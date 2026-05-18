@@ -514,6 +514,9 @@ def init_db():
         u.set_password("Demo2026!"); db.session.add(u)
     db.session.commit()
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
+  
+with app.app_context():
+    init_db()
 
 if __name__=="__main__":
     with app.app_context(): init_db()
