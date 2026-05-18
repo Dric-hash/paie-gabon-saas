@@ -192,7 +192,7 @@ def admin_rubriques():
     return render_template("admin/rubriques.html", rubriques=RubriquePaie.query.all())
 
 # ── Tenant ────────────────────────────────────────────────────────────────────
-@app.route("/app")
+@app.route("/dashboard")
 @tenant_required
 def dashboard():
     t=get_tenant(); now=datetime.now()
@@ -209,7 +209,7 @@ def dashboard():
         nb_actifs=nb_actifs, nb_total=Salarie.query.filter_by(tenant_id=t.id).count(),
         periode=periode, masse=masse, nb_valides=nb_v, nb_brouillon=nb_b, derniers=derniers)
 
-@app.route("/app/salaries")
+@app.route("/salaries")
 @tenant_required
 def salaries():
     t=get_tenant(); q=request.args.get("q",""); statut=request.args.get("statut","")
@@ -219,7 +219,7 @@ def salaries():
     return render_template("tenant/salaries.html", salaries=query.order_by(Salarie.nom).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(), q=q, statut=statut, tenant=t)
 
-@app.route("/app/salaries/nouveau", methods=["GET","POST"])
+@app.route("/salaries/nouveau", methods=["GET","POST"])
 @tenant_required
 @can_edit
 def salarie_nouveau():
@@ -250,7 +250,7 @@ def salarie_nouveau():
         return redirect(url_for("salarie_detail",id=s.id))
     return render_template("tenant/salarie_form.html", salarie=None, categories=cats, action="nouveau", tenant=t)
 
-@app.route("/app/salaries/<int:id>")
+@app.route("/salaries/<int:id>")
 @tenant_required
 def salarie_detail(id):
     t=get_tenant()
@@ -259,7 +259,7 @@ def salarie_detail(id):
         bulletins=BulletinPaie.query.filter_by(salarie_id=id,tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(12).all(),
         contrat=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first())
 
-@app.route("/app/salaries/<int:id>/modifier", methods=["GET","POST"])
+@app.route("/salaries/<int:id>/modifier", methods=["GET","POST"])
 @tenant_required
 @can_edit
 def salarie_modifier(id):
@@ -280,7 +280,7 @@ def salarie_modifier(id):
         return redirect(url_for("salarie_detail",id=s.id))
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats, action="modifier", tenant=t)
 
-@app.route("/app/bulletins")
+@app.route("/bulletins")
 @tenant_required
 def bulletins():
     t=get_tenant(); pid=request.args.get("periode_id",type=int); sf=request.args.get("statut","")
@@ -295,7 +295,7 @@ def bulletins():
     return render_template("tenant/bulletins.html", periodes=periodes, periode_sel=ps,
         bulletins=buls, masse=masse, statut_filtre=sf, tenant=t)
 
-@app.route("/app/bulletins/saisie", methods=["GET","POST"])
+@app.route("/bulletins/saisie", methods=["GET","POST"])
 @tenant_required
 @can_edit
 def bulletin_saisie():
@@ -323,14 +323,14 @@ def bulletin_saisie():
     c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
     return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t)
 
-@app.route("/app/bulletins/<int:id>")
+@app.route("/bulletins/<int:id>")
 @tenant_required
 def bulletin_detail(id):
     t=get_tenant()
     return render_template("tenant/bulletin_detail.html",
         bulletin=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404(), tenant=t)
 
-@app.route("/app/bulletins/<int:id>/valider", methods=["POST"])
+@app.route("/bulletins/<int:id>/valider", methods=["POST"])
 @tenant_required
 @can_edit
 def bulletin_valider(id):
@@ -338,7 +338,7 @@ def bulletin_valider(id):
     b.statut="VALIDÉ"; b.date_validation=datetime.utcnow(); db.session.commit()
     flash("Bulletin validé.","success"); return redirect(url_for("bulletin_detail",id=id))
 
-@app.route("/app/bulletins/<int:id>/payer", methods=["POST"])
+@app.route("/bulletins/<int:id>/payer", methods=["POST"])
 @tenant_required
 @can_edit
 def bulletin_paye(id):
@@ -346,14 +346,14 @@ def bulletin_paye(id):
     b.statut="PAYÉ"; db.session.commit(); flash("Payé.","success")
     return redirect(url_for("bulletin_detail",id=id))
 
-@app.route("/app/periodes")
+@app.route("/periodes")
 @tenant_required
 def periodes():
     t=get_tenant()
     return render_template("tenant/periodes.html", tenant=t,
         periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all())
 
-@app.route("/app/periodes/nouvelle", methods=["POST"])
+@app.route("/periodes/nouvelle", methods=["POST"])
 @tenant_required
 @can_edit
 def periode_nouvelle():
@@ -366,7 +366,7 @@ def periode_nouvelle():
         db.session.commit(); flash(f"Période {noms[mois]} {annee} créée.","success")
     return redirect(url_for("periodes"))
 
-@app.route("/app/periodes/<int:id>/cloturer", methods=["POST"])
+@app.route("/periodes/<int:id>/cloturer", methods=["POST"])
 @tenant_required
 @can_edit
 def periode_cloturer(id):
@@ -374,7 +374,7 @@ def periode_cloturer(id):
     p.statut="CLÔTURÉ"; p.date_cloture=datetime.utcnow(); db.session.commit()
     flash("Période clôturée.","success"); return redirect(url_for("periodes"))
 
-@app.route("/app/parametres")
+@app.route("/parametres")
 @tenant_required
 def parametres():
     t=get_tenant()
@@ -383,7 +383,7 @@ def parametres():
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
         users=Utilisateur.query.filter_by(tenant_id=t.id).all())
 
-@app.route("/app/parametres/societe", methods=["POST"])
+@app.route("/parametres/societe", methods=["POST"])
 @tenant_required
 @can_edit
 def parametres_societe():
@@ -393,7 +393,7 @@ def parametres_societe():
     db.session.commit(); flash("Informations mises à jour.","success")
     return redirect(url_for("parametres"))
 
-@app.route("/app/utilisateurs/nouveau", methods=["POST"])
+@app.route("/utilisateurs/nouveau", methods=["POST"])
 @tenant_required
 def utilisateur_nouveau():
     t=get_tenant()
@@ -410,7 +410,7 @@ def utilisateur_nouveau():
     db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
     return redirect(url_for("parametres"))
 
-@app.route("/app/bulletins/export/<int:periode_id>")
+@app.route("/bulletins/export/<int:periode_id>")
 @tenant_required
 def export_journal(periode_id):
     from openpyxl import Workbook
@@ -514,9 +514,6 @@ def init_db():
         u.set_password("Demo2026!"); db.session.add(u)
     db.session.commit()
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
-  
-with app.app_context():
-    init_db()
 
 if __name__=="__main__":
     with app.app_context(): init_db()
