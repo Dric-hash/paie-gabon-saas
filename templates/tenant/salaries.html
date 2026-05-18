@@ -1,0 +1,96 @@
+{% extends "tenant/base.html" %}
+{% block title %}Salariés — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-black text-gray-900">Salariés</h1>
+    <p class="text-gray-500 text-sm mt-1">{{ salaries|length }} salarié(s) trouvé(s)</p>
+  </div>
+  <a href="{{ url_for("salarie_nouveau') }}" class="btn-primary">+ Nouveau salarié</a>
+</div>
+
+<!-- Filtres -->
+<div class="card p-4 mb-6">
+  <form method="GET" class="flex gap-3 items-center">
+    <input type="text" name="q" value="{{ q }}" placeholder="🔍  Rechercher nom, matricule, poste..."
+      class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm"/>
+    <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      <option value="">Tous les statuts</option>
+      <option value="ACTIF" {% if statut == 'ACTIF' %}selected{% endif %}>Actifs</option>
+      <option value="INACTIF" {% if statut == 'INACTIF' %}selected{% endif %}>Inactifs</option>
+    </select>
+    <button type="submit" class="btn-primary">Filtrer</button>
+    {% if q or statut %}
+    <a href="{{ url_for("salaries") }}" class="btn-secondary">Effacer</a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Table -->
+<div class="card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead>
+      <tr class="bg-primary text-white text-xs uppercase tracking-wider">
+        <th class="px-4 py-3 text-left font-bold">Matricule</th>
+        <th class="px-4 py-3 text-left font-bold">Nom & Prénom</th>
+        <th class="px-4 py-3 text-left font-bold">Emploi</th>
+        <th class="px-4 py-3 text-center font-bold">Catégorie</th>
+        <th class="px-4 py-3 text-right font-bold">Salaire base</th>
+        <th class="px-4 py-3 text-center font-bold">Statut</th>
+        <th class="px-4 py-3 text-center font-bold">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in salaries %}
+      <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+        <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ s.matricule }}</td>
+        <td class="px-4 py-3">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
+              {{ s.nom[0] }}{{ s.prenom[0] }}
+            </div>
+            <div>
+              <div class="font-bold text-gray-900">{{ s.nom }} {{ s.prenom }}</div>
+              <div class="text-xs text-gray-400">Embauché le {{ s.date_embauche|date_fr }}</div>
+            </div>
+          </div>
+        </td>
+        <td class="px-4 py-3 text-gray-700">{{ s.emploi or '—' }}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-lg">
+            {{ s.categorie.code if s.categorie else '—' }}
+          </span>
+        </td>
+        <td class="px-4 py-3 text-right font-bold text-gray-900">
+          {% if s.contrats %}
+            {{ s.contrats[-1].salaire_base|fcfa }}
+          {% else %}—{% endif %}
+        </td>
+        <td class="px-4 py-3 text-center">
+          <span class="badge-{{ s.statut|lower }}">{{ s.statut }}</span>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex gap-2 justify-center">
+            <a href="{{ url_for("salarie_detail', id=s.id) }}"
+               class="text-primary hover:underline text-xs font-bold">Voir</a>
+            <span class="text-gray-300">|</span>
+            <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ s.id }}"
+               class="text-amber-600 hover:underline text-xs font-bold">Bulletin</a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" class="text-center py-12 text-gray-400">
+          <div class="text-4xl mb-2">👤</div>
+          <p>Aucun salarié trouvé</p>
+          <a href="{{ url_for("salarie_nouveau') }}" class="btn-primary inline-block mt-3">Créer le premier salarié</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}

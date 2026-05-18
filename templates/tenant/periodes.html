@@ -1,0 +1,66 @@
+{% extends "tenant/base.html" %}{% block title %}Périodes{% endblock %}{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-black">Périodes de paie</h1>
+</div>
+<div class="grid grid-cols-3 gap-6">
+  <!-- Créer une période -->
+  <div class="card p-6">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ouvrir une nouvelle période</h2>
+    <form method="POST" action="{{ url_for("periode_nouvelle') }}" class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Année</label>
+        <input type="number" name="annee" value="{{ now.year if now else 2026 }}" min="2020" max="2030"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center font-mono"/>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Mois</label>
+        <select name="mois" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          {% for i, m in enumerate(['','JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE']) %}
+          {% if i > 0 %}<option value="{{ i }}">{{ m }}</option>{% endif %}
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="w-full btn-primary">📅 Créer la période</button>
+    </form>
+  </div>
+  <!-- Liste des périodes -->
+  <div class="col-span-2 card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead><tr class="bg-primary text-white text-xs uppercase">
+        <th class="px-4 py-3 text-left">Période</th>
+        <th class="px-4 py-3 text-center">Bulletins</th>
+        <th class="px-4 py-3 text-center">Statut</th>
+        <th class="px-4 py-3 text-center">Actions</th>
+      </tr></thead>
+      <tbody>{% for p in periodes %}
+      <tr class="border-b border-gray-100 hover:bg-gray-50">
+        <td class="px-4 py-3 font-bold">{{ p.libelle_complet }}</td>
+        <td class="px-4 py-3 text-center text-gray-500">{{ p.bulletins|length }}</td>
+        <td class="px-4 py-3 text-center">
+          <span class="text-xs font-bold px-2 py-0.5 rounded-full
+            {% if p.statut=='OUVERT' %}bg-emerald-100 text-emerald-700
+            {% elif p.statut=='CLÔTURÉ' %}bg-red-100 text-red-600
+            {% else %}bg-gray-100 text-gray-600{% endif %}">{{ p.statut }}</span>
+        </td>
+        <td class="px-4 py-3 text-center">
+          <div class="flex gap-2 justify-center">
+            <a href="{{ url_for("bulletins') }}?periode_id={{ p.id }}" class="text-primary text-xs font-bold hover:underline">Bulletins</a>
+            <span class="text-gray-300">|</span>
+            <a href="{{ url_for("export_journal', periode_id=p.id) }}" class="text-amber-600 text-xs font-bold hover:underline">Export</a>
+            {% if p.statut == 'OUVERT' %}
+            <span class="text-gray-300">|</span>
+            <form method="POST" action="{{ url_for("periode_cloturer', id=p.id) }}" class="inline">
+              <button type="submit" class="text-red-500 text-xs font-bold hover:underline"
+                onclick="return confirm('Clôturer {{ p.libelle_complet }} ?')">Clôturer</button>
+            </form>
+            {% endif %}
+          </div>
+        </td>
+      </tr>{% else %}
+      <tr><td colspan="4" class="text-center py-10 text-gray-400">Aucune période créée</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}<script>const now = new Date();</script>{% endblock %}

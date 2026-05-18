@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen">
+<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-4 shadow-lg">
+  <a href="/admin" class="text-xl font-black">🏗️ PaieGabon</a>
+  <a href="/admin/rubriques" class="text-sm font-bold">Rubriques légales</a>
+  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+</nav>
+<main class="max-w-5xl mx-auto p-8">
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold bg-emerald-50 text-emerald-700">{{msg}}</div>
+  {% endfor %}{% endif %}{% endwith %}
+  <h1 class="text-2xl font-black mb-6">Rubriques de paie — Réglementation Gabon</h1>
+  <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden mb-6">
+    <table class="w-full text-sm">
+      <thead><tr class="bg-purple-900 text-white text-xs uppercase">
+        <th class="px-4 py-3 text-left">Code</th><th class="px-4 py-3 text-left">Libellé</th>
+        <th class="px-4 py-3 text-center">Type</th><th class="px-4 py-3 text-center">Taux salarié</th>
+        <th class="px-4 py-3 text-center">Taux patronal</th><th class="px-4 py-3 text-right">Plafond</th>
+      </tr></thead>
+      <tbody>{% for r in rubriques %}
+      <tr class="border-b border-gray-50 hover:bg-gray-50">
+        <td class="px-4 py-3"><span class="bg-purple-900 text-white text-xs font-black px-2 py-0.5 rounded-md">{{r.code}}</span></td>
+        <td class="px-4 py-3 font-semibold">{{r.libelle}}</td>
+        <td class="px-4 py-3 text-center text-xs text-gray-500">{{r.type}}</td>
+        <td class="px-4 py-3 text-center font-bold text-red-600">{{'%.1f%%'|format(r.taux_salarie*100) if r.taux_salarie else '—'}}</td>
+        <td class="px-4 py-3 text-center font-bold text-blue-600">{{'%.1f%%'|format(r.taux_patronal*100) if r.taux_patronal else '—'}}</td>
+        <td class="px-4 py-3 text-right text-gray-500">{{r.plafond_mensuel|int|fcfa if r.plafond_mensuel else '—'}}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  <div class="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-700 font-semibold text-center">
+    ✅ Réglementation gabonaise en vigueur — CGI · Décret 578/PR · Arrêté 037/METPS
+  </div>
+</main></body></html>

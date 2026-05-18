@@ -1,0 +1,49 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Entreprises — PaieGabon Admin</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen">
+<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-6 shadow-lg">
+  <a href="/admin" class="text-xl font-black">🏗️ PaieGabon</a>
+  <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+  <a href="/admin/tenants" class="text-sm font-bold">Entreprises</a>
+  <a href="/admin/plans" class="text-sm text-white/70 hover:text-white">Plans</a>
+  <a href="/admin/rubriques" class="text-sm text-white/70 hover:text-white">Rubriques</a>
+  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+</nav>
+<main class="max-w-6xl mx-auto p-8">
+  <div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-black">Entreprises clientes ({{tenants|length}})</h1>
+  </div>
+  <form method="GET" class="flex gap-3 mb-6 bg-white border border-gray-200 rounded-2xl p-4">
+    <input name="q" value="{{q}}" placeholder="🔍 Rechercher..." class="flex-1 border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"/>
+    <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+      <option value="">Tous statuts</option>
+      <option {{'selected' if statut=='ACTIF'}}>ACTIF</option>
+      <option {{'selected' if statut=='ESSAI'}}>ESSAI</option>
+      <option {{'selected' if statut=='SUSPENDU'}}>SUSPENDU</option>
+    </select>
+    <button type="submit" class="bg-purple-900 text-white px-4 py-2 rounded-xl text-sm font-bold">Filtrer</button>
+  </form>
+  <div class="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+    <table class="w-full text-sm">
+      <thead><tr class="bg-purple-900 text-white text-xs uppercase">
+        <th class="px-4 py-3 text-left">Entreprise</th><th class="px-4 py-3 text-left">Contact</th>
+        <th class="px-4 py-3 text-center">Plan</th><th class="px-4 py-3 text-center">Salariés</th>
+        <th class="px-4 py-3 text-center">Statut</th><th class="px-4 py-3 text-center">Actions</th>
+      </tr></thead>
+      <tbody>{% for t in tenants %}
+      <tr class="border-b border-gray-50 hover:bg-gray-50">
+        <td class="px-4 py-3"><div class="font-bold">{{t.denomination}}</div><div class="text-xs text-gray-400">{{t.slug}} · {{t.activite or '—'}}</div></td>
+        <td class="px-4 py-3 text-gray-600">{{t.ville}}</td>
+        <td class="px-4 py-3 text-center"><span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">{{t.plan.nom if t.plan else '—'}}</span></td>
+        <td class="px-4 py-3 text-center font-bold">{{t.nb_salaries_actifs}}</td>
+        <td class="px-4 py-3 text-center"><span class="text-xs font-bold px-2 py-0.5 rounded-full {{'bg-emerald-100 text-emerald-700' if t.statut=='ACTIF' else 'bg-amber-100 text-amber-700' if t.statut=='ESSAI' else 'bg-red-100 text-red-600'}}">{{t.statut}}</span></td>
+        <td class="px-4 py-3 text-center">
+          <a href="/admin/tenants/{{t.id}}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
+          <a href="/admin/tenants/{{t.id}}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+        </td>
+      </tr>{% else %}
+      <tr><td colspan="6" class="text-center py-10 text-gray-400">Aucune entreprise trouvée</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+</main></body></html>

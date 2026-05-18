@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Inscription — PaieGabon</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 p-6">
+<div class="max-w-2xl mx-auto">
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-black text-white">🏗️ PaieGabon</h1>
+    <p class="text-white/50 mt-1 text-sm">Créez votre espace entreprise — Essai gratuit 30 jours</p>
+  </div>
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold bg-red-50 text-red-700">⚠️ {{msg}}</div>
+  {% endfor %}{% endif %}{% endwith %}
+
+  <!-- Plans -->
+  <div class="grid grid-cols-3 gap-4 mb-6">
+    {% for p in plans %}
+    <label class="cursor-pointer">
+      <input type="radio" name="plan_choix" value="{{p.id}}" class="hidden peer" {% if loop.index==2 %}checked{% endif %}>
+      <div class="bg-white/10 peer-checked:bg-white peer-checked:text-slate-900 text-white rounded-2xl p-4 text-center transition-all border-2 border-transparent peer-checked:border-amber-400">
+        <div class="font-black text-lg">{{p.nom}}</div>
+        <div class="text-2xl font-black my-2">{{p.prix_mensuel|int|string|replace(",","")}} <span class="text-xs font-normal">FCFA/mois</span></div>
+        <div class="text-xs opacity-70">{{p.description}}</div>
+      </div>
+    </label>
+    {% endfor %}
+  </div>
+
+  <form method="POST" class="bg-white rounded-3xl shadow-2xl p-8 space-y-5">
+    <input type="hidden" name="plan_id" id="plan_id_field"/>
+    <h2 class="text-xl font-black text-gray-900 mb-2">Informations entreprise</h2>
+    <div class="grid grid-cols-2 gap-4">
+      {% macro f(label,name,ph="",required=False) %}
+      <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">{{label}}{% if required %} *{% endif %}</label>
+      <input type="text" name="{{name}}" placeholder="{{ph}}" {% if required %}required{% endif %}
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
+      {% endmacro %}
+      {{f("Dénomination sociale","denomination","SOCIETE XYZ",True)}}
+      {{f("Sigle","sigle","XYZ")}}
+      {{f("Activité","activite","Génie civil")}}
+      {{f("NIF","nif","202XXXXXXXXX M")}}
+      {{f("Téléphone","telephone","+241 XX XX XX XX")}}
+      {{f("Ville","ville","Libreville")}}
+    </div>
+    <h2 class="text-xl font-black text-gray-900 pt-2">Votre compte administrateur</h2>
+    <div class="grid grid-cols-2 gap-4">
+      {{f("Nom","nom","DUPONT",True)}}
+      {{f("Prénom","prenom","Jean",True)}}
+    </div>
+    <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email *</label>
+    <input type="email" name="email" required placeholder="vous@entreprise.ga"
+      class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
+    <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Mot de passe *</label>
+    <input type="password" name="password" required minlength="8" placeholder="Minimum 8 caractères"
+      class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
+    <button type="submit" class="w-full bg-slate-900 text-white rounded-xl py-3.5 font-black text-sm hover:bg-slate-700 transition-all">
+      🚀 Créer mon espace — Essai 30 jours GRATUIT</button>
+    <p class="text-center text-xs text-gray-400">Déjà un compte ? <a href="/login" class="text-slate-700 font-bold hover:underline">Se connecter</a></p>
+  </form>
+</div>
+<script>
+document.querySelectorAll('input[name="plan_choix"]').forEach(r=>{
+  r.addEventListener('change',()=>document.getElementById('plan_id_field').value=r.value);
+  if(r.checked) document.getElementById('plan_id_field').value=r.value;
+});
+</script>
+</body></html>

@@ -1,0 +1,125 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ salarie.nom_complet }} — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="{{ url_for("salaries") }}" class="text-gray-400 hover:text-gray-700">← Salariés</a>
+  <h1 class="text-2xl font-black text-gray-900">{{ salarie.nom_complet }}</h1>
+  <span class="badge-{{ salarie.statut|lower }}">{{ salarie.statut }}</span>
+</div>
+
+<div class="grid grid-cols-3 gap-6">
+
+  <!-- Fiche identité -->
+  <div class="col-span-2 space-y-5">
+    <div class="card p-6">
+      <div class="flex items-center gap-4 mb-6">
+        <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black">
+          {{ salarie.nom[0] }}{{ salarie.prenom[0] }}
+        </div>
+        <div>
+          <div class="text-xl font-black">{{ salarie.nom_complet }}</div>
+          <div class="text-gray-500">{{ salarie.emploi or '—' }}</div>
+          <div class="text-xs text-gray-400 mt-1 font-mono">{{ salarie.matricule }}</div>
+        </div>
+        <div class="ml-auto">
+          <a href="{{ url_for("salarie_modifier', id=salarie.id) }}" class="btn-secondary">✏️ Modifier</a>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-4 text-sm">
+        {% macro info(label, value) %}
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-0.5">{{ label }}</div>
+          <div class="font-bold text-gray-900">{{ value or '—' }}</div>
+        </div>
+        {% endmacro %}
+        {{ info("Catégorie", salarie.categorie.code ~ ' — ' ~ salarie.categorie.libelle if salarie.categorie else '—') }}
+        {{ info("Date d'embauche", salarie.date_embauche|date_fr) }}
+        {{ info("Nationalité", salarie.nationalite) }}
+        {{ info("Sexe", 'Masculin' if salarie.sexe == 'M' else 'Féminin') }}
+        {{ info("Sit. matrimoniale", salarie.situation_matrimoniale) }}
+        {{ info("Nb enfants", salarie.nb_enfants|string ~ ' (' ~ salarie.nb_enfants_moins_16ans|string ~ ' < 16 ans)') }}
+        {{ info("Nombre de parts", salarie.nombre_parts) }}
+        {{ info("N° CNSS", salarie.numero_cnss) }}
+        {{ info("N° CNAMGS", salarie.numero_cnamgs) }}
+      </div>
+    </div>
+
+    <!-- Contrat actif -->
+    {% if contrat %}
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Contrat en cours</h2>
+      <div class="grid grid-cols-3 gap-4 text-sm">
+        <div class="bg-primary/5 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-0.5">Type</div>
+          <div class="font-bold">{{ contrat.type_contrat }}</div>
+        </div>
+        <div class="bg-primary/5 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-0.5">Salaire de base</div>
+          <div class="font-black text-primary">{{ contrat.salaire_base|fcfa }}</div>
+        </div>
+        <div class="bg-primary/5 rounded-xl p-3">
+          <div class="text-xs text-gray-400 mb-0.5">Depuis</div>
+          <div class="font-bold">{{ contrat.date_debut|date_fr }}</div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Historique bulletins -->
+    <div class="card p-6">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Historique des bulletins</h2>
+        <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ salarie.id }}" class="btn-primary text-xs">+ Nouveau bulletin</a>
+      </div>
+      {% if bulletins %}
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="text-xs text-gray-400 border-b border-gray-100">
+            <th class="text-left pb-2">Période</th>
+            <th class="text-right pb-2">Brut</th>
+            <th class="text-right pb-2">Net à payer</th>
+            <th class="text-center pb-2">Statut</th>
+            <th class="text-center pb-2"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bulletins %}
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="py-2.5 font-semibold">{{ b.periode.libelle_complet }}</td>
+            <td class="py-2.5 text-right font-mono text-gray-600">{{ b.salaire_brut|fcfa }}</td>
+            <td class="py-2.5 text-right font-mono font-bold">{{ b.net_a_payer|fcfa }}</td>
+            <td class="py-2.5 text-center"><span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span></td>
+            <td class="py-2.5 text-center">
+              <a href="{{ url_for("bulletin_detail', id=b.id) }}" class="text-primary text-xs font-bold hover:underline">Voir</a>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <p class="text-center py-6 text-gray-400 text-sm">Aucun bulletin enregistré</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Actions rapides -->
+  <div class="space-y-4">
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Actions</h2>
+      <div class="space-y-2">
+        <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ salarie.id }}"
+           class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 text-sm font-semibold">
+          📄 Créer un bulletin
+        </a>
+        <a href="{{ url_for("salarie_modifier', id=salarie.id) }}"
+           class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 text-sm font-semibold">
+          ✏️ Modifier la fiche
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

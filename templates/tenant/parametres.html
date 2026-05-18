@@ -1,0 +1,100 @@
+{% extends "tenant/base.html" %}{% block title %}Paramètres{% endblock %}{% block content %}
+<h1 class="text-2xl font-black mb-6">Paramètres</h1>
+<div class="grid grid-cols-2 gap-6">
+
+  <!-- Société -->
+  <div class="card p-6">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Informations Société</h2>
+    <form method="POST" action="{{ url_for("parametres_societe') }}" class="space-y-3">
+      {% macro f(label, name, val) %}
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1">{{ label }}</label>
+        <input type="text" name="{{ name }}" value="{{ val or '' }}"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
+      </div>
+      {% endmacro %}
+      {% if societe %}
+      {{ f("Dénomination", "denomination", societe.denomination) }}
+      {{ f("Sigle", "sigle", societe.sigle) }}
+      {{ f("Activité", "activite", societe.activite) }}
+      {{ f("NIF", "nif", societe.nif) }}
+      {{ f("N° CNSS employeur", "numero_cnss", societe.numero_cnss) }}
+      {{ f("N° CNAMGS employeur", "numero_cnamgs", societe.numero_cnamgs) }}
+      {{ f("Adresse", "adresse", societe.adresse) }}
+      {{ f("Boîte postale", "boite_postale", societe.boite_postale) }}
+      {{ f("Téléphone", "telephone", societe.telephone) }}
+      {{ f("Ville", "ville", societe.ville) }}
+      {{ f("Région", "region", societe.region) }}
+      {% endif %}
+      <button type="submit" class="btn-primary mt-2">💾 Enregistrer</button>
+    </form>
+  </div>
+
+  <!-- Taux de cotisation -->
+  <div class="space-y-5">
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Taux de cotisation — Gabon</h2>
+      <div class="space-y-3">
+        {% for r in rubriques %}
+        <div class="bg-gray-50 rounded-xl p-3">
+          <div class="flex justify-between items-center">
+            <div>
+              <span class="text-xs font-black bg-primary text-white px-2 py-0.5 rounded-md">{{ r.code }}</span>
+              <div class="text-xs text-gray-500 mt-1">{{ r.libelle }}</div>
+            </div>
+            <div class="text-right text-xs">
+              {% if r.taux_salarie %}<div>Sal : <strong class="text-red-600">{{ "%.1f"|format(r.taux_salarie*100) }}%</strong></div>{% endif %}
+              {% if r.taux_patronal %}<div>Pat : <strong class="text-blue-600">{{ "%.1f"|format(r.taux_patronal*100) }}%</strong></div>{% endif %}
+              {% if r.plafond_mensuel %}<div class="text-gray-400">Plafond : {{ r.plafond_mensuel|int|fcfa }}</div>{% endif %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700 text-center font-semibold">
+        ✅ Réglementation gabonaise à jour — CGI · Décret 578/PR · Arrêté 037/METPS
+      </div>
+    </div>
+
+    <!-- Catégories -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Catégories d'emploi</h2>
+      {% for c in categories %}
+      <div class="flex justify-between py-2 border-b border-gray-50 text-sm">
+        <span class="font-black text-primary">{{ c.code }}</span>
+        <span class="text-gray-600">{{ c.libelle }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+<!-- Ajout utilisateur (injecté en bas) -->
+
+  <!-- Section utilisateurs -->
+  <div class="card p-6 mt-6">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Utilisateurs ({{users|length}})</h2>
+    <div class="space-y-2 mb-5">
+      {% for u in users %}
+      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+        <div><div class="text-sm font-bold">{{u.nom_complet}}</div><div class="text-xs text-gray-400">{{u.email}}</div></div>
+        <span class="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full">{{u.role}}</span>
+      </div>{% endfor %}
+    </div>
+    {% if current_user.is_tenant_admin %}
+    <div class="border-t border-gray-100 pt-5">
+      <h3 class="text-sm font-bold text-gray-700 mb-3">Ajouter un utilisateur</h3>
+      <form method="POST" action="/app/utilisateurs/nouveau" class="grid grid-cols-2 gap-3">
+        <input type="text" name="nom" placeholder="Nom *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
+        <input type="text" name="prenom" placeholder="Prénom *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
+        <input type="email" name="email" placeholder="Email *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
+        <input type="password" name="password" placeholder="Mot de passe *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
+        <select name="role" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+          <option value="GESTIONNAIRE">Gestionnaire</option>
+          <option value="LECTURE">Lecture seule</option>
+          <option value="TENANT_ADMIN">Administrateur</option>
+        </select>
+        <button type="submit" class="bg-slate-900 text-white rounded-xl py-2 font-bold text-sm">+ Créer</button>
+      </form>
+    </div>{% endif %}
+  </div>

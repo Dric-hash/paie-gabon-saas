@@ -1,0 +1,171 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ 'Modifier' if action == 'modifier' else 'Nouveau' }} salarié — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="{{ url_for("salaries") }}" class="text-gray-400 hover:text-gray-700">← Retour</a>
+  <h1 class="text-2xl font-black text-gray-900">
+    {{ 'Modifier' if action == 'modifier' else 'Nouveau salarié' }}
+  </h1>
+</div>
+
+<form method="POST" class="grid grid-cols-2 gap-6">
+
+  <!-- Identité -->
+  <div class="card p-6 space-y-4">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Identité</h2>
+
+    {% macro field(label, name, type="text", required=False, value="") %}
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">{{ label }}{% if required %} *{% endif %}</label>
+      <input type="{{ type }}" name="{{ name }}" value="{{ value }}" {% if required %}required{% endif %}
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:border-primary transition-colors"/>
+    </div>
+    {% endmacro %}
+
+    {{ field("Matricule", "matricule", required=True, value=salarie.matricule if salarie else '') }}
+    {{ field("Nom", "nom", required=True, value=salarie.nom if salarie else '') }}
+    {{ field("Prénom(s)", "prenom", required=True, value=salarie.prenom if salarie else '') }}
+    {{ field("Téléphone", "telephone", value=salarie.telephone if salarie else '') }}
+    {{ field("Nationalité", "nationalite", value=salarie.nationalite if salarie else 'GABONAISE') }}
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Sexe</label>
+      <select name="sexe" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="M" {% if salarie and salarie.sexe == 'M' %}selected{% endif %}>Masculin</option>
+        <option value="F" {% if salarie and salarie.sexe == 'F' %}selected{% endif %}>Féminin</option>
+      </select>
+    </div>
+
+    {{ field("Date de naissance", "date_naissance", "date",
+             value=salarie.date_naissance|string if salarie and salarie.date_naissance else '') }}
+  </div>
+
+  <!-- Emploi -->
+  <div class="card p-6 space-y-4">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Emploi & Contrat</h2>
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Poste / Emploi *</label>
+      <input type="text" name="emploi" required value="{{ salarie.emploi if salarie else '' }}"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm"/>
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Catégorie</label>
+      <select name="categorie_id" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="">— Non définie —</option>
+        {% for cat in categories %}
+        <option value="{{ cat.id }}"
+          {% if salarie and salarie.categorie_id == cat.id %}selected{% endif %}>
+          {{ cat.code }} — {{ cat.libelle }}
+        </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    {% if action == 'nouveau' %}
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Salaire de base (FCFA) *</label>
+      <input type="number" name="salaire_base" required min="0"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Type de contrat</label>
+      <select name="type_contrat" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option>CDI</option><option>CDD</option><option>STAGE</option>
+      </select>
+    </div>
+    {% endif %}
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Date d'embauche *</label>
+      <input type="date" name="date_embauche" required
+        value="{{ salarie.date_embauche|string if salarie and salarie.date_embauche else '' }}"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm"/>
+    </div>
+
+    {% if action == 'modifier' %}
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Statut</label>
+      <select name="statut" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        {% for st in ['ACTIF','INACTIF','SUSPENDU'] %}
+        <option {% if salarie and salarie.statut == st %}selected{% endif %}>{{ st }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Situation familiale -->
+  <div class="card p-6 space-y-4">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Situation familiale</h2>
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Situation matrimoniale</label>
+      <select name="situation_matrimoniale" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        {% for sm in ['CELIBATAIRE SEAC','CELIBATAIRE AEAC','MARIE AEAC','MARIE SEAC','DIVORCE SEAC','VEUF SEAC'] %}
+        <option {% if salarie and salarie.situation_matrimoniale == sm %}selected{% endif %}>{{ sm }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Nb enfants total</label>
+        <input type="number" name="nb_enfants" min="0"
+          value="{{ salarie.nb_enfants if salarie else 0 }}"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center"/>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Dont - de 16 ans</label>
+        <input type="number" name="nb_enfants_moins_16ans" min="0"
+          value="{{ salarie.nb_enfants_moins_16ans if salarie else 0 }}"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center"/>
+      </div>
+    </div>
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Nombre de parts (IRPP)</label>
+      <input type="number" name="nombre_parts" min="1" step="0.5"
+        value="{{ salarie.nombre_parts if salarie else 1 }}"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center font-mono"/>
+    </div>
+  </div>
+
+  <!-- Cotisations -->
+  <div class="card p-6 space-y-4">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Numéros de cotisation</h2>
+
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">N° CNSS</label>
+      <input type="text" name="numero_cnss"
+        value="{{ salarie.numero_cnss if salarie else '' }}"
+        placeholder="001-XXXXXXX-X"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">N° CNAMGS</label>
+      <input type="text" name="numero_cnamgs"
+        value="{{ salarie.numero_cnamgs if salarie else '' }}"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Assujetti CNAMGS</label>
+      <select name="assujetti_cnamgs" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="OUI" {% if not salarie or salarie.assujetti_cnamgs %}selected{% endif %}>OUI</option>
+        <option value="NON" {% if salarie and not salarie.assujetti_cnamgs %}selected{% endif %}>NON</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Boutons -->
+  <div class="col-span-2 flex gap-3 justify-end">
+    <a href="{{ url_for("salaries") }}" class="btn-secondary">Annuler</a>
+    <button type="submit" class="btn-primary text-base px-8">
+      💾 {{ 'Enregistrer les modifications' if action == 'modifier' else 'Créer le salarié' }}
+    </button>
+  </div>
+</form>
+
+{% endblock %}

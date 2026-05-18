@@ -1,0 +1,22 @@
+{% extends "base.html" %}{% block title %}Statistiques{% endblock %}{% block content %}
+<h1 class="text-2xl font-black mb-6">Statistiques globales</h1>
+<div class="card overflow-hidden">
+  <table class="w-full text-sm">
+    <thead><tr class="bg-primary text-white text-xs uppercase">
+      <th class="px-5 py-3 text-left">Entreprise</th>
+      <th class="px-5 py-3 text-center">Plan</th>
+      <th class="px-5 py-3 text-center">Salariés actifs</th>
+      <th class="px-5 py-3 text-center">Total bulletins</th>
+      <th class="px-5 py-3 text-center">Statut</th>
+    </tr></thead>
+    <tbody>{% for s in stats %}
+    <tr class="border-b border-gray-100 hover:bg-gray-50">
+      <td class="px-5 py-3 font-bold">{{ s.tenant.denomination }}<div class="text-xs text-gray-400">{{ s.tenant.ville }}</div></td>
+      <td class="px-5 py-3 text-center"><span class="text-xs bg-gray-100 font-bold px-2 py-0.5 rounded-lg">{{ s.tenant.plan.nom if s.tenant.plan else '—' }}</span></td>
+      <td class="px-5 py-3 text-center font-bold text-primary">{{ s.nb_salaries }}</td>
+      <td class="px-5 py-3 text-center font-bold">{{ s.nb_bulletins }}</td>
+      <td class="px-5 py-3 text-center"><span class="badge-{{ s.tenant.statut|lower }}">{{ s.tenant.statut }}</span></td>
+    </tr>{% endfor %}</tbody>
+  </table>
+</div>
+{% endblock %}

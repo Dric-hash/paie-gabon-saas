@@ -1,0 +1,51 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen">
+<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-4 shadow-lg">
+  <a href="/admin" class="text-xl font-black">🏗️ PaieGabon</a>
+  <a href="/admin/tenants" class="text-sm text-white/70">← Entreprises</a>
+  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+</nav>
+<main class="max-w-5xl mx-auto p-8">
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
+  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold {{'bg-emerald-50 text-emerald-700' if cat=='success' else 'bg-amber-50 text-amber-700'}}">{{msg}}</div>
+  {% endfor %}{% endif %}{% endwith %}
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-black">{{tenant.denomination}}</h1>
+      <p class="text-gray-500 text-sm">Slug : {{tenant.slug}} · NIF : {{tenant.nif or '—'}} · {{tenant.ville}}</p>
+    </div>
+    <a href="/admin/tenants/{{tenant.id}}/impersonate" class="bg-amber-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-amber-600">👁️ Accéder à l'espace</a>
+  </div>
+  <div class="grid grid-cols-3 gap-4 mb-8">
+    {% for label,val,color in [("Salariés",nb_salaries,"bg-slate-800"),("Bulletins",nb_bulletins,"bg-blue-700"),("Utilisateurs",users|length,"bg-emerald-700")] %}
+    <div class="{{color}} rounded-2xl p-5 text-white text-center">
+      <div class="text-3xl font-black">{{val}}</div><div class="text-sm opacity-70">{{label}}</div>
+    </div>{% endfor %}
+  </div>
+  <div class="grid grid-cols-2 gap-6">
+    <!-- Modifier statut/plan -->
+    <div class="bg-white rounded-2xl border border-gray-200 p-6">
+      <h2 class="font-black mb-4">Statut & Plan</h2>
+      <form method="POST" action="/admin/tenants/{{tenant.id}}/statut" class="space-y-4">
+        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Statut</label>
+        <select name="statut" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          {% for s in ['ACTIF','ESSAI','SUSPENDU'] %}<option {{'selected' if tenant.statut==s}}>{{s}}</option>{% endfor %}
+        </select></div>
+        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Plan</label>
+        <select name="plan_id" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          {% for p in plans %}<option value="{{p.id}}" {{'selected' if tenant.plan_id==p.id}}>{{p.nom}} — {{p.prix_mensuel|int}} FCFA/mois</option>{% endfor %}
+        </select></div>
+        <button type="submit" class="w-full bg-purple-900 text-white rounded-xl py-2.5 font-bold text-sm">Enregistrer</button>
+      </form>
+    </div>
+    <!-- Utilisateurs -->
+    <div class="bg-white rounded-2xl border border-gray-200 p-6">
+      <h2 class="font-black mb-4">Utilisateurs ({{users|length}})</h2>
+      {% for u in users %}
+      <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 text-sm">
+        <div><div class="font-bold">{{u.nom_complet}}</div><div class="text-xs text-gray-400">{{u.email}}</div></div>
+        <span class="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{{u.role}}</span>
+      </div>{% endfor %}
+    </div>
+  </div>
+</main></body></html>

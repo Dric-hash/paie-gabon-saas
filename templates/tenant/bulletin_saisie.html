@@ -1,0 +1,268 @@
+{% extends "tenant/base.html" %}
+{% block title %}Saisie bulletin — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-black text-gray-900">Saisie de bulletin</h1>
+  <p class="text-gray-500 text-sm mt-1">Les cotisations sont calculées automatiquement selon la réglementation gabonaise.</p>
+</div>
+
+<form method="POST" action="{{ url_for("bulletin_saisie') }}" id="formBulletin">
+<div class="grid grid-cols-3 gap-6">
+
+  <!-- Colonne gauche : salarié + éléments -->
+  <div class="col-span-2 space-y-5">
+
+    <!-- Sélection salarié & période -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Salarié & Période</h2>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">Salarié *</label>
+          <select name="salarie_id" id="salarie_id" required
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+            <option value="">— Sélectionner —</option>
+            {% for s in salaries %}
+            <option value="{{ s.id }}"
+              {% if salarie_sel and salarie_sel.id == s.id %}selected{% endif %}>
+              {{ s.nom }} {{ s.prenom }} — {{ s.matricule }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">Période *</label>
+          <select name="periode_id" required
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+            <option value="">— Sélectionner —</option>
+            {% for p in periodes %}
+            <option value="{{ p.id }}">{{ p.libelle_complet }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">Jours travaillés</label>
+          <input type="number" name="nb_jours_travailles" value="24" min="0" max="31"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm"/>
+        </div>
+      </div>
+      <!-- Infos salarié sélectionné -->
+      <div id="infoSalarie" class="hidden mt-4 p-4 bg-gray-50 rounded-xl text-sm">
+        <div class="flex gap-6">
+          <div><span class="text-gray-400">Poste :</span> <strong id="infoPoste">—</strong></div>
+          <div><span class="text-gray-400">Salaire base :</span> <strong id="infoSalaireBase">—</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Éléments de salaire -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Éléments de salaire</h2>
+      <div class="grid grid-cols-2 gap-4">
+        {% macro champ(label, name, value=0, required=False) %}
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">{{ label }}</label>
+          <input type="number" name="{{ name }}" id="{{ name }}" value="{{ value }}" min="0" step="1"
+            class="calcul w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono
+                   {% if required %}border-primary{% endif %}"/>
+        </div>
+        {% endmacro %}
+        {{ champ("Salaire de base (FCFA) *", "salaire_base",
+                  contrat.salaire_base|int if contrat else 0, True) }}
+        {{ champ("Sursalaire (FCFA)", "sursalaire") }}
+        {{ champ("Heures sup +10% (FCFA)", "heures_sup_10") }}
+        {{ champ("Heures sup +30% (FCFA)", "heures_sup_30") }}
+        {{ champ("Heures sup +40% (FCFA)", "heures_sup_40") }}
+        {{ champ("Heures sup +70% (FCFA)", "heures_sup_70") }}
+        {{ champ("Absences (FCFA)", "absences") }}
+        {{ champ("Prime de caisse", "prime_caisse") }}
+        {{ champ("Carburant", "carburant") }}
+        {{ champ("Prime d'ancienneté", "prime_anciennete") }}
+      </div>
+    </div>
+
+    <!-- Indemnités & Primes -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Indemnités & Primes</h2>
+      <div class="grid grid-cols-2 gap-4">
+        {% macro champ2(label, name) %}
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">{{ label }}</label>
+          <input type="number" name="{{ name }}" id="{{ name }}" value="0" min="0" step="1"
+            class="calcul w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
+        </div>
+        {% endmacro %}
+        {{ champ2("Indemnité de logement", "indem_logement") }}
+        {{ champ2("Indemnité de domesticité", "indem_domesticite") }}
+        {{ champ2("Indemnité eau & électricité", "indem_eau_electricite") }}
+        {{ champ2("Indemnité de nourriture", "indem_nourriture") }}
+        {{ champ2("Prime de rendement", "prime_rendement") }}
+        {{ champ2("Prime d'assiduité", "prime_assiduité") }}
+        {{ champ2("Prime de qualité", "prime_qualite") }}
+        {{ champ2("Prime de performance", "prime_performance") }}
+        {{ champ2("Prime de transport", "prime_transport") }}
+        {{ champ2("Prime de responsabilité", "prime_responsabilite") }}
+        {{ champ2("Allocations de congé", "allocations_conge") }}
+      </div>
+    </div>
+
+    <!-- Éléments hors cotisations -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Éléments hors cotisations</h2>
+      <div class="grid grid-cols-2 gap-4">
+        {% macro champ3(label, name) %}
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">{{ label }}</label>
+          <input type="number" name="{{ name }}" id="{{ name }}" value="0" min="0" step="1"
+            class="calcul w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
+        </div>
+        {% endmacro %}
+        {{ champ3("Prime de panier", "prime_panier") }}
+        {{ champ3("Indemnité de transport (net)", "indem_transport") }}
+        {{ champ3("Indemnité de représentation", "indem_representation") }}
+        {{ champ3("Prime de salisure", "prime_salisure") }}
+        {{ champ3("Acompte à déduire", "acompte") }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Colonne droite : Récapitulatif calculé -->
+  <div class="space-y-5">
+    <div class="card p-6 sticky top-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+        Calcul automatique
+        <span id="spinnerCalc" class="hidden ml-2 text-amber-500">⟳</span>
+      </h2>
+
+      {% macro ligne_calcul(label, id, couleur="text-gray-700") %}
+      <div class="flex justify-between items-center py-1.5 text-sm">
+        <span class="{{ couleur }}">{{ label }}</span>
+        <span id="{{ id }}" class="font-bold {{ couleur }} font-mono">— FCFA</span>
+      </div>
+      {% endmacro %}
+
+      <!-- Brut -->
+      <div class="pb-3 border-b border-gray-200 mb-3">
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-bold text-gray-900">Salaire BRUT</span>
+          <span id="r_salaire_brut" class="text-base font-black text-gray-900 font-mono">— FCFA</span>
+        </div>
+      </div>
+
+      <!-- Cotisations salariales -->
+      <p class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Retenues salariales</p>
+      {{ ligne_calcul("CNSS salarié (2,5%)", "r_cnss_salarie", "text-red-600") }}
+      {{ ligne_calcul("CNAMGS salarié (2%)", "r_cnamgs_salarie", "text-red-600") }}
+      {{ ligne_calcul("TCS (5%)", "r_tcs", "text-red-600") }}
+      {{ ligne_calcul("IRPP", "r_irpp", "text-red-600") }}
+
+      <!-- Net -->
+      <div class="my-3 border-t border-gray-200 pt-3">
+        <div class="flex justify-between items-center">
+          <span class="text-sm font-bold text-gray-900">Salaire NET</span>
+          <span id="r_salaire_net" class="text-base font-black text-gray-900 font-mono">— FCFA</span>
+        </div>
+      </div>
+
+      <!-- Net à payer -->
+      <div class="bg-primary rounded-2xl p-4 mt-2">
+        <div class="text-xs font-bold text-white/60 mb-1">NET À PAYER</div>
+        <div id="r_net_a_payer" class="text-2xl font-black text-emerald-400 font-mono">— FCFA</div>
+      </div>
+
+      <!-- Charges patronales (info) -->
+      <div class="mt-4 p-3 bg-blue-50 rounded-xl border border-blue-100">
+        <p class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-2">Charges patronales</p>
+        {{ ligne_calcul("CNSS patronal (16%)", "r_cnss_patronale", "text-blue-700") }}
+        {{ ligne_calcul("CNAMGS patronal (4,1%)", "r_cnamgs_patronale", "text-blue-700") }}
+        {{ ligne_calcul("FNH (2%)", "r_fnh", "text-blue-700") }}
+        {{ ligne_calcul("CFP (0,5%)", "r_cfp", "text-blue-700") }}
+      </div>
+
+      <!-- Boutons -->
+      <div class="mt-5 space-y-2">
+        <button type="submit" name="action" value="brouillon"
+          class="w-full bg-amber-500 text-white rounded-xl py-3 font-bold text-sm hover:bg-amber-600 transition-all">
+          💾 Sauvegarder (brouillon)
+        </button>
+        <button type="submit" name="action" value="valider"
+          class="w-full bg-emerald-600 text-white rounded-xl py-3 font-bold text-sm hover:bg-emerald-700 transition-all">
+          ✅ Valider le bulletin
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+</form>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n)) + ' FCFA';
+
+  // Calcul en temps réel via l'API
+  let timer;
+  function recalculer() {
+    const form = document.getElementById('formBulletin');
+    const data = { salarie_id: document.getElementById('salarie_id').value };
+    form.querySelectorAll('input.calcul').forEach(inp => {
+      data[inp.name] = parseFloat(inp.value) || 0;
+    });
+
+    document.getElementById('spinnerCalc').classList.remove('hidden');
+
+    fetch('/api/calculer-bulletin', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(res => {
+      const set = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = fmt(val);
+      };
+      set('r_salaire_brut',    res.salaire_brut);
+      set('r_cnss_salarie',    res.cnss_salarie);
+      set('r_cnamgs_salarie',  res.cnamgs_salarie);
+      set('r_tcs',             res.tcs);
+      set('r_irpp',            res.irpp);
+      set('r_salaire_net',     res.salaire_net);
+      set('r_net_a_payer',     res.net_a_payer);
+      set('r_cnss_patronale',  res.cnss_patronale);
+      set('r_cnamgs_patronale',res.cnamgs_patronale);
+      set('r_fnh',             res.fnh);
+      set('r_cfp',             res.cfp);
+      document.getElementById('spinnerCalc').classList.add('hidden');
+    })
+    .catch(() => document.getElementById('spinnerCalc').classList.add('hidden'));
+  }
+
+  // Écouter tous les champs numériques
+  document.querySelectorAll('input.calcul').forEach(inp => {
+    inp.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(recalculer, 400); });
+  });
+
+  // Chargement des infos salarié
+  document.getElementById('salarie_id').addEventListener('change', function() {
+    const id = this.value;
+    if (!id) return;
+    fetch(`/api/salarie/${id}/contrat`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.salaire_base) {
+          document.getElementById('salaire_base').value = data.salaire_base;
+          document.getElementById('infoPoste').textContent = data.poste || '—';
+          document.getElementById('infoSalaireBase').textContent = fmt(data.salaire_base);
+          document.getElementById('infoSalarie').classList.remove('hidden');
+          recalculer();
+        }
+      });
+  });
+
+  // Calcul initial
+  recalculer();
+</script>
+{% endblock %}

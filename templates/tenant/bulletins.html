@@ -1,0 +1,61 @@
+{% extends "tenant/base.html" %}{% block title %}Bulletins{% endblock %}{% block content %}
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-black">Bulletins de paie</h1>
+  <a href="{{ url_for("bulletin_saisie') }}" class="btn-primary">+ Nouveau bulletin</a>
+</div>
+<div class="card p-4 mb-6">
+  <form method="GET" class="flex gap-3">
+    <select name="periode_id" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm flex-1">
+      <option value="">— Choisir une période —</option>
+      {% for p in periodes %}<option value="{{ p.id }}" {% if periode_sel and periode_sel.id==p.id %}selected{% endif %}>{{ p.libelle_complet }}</option>{% endfor %}
+    </select>
+    <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      <option value="">Tous statuts</option>
+      {% for s in ['BROUILLON','VALIDÉ','PAYÉ'] %}<option {% if statut_filtre==s %}selected{% endif %}>{{ s }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn-primary">Filtrer</button>
+  </form>
+</div>
+{% if periode_sel %}
+<div class="grid grid-cols-4 gap-4 mb-6">
+  {% for label, val, color in [("Bulletins",bulletins|length,"bg-primary"),("Masse brute",masse.get('total_brut',0)|int|string~" FCFA","bg-amber-600"),("Net total",masse.get('total_net',0)|int|string~" FCFA","bg-emerald-600"),("Charges pat.",masse.get('total_charges_patronales',0)|int|string~" FCFA","bg-blue-700")] %}
+  <div class="{{ color }} rounded-2xl p-4 text-white text-center">
+    <div class="text-xl font-black">{{ val }}</div>
+    <div class="text-xs opacity-70 mt-1">{{ label }}</div>
+  </div>{% endfor %}
+</div>
+<div class="card overflow-hidden">
+  <div class="flex justify-between items-center p-4 border-b border-gray-100">
+    <span class="text-xs font-bold text-gray-400 uppercase tracking-widest">{{ bulletins|length }} bulletin(s)</span>
+    <a href="{{ url_for("export_journal', periode_id=periode_sel.id) }}" class="btn-secondary text-xs">📥 Exporter Excel</a>
+  </div>
+  <table class="w-full text-sm">
+    <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+      <th class="px-4 py-3 text-left">Salarié</th>
+      <th class="px-4 py-3 text-right">Brut</th>
+      <th class="px-4 py-3 text-right">CNSS</th>
+      <th class="px-4 py-3 text-right">TCS</th>
+      <th class="px-4 py-3 text-right">IRPP</th>
+      <th class="px-4 py-3 text-right font-bold">Net à payer</th>
+      <th class="px-4 py-3 text-center">Statut</th>
+      <th class="px-4 py-3"></th>
+    </tr></thead>
+    <tbody>{% for b in bulletins %}
+    <tr class="border-b border-gray-50 hover:bg-gray-50">
+      <td class="px-4 py-3 font-bold">{{ b.salarie.nom_complet }}</td>
+      <td class="px-4 py-3 text-right font-mono text-gray-600">{{ b.salaire_brut|fcfa }}</td>
+      <td class="px-4 py-3 text-right font-mono text-red-500 text-xs">{{ b.cnss_salarie|fcfa }}</td>
+      <td class="px-4 py-3 text-right font-mono text-red-500 text-xs">{{ b.tcs|fcfa }}</td>
+      <td class="px-4 py-3 text-right font-mono text-red-500 text-xs">{{ b.irpp|fcfa }}</td>
+      <td class="px-4 py-3 text-right font-black">{{ b.net_a_payer|fcfa }}</td>
+      <td class="px-4 py-3 text-center"><span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span></td>
+      <td class="px-4 py-3"><a href="{{ url_for("bulletin_detail', id=b.id) }}" class="text-primary text-xs font-bold hover:underline">Voir</a></td>
+    </tr>{% else %}
+    <tr><td colspan="8" class="text-center py-10 text-gray-400">Aucun bulletin pour cette période</td></tr>
+    {% endfor %}</tbody>
+  </table>
+</div>
+{% else %}
+<div class="card p-12 text-center text-gray-400"><div class="text-5xl mb-3">📊</div><p>Sélectionnez une période pour afficher les bulletins</p></div>
+{% endif %}
+{% endblock %}

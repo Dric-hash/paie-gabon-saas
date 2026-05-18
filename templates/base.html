@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{% block title %}Paie Gabon{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={theme:{extend:{colors:{primary:"#1a2332",accent:"#f59e0b"}}}}</script>
+  <style>
+    body{font-family:'Segoe UI',system-ui,sans-serif}
+    .nav-link{@apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all}
+    .nav-link:hover{@apply bg-white/10}
+    .nav-link.active{@apply bg-white text-primary}
+    .card{@apply bg-white rounded-2xl border border-gray-200 shadow-sm}
+    .btn-primary{@apply bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all}
+    .btn-secondary{@apply bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all}
+    .btn-danger{@apply bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-700 transition-all}
+    .badge{@apply text-xs font-bold px-2 py-0.5 rounded-full border}
+    .badge-actif{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
+    .badge-inactif{@apply badge bg-red-100 text-red-600 border-red-200}
+    .badge-essai{@apply badge bg-amber-100 text-amber-700 border-amber-200}
+    .badge-suspendu{@apply badge bg-red-100 text-red-700 border-red-200}
+    .badge-validé{@apply badge bg-blue-100 text-blue-700 border-blue-200}
+    .badge-brouillon{@apply badge bg-amber-100 text-amber-700 border-amber-200}
+    .badge-payé{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
+    .badge-ouvert{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
+    .badge-clôturé{@apply badge bg-gray-100 text-gray-600 border-gray-200}
+    input:focus,select:focus{outline:none;border-color:#1a2332!important}
+    .form-input{@apply w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm transition-colors}
+  </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+{% if current_user.is_authenticated %}
+<div class="flex min-h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-60 bg-primary text-white flex flex-col fixed h-full z-20 shadow-2xl">
+
+    <!-- Logo -->
+    <div class="px-5 py-4 border-b border-white/10">
+      {% if current_user.is_super_admin %}
+      <div class="text-base font-black">🛡️ Super Admin</div>
+      <div class="text-xs text-white/40 mt-0.5">Paie Gabon SaaS</div>
+      {% else %}
+      <div class="text-base font-black truncate">
+        {{ current_user.tenant.sigle or current_user.tenant.denomination[:15] if current_user.tenant else 'Paie Gabon' }}
+      </div>
+      <div class="text-xs text-white/40 mt-0.5">
+        {% if current_user.tenant %}
+          <span class="badge-{{ current_user.tenant.statut|lower }} text-xs">{{ current_user.tenant.statut }}</span>
+          · {{ current_user.tenant.plan.nom if current_user.tenant.plan else '—' }}
+        {% endif %}
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Navigation -->
+    <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+      {% if current_user.is_super_admin %}
+        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2">Admin</p>
+        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint=='admin_dashboard' %}active{% endif %}">🏠 Dashboard</a>
+        <a href="{{ url_for('admin_tenants') }}" class="nav-link {% if 'tenant' in request.endpoint %}active{% endif %}">🏢 Entreprises</a>
+        <a href="{{ url_for('admin_plans') }}" class="nav-link {% if request.endpoint=='admin_plans' %}active{% endif %}">💳 Plans</a>
+        <a href="{{ url_for('admin_rubriques') }}" class="nav-link {% if request.endpoint=='admin_rubriques' %}active{% endif %}">⚙️ Rubriques paie</a>
+        <a href="{{ url_for('admin_stats') }}" class="nav-link {% if request.endpoint=='admin_stats' %}active{% endif %}">📊 Statistiques</a>
+      {% else %}
+        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2">Paie</p>
+        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">🏠 Tableau de bord</a>
+        <a href="{{ url_for('salaries') }}" class="nav-link {% if 'salari' in request.endpoint %}active{% endif %}">👥 Salariés</a>
+        <a href="{{ url_for('bulletin_saisie') }}" class="nav-link {% if request.endpoint=='bulletin_saisie' %}active{% endif %}">📄 Saisie bulletin</a>
+        <a href="{{ url_for('bulletins') }}" class="nav-link {% if request.endpoint=='bulletins' %}active{% endif %}">📊 Bulletins</a>
+        <a href="{{ url_for('periodes') }}" class="nav-link {% if request.endpoint=='periodes' %}active{% endif %}">📅 Périodes</a>
+        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2 mt-3">Gestion</p>
+        {% if current_user.is_tenant_admin %}
+        <a href="{{ url_for('utilisateurs') }}" class="nav-link {% if 'utilisateur' in request.endpoint %}active{% endif %}">🔐 Utilisateurs</a>
+        {% endif %}
+        <a href="{{ url_for('parametres') }}" class="nav-link {% if request.endpoint=='parametres' %}active{% endif %}">⚙️ Paramètres</a>
+      {% endif %}
+    </nav>
+
+    <!-- Pied de sidebar -->
+    <div class="px-4 py-3 border-t border-white/10">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-black flex-shrink-0">
+          {{ current_user.prenom[0] }}{{ current_user.nom[0] }}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-bold truncate">{{ current_user.nom_complet }}</div>
+          <div class="text-xs text-white/40">{{ current_user.role }}</div>
+        </div>
+        <a href="{{ url_for('logout') }}" class="text-white/40 hover:text-white text-lg" title="Déconnexion">⏏</a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- CONTENU -->
+  <main class="ml-60 flex-1 p-8 min-h-screen">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="mb-6 space-y-2">
+        {% for cat,msg in messages %}
+        <div class="px-4 py-3 rounded-xl text-sm font-semibold
+          {% if cat=='success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+          {% elif cat=='error' %}bg-red-50 text-red-800 border border-red-200
+          {% else %}bg-amber-50 text-amber-800 border border-amber-200{% endif %}">
+          {{ msg }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+
+{% else %}
+{% block auth_content %}{% endblock %}
+{% endif %}
+
+{% block scripts %}{% endblock %}
+</body>
+</html>
