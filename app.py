@@ -17,6 +17,9 @@ app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL","sqlite://
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
 
+with app.app_context():
+    init_db()
+
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
 login_manager.login_message = "Veuillez vous connecter."
@@ -516,5 +519,4 @@ def init_db():
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
 
 if __name__=="__main__":
-    with app.app_context(): init_db()
     app.run(debug=True,port=5000)
