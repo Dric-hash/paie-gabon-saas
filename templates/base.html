@@ -63,6 +63,7 @@
         <a href="{{ url_for('admin_tenants') }}" class="nav-link {% if 'tenant' in request.endpoint %}active{% endif %}">🏢 Entreprises</a>
         <a href="{{ url_for('admin_plans') }}" class="nav-link {% if request.endpoint=='admin_plans' %}active{% endif %}">💳 Plans</a>
         <a href="{{ url_for('admin_rubriques') }}" class="nav-link {% if request.endpoint=='admin_rubriques' %}active{% endif %}">⚙️ Rubriques paie</a>
+        <a href="{{ url_for('admin_import_excel') }}" class="nav-link {% if request.endpoint=='admin_import_excel' %}active{% endif %}">📥 Import Excel</a>
         <a href="{{ url_for('admin_stats') }}" class="nav-link {% if request.endpoint=='admin_stats' %}active{% endif %}">📊 Statistiques</a>
       {% else %}
         <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2">Paie</p>
