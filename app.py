@@ -193,9 +193,15 @@ def admin_rubriques():
 
 # ── Tenant ────────────────────────────────────────────────────────────────────
 @app.route("/dashboard")
-@tenant_required
+@login_required
 def dashboard():
-    t=get_tenant(); now=datetime.now()
+    if current_user.is_super_admin:
+        return redirect(url_for("admin_dashboard"))
+    t=get_tenant()
+    if not t:
+        flash("Aucune entreprise associée à votre compte.","error")
+        return redirect(url_for("login"))
+    now=datetime.now()
     nb_actifs=Salarie.query.filter_by(tenant_id=t.id,statut="ACTIF").count()
     periode=PeriodePaie.query.filter_by(tenant_id=t.id,annee=now.year,mois=now.month).first()
     masse={}; nb_v=nb_b=0
