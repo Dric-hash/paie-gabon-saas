@@ -179,6 +179,150 @@ def admin_plans():
         db.session.add(p); db.session.commit(); flash("Plan créé.","success")
     return render_template("admin/plans.html", plans=Plan.query.all())
 
+
+@app.route("/admin/import", methods=["GET","POST"])
+@login_required
+@super_admin_required
+def admin_import_excel():
+    from werkzeug.utils import secure_filename
+    import io
+    tenants = Tenant.query.order_by(Tenant.denomination).all()
+    resultats = None
+
+    if request.method == "POST":
+        tenant_id = request.form.get("tenant_id", type=int)
+        tenant = Tenant.query.get_or_404(tenant_id)
+        f = request.files.get("excel_file")
+        if not f or not f.filename.endswith(".xlsx"):
+            flash("Fichier invalide. Utilisez un fichier .xlsx", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        imp_societe  = "import_societe"   in request.form
+        imp_salaries = "import_salaries"  in request.form
+        imp_bulletins= "import_bulletins" in request.form
+        ecraser      = "ecraser"          in request.form
+        try:
+            from openpyxl import load_workbook
+            from datetime import datetime as dt2, date as d2
+            wb = load_workbook(io.BytesIO(f.read()), read_only=True, data_only=True)
+            nb_sal=nb_bul=nb_per=nb_err=0
+            def nv(v,d=0):
+                try: return float(v) if v is not None else d
+                except: return d
+            def dv(v):
+                if v is None: return None
+                if isinstance(v,dt2): return v.date()
+                if isinstance(v,d2): return v
+                try: return dt2.strptime(str(v)[:10],"%Y-%m-%d").date()
+                except: return None
+            if imp_societe and "INFOS SOCIETE" in wb.sheetnames:
+                ws=wb["INFOS SOCIETE"]; infos={}
+                for row in ws.iter_rows(values_only=True):
+                    if row[1] and row[2]: infos[str(row[1]).strip().upper()]=row[2]
+                tenant.denomination=str(infos.get("DENOMINATION SOCIALE",tenant.denomination)).strip().upper()
+                tenant.sigle=str(infos.get("SIGLE",tenant.sigle or "")).strip()
+                tenant.activite=str(infos.get("ACTIVITE",tenant.activite or "")).strip()
+                tenant.nif=str(infos.get("NIF",tenant.nif or "")).strip()
+                tenant.adresse=str(infos.get("ADRESSE",tenant.adresse or "")).strip()
+                tenant.ville=str(infos.get("VILLE",tenant.ville or "Libreville")).strip()
+                tenant.region=str(infos.get("REGION",tenant.region or "")).strip()
+            cats={}
+            for code,lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
+                cat=CategorieEmploi.query.filter_by(tenant_id=tenant.id,code=code).first()
+                if not cat:
+                    cat=CategorieEmploi(tenant_id=tenant.id,code=code,libelle=lib)
+                    db.session.add(cat); db.session.flush()
+                cats[code]=cat
+            salaries_map={}
+            if imp_salaries and "INFOS SALARIES" in wb.sheetnames:
+                ws=wb["INFOS SALARIES"]; header=None
+                for row in ws.iter_rows(values_only=True):
+                    if not any(v is not None for v in row): continue
+                    if header is None: header=row; continue
+                    if row[0] is None: continue
+                    matricule=str(row[0]).strip().upper()
+                    if not matricule: continue
+                    sal=Salarie.query.filter_by(tenant_id=tenant.id,matricule=matricule).first()
+                    if sal and not ecraser: salaries_map[matricule]=sal; continue
+                    if not sal: sal=Salarie(tenant_id=tenant.id,matricule=matricule); db.session.add(sal)
+                    sal.nom=str(row[1]).strip().upper() if row[1] else "—"
+                    sal.prenom=str(row[2]).strip() if row[2] else "—"
+                    sal.telephone=str(row[3]).strip() if row[3] else None
+                    sal.nationalite=str(row[5]).strip().upper() if row[5] else "GABONAISE"
+                    sal.sexe=str(row[6]).strip().upper() if row[6] else "M"
+                    sal.date_naissance=dv(row[7])
+                    sal.date_embauche=dv(row[9]) or d2(2024,8,1)
+                    sal.date_cessation=dv(row[10])
+                    sal.situation_matrimoniale=str(row[11]).strip().upper() if row[11] else None
+                    sal.nb_enfants=int(row[12]) if row[12] and str(row[12]).replace('.','').isdigit() else 0
+                    sal.nombre_parts=float(row[13]) if row[13] else 1.0
+                    sal.numero_cnss=str(row[14]).strip() if row[14] else None
+                    sal.numero_cnamgs=str(row[15]).strip() if row[15] else None
+                    sal.emploi=str(row[16]).strip().upper() if row[16] else None
+                    sal.nb_enfants_moins_16ans=int(row[18]) if row[18] and str(row[18]).replace('.','').isdigit() else 0
+                    sal.assujetti_cnamgs=str(row[19]).strip().upper()=="OUI" if row[19] else True
+                    sal.statut="INACTIF" if dv(row[10]) else "ACTIF"
+                    cat_code=str(row[17]).strip().upper() if row[17] else "C1"
+                    sal.categorie_id=cats.get(cat_code,cats.get("C1")).id
+                    db.session.flush(); salaries_map[matricule]=sal; nb_sal+=1
+            if not imp_salaries:
+                for s in Salarie.query.filter_by(tenant_id=tenant.id).all():
+                    salaries_map[s.matricule]=s
+            MOIS={"JANVIER":1,"FÉVRIER":2,"FEVRIER":2,"MARS":3,"AVRIL":4,"MAI":5,"JUIN":6,
+                  "JUILLET":7,"AOÛT":8,"AOUT":8,"SEPTEMBRE":9,"OCTOBRE":10,"NOVEMBRE":11,"DÉCEMBRE":12,"DECEMBRE":12}
+            periodes_cache={}
+            if imp_bulletins and "DONNEES DU BULLETIN" in wb.sheetnames:
+                ws=wb["DONNEES DU BULLETIN"]
+                for i,row in enumerate(ws.iter_rows(values_only=True)):
+                    if i==0: continue
+                    if not any(v is not None for v in row): continue
+                    if row[4] is None: continue
+                    matricule=str(row[4]).strip().upper()
+                    if matricule not in salaries_map: nb_err+=1; continue
+                    annee=int(row[1]) if row[1] else None
+                    mois_str=str(row[2]).strip().upper() if row[2] else ""
+                    mois=MOIS.get(mois_str)
+                    if not annee or not mois: nb_err+=1; continue
+                    pk=f"{annee}-{mois}"
+                    if pk not in periodes_cache:
+                        p=PeriodePaie.query.filter_by(tenant_id=tenant.id,annee=annee,mois=mois).first()
+                        if not p:
+                            mois_nom=[k for k,v in MOIS.items() if v==mois and len(k)>4][0]
+                            p=PeriodePaie(tenant_id=tenant.id,annee=annee,mois=mois,
+                                libelle_mois=mois_nom,trimestre=f"T{(mois-1)//3+1}",statut="CLÔTURÉ")
+                            db.session.add(p); db.session.flush(); nb_per+=1
+                        periodes_cache[pk]=p
+                    sal=salaries_map[matricule]
+                    bul=BulletinPaie.query.filter_by(tenant_id=tenant.id,salarie_id=sal.id,periode_id=periodes_cache[pk].id).first()
+                    if bul and not ecraser: continue
+                    if not bul: bul=BulletinPaie(tenant_id=tenant.id,salarie_id=sal.id,periode_id=periodes_cache[pk].id); db.session.add(bul)
+                    bul.nb_jours_travailles=int(nv(row[42]))
+                    bul.salaire_base=nv(row[5]); bul.heures_sup_10=nv(row[7]); bul.heures_sup_30=nv(row[9])
+                    bul.heures_sup_40=nv(row[11]); bul.heures_sup_70=nv(row[13]); bul.absences=nv(row[15])
+                    bul.sursalaire=nv(row[17]); bul.prime_caisse=nv(row[19]); bul.carburant=nv(row[21])
+                    bul.prime_anciennete=nv(row[23]); bul.indem_logement=nv(row[25])
+                    bul.indem_domesticite=nv(row[26]); bul.indem_eau_electricite=nv(row[27])
+                    bul.indem_nourriture=nv(row[28]); bul.prime_rendement=nv(row[29])
+                    bul.prime_assiduité=nv(row[31]); bul.prime_qualite=nv(row[33])
+                    bul.prime_performance=nv(row[35]); bul.prime_transport=nv(row[37])
+                    bul.prime_responsabilite=nv(row[39]); bul.allocations_conge=nv(row[41])
+                    bul.salaire_brut=nv(row[53]); bul.base_cnss=nv(row[54])
+                    bul.cnss_salarie=nv(row[55]); bul.cnss_patronale=nv(row[56])
+                    bul.base_cnamgs=nv(row[59]); bul.cnamgs_salarie=nv(row[60])
+                    bul.cnamgs_patronale=nv(row[61]); bul.fnh=nv(row[62]); bul.cfp=nv(row[63])
+                    bul.base_tcs=nv(row[72]); bul.tcs=nv(row[73]); bul.net_avant_irpp=nv(row[74])
+                    bul.base_irpp=nv(row[75]); bul.irpp=nv(row[76]); bul.salaire_net=nv(row[77])
+                    bul.prime_panier=nv(row[78]); bul.indem_transport=nv(row[79])
+                    bul.indem_representation=nv(row[80]); bul.prime_salisure=nv(row[81])
+                    bul.acompte=nv(row[82]); bul.net_a_payer=nv(row[83])
+                    bul.statut="VALIDÉ"; bul.date_validation=datetime.utcnow(); nb_bul+=1
+            db.session.commit()
+            resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,"erreurs":nb_err}
+            flash(f"✅ Import réussi ! {nb_sal} salariés, {nb_bul} bulletins, {nb_per} périodes importés.","success")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"❌ Erreur : {str(e)}","error")
+    return render_template("admin/import_excel.html", tenants=tenants, resultats=resultats)
+
 @app.route("/admin/rubriques", methods=["GET","POST"])
 @super_admin_required
 def admin_rubriques():
