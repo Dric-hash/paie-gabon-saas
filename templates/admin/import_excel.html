@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Import Excel — Super Admin{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="text-2xl font-black text-gray-900">Import de données Excel</h1>
+  <p class="text-gray-500 text-sm mt-1">Importez les salariés et bulletins depuis un fichier Excel SGTG.</p>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    {% for cat, msg in messages %}
+    <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold
+      {% if cat=='success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
+      {% elif cat=='error' %}bg-red-50 text-red-800 border border-red-200
+      {% else %}bg-amber-50 text-amber-800 border border-amber-200{% endif %}">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  {% endif %}
+{% endwith %}
+
+<div class="grid grid-cols-2 gap-6">
+
+  <!-- Formulaire d'import -->
+  <div class="card p-6">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Importer un fichier Excel</h2>
+
+    <form method="POST" action="{{ url_for('admin_import_excel') }}" enctype="multipart/form-data" class="space-y-4">
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">
+          Entreprise destinataire *
+        </label>
+        <select name="tenant_id" required
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="">— Sélectionner une entreprise —</option>
+          {% for t in tenants %}
+          <option value="{{ t.id }}">{{ t.denomination }} ({{ t.statut }})</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">
+          Fichier Excel (.xlsx) *
+        </label>
+        <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center hover:border-primary transition-colors" id="dropZone">
+          <div class="text-4xl mb-2">📊</div>
+          <p class="text-sm text-gray-500 mb-2">Glissez votre fichier ici ou</p>
+          <label class="btn-primary cursor-pointer inline-block">
+            Choisir le fichier
+            <input type="file" name="excel_file" accept=".xlsx,.xlsb" class="hidden" id="fileInput" required
+              onchange="document.getElementById('fileName').textContent = this.files[0].name"/>
+          </label>
+          <p id="fileName" class="text-xs text-gray-400 mt-2">Aucun fichier sélectionné</p>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">
+          Options d'import
+        </label>
+        <div class="space-y-2">
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" name="import_societe" checked class="rounded"/>
+            <span>Mettre à jour les infos de la société</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" name="import_salaries" checked class="rounded"/>
+            <span>Importer les salariés</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" name="import_bulletins" checked class="rounded"/>
+            <span>Importer l'historique des bulletins</span>
+          </label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" name="ecraser" class="rounded"/>
+            <span class="text-amber-700">⚠️ Écraser les données existantes</span>
+          </label>
+        </div>
+      </div>
+
+      <button type="submit" id="submitBtn"
+        class="w-full bg-primary text-white rounded-xl py-3 font-bold text-sm hover:bg-gray-800 transition-all">
+        🚀 Lancer l'import
+      </button>
+    </form>
+  </div>
+
+  <!-- Instructions -->
+  <div class="space-y-4">
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Format accepté</h2>
+      <div class="space-y-2 text-sm">
+        <div class="flex items-start gap-2">
+          <span class="text-emerald-500 font-bold mt-0.5">✅</span>
+          <span>Fichier <strong>.xlsx</strong> — Format Excel standard</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-emerald-500 font-bold mt-0.5">✅</span>
+          <span>Doit contenir les feuilles : <strong>INFOS SOCIETE</strong>, <strong>INFOS SALARIES</strong>, <strong>DONNEES DU BULLETIN</strong></span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-emerald-500 font-bold mt-0.5">✅</span>
+          <span>Compatible avec le modèle de paie gabonais SGTG</span>
+        </div>
+        <div class="flex items-start gap-2">
+          <span class="text-amber-500 font-bold mt-0.5">⚠️</span>
+          <span>Taille maximale : <strong>10 Mo</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Ce qui sera importé</h2>
+      <div class="space-y-3 text-sm">
+        <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+          <span class="text-xl">🏢</span>
+          <div><div class="font-bold">Infos société</div><div class="text-xs text-gray-400">Dénomination, NIF, adresse, secteur</div></div>
+        </div>
+        <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+          <span class="text-xl">👷</span>
+          <div><div class="font-bold">Salariés</div><div class="text-xs text-gray-400">Matricule, nom, emploi, CNSS, CNAMGS, situation familiale</div></div>
+        </div>
+        <div class="flex items-center gap-3 p-2 bg-gray-50 rounded-lg">
+          <span class="text-xl">📄</span>
+          <div><div class="font-bold">Bulletins historiques</div><div class="text-xs text-gray-400">Tous les mois avec cotisations et nets à payer</div></div>
+        </div>
+      </div>
+    </div>
+
+    {% if resultats %}
+    <div class="card p-5 border-emerald-200 bg-emerald-50">
+      <h2 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Résultats du dernier import</h2>
+      <div class="space-y-1 text-sm">
+        <div class="flex justify-between"><span>Salariés importés</span><strong>{{ resultats.nb_salaries }}</strong></div>
+        <div class="flex justify-between"><span>Bulletins importés</span><strong>{{ resultats.nb_bulletins }}</strong></div>
+        <div class="flex justify-between"><span>Périodes créées</span><strong>{{ resultats.nb_periodes }}</strong></div>
+        {% if resultats.erreurs %}
+        <div class="mt-2 text-amber-700 text-xs">⚠️ {{ resultats.erreurs }} lignes ignorées</div>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+
+<script>
+// Afficher un loader pendant l'import
+document.querySelector('form').addEventListener('submit', function() {
+  const btn = document.getElementById('submitBtn');
+  btn.textContent = '⏳ Import en cours... Veuillez patienter';
+  btn.disabled = true;
+  btn.classList.add('opacity-75');
+});
+</script>
+
+{% endblock %}
