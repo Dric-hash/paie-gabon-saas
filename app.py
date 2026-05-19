@@ -504,7 +504,7 @@ def init_db():
             ("CFP","Contribution Formation Professionnelle","COTISATION",None,0.005,None),
         ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
     if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        sa=Utilisateur(nom="ADMIN",prenom="Super",email="admin@paiegalon.ga",role="SUPER_ADMIN",actif=True)
+        sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
         sa.set_password("Admin2026!"); db.session.add(sa)
     if not Tenant.query.first():
         db.session.flush()
@@ -520,6 +520,13 @@ def init_db():
         u.set_password("Demo2026!"); db.session.add(u)
     db.session.commit()
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
+
+# Initialisation automatique au démarrage (Railway/Production)
+with app.app_context():
+    try:
+        init_db()
+    except Exception as e:
+        print(f"Erreur init_db: {e}")
 
 if __name__=="__main__":
     with app.app_context(): init_db()
