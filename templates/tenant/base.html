@@ -1,51 +1,126 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>{% block title %}PaieGabon{% endblock %}</title><script src="https://cdn.tailwindcss.com"></script>
-<style>body{font-family:'Segoe UI',system-ui,sans-serif}.card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}.btn-primary{background:#1a2332;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem}.btn-secondary{background:#f1f5f9;color:#374151;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem}.badge-actif{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}.badge-inactif{background:#fee2e2;color:#991b1b;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}.badge-validé{background:#dbeafe;color:#1e40af;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}.badge-brouillon{background:#fef3c7;color:#92400e;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}.badge-payé{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}</style>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{% block title %}PaieGabon{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body{font-family:'Segoe UI',system-ui,sans-serif}
+    .card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .btn-primary{background:#1a2332;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;display:inline-block;cursor:pointer;border:none}
+    .btn-primary:hover{background:#374151}
+    .btn-secondary{background:#f1f5f9;color:#374151;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;display:inline-block;cursor:pointer;border:none}
+    .badge-actif{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #a7f3d0}
+    .badge-inactif{background:#fee2e2;color:#991b1b;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #fca5a5}
+    .badge-suspendu{background:#fee2e2;color:#991b1b;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .badge-validé{background:#dbeafe;color:#1e40af;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #93c5fd}
+    .badge-brouillon{background:#fef3c7;color:#92400e;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #fcd34d}
+    .badge-payé{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #a7f3d0}
+    .badge-ouvert{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .badge-clôturé{background:#f3f4f6;color:#6b7280;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .form-input{width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem}
+    .form-input:focus{outline:none;border-color:#1a2332}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f9fafb;padding:.625rem .75rem;text-align:left;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
+    td{padding:.75rem;border-bottom:1px solid #f3f4f6;font-size:.875rem}
+    tr:hover td{background:#fafafa}
+  </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
 <div class="flex min-h-screen">
+
   <!-- Sidebar -->
   <aside class="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-2xl">
+    <!-- Logo -->
     <div class="px-6 py-5 border-b border-white/10">
       <div class="text-lg font-black">🏗️ PaieGabon</div>
-      <div class="text-xs text-white/50 mt-0.5 truncate">{{tenant.denomination if tenant else 'Super-Admin'}}</div>
-      {% if tenant and tenant.plan %}<span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold">{{tenant.plan.nom}}</span>{% endif %}
+      <div class="text-xs text-white/50 mt-0.5 truncate">
+        {% if tenant %}{{ tenant.denomination }}{% else %}Espace entreprise{% endif %}
+      </div>
+      {% if tenant and tenant.plan %}
+      <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold mt-1 inline-block">
+        {{ tenant.plan.nom }}
+      </span>
+      {% endif %}
     </div>
+
+    <!-- Navigation -->
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-      {% macro navlink(url, icon, label, ep) %}<a href="{{url}}" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{'bg-white text-slate-900' if request.endpoint==ep else 'text-white/80 hover:bg-white/10'}}">{{icon}} <span>{{label}}</span></a>{% endmacro %}
-      {{navlink('/app','🏠','Tableau de bord','dashboard')}}
-      {{navlink('/app/salaries','👥','Salariés','salaries')}}
-      {{navlink('/app/bulletins/saisie','📄','Saisie bulletin','bulletin_saisie')}}
-      {{navlink('/app/bulletins','📊','Bulletins','bulletins')}}
-      {{navlink('/app/periodes','📅','Périodes','periodes')}}
+      {% set ep = request.endpoint %}
+      <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
+        🏠 <span>Tableau de bord</span>
+      </a>
+      <a href="/salaries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'salari' in ep else 'text-white/80 hover:bg-white/10' }}">
+        👥 <span>Salariés</span>
+      </a>
+      <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
+        📄 <span>Saisie bulletin</span>
+      </a>
+      <a href="/bulletins" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletins' else 'text-white/80 hover:bg-white/10' }}">
+        📊 <span>Bulletins</span>
+      </a>
+      <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
+        📅 <span>Périodes</span>
+      </a>
       <div class="border-t border-white/10 my-2"></div>
-      {{navlink('/app/parametres','⚙️','Paramètres','parametres')}}
-      {% if current_user.is_super_admin %}<a href="/admin" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-purple-300 hover:bg-white/10">🔑 <span>Retour admin</span></a>{% endif %}
+      {% if current_user.is_tenant_admin %}
+      <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🔐 <span>Utilisateurs</span>
+      </a>
+      {% endif %}
+      <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
+        ⚙️ <span>Paramètres</span>
+      </a>
+      {% if current_user.is_super_admin %}
+      <div class="border-t border-white/10 my-2"></div>
+      <a href="/admin" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-purple-300 hover:bg-white/10 transition-all">
+        🔑 <span>Retour admin</span>
+      </a>
+      {% endif %}
     </nav>
+
+    <!-- Utilisateur connecté -->
     <div class="px-4 py-4 border-t border-white/10">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-sm font-black">
-          {{current_user.prenom[0]}}{{current_user.nom[0]}}</div>
+        <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-sm font-black flex-shrink-0">
+          {{ current_user.prenom[0] }}{{ current_user.nom[0] }}
+        </div>
         <div class="flex-1 min-w-0">
-          <div class="text-sm font-bold truncate">{{current_user.nom_complet}}</div>
-          <div class="text-xs text-white/50">{{current_user.role}}</div>
+          <div class="text-sm font-bold truncate">{{ current_user.nom_complet }}</div>
+          <div class="text-xs text-white/50">{{ current_user.role }}</div>
         </div>
         <a href="/logout" title="Déconnexion" class="text-white/40 hover:text-white text-lg">⏏</a>
       </div>
     </div>
-    {% if tenant and tenant.statut=='ESSAI' %}
+
+    <!-- Bandeau essai -->
+    {% if tenant and tenant.statut == 'ESSAI' %}
     <div class="mx-3 mb-3 bg-amber-500/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 text-center font-semibold">
-      ⏳ Essai gratuit — Expire le {{tenant.date_expiration.strftime('%d/%m/%Y') if tenant.date_expiration else '—'}}
-    </div>{% endif %}
+      ⏳ Période d'essai gratuite
+    </div>
+    {% endif %}
   </aside>
-  <!-- Contenu -->
-  <main class="ml-64 flex-1 p-8">
-    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
-    <div class="mb-6 space-y-2">{% for cat,msg in messages %}
-    <div class="px-4 py-3 rounded-xl text-sm font-semibold {{'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success' else 'bg-red-50 text-red-800 border border-red-200' if cat=='error' else 'bg-amber-50 text-amber-800 border border-amber-200'}}">{{msg}}</div>
-    {% endfor %}</div>{% endif %}{% endwith %}
+
+  <!-- Contenu principal -->
+  <main class="ml-64 flex-1 p-8 min-h-screen">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="mb-6 space-y-2">
+        {% for cat, msg in messages %}
+        <div class="px-4 py-3 rounded-xl text-sm font-semibold
+          {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+          else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+          else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+          {{ msg }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
     {% block content %}{% endblock %}
   </main>
 </div>
 {% block scripts %}{% endblock %}
-</body></html>
+</body>
+</html>
