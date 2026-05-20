@@ -1,5 +1,5 @@
 {% extends "tenant/base.html" %}
-{% block title %}Salariés — Paie Gabon{% endblock %}
+{% block title %}Salariés — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
 <div class="flex items-center justify-between mb-6">
@@ -7,47 +7,47 @@
     <h1 class="text-2xl font-black text-gray-900">Salariés</h1>
     <p class="text-gray-500 text-sm mt-1">{{ salaries|length }} salarié(s) trouvé(s)</p>
   </div>
-  <a href="{{ url_for("salarie_nouveau') }}" class="btn-primary">+ Nouveau salarié</a>
+  <a href="/salaries/nouveau" class="btn-primary">+ Nouveau salarié</a>
 </div>
 
 <!-- Filtres -->
 <div class="card p-4 mb-6">
-  <form method="GET" class="flex gap-3 items-center">
-    <input type="text" name="q" value="{{ q }}" placeholder="🔍  Rechercher nom, matricule, poste..."
-      class="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm"/>
-    <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+  <form method="GET" class="flex gap-3">
+    <input type="text" name="q" value="{{ q }}" placeholder="🔍 Rechercher nom, matricule, poste..."
+      class="flex-1 form-input"/>
+    <select name="statut" class="form-input" style="width:180px">
       <option value="">Tous les statuts</option>
-      <option value="ACTIF" {% if statut == 'ACTIF' %}selected{% endif %}>Actifs</option>
-      <option value="INACTIF" {% if statut == 'INACTIF' %}selected{% endif %}>Inactifs</option>
+      <option value="ACTIF" {% if statut=='ACTIF' %}selected{% endif %}>Actifs</option>
+      <option value="INACTIF" {% if statut=='INACTIF' %}selected{% endif %}>Inactifs</option>
     </select>
     <button type="submit" class="btn-primary">Filtrer</button>
     {% if q or statut %}
-    <a href="{{ url_for("salaries") }}" class="btn-secondary">Effacer</a>
+    <a href="/salaries" class="btn-secondary">Effacer</a>
     {% endif %}
   </form>
 </div>
 
-<!-- Table -->
+<!-- Tableau -->
 <div class="card overflow-hidden">
-  <table class="w-full text-sm">
+  <table>
     <thead>
-      <tr class="bg-primary text-white text-xs uppercase tracking-wider">
-        <th class="px-4 py-3 text-left font-bold">Matricule</th>
-        <th class="px-4 py-3 text-left font-bold">Nom & Prénom</th>
-        <th class="px-4 py-3 text-left font-bold">Emploi</th>
-        <th class="px-4 py-3 text-center font-bold">Catégorie</th>
-        <th class="px-4 py-3 text-right font-bold">Salaire base</th>
-        <th class="px-4 py-3 text-center font-bold">Statut</th>
-        <th class="px-4 py-3 text-center font-bold">Actions</th>
+      <tr>
+        <th>Matricule</th>
+        <th>Nom & Prénom</th>
+        <th>Emploi</th>
+        <th style="text-align:center">Catégorie</th>
+        <th style="text-align:right">Salaire base</th>
+        <th style="text-align:center">Statut</th>
+        <th style="text-align:center">Actions</th>
       </tr>
     </thead>
     <tbody>
       {% for s in salaries %}
-      <tr class="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-        <td class="px-4 py-3 font-mono text-xs text-gray-500">{{ s.matricule }}</td>
-        <td class="px-4 py-3">
+      <tr>
+        <td class="font-mono text-xs text-gray-500">{{ s.matricule }}</td>
+        <td>
           <div class="flex items-center gap-3">
-            <div class="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-xs">
+            <div style="width:2rem;height:2rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
               {{ s.nom[0] }}{{ s.prenom[0] }}
             </div>
             <div>
@@ -56,36 +56,30 @@
             </div>
           </div>
         </td>
-        <td class="px-4 py-3 text-gray-700">{{ s.emploi or '—' }}</td>
-        <td class="px-4 py-3 text-center">
-          <span class="bg-gray-100 text-gray-700 text-xs font-bold px-2 py-1 rounded-lg">
+        <td class="text-gray-700">{{ s.emploi or '—' }}</td>
+        <td style="text-align:center">
+          <span style="background:#f3f4f6;color:#374151;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:.5rem">
             {{ s.categorie.code if s.categorie else '—' }}
           </span>
         </td>
-        <td class="px-4 py-3 text-right font-bold text-gray-900">
-          {% if s.contrats %}
-            {{ s.contrats[-1].salaire_base|fcfa }}
-          {% else %}—{% endif %}
+        <td style="text-align:right" class="font-bold text-gray-900">
+          {% if s.contrats %}{{ s.contrats[-1].salaire_base|fcfa }}{% else %}—{% endif %}
         </td>
-        <td class="px-4 py-3 text-center">
+        <td style="text-align:center">
           <span class="badge-{{ s.statut|lower }}">{{ s.statut }}</span>
         </td>
-        <td class="px-4 py-3 text-center">
-          <div class="flex gap-2 justify-center">
-            <a href="{{ url_for("salarie_detail', id=s.id) }}"
-               class="text-primary hover:underline text-xs font-bold">Voir</a>
-            <span class="text-gray-300">|</span>
-            <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ s.id }}"
-               class="text-amber-600 hover:underline text-xs font-bold">Bulletin</a>
-          </div>
+        <td style="text-align:center">
+          <a href="/salaries/{{ s.id }}" class="text-blue-600 text-xs font-bold hover:underline">Voir</a>
+          <span class="text-gray-300 mx-1">|</span>
+          <a href="/bulletins/saisie?salarie_id={{ s.id }}" class="text-amber-600 text-xs font-bold hover:underline">Bulletin</a>
         </td>
       </tr>
       {% else %}
       <tr>
-        <td colspan="7" class="text-center py-12 text-gray-400">
-          <div class="text-4xl mb-2">👤</div>
+        <td colspan="7" style="text-align:center;padding:3rem;color:#9ca3af">
+          <div style="font-size:2rem;margin-bottom:.5rem">👤</div>
           <p>Aucun salarié trouvé</p>
-          <a href="{{ url_for("salarie_nouveau') }}" class="btn-primary inline-block mt-3">Créer le premier salarié</a>
+          <a href="/salaries/nouveau" class="btn-primary" style="display:inline-block;margin-top:.75rem">Créer le premier salarié</a>
         </td>
       </tr>
       {% endfor %}
