@@ -503,10 +503,29 @@ def salarie_detail(id):
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
     if not t: return redirect(url_for("login"))
-    s=Salarie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    return render_template("tenant/salarie_detail.html", salarie=s, tenant=t,
-        bulletins=BulletinPaie.query.filter_by(salarie_id=id,tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(12).all(),
-        contrat=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first())
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)                .order_by(BulletinPaie.date_creation.desc()).all()
+    contrat = Contrat.query.filter_by(salarie_id=id, tenant_id=t.id, actif=True).first()
+    conge = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
+                annee=datetime.now().year).first()
+
+    # Statistiques du salarié
+    total_brut = sum(float(b.salaire_brut or 0) for b in bulletins)
+    total_net  = sum(float(b.net_a_payer or 0) for b in bulletins)
+    total_cnss = sum(float(b.cnss_salarie or 0) for b in bulletins)
+    total_irpp = sum(float(b.irpp or 0) for b in bulletins)
+    nb_mois    = len(bulletins)
+
+    # Ancienneté
+    anciennete_jours = (datetime.now().date() - s.date_embauche).days if s.date_embauche else 0
+    anciennete_ans   = anciennete_jours // 365
+    anciennete_mois  = (anciennete_jours % 365) // 30
+
+    return render_template("tenant/salarie_detail.html",
+        salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
+        total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
+        total_irpp=total_irpp, nb_mois=nb_mois,
+        anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois)
 
 @app.route("/salaries/<int:id>/modifier", methods=["GET","POST"])
 @login_required
