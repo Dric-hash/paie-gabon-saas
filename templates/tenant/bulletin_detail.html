@@ -80,7 +80,7 @@
         <div class="text-xs text-gray-400">Base : {{ base|fcfa }}</div>
       </div>
       {% endmacro %}
-      {{ cotis("CNSS salarié", bulletin.base_cnss, bulletin.cnss_salarie, "2,5%") }}
+      {{ cotis("CNSS salarié", bulletin.base_cnss, bulletin.cnss_salarie, "5%") }}
       {{ cotis("CNAMGS salarié", bulletin.base_cnamgs, bulletin.cnamgs_salarie, "2%") }}
       {{ cotis("TCS", bulletin.base_tcs, bulletin.tcs, "5%") }}
       {{ cotis("IRPP", bulletin.base_irpp, bulletin.irpp, "barème") }}
@@ -124,7 +124,7 @@
         <span class="font-bold" style="color:#1e3a8a">{{ val|fcfa }}</span>
       </div>
       {% endmacro %}
-      {{ pat("CNSS patronal", bulletin.cnss_patronale, "16%") }}
+      {{ pat("CNSS patronal", bulletin.cnss_patronale, "18%") }}
       {{ pat("CNAMGS patronal", bulletin.cnamgs_patronale, "4,1%") }}
       {{ pat("FNH", bulletin.fnh, "2%") }}
       {{ pat("CFP", bulletin.cfp, "0,5%") }}
