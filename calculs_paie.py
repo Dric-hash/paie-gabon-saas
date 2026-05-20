@@ -4,8 +4,8 @@ Références : CGI Gabon, Décret 578/PR/MDSFPSSN, Arrêté 037/METPS
 """
 
 # ─── CONSTANTES RÉGLEMENTAIRES (Gabon 2026) ───────────────────────────────────
-CNSS_TAUX_SALARIE    = 0.025       # 2,5%
-CNSS_TAUX_PATRONAL   = 0.16        # 16%
+CNSS_TAUX_SALARIE    = 0.05        # 5%
+CNSS_TAUX_PATRONAL   = 0.18        # 18%
 CNSS_PLAFOND         = 1_500_000   # FCFA/mois
 
 CNAMGS_TAUX_SALARIE  = 0.02        # 2%
