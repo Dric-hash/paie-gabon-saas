@@ -1,125 +1,237 @@
 {% extends "tenant/base.html" %}
-{% block title %}{{ salarie.nom_complet }} — Paie Gabon{% endblock %}
+{% block title %}{{ salarie.nom_complet }} — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
-<div class="flex items-center gap-3 mb-6">
-  <a href="{{ url_for("salaries") }}" class="text-gray-400 hover:text-gray-700">← Salariés</a>
+<!-- En-tête -->
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/salaries" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Salariés</a>
   <h1 class="text-2xl font-black text-gray-900">{{ salarie.nom_complet }}</h1>
   <span class="badge-{{ salarie.statut|lower }}">{{ salarie.statut }}</span>
 </div>
 
-<div class="grid grid-cols-3 gap-6">
-
-  <!-- Fiche identité -->
-  <div class="col-span-2 space-y-5">
-    <div class="card p-6">
-      <div class="flex items-center gap-4 mb-6">
-        <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black">
-          {{ salarie.nom[0] }}{{ salarie.prenom[0] }}
-        </div>
-        <div>
-          <div class="text-xl font-black">{{ salarie.nom_complet }}</div>
-          <div class="text-gray-500">{{ salarie.emploi or '—' }}</div>
-          <div class="text-xs text-gray-400 mt-1 font-mono">{{ salarie.matricule }}</div>
-        </div>
-        <div class="ml-auto">
-          <a href="{{ url_for("salarie_modifier', id=salarie.id) }}" class="btn-secondary">✏️ Modifier</a>
-        </div>
+<!-- Carte principale salarié -->
+<div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center">
+  <div style="display:flex;align-items:center;gap:1.25rem">
+    <div style="width:5rem;height:5rem;border-radius:1rem;background:rgba(255,255,255,.15);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:900">
+      {{ salarie.nom[0] }}{{ salarie.prenom[0] }}
+    </div>
+    <div>
+      <div style="font-size:1.5rem;font-weight:900">{{ salarie.nom }} {{ salarie.prenom }}</div>
+      <div style="opacity:.7;margin-top:.25rem">{{ salarie.emploi or 'Poste non défini' }}</div>
+      <div style="opacity:.5;font-size:.875rem;margin-top:.25rem;font-family:monospace">{{ salarie.matricule }}</div>
+      <div style="margin-top:.5rem;display:flex;gap:.5rem">
+        {% if salarie.categorie %}
+        <span style="background:rgba(255,255,255,.15);padding:.125rem .625rem;border-radius:9999px;font-size:.75rem;font-weight:700">{{ salarie.categorie.code }} — {{ salarie.categorie.libelle }}</span>
+        {% endif %}
+        {% if anciennete_ans > 0 or anciennete_mois > 0 %}
+        <span style="background:rgba(255,255,255,.15);padding:.125rem .625rem;border-radius:9999px;font-size:.75rem;font-weight:700">
+          {{ anciennete_ans }}a {{ anciennete_mois }}m d'ancienneté
+        </span>
+        {% endif %}
       </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:.75rem">
+    <a href="/salaries/{{ salarie.id }}/modifier" style="background:rgba(255,255,255,.15);color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">✏️ Modifier</a>
+    <a href="/bulletins/saisie?salarie_id={{ salarie.id }}" style="background:#f59e0b;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">📄 Nouveau bulletin</a>
+  </div>
+</div>
 
-      <div class="grid grid-cols-3 gap-4 text-sm">
-        {% macro info(label, value) %}
-        <div class="bg-gray-50 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-0.5">{{ label }}</div>
-          <div class="font-bold text-gray-900">{{ value or '—' }}</div>
-        </div>
-        {% endmacro %}
-        {{ info("Catégorie", salarie.categorie.code ~ ' — ' ~ salarie.categorie.libelle if salarie.categorie else '—') }}
-        {{ info("Date d'embauche", salarie.date_embauche|date_fr) }}
-        {{ info("Nationalité", salarie.nationalite) }}
-        {{ info("Sexe", 'Masculin' if salarie.sexe == 'M' else 'Féminin') }}
-        {{ info("Sit. matrimoniale", salarie.situation_matrimoniale) }}
-        {{ info("Nb enfants", salarie.nb_enfants|string ~ ' (' ~ salarie.nb_enfants_moins_16ans|string ~ ' < 16 ans)') }}
-        {{ info("Nombre de parts", salarie.nombre_parts) }}
-        {{ info("N° CNSS", salarie.numero_cnss) }}
-        {{ info("N° CNAMGS", salarie.numero_cnamgs) }}
+<!-- KPIs du salarié -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.5rem;font-weight:900;color:#1a2332">{{ nb_mois }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">Bulletins émis</div>
+  </div>
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.25rem;font-weight:900;color:#d97706">{{ total_brut|int|fcfa }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">Total brut cumulé</div>
+  </div>
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.25rem;font-weight:900;color:#059669">{{ total_net|int|fcfa }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">Total net cumulé</div>
+  </div>
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.25rem;font-weight:900;color:#dc2626">{{ total_cnss|int|fcfa }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">Total CNSS salarié</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+
+  <!-- Colonne gauche : infos -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <!-- Identité -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Identité</h2>
+      {% macro info(label, value) %}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
+        <span style="color:#6b7280">{{ label }}</span>
+        <span style="font-weight:700">{{ value or '—' }}</span>
+      </div>
+      {% endmacro %}
+      {{ info("Sexe", "Masculin" if salarie.sexe == "M" else "Féminin") }}
+      {{ info("Date de naissance", salarie.date_naissance|date_fr) }}
+      {{ info("Nationalité", salarie.nationalite) }}
+      {{ info("Téléphone", salarie.telephone) }}
+      {{ info("Adresse", salarie.adresse) }}
+    </div>
+
+    <!-- Emploi & Contrat -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Emploi & Contrat</h2>
+      {% macro info2(label, value) %}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
+        <span style="color:#6b7280">{{ label }}</span>
+        <span style="font-weight:700">{{ value or '—' }}</span>
+      </div>
+      {% endmacro %}
+      {{ info2("Poste / Emploi", salarie.emploi) }}
+      {{ info2("Catégorie", salarie.categorie.code ~ " — " ~ salarie.categorie.libelle if salarie.categorie else "—") }}
+      {{ info2("Date d'embauche", salarie.date_embauche|date_fr) }}
+      {% if contrat %}
+      {{ info2("Type de contrat", contrat.type_contrat) }}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
+        <span style="color:#6b7280">Salaire de base</span>
+        <span style="font-weight:900;color:#1a2332">{{ contrat.salaire_base|fcfa }}</span>
+      </div>
+      {% endif %}
+      {% if salarie.date_cessation %}
+      {{ info2("Date de cessation", salarie.date_cessation|date_fr) }}
+      {{ info2("Motif de rupture", salarie.type_rupture) }}
+      {% endif %}
+    </div>
+
+    <!-- Situation familiale -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Situation Familiale</h2>
+      {% macro info3(label, value) %}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
+        <span style="color:#6b7280">{{ label }}</span>
+        <span style="font-weight:700">{{ value or '—' }}</span>
+      </div>
+      {% endmacro %}
+      {{ info3("Situation matrimoniale", salarie.situation_matrimoniale) }}
+      {{ info3("Nombre d'enfants", salarie.nb_enfants|string ~ " (dont " ~ salarie.nb_enfants_moins_16ans|string ~ " < 16 ans)") }}
+      {{ info3("Nombre de parts IRPP", salarie.nombre_parts) }}
+    </div>
+
+    <!-- Cotisations sociales -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Cotisations Sociales</h2>
+      {% macro info4(label, value) %}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
+        <span style="color:#6b7280">{{ label }}</span>
+        <span style="font-weight:700;font-family:monospace">{{ value or '—' }}</span>
+      </div>
+      {% endmacro %}
+      {{ info4("N° CNSS", salarie.numero_cnss) }}
+      {{ info4("N° CNAMGS", salarie.numero_cnamgs) }}
+      {{ info4("Assujetti CNAMGS", "OUI" if salarie.assujetti_cnamgs else "NON") }}
+      <div style="display:flex;justify-content:space-between;padding:.5rem 0;font-size:.875rem">
+        <span style="color:#6b7280">Total IRPP cumulé</span>
+        <span style="font-weight:700;color:#dc2626">{{ total_irpp|int|fcfa }}</span>
       </div>
     </div>
 
-    <!-- Contrat actif -->
-    {% if contrat %}
-    <div class="card p-6">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Contrat en cours</h2>
-      <div class="grid grid-cols-3 gap-4 text-sm">
-        <div class="bg-primary/5 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-0.5">Type</div>
-          <div class="font-bold">{{ contrat.type_contrat }}</div>
+    <!-- Congés -->
+    <div class="card p-5">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Congés {{ now.year }}</h2>
+        <a href="/conges/nouveau?salarie_id={{ salarie.id }}" style="font-size:.75rem;font-weight:700;color:#1a2332;text-decoration:none;background:#f3f4f6;padding:.25rem .625rem;border-radius:.5rem">+ Demande</a>
+      </div>
+      {% if conge %}
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.5rem;text-align:center">
+        <div style="background:#f0fdf4;border-radius:.75rem;padding:.75rem">
+          <div style="font-size:1.5rem;font-weight:900;color:#059669">{{ conge.jours_acquis|int }}</div>
+          <div style="font-size:.7rem;color:#047857">Acquis</div>
         </div>
-        <div class="bg-primary/5 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-0.5">Salaire de base</div>
-          <div class="font-black text-primary">{{ contrat.salaire_base|fcfa }}</div>
+        <div style="background:#fef2f2;border-radius:.75rem;padding:.75rem">
+          <div style="font-size:1.5rem;font-weight:900;color:#dc2626">{{ conge.jours_pris|int }}</div>
+          <div style="font-size:.7rem;color:#b91c1c">Pris</div>
         </div>
-        <div class="bg-primary/5 rounded-xl p-3">
-          <div class="text-xs text-gray-400 mb-0.5">Depuis</div>
-          <div class="font-bold">{{ contrat.date_debut|date_fr }}</div>
+        <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem">
+          <div style="font-size:1.5rem;font-weight:900;color:#2563eb">{{ conge.jours_restants|int }}</div>
+          <div style="font-size:.7rem;color:#1d4ed8">Restant</div>
         </div>
       </div>
+      {% if conge.date_depart %}
+      <div style="margin-top:.75rem;font-size:.8rem;color:#6b7280;text-align:center">
+        Dernier congé : {{ conge.date_depart|date_fr }} → {{ conge.date_retour|date_fr }}
+        <span class="badge-{{ conge.statut|lower }}" style="margin-left:.5rem">{{ conge.statut }}</span>
+      </div>
+      {% endif %}
+      {% else %}
+      <div style="text-align:center;padding:1rem;color:#9ca3af;font-size:.875rem">
+        <div style="font-size:1.5rem;margin-bottom:.25rem">🏖️</div>
+        Aucune demande cette année
+      </div>
+      {% endif %}
     </div>
-    {% endif %}
 
-    <!-- Historique bulletins -->
-    <div class="card p-6">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Historique des bulletins</h2>
-        <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ salarie.id }}" class="btn-primary text-xs">+ Nouveau bulletin</a>
+  </div>
+
+  <!-- Colonne droite : historique bulletins -->
+  <div>
+    <div class="card overflow-hidden">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Historique bulletins ({{ nb_mois }})</h2>
+        <a href="/bulletins/saisie?salarie_id={{ salarie.id }}" class="btn-primary" style="font-size:.75rem">+ Bulletin</a>
       </div>
       {% if bulletins %}
-      <table class="w-full text-sm">
+      <table>
         <thead>
-          <tr class="text-xs text-gray-400 border-b border-gray-100">
-            <th class="text-left pb-2">Période</th>
-            <th class="text-right pb-2">Brut</th>
-            <th class="text-right pb-2">Net à payer</th>
-            <th class="text-center pb-2">Statut</th>
-            <th class="text-center pb-2"></th>
+          <tr>
+            <th>Période</th>
+            <th style="text-align:right">Brut</th>
+            <th style="text-align:right">Net à payer</th>
+            <th style="text-align:center">Statut</th>
+            <th style="text-align:center">Actions</th>
           </tr>
         </thead>
         <tbody>
           {% for b in bulletins %}
-          <tr class="border-b border-gray-50 hover:bg-gray-50">
-            <td class="py-2.5 font-semibold">{{ b.periode.libelle_complet }}</td>
-            <td class="py-2.5 text-right font-mono text-gray-600">{{ b.salaire_brut|fcfa }}</td>
-            <td class="py-2.5 text-right font-mono font-bold">{{ b.net_a_payer|fcfa }}</td>
-            <td class="py-2.5 text-center"><span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span></td>
-            <td class="py-2.5 text-center">
-              <a href="{{ url_for("bulletin_detail', id=b.id) }}" class="text-primary text-xs font-bold hover:underline">Voir</a>
+          <tr>
+            <td style="font-weight:600">{{ b.periode.libelle_complet }}</td>
+            <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ b.salaire_brut|fcfa }}</td>
+            <td style="text-align:right;font-family:monospace;font-weight:900">{{ b.net_a_payer|fcfa }}</td>
+            <td style="text-align:center"><span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span></td>
+            <td style="text-align:center">
+              <div style="display:flex;gap:.5rem;justify-content:center">
+                <a href="/bulletins/{{ b.id }}" style="font-size:.75rem;color:#2563eb;font-weight:700;text-decoration:none">Voir</a>
+                <span style="color:#e5e7eb">|</span>
+                <a href="/bulletins/{{ b.id }}/imprimer" target="_blank" style="font-size:.75rem;color:#059669;font-weight:700;text-decoration:none">🖨️</a>
+              </div>
             </td>
           </tr>
           {% endfor %}
         </tbody>
+        <!-- Total -->
+        <tfoot>
+          <tr style="background:#f9fafb;font-weight:900">
+            <td style="padding:.5rem .75rem;font-size:.8rem">TOTAL ({{ nb_mois }} mois)</td>
+            <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.8rem;color:#6b7280">{{ total_brut|int|fcfa }}</td>
+            <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.8rem;color:#059669">{{ total_net|int|fcfa }}</td>
+            <td colspan="2"></td>
+          </tr>
+        </tfoot>
       </table>
       {% else %}
-      <p class="text-center py-6 text-gray-400 text-sm">Aucun bulletin enregistré</p>
-      {% endif %}
-    </div>
-  </div>
-
-  <!-- Actions rapides -->
-  <div class="space-y-4">
-    <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Actions</h2>
-      <div class="space-y-2">
-        <a href="{{ url_for("bulletin_saisie') }}?salarie_id={{ salarie.id }}"
-           class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 text-sm font-semibold">
-          📄 Créer un bulletin
-        </a>
-        <a href="{{ url_for("salarie_modifier', id=salarie.id) }}"
-           class="flex items-center gap-2 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 text-sm font-semibold">
-          ✏️ Modifier la fiche
-        </a>
+      <div style="text-align:center;padding:3rem;color:#9ca3af">
+        <div style="font-size:3rem;margin-bottom:.5rem">📭</div>
+        <p style="font-size:.875rem">Aucun bulletin saisi pour ce salarié</p>
+        <a href="/bulletins/saisie?salarie_id={{ salarie.id }}" class="btn-primary" style="display:inline-block;margin-top:.75rem">Créer le premier bulletin</a>
       </div>
+      {% endif %}
     </div>
   </div>
 </div>
 
+{% endblock %}
+{% block scripts %}
+<script>
+// Injecter la date courante pour les congés
+const now = new Date();
+</script>
 {% endblock %}
