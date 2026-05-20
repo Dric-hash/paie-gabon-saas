@@ -689,6 +689,122 @@ def utilisateur_nouveau():
     db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
     return redirect(url_for("parametres"))
 
+# ── GESTION DES ACOMPTES ──────────────────────────────────────────────────────
+@app.route("/acomptes")
+@login_required
+def acomptes():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    now = datetime.now()
+    mois = request.args.get("mois", now.month, type=int)
+    annee = request.args.get("annee", now.year, type=int)
+    salarie_id = request.args.get("salarie_id", type=int)
+
+    query = Acompte.query.filter_by(tenant_id=t.id, annee=annee, mois=mois)
+    if salarie_id:
+        query = query.filter_by(salarie_id=salarie_id)
+    liste = query.order_by(Acompte.date_acompte.desc()).all()
+
+    # Total acomptes du mois
+    total_mois = sum(float(a.montant) for a in liste if a.statut != "ANNULE")
+    total_en_attente = sum(float(a.montant) for a in liste if a.statut == "EN_ATTENTE")
+    total_deduit = sum(float(a.montant) for a in liste if a.statut == "DEDUIT")
+
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    MOIS_NOMS = PeriodePaie.MOIS_NOMS
+
+    return render_template("tenant/acomptes.html",
+        tenant=t, liste=liste, salaries=salaries,
+        mois=mois, annee=annee, now=now,
+        total_mois=total_mois, total_en_attente=total_en_attente,
+        total_deduit=total_deduit, MOIS_NOMS=MOIS_NOMS)
+
+@app.route("/acomptes/nouveau", methods=["GET","POST"])
+@login_required
+def acompte_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.can_edit: abort(403)
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+
+    if request.method == "POST":
+        salarie_id = request.form.get("salarie_id", type=int)
+        montant    = float(request.form.get("montant", 0) or 0)
+        date_ac    = _parse_date(request.form.get("date_acompte"))
+        mois       = request.form.get("mois", type=int)
+        annee      = request.form.get("annee", type=int)
+        motif      = request.form.get("motif", "").strip()
+
+        if not salarie_id or montant <= 0 or not date_ac:
+            flash("Veuillez remplir tous les champs obligatoires.", "error")
+        else:
+            # Vérifier limite : acompte ≤ 50% du salaire de base
+            contrat = Contrat.query.filter_by(salarie_id=salarie_id, tenant_id=t.id, actif=True).first()
+            if contrat and montant > float(contrat.salaire_base) * 0.5:
+                flash(f"L'acompte ne peut pas dépasser 50% du salaire de base ({float(contrat.salaire_base)*0.5:,.0f} FCFA).".replace(",", " "), "error")
+                return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries, now=datetime.now())
+
+            a = Acompte(
+                tenant_id=t.id, salarie_id=salarie_id,
+                montant=montant, date_acompte=date_ac,
+                mois=mois, annee=annee, motif=motif,
+                statut="EN_ATTENTE"
+            )
+            db.session.add(a)
+            db.session.commit()
+            flash(f"Acompte de {montant:,.0f} FCFA enregistré.".replace(",", " "), "success")
+            return redirect(url_for("acomptes", mois=mois, annee=annee))
+
+    return render_template("tenant/acompte_form.html",
+        tenant=t, salaries=salaries, now=datetime.now())
+
+@app.route("/acomptes/<int:id>/valider", methods=["POST"])
+@login_required
+def acompte_valider(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    a.statut = "DEDUIT"
+    db.session.commit()
+    flash("Acompte marqué comme déduit.", "success")
+    return redirect(url_for("acomptes", mois=a.mois, annee=a.annee))
+
+@app.route("/acomptes/<int:id>/annuler", methods=["POST"])
+@login_required
+def acompte_annuler(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    a.statut = "ANNULE"
+    db.session.commit()
+    flash("Acompte annulé.", "success")
+    return redirect(url_for("acomptes", mois=a.mois, annee=a.annee))
+
+@app.route("/acomptes/<int:id>/supprimer", methods=["POST"])
+@login_required
+def acompte_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    mois, annee = a.mois, a.annee
+    db.session.delete(a)
+    db.session.commit()
+    flash("Acompte supprimé.", "success")
+    return redirect(url_for("acomptes", mois=mois, annee=annee))
+
+@app.route("/api/salarie/<int:id>/acomptes-mois")
+@login_required
+def api_acomptes_mois(id):
+    """Retourne le total des acomptes EN_ATTENTE d'un salarié pour un mois donné."""
+    t = get_tenant()
+    mois  = request.args.get("mois", type=int)
+    annee = request.args.get("annee", type=int)
+    if not t or not mois or not annee: return jsonify({"total": 0})
+    total = db.session.query(db.func.sum(Acompte.montant))            .filter_by(tenant_id=t.id, salarie_id=id, mois=mois, annee=annee, statut="EN_ATTENTE")            .scalar() or 0
+    return jsonify({"total": float(total)})
+
 # ── IMPRESSION BULLETIN ───────────────────────────────────────────────────────
 @app.route("/bulletins/<int:id>/imprimer")
 @login_required
