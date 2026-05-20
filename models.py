@@ -353,3 +353,30 @@ class Conge(db.Model):
     @property
     def jours_restants(self):
         return float(self.jours_acquis or 0) - float(self.jours_pris or 0)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ACOMPTES SUR SALAIRE
+# ─────────────────────────────────────────────────────────────────────────────
+class Acompte(db.Model):
+    __tablename__ = "acomptes"
+    id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id   = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    montant      = db.Column(db.Numeric(15,2), nullable=False)
+    date_acompte = db.Column(db.Date, nullable=False)
+    mois         = db.Column(db.Integer, nullable=False)   # mois sur lequel déduire
+    annee        = db.Column(db.Integer, nullable=False)
+    motif        = db.Column(db.String(200))
+    statut       = db.Column(db.String(20), default="EN_ATTENTE")
+    # EN_ATTENTE → DEDUIT → ANNULE
+    date_creation = db.Column(db.DateTime, default=__import__('datetime').datetime.utcnow)
+
+    salarie  = db.relationship("Salarie", backref="acomptes")
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for k in ["date_acompte", "date_creation"]:
+            if d[k]: d[k] = str(d[k])
+        if d["montant"]: d["montant"] = float(d["montant"])
+        return d
