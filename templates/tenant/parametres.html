@@ -1,100 +1,426 @@
-{% extends "tenant/base.html" %}{% block title %}Paramètres{% endblock %}{% block content %}
-<h1 class="text-2xl font-black mb-6">Paramètres</h1>
-<div class="grid grid-cols-2 gap-6">
+{% extends "tenant/base.html" %}
+{% block title %}Paramètres — {{ tenant.denomination }}{% endblock %}
+{% block content %}
 
-  <!-- Société -->
-  <div class="card p-6">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Informations Société</h2>
-    <form method="POST" action="{{ url_for("parametres_societe') }}" class="space-y-3">
-      {% macro f(label, name, val) %}
-      <div>
-        <label class="block text-xs font-bold text-gray-500 mb-1">{{ label }}</label>
-        <input type="text" name="{{ name }}" value="{{ val or '' }}"
-          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
-      </div>
-      {% endmacro %}
-      {% if societe %}
-      {{ f("Dénomination", "denomination", societe.denomination) }}
-      {{ f("Sigle", "sigle", societe.sigle) }}
-      {{ f("Activité", "activite", societe.activite) }}
-      {{ f("NIF", "nif", societe.nif) }}
-      {{ f("N° CNSS employeur", "numero_cnss", societe.numero_cnss) }}
-      {{ f("N° CNAMGS employeur", "numero_cnamgs", societe.numero_cnamgs) }}
-      {{ f("Adresse", "adresse", societe.adresse) }}
-      {{ f("Boîte postale", "boite_postale", societe.boite_postale) }}
-      {{ f("Téléphone", "telephone", societe.telephone) }}
-      {{ f("Ville", "ville", societe.ville) }}
-      {{ f("Région", "region", societe.region) }}
-      {% endif %}
-      <button type="submit" class="btn-primary mt-2">💾 Enregistrer</button>
-    </form>
-  </div>
+<div class="mb-6">
+  <h1 class="text-2xl font-black text-gray-900">Paramètres</h1>
+  <p class="text-gray-500 text-sm mt-1">Gérez les informations de votre entreprise, utilisateurs et préférences.</p>
+</div>
 
-  <!-- Taux de cotisation -->
-  <div class="space-y-5">
+<!-- ONGLETS -->
+<div style="display:flex;gap:.5rem;margin-bottom:1.5rem;border-bottom:2px solid #e5e7eb;padding-bottom:0">
+  {% for id, label, icon in [('societe','Société','🏢'),('cotisations','Cotisations','📊'),('utilisateurs','Utilisateurs','👥'),('categories','Catégories','📋'),('abonnement','Abonnement','💳')] %}
+  <button onclick="showTab('{{ id }}')" id="tab-{{ id }}"
+    style="padding:.5rem 1rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer;border-radius:.5rem .5rem 0 0;transition:all .2s;background:transparent;color:#6b7280"
+    class="tab-btn">
+    {{ icon }} {{ label }}
+  </button>
+  {% endfor %}
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- TAB 1 : SOCIÉTÉ -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="content-societe" class="tab-content">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+
+    <!-- Formulaire infos société -->
     <div class="card p-6">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Taux de cotisation — Gabon</h2>
-      <div class="space-y-3">
-        {% for r in rubriques %}
-        <div class="bg-gray-50 rounded-xl p-3">
-          <div class="flex justify-between items-center">
-            <div>
-              <span class="text-xs font-black bg-primary text-white px-2 py-0.5 rounded-md">{{ r.code }}</span>
-              <div class="text-xs text-gray-500 mt-1">{{ r.libelle }}</div>
-            </div>
-            <div class="text-right text-xs">
-              {% if r.taux_salarie %}<div>Sal : <strong class="text-red-600">{{ "%.1f"|format(r.taux_salarie*100) }}%</strong></div>{% endif %}
-              {% if r.taux_patronal %}<div>Pat : <strong class="text-blue-600">{{ "%.1f"|format(r.taux_patronal*100) }}%</strong></div>{% endif %}
-              {% if r.plafond_mensuel %}<div class="text-gray-400">Plafond : {{ r.plafond_mensuel|int|fcfa }}</div>{% endif %}
-            </div>
-          </div>
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Informations générales</h2>
+      <form method="POST" action="/parametres/societe" class="space-y-3">
+        {% macro fi(label, name, val, placeholder='') %}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem">{{ label }}</label>
+          <input type="text" name="{{ name }}" value="{{ val or '' }}" placeholder="{{ placeholder }}"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
         </div>
-        {% endfor %}
-      </div>
-      <div class="mt-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-700 text-center font-semibold">
-        ✅ Réglementation gabonaise à jour — CGI · Décret 578/PR · Arrêté 037/METPS
-      </div>
+        {% endmacro %}
+        {{ fi("Dénomination sociale *", "denomination", tenant.denomination) }}
+        {{ fi("Sigle / Abréviation", "sigle", tenant.sigle, "Ex: SGTG") }}
+        {{ fi("Activité principale", "activite", tenant.activite, "Ex: Génie Civil") }}
+        {{ fi("Secteur", "secteur", tenant.secteur, "Ex: BTP, Construction") }}
+        <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
+          💾 Enregistrer les informations
+        </button>
+      </form>
     </div>
 
-    <!-- Catégories -->
-    <div class="card p-6">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Catégories d'emploi</h2>
-      {% for c in categories %}
-      <div class="flex justify-between py-2 border-b border-gray-50 text-sm">
-        <span class="font-black text-primary">{{ c.code }}</span>
-        <span class="text-gray-600">{{ c.libelle }}</span>
+    <!-- Infos fiscales et localisation -->
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="card p-6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Identifiants fiscaux & sociaux</h2>
+        <form method="POST" action="/parametres/societe" class="space-y-3">
+          {% macro fi2(label, name, val, placeholder='') %}
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
+            <input type="text" name="{{ name }}" value="{{ val or '' }}" placeholder="{{ placeholder }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;font-family:monospace;box-sizing:border-box"/>
+          </div>
+          {% endmacro %}
+          {{ fi2("NIF (Numéro d'Identification Fiscale)", "nif", tenant.nif, "Ex: 202301019031 M") }}
+          {{ fi2("N° CNSS Employeur", "numero_cnss", tenant.numero_cnss, "Ex: 001-XXXXXXX-X") }}
+          {{ fi2("N° CNAMGS Employeur", "numero_cnamgs", tenant.numero_cnamgs) }}
+          <!-- Champs cachés pour ne pas écraser les autres infos -->
+          <input type="hidden" name="denomination" value="{{ tenant.denomination or '' }}"/>
+          <input type="hidden" name="sigle" value="{{ tenant.sigle or '' }}"/>
+          <input type="hidden" name="activite" value="{{ tenant.activite or '' }}"/>
+          <input type="hidden" name="secteur" value="{{ tenant.secteur or '' }}"/>
+          <input type="hidden" name="adresse" value="{{ tenant.adresse or '' }}"/>
+          <input type="hidden" name="boite_postale" value="{{ tenant.boite_postale or '' }}"/>
+          <input type="hidden" name="telephone" value="{{ tenant.telephone or '' }}"/>
+          <input type="hidden" name="ville" value="{{ tenant.ville or '' }}"/>
+          <input type="hidden" name="region" value="{{ tenant.region or '' }}"/>
+          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+            💾 Enregistrer
+          </button>
+        </form>
       </div>
-      {% endfor %}
+
+      <div class="card p-6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Coordonnées</h2>
+        <form method="POST" action="/parametres/societe" class="space-y-3">
+          {% macro fi3(label, name, val, placeholder='') %}
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
+            <input type="text" name="{{ name }}" value="{{ val or '' }}" placeholder="{{ placeholder }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+          </div>
+          {% endmacro %}
+          {{ fi3("Adresse", "adresse", tenant.adresse, "Ex: 3 Quartiers, Zone Industrielle") }}
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            {{ fi3("Boîte postale", "boite_postale", tenant.boite_postale, "Ex: 6772") }}
+            {{ fi3("Téléphone", "telephone", tenant.telephone) }}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+            {{ fi3("Ville", "ville", tenant.ville, "Libreville") }}
+            {{ fi3("Région", "region", tenant.region, "Estuaire") }}
+          </div>
+          <!-- Champs cachés -->
+          <input type="hidden" name="denomination" value="{{ tenant.denomination or '' }}"/>
+          <input type="hidden" name="sigle" value="{{ tenant.sigle or '' }}"/>
+          <input type="hidden" name="activite" value="{{ tenant.activite or '' }}"/>
+          <input type="hidden" name="secteur" value="{{ tenant.secteur or '' }}"/>
+          <input type="hidden" name="nif" value="{{ tenant.nif or '' }}"/>
+          <input type="hidden" name="numero_cnss" value="{{ tenant.numero_cnss or '' }}"/>
+          <input type="hidden" name="numero_cnamgs" value="{{ tenant.numero_cnamgs or '' }}"/>
+          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+            💾 Enregistrer
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Aperçu bulletin -->
+  <div class="card p-5 mt-5" style="background:linear-gradient(135deg,#1a2332,#374151);color:white">
+    <div class="text-xs font-bold mb-3" style="opacity:.6;text-transform:uppercase;letter-spacing:.05em">Aperçu — En-tête bulletin de paie</div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:1.1rem;font-weight:900">{{ tenant.denomination or '—' }}</div>
+        <div style="font-size:.75rem;opacity:.7;margin-top:.25rem">{{ tenant.activite or '' }}</div>
+        <div style="font-size:.75rem;opacity:.6">{{ tenant.adresse or '' }}{% if tenant.boite_postale %} — BP {{ tenant.boite_postale }}{% endif %}</div>
+        <div style="font-size:.75rem;opacity:.6">{{ tenant.ville or 'Libreville' }}, Gabon</div>
+        {% if tenant.nif %}<div style="font-size:.75rem;opacity:.6">NIF : {{ tenant.nif }}</div>{% endif %}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:1rem;font-weight:900;text-transform:uppercase">Bulletin de Paie</div>
+        <div style="font-size:.75rem;opacity:.6;margin-top:.25rem">Mois XXXX 2026</div>
+      </div>
     </div>
   </div>
 </div>
-{% endblock %}
-<!-- Ajout utilisateur (injecté en bas) -->
 
-  <!-- Section utilisateurs -->
-  <div class="card p-6 mt-6">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Utilisateurs ({{users|length}})</h2>
-    <div class="space-y-2 mb-5">
-      {% for u in users %}
-      <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-        <div><div class="text-sm font-bold">{{u.nom_complet}}</div><div class="text-xs text-gray-400">{{u.email}}</div></div>
-        <span class="text-xs font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full">{{u.role}}</span>
-      </div>{% endfor %}
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- TAB 2 : COTISATIONS -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="content-cotisations" class="tab-content" style="display:none">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Cotisations salariales</h2>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        {% for r in rubriques %}
+        {% if r.taux_salarie %}
+        <div style="background:#fafafa;border-radius:.75rem;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="background:#1a2332;color:white;font-size:.7rem;font-weight:900;padding:.125rem .5rem;border-radius:.375rem">{{ r.code }}</span>
+            <div style="font-size:.75rem;color:#6b7280;margin-top:.25rem">{{ r.libelle }}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1rem;font-weight:900;color:#dc2626">{{ "%.1f"|format(r.taux_salarie*100) }}%</div>
+            <div style="font-size:.7rem;color:#9ca3af">Salarié</div>
+            {% if r.plafond_mensuel %}<div style="font-size:.7rem;color:#9ca3af">Plafond : {{ r.plafond_mensuel|int|fcfa }}</div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
     </div>
-    {% if current_user.is_tenant_admin %}
-    <div class="border-t border-gray-100 pt-5">
-      <h3 class="text-sm font-bold text-gray-700 mb-3">Ajouter un utilisateur</h3>
-      <form method="POST" action="/app/utilisateurs/nouveau" class="grid grid-cols-2 gap-3">
-        <input type="text" name="nom" placeholder="Nom *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
-        <input type="text" name="prenom" placeholder="Prénom *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
-        <input type="email" name="email" placeholder="Email *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
-        <input type="password" name="password" placeholder="Mot de passe *" required class="border border-gray-200 rounded-xl px-3 py-2 text-sm"/>
-        <select name="role" class="border border-gray-200 rounded-xl px-3 py-2 text-sm">
-          <option value="GESTIONNAIRE">Gestionnaire</option>
-          <option value="LECTURE">Lecture seule</option>
-          <option value="TENANT_ADMIN">Administrateur</option>
-        </select>
-        <button type="submit" class="bg-slate-900 text-white rounded-xl py-2 font-bold text-sm">+ Créer</button>
-      </form>
-    </div>{% endif %}
+
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Cotisations patronales</h2>
+      <div style="display:flex;flex-direction:column;gap:.75rem">
+        {% for r in rubriques %}
+        {% if r.taux_patronal %}
+        <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <span style="background:#1e40af;color:white;font-size:.7rem;font-weight:900;padding:.125rem .5rem;border-radius:.375rem">{{ r.code }}</span>
+            <div style="font-size:.75rem;color:#6b7280;margin-top:.25rem">{{ r.libelle }}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:1rem;font-weight:900;color:#1e40af">{{ "%.1f"|format(r.taux_patronal*100) }}%</div>
+            <div style="font-size:.7rem;color:#9ca3af">Patronal</div>
+            {% if r.plafond_mensuel %}<div style="font-size:.7rem;color:#9ca3af">Plafond : {{ r.plafond_mensuel|int|fcfa }}</div>{% endif %}
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+      </div>
+    </div>
   </div>
+
+  <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:1rem;padding:1rem 1.25rem;margin-top:1.5rem;display:flex;gap:.75rem;align-items:center">
+    <span style="font-size:1.5rem">✅</span>
+    <div>
+      <div style="font-weight:700;color:#065f46;font-size:.875rem">Réglementation gabonaise à jour</div>
+      <div style="font-size:.75rem;color:#047857;margin-top:.125rem">CGI Gabon · Décret 578/PR/MDSFPSSN · Arrêté 037/METPS · SMIG 150 000 FCFA</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- TAB 3 : UTILISATEURS -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="content-utilisateurs" class="tab-content" style="display:none">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+
+    <!-- Liste utilisateurs -->
+    <div class="card overflow-hidden">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Utilisateurs ({{ users|length }})</h2>
+        {% if tenant.plan and tenant.plan.max_utilisateurs %}
+        <span style="font-size:.75rem;color:#6b7280">{{ users|length }}/{{ tenant.plan.max_utilisateurs }} max</span>
+        {% endif %}
+      </div>
+      {% for u in users %}
+      <div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1.25rem;border-bottom:1px solid #f9fafb">
+        <div style="width:2.25rem;height:2.25rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
+          {{ u.prenom[0] }}{{ u.nom[0] }}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.875rem">{{ u.nom_complet }}
+            {% if u.id == current_user.id %}<span style="font-size:.7rem;color:#9ca3af">(vous)</span>{% endif %}
+          </div>
+          <div style="font-size:.75rem;color:#9ca3af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ u.email }}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <span style="font-size:.7rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
+            {% if u.role=='TENANT_ADMIN' %}background:#dbeafe;color:#1e40af
+            {% elif u.role=='GESTIONNAIRE' %}background:#fef3c7;color:#92400e
+            {% else %}background:#f3f4f6;color:#6b7280{% endif %}">
+            {{ u.role }}
+          </span>
+          <div style="font-size:.7rem;color:#9ca3af;margin-top:.125rem">{{ u.derniere_connexion|date_fr if u.derniere_connexion else 'Jamais' }}</div>
+        </div>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">Aucun utilisateur</div>
+      {% endfor %}
+    </div>
+
+    <!-- Ajouter utilisateur -->
+    {% if current_user.is_tenant_admin %}
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ajouter un utilisateur</h2>
+      <form method="POST" action="/utilisateurs/nouveau" class="space-y-3">
+        {% macro fu(label, name, type='text', required=True, placeholder='') %}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}{% if required %} *{% endif %}</label>
+          <input type="{{ type }}" name="{{ name }}" {% if required %}required{% endif %} placeholder="{{ placeholder }}"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        {% endmacro %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+          {{ fu("Nom", "nom") }}
+          {{ fu("Prénom", "prenom") }}
+        </div>
+        {{ fu("Email professionnel", "email", "email", placeholder="utilisateur@entreprise.com") }}
+        {{ fu("Mot de passe temporaire", "password", "password") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Rôle *</label>
+          <select name="role" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+            <option value="GESTIONNAIRE">Gestionnaire — peut saisir et modifier</option>
+            <option value="TENANT_ADMIN">Administrateur — accès complet</option>
+            <option value="LECTURE">Lecture seule — consultation uniquement</option>
+          </select>
+        </div>
+        <button type="submit" style="width:100%;background:#059669;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          + Créer l'utilisateur
+        </button>
+      </form>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.75rem;margin-top:1rem;font-size:.75rem;color:#166534">
+        <strong>Rôles :</strong><br/>
+        🔑 <strong>Administrateur</strong> : accès total (paramètres, suppression)<br/>
+        ✏️ <strong>Gestionnaire</strong> : saisie bulletins, gestion salariés<br/>
+        👁️ <strong>Lecture</strong> : consultation uniquement
+      </div>
+    </div>
+    {% else %}
+    <div class="card p-6 text-center" style="color:#9ca3af">
+      <div style="font-size:2rem;margin-bottom:.5rem">🔒</div>
+      <p style="font-size:.875rem">Seul l'administrateur peut gérer les utilisateurs.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- TAB 4 : CATÉGORIES -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="content-categories" class="tab-content" style="display:none">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+    <div class="card overflow-hidden">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Catégories d'emploi</h2>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Code</th>
+            <th>Libellé</th>
+            <th style="text-align:right">Salaire minimum</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in categories %}
+          <tr>
+            <td><span style="background:#1a2332;color:white;font-size:.75rem;font-weight:900;padding:.125rem .625rem;border-radius:.375rem">{{ c.code }}</span></td>
+            <td style="font-weight:600">{{ c.libelle }}</td>
+            <td style="text-align:right;font-family:monospace;color:#6b7280">{{ c.salaire_minimum|fcfa if c.salaire_minimum else '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" style="text-align:center;color:#9ca3af;padding:2rem">Aucune catégorie</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Grille salariale Gabon</h2>
+      <div style="font-size:.875rem;color:#6b7280;space-y:.5rem">
+        <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
+          <span>SMIG Gabon</span><strong style="color:#1a2332">150 000 FCFA/mois</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
+          <span>Heures sup +10%</span><strong style="color:#1a2332">Nuit semaine</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
+          <span>Heures sup +30%</span><strong style="color:#1a2332">Dimanche</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
+          <span>Heures sup +40%</span><strong style="color:#1a2332">Nuit dimanche</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem 0">
+          <span>Heures sup +70%</span><strong style="color:#1a2332">Jours fériés</strong>
+        </div>
+      </div>
+      <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.75rem;margin-top:1rem;font-size:.75rem;color:#92400e">
+        ⚠️ Les salaires de base ne peuvent pas être inférieurs au SMIG (150 000 FCFA).
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- TAB 5 : ABONNEMENT -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div id="content-abonnement" class="tab-content" style="display:none">
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+
+    <!-- Plan actuel -->
+    <div class="card p-6">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Plan actuel</h2>
+      {% if tenant.plan %}
+      <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.5rem;color:white;margin-bottom:1rem">
+        <div style="font-size:1.5rem;font-weight:900">{{ tenant.plan.nom }}</div>
+        <div style="font-size:2rem;font-weight:900;color:#fbbf24;margin:.5rem 0">
+          {% if tenant.plan.prix_mensuel %}{{ tenant.plan.prix_mensuel|int|fcfa }}<span style="font-size:.875rem;font-weight:400;opacity:.7">/mois</span>
+          {% else %}Sur devis{% endif %}
+        </div>
+        <div style="font-size:.875rem;opacity:.7">{{ tenant.plan.description or '' }}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.5rem;font-size:.875rem">
+        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
+          <span>Salariés</span>
+          <strong>{{ tenant.nb_salaries_actifs }} / {% if tenant.plan.max_salaries %}{{ tenant.plan.max_salaries }}{% else %}∞{% endif %}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
+          <span>Utilisateurs</span>
+          <strong>{{ users|length }} / {% if tenant.plan.max_utilisateurs %}{{ tenant.plan.max_utilisateurs }}{% else %}∞{% endif %}</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
+          <span>Statut</span>
+          <span class="badge-{{ tenant.statut|lower }}">{{ tenant.statut }}</span>
+        </div>
+      </div>
+      {% else %}
+      <p style="color:#9ca3af;font-size:.875rem">Aucun plan associé.</p>
+      {% endif %}
+    </div>
+
+    <!-- Contact & upgrade -->
+    <div style="display:flex;flex-direction:column;gap:1rem">
+      <div class="card p-6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Changer de plan</h2>
+        <p style="font-size:.875rem;color:#6b7280;margin-bottom:1rem">Pour mettre à niveau votre abonnement, contactez notre équipe.</p>
+        <div style="display:flex;flex-direction:column;gap:.5rem">
+          <a href="mailto:contact@paiegalon.ga" style="display:block;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-align:center;text-decoration:none">
+            📧 Contacter le support
+          </a>
+          <a href="https://wa.me/24100000000" target="_blank" style="display:block;background:#25d366;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-align:center;text-decoration:none">
+            💬 WhatsApp
+          </a>
+        </div>
+      </div>
+
+      <div class="card p-5" style="background:#f0fdf4;border-color:#bbf7d0">
+        <h2 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Fonctionnalités incluses</h2>
+        {% for feat in ["Calcul automatique CNSS, CNAMGS, TCS, IRPP","Bulletins de paie imprimables","Export journal Excel","Historique illimité","Données sécurisées PostgreSQL","Support technique"] %}
+        <div style="display:flex;gap:.5rem;align-items:center;font-size:.875rem;color:#166534;padding:.25rem 0">
+          <span style="color:#22c55e;font-weight:700">✓</span> {{ feat }}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- JavaScript pour les onglets -->
+<script>
+function showTab(id) {
+  // Masquer tous les contenus
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  // Réinitialiser tous les boutons
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.style.background = 'transparent';
+    btn.style.color = '#6b7280';
+    btn.style.borderBottom = 'none';
+  });
+  // Afficher le contenu sélectionné
+  document.getElementById('content-' + id).style.display = 'block';
+  // Activer le bouton sélectionné
+  var btn = document.getElementById('tab-' + id);
+  btn.style.background = '#1a2332';
+  btn.style.color = 'white';
+}
+// Activer le premier onglet par défaut
+showTab('societe');
+</script>
+
+{% endblock %}
