@@ -63,6 +63,9 @@
       <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
         📅 <span>Périodes</span>
       </a>
+      <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🏖️ <span>Congés</span>
+      </a>
       <div class="border-t border-white/10 my-2"></div>
       {% if current_user.is_tenant_admin %}
       <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">
