@@ -689,6 +689,256 @@ def utilisateur_nouveau():
     db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
     return redirect(url_for("parametres"))
 
+# ── GESTION DES JOURNALIERS ───────────────────────────────────────────────────
+@app.route("/journaliers")
+@login_required
+def journaliers():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    q = request.args.get("q","")
+    query = Journalier.query.filter_by(tenant_id=t.id)
+    if q:
+        query = query.filter(db.or_(
+            Journalier.nom.ilike(f"%{q}%"),
+            Journalier.prenom.ilike(f"%{q}%"),
+            Journalier.profession.ilike(f"%{q}%")))
+    liste = query.order_by(Journalier.nom).all()
+    return render_template("tenant/journaliers.html", tenant=t, journaliers=liste, q=q)
+
+@app.route("/journaliers/nouveau", methods=["GET","POST"])
+@login_required
+def journalier_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if request.method == "POST":
+        j = Journalier(
+            tenant_id   = t.id,
+            nom         = request.form["nom"].strip().upper(),
+            prenom      = request.form["prenom"].strip(),
+            telephone   = request.form.get("telephone","").strip(),
+            profession  = request.form.get("profession","").strip().upper(),
+            taux_horaire= float(request.form.get("taux_horaire",0) or 0),
+            statut      = "ACTIF"
+        )
+        db.session.add(j); db.session.commit()
+        flash(f"Journalier {j.nom_complet} créé.", "success")
+        return redirect(url_for("journaliers"))
+    return render_template("tenant/journalier_form.html", tenant=t, journalier=None)
+
+@app.route("/journaliers/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def journalier_modifier(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.method == "POST":
+        j.nom          = request.form["nom"].strip().upper()
+        j.prenom       = request.form["prenom"].strip()
+        j.telephone    = request.form.get("telephone","").strip()
+        j.profession   = request.form.get("profession","").strip().upper()
+        j.taux_horaire = float(request.form.get("taux_horaire",0) or 0)
+        j.statut       = request.form.get("statut","ACTIF")
+        db.session.commit()
+        flash("Journalier mis à jour.", "success")
+        return redirect(url_for("journaliers"))
+    return render_template("tenant/journalier_form.html", tenant=t, journalier=j)
+
+# ── POINTAGE ──────────────────────────────────────────────────────────────────
+@app.route("/pointage")
+@login_required
+def pointage():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    now = datetime.now()
+    date_str = request.args.get("date", now.strftime("%Y-%m-%d"))
+    try:
+        date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        date_sel = now.date()
+
+    # Salariés mensuels actifs
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    # Journaliers actifs
+    journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    # Pointages du jour
+    pts_salaries = {p.salarie_id: p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.salarie_id.isnot(None)).all()}
+    pts_journaliers = {p.journalier_id: p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.journalier_id.isnot(None)).all()}
+
+    # Stats du jour
+    nb_presents_sal = sum(1 for p in pts_salaries.values() if p.present)
+    nb_presents_jour = sum(1 for p in pts_journaliers.values() if p.present)
+    nb_absents = sum(1 for p in list(pts_salaries.values())+list(pts_journaliers.values()) if p.absent)
+
+    # Semaine en cours pour navigation
+    lundi = date_sel - __import__('datetime').timedelta(days=date_sel.weekday())
+    semaine = [(lundi + __import__('datetime').timedelta(days=i)) for i in range(6)]  # Lundi→Samedi
+
+    return render_template("tenant/pointage.html",
+        tenant=t, date_sel=date_sel, semaine=semaine,
+        salaries=salaries, journaliers=journaliers_list,
+        pts_salaries=pts_salaries, pts_journaliers=pts_journaliers,
+        nb_presents_sal=nb_presents_sal, nb_presents_jour=nb_presents_jour,
+        nb_absents=nb_absents, now=now)
+
+@app.route("/pointage/sauvegarder", methods=["POST"])
+@login_required
+def pointage_sauvegarder():
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    date_str = request.form.get("date_pointage")
+    try:
+        date_p = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        flash("Date invalide.", "error")
+        return redirect(url_for("pointage"))
+
+    nb_sauvegardes = 0
+    # Traiter les salariés mensuels
+    for key, val in request.form.items():
+        if key.startswith("sal_present_"):
+            salarie_id = int(key.replace("sal_present_",""))
+            present = val == "1"
+            absent = not present
+            heures_n = float(request.form.get(f"sal_heures_{salarie_id}", 8) or 8)
+            heures_s = float(request.form.get(f"sal_sup_{salarie_id}", 0) or 0)
+            motif    = request.form.get(f"sal_motif_{salarie_id}", "")
+
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, salarie_id=salarie_id).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=salarie_id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = heures_n; pt.heures_sup = heures_s
+            pt.motif_absence = motif if absent else None
+            nb_sauvegardes += 1
+
+        if key.startswith("jour_present_"):
+            journalier_id = int(key.replace("jour_present_",""))
+            present = val == "1"
+            absent = not present
+            heures_n = float(request.form.get(f"jour_heures_{journalier_id}", 8) or 8)
+            heures_s = float(request.form.get(f"jour_sup_{journalier_id}", 0) or 0)
+            motif    = request.form.get(f"jour_motif_{journalier_id}", "")
+
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, journalier_id=journalier_id).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=journalier_id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = heures_n; pt.heures_sup = heures_s
+            pt.motif_absence = motif if absent else None
+            nb_sauvegardes += 1
+
+    db.session.commit()
+    flash(f"Pointage du {date_p.strftime('%d/%m/%Y')} sauvegardé ({nb_sauvegardes} lignes).", "success")
+    return redirect(url_for("pointage", date=date_str))
+
+# ── FEUILLES DE PAIE JOURNALIERS ──────────────────────────────────────────────
+@app.route("/journaliers/paie")
+@login_required
+def journaliers_paie():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    now = datetime.now()
+    # Prochains samedis (paiement bi-hebdo)
+    feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)               .order_by(FeuillePaieJournalier.date_fin.desc()).limit(50).all()
+    journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+    return render_template("tenant/journaliers_paie.html",
+        tenant=t, feuilles=feuilles, journaliers=journaliers_list, now=now)
+
+@app.route("/journaliers/paie/generer", methods=["POST"])
+@login_required
+def journaliers_paie_generer():
+    """Génère les feuilles de paie pour une période de 2 semaines."""
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    date_debut = _parse_date(request.form.get("date_debut"))
+    date_fin   = _parse_date(request.form.get("date_fin"))
+    if not date_debut or not date_fin:
+        flash("Dates invalides.", "error")
+        return redirect(url_for("journaliers_paie"))
+
+    journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+    nb_generes = 0
+
+    for j in journaliers_list:
+        # Récupérer les pointages de la période
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)              .filter(Pointage.date_pointage >= date_debut,
+                      Pointage.date_pointage <= date_fin,
+                      Pointage.present == True).all()
+
+        total_h = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
+        nb_jours = len(pts)
+        montant = round(total_h * float(j.taux_horaire), 2)
+
+        if nb_jours == 0: continue
+
+        # Vérifier si feuille existe déjà
+        exist = FeuillePaieJournalier.query.filter_by(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin).first()
+        if exist: continue
+
+        f = FeuillePaieJournalier(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin,
+            nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=j.taux_horaire, montant_brut=montant,
+            statut="EN_ATTENTE"
+        )
+        db.session.add(f)
+        nb_generes += 1
+
+    db.session.commit()
+    flash(f"{nb_generes} feuille(s) de paie générée(s).", "success")
+    return redirect(url_for("journaliers_paie"))
+
+@app.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
+@login_required
+def journalier_payer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    f.statut = "PAYÉ"
+    f.date_paiement = datetime.now().date()
+    db.session.commit()
+    flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
+    return redirect(url_for("journaliers_paie"))
+
+@app.route("/api/pointage/semaine")
+@login_required
+def api_pointage_semaine():
+    """Retourne les stats de pointage d'une semaine."""
+    t = get_tenant()
+    if not t: return jsonify({})
+    from datetime import timedelta
+    date_str = request.args.get("date")
+    try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_sel = datetime.now().date()
+    lundi = date_sel - timedelta(days=date_sel.weekday())
+    samedi = lundi + timedelta(days=5)
+    pts = Pointage.query.filter_by(tenant_id=t.id)          .filter(Pointage.date_pointage >= lundi,
+                  Pointage.date_pointage <= samedi).all()
+    stats = {}
+    for p in pts:
+        key = str(p.date_pointage)
+        if key not in stats: stats[key] = {"presents":0,"absents":0,"heures":0}
+        if p.present:
+            stats[key]["presents"] += 1
+            stats[key]["heures"] += p.total_heures
+        else:
+            stats[key]["absents"] += 1
+    return jsonify(stats)
+
 # ── GESTION DES ACOMPTES ──────────────────────────────────────────────────────
 @app.route("/acomptes")
 @login_required
