@@ -670,6 +670,19 @@ def utilisateur_nouveau():
     db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
     return redirect(url_for("parametres"))
 
+# ── IMPRESSION BULLETIN ───────────────────────────────────────────────────────
+@app.route("/bulletins/<int:id>/imprimer")
+@login_required
+def bulletin_imprimer(id):
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        t = b.salarie.tenant
+    else:
+        t = get_tenant()
+        if not t: return redirect(url_for("login"))
+        b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    return render_template("tenant/bulletin_print.html", bulletin=b, tenant=t)
+
 # ── GESTION DES CONGÉS ────────────────────────────────────────────────────────
 @app.route("/conges")
 @login_required
