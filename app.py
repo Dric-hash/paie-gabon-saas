@@ -371,18 +371,85 @@ def dashboard():
         flash("Aucune entreprise associée à votre compte.","error")
         return redirect(url_for("login"))
     now=datetime.now()
-    nb_actifs=Salarie.query.filter_by(tenant_id=t.id,statut="ACTIF").count()
-    periode=PeriodePaie.query.filter_by(tenant_id=t.id,annee=now.year,mois=now.month).first()
-    masse={}; nb_v=nb_b=0
+
+    # ── Stats salariés ──────────────────────────────────────────
+    nb_actifs   = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_inactifs = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
+    nb_total    = Salarie.query.filter_by(tenant_id=t.id).count()
+    # Nouvelles embauches ce mois
+    debut_mois  = datetime(now.year, now.month, 1).date()
+    nb_new_mois = Salarie.query.filter(
+        Salarie.tenant_id==t.id,
+        Salarie.date_embauche>=debut_mois).count()
+
+    # ── Période en cours ──────────────────────────────────────
+    periode = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=now.year, mois=now.month).first()
+    masse={}; nb_v=nb_b=nb_p=0
     if periode:
-        buls=BulletinPaie.query.filter_by(tenant_id=t.id,periode_id=periode.id).all()
-        masse=calculer_masse_salariale(buls)
-        nb_v=sum(1 for b in buls if b.statut in("VALIDÉ","PAYÉ"))
-        nb_b=sum(1 for b in buls if b.statut=="BROUILLON")
-    derniers=BulletinPaie.query.filter_by(tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(5).all()
+        buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).all()
+        masse = calculer_masse_salariale(buls)
+        nb_v = sum(1 for b in buls if b.statut=="VALIDÉ")
+        nb_p = sum(1 for b in buls if b.statut=="PAYÉ")
+        nb_b = sum(1 for b in buls if b.statut=="BROUILLON")
+
+    # ── Évolution masse salariale (6 derniers mois) ───────────
+    evolution = []
+    for i in range(5, -1, -1):
+        m = now.month - i
+        y = now.year
+        while m <= 0: m += 12; y -= 1
+        p = PeriodePaie.query.filter_by(tenant_id=t.id, annee=y, mois=m).first()
+        mois_noms = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+        if p:
+            buls_p = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=p.id).all()
+            total_net = sum(float(b.net_a_payer or 0) for b in buls_p)
+            total_brut = sum(float(b.salaire_brut or 0) for b in buls_p)
+            total_charges = sum(float(b.cnss_patronale or 0)+float(b.cnamgs_patronale or 0)+
+                               float(b.fnh or 0)+float(b.cfp or 0) for b in buls_p)
+        else:
+            total_net = total_brut = total_charges = 0
+        evolution.append({
+            "mois": mois_noms[m],
+            "annee": y,
+            "brut": round(total_brut),
+            "net": round(total_net),
+            "charges": round(total_charges),
+            "nb_bulletins": len(buls_p) if p else 0
+        })
+
+    # ── Top 5 salaires les plus élevés (mois en cours) ────────
+    top_salaries = []
+    if periode:
+        top = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)              .order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
+        top_salaries = top
+
+    # ── Répartition par catégorie ──────────────────────────────
+    from sqlalchemy import func
+    cats_stats = db.session.query(
+        CategorieEmploi.code,
+        CategorieEmploi.libelle,
+        func.count(Salarie.id).label("nb")
+    ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)     .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")     .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+
+    # ── Derniers bulletins ─────────────────────────────────────
+    derniers = BulletinPaie.query.filter_by(tenant_id=t.id)               .order_by(BulletinPaie.date_creation.desc()).limit(6).all()
+
+    # ── Alertes ────────────────────────────────────────────────
+    alertes = []
+    if nb_b > 0:
+        alertes.append({"type":"warning","msg":f"{nb_b} bulletin(s) en brouillon à valider"})
+    if not periode:
+        alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
+    if t.plan and t.plan.max_salaries and nb_actifs >= t.plan.max_salaries * 0.9:
+        alertes.append({"type":"danger","msg":f"Limite de salariés bientôt atteinte ({nb_actifs}/{t.plan.max_salaries})"})
+
     return render_template("tenant/dashboard.html", tenant=t,
-        nb_actifs=nb_actifs, nb_total=Salarie.query.filter_by(tenant_id=t.id).count(),
-        periode=periode, masse=masse, nb_valides=nb_v, nb_brouillon=nb_b, derniers=derniers)
+        nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
+        nb_new_mois=nb_new_mois, periode=periode, masse=masse,
+        nb_valides=nb_v, nb_payes=nb_p, nb_brouillon=nb_b,
+        evolution=evolution, top_salaries=top_salaries,
+        cats_stats=cats_stats, derniers=derniers, alertes=alertes, now=now)
 
 @app.route("/salaries")
 @login_required
@@ -603,6 +670,126 @@ def utilisateur_nouveau():
     db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
     return redirect(url_for("parametres"))
 
+# ── GESTION DES CONGÉS ────────────────────────────────────────────────────────
+@app.route("/conges")
+@login_required
+def conges():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    now = datetime.now()
+    annee = request.args.get("annee", now.year, type=int)
+    salarie_id = request.args.get("salarie_id", type=int)
+    q = request.args.get("q", "")
+
+    # Liste salariés avec leurs soldes congés
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+
+    # Calculer les soldes pour chaque salarié
+    soldes = []
+    for s in salaries:
+        if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower():
+            continue
+        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=s.id, annee=annee).first()
+        # Calcul auto : 2.5 jours/mois travaillé (30 jours/an au Gabon)
+        mois_anciennete = max(1, (datetime.now().date() - s.date_embauche).days // 30) if s.date_embauche else 12
+        jours_acquis_auto = round(min(mois_anciennete, 12) * 2.0, 1)
+        soldes.append({
+            "salarie": s,
+            "conge": conge,
+            "jours_acquis": float(conge.jours_acquis) if conge else jours_acquis_auto,
+            "jours_pris": float(conge.jours_pris) if conge else 0,
+            "jours_restants": (float(conge.jours_acquis) - float(conge.jours_pris)) if conge else jours_acquis_auto,
+        })
+
+    # Demandes de congé en cours
+    demandes = Conge.query.filter_by(tenant_id=t.id)               .filter(Conge.statut.in_(["DEMANDÉ","APPROUVÉ"]))               .order_by(Conge.date_depart).all()
+
+    return render_template("tenant/conges.html",
+        tenant=t, soldes=soldes, demandes=demandes,
+        annee=annee, now=now, q=q,
+        salaries=salaries)
+
+@app.route("/conges/nouveau", methods=["GET","POST"])
+@login_required
+def conge_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+
+    if request.method == "POST":
+        salarie_id = request.form.get("salarie_id", type=int)
+        annee = request.form.get("annee", datetime.now().year, type=int)
+        date_dep = _parse_date(request.form.get("date_depart"))
+        date_ret = _parse_date(request.form.get("date_retour"))
+        type_c = request.form.get("type_conge", "ANNUEL")
+
+        # Calculer les jours
+        jours = 0
+        if date_dep and date_ret:
+            jours = (date_ret - date_dep).days + 1
+
+        # Trouver ou créer le solde annuel
+        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
+        if not conge:
+            s = Salarie.query.get(salarie_id)
+            mois = max(1, (datetime.now().date() - s.date_embauche).days // 30) if s.date_embauche else 12
+            conge = Conge(
+                tenant_id=t.id, salarie_id=salarie_id, annee=annee,
+                jours_acquis=round(min(mois, 12) * 2.0, 1),
+                jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
+            db.session.add(conge)
+
+        conge.date_depart = date_dep
+        conge.date_retour = date_ret
+        conge.type_conge = type_c
+        conge.statut = "DEMANDÉ"
+
+        db.session.commit()
+        flash(f"Demande de congé enregistrée ({jours} jours).", "success")
+        return redirect(url_for("conges"))
+
+    return render_template("tenant/conge_form.html",
+        tenant=t, salaries=salaries, now=datetime.now())
+
+@app.route("/conges/<int:id>/approuver", methods=["POST"])
+@login_required
+def conge_approuver(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # Déduire les jours du solde
+    if c.date_depart and c.date_retour:
+        jours = (c.date_retour - c.date_depart).days + 1
+        c.jours_pris = float(c.jours_pris or 0) + jours
+    c.statut = "APPROUVÉ"
+    db.session.commit()
+    flash(f"Congé de {c.salarie.nom_complet} approuvé.", "success")
+    return redirect(url_for("conges"))
+
+@app.route("/conges/<int:id>/refuser", methods=["POST"])
+@login_required
+def conge_refuser(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    c.statut = "REFUSÉ"
+    db.session.commit()
+    flash(f"Congé de {c.salarie.nom_complet} refusé.", "success")
+    return redirect(url_for("conges"))
+
+@app.route("/conges/<int:id>/supprimer", methods=["POST"])
+@login_required
+def conge_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(c)
+    db.session.commit()
+    flash("Demande supprimée.", "success")
+    return redirect(url_for("conges"))
+
 @app.route("/bulletins/export/<int:periode_id>")
 @tenant_required
 def export_journal(periode_id):
@@ -684,7 +871,7 @@ def init_db():
         ]: db.session.add(Plan(code=code,nom=nom,prix_mensuel=prix,max_salaries=ms,max_utilisateurs=mu,description=desc))
     if not RubriquePaie.query.first():
         for code,lib,typ,ts,tp,plaf in [
-            ("CNSS","Caisse Nationale Sécurité Sociale","COTISATION",0.025,0.16,1500000),
+            ("CNSS","Caisse Nationale Sécurité Sociale","COTISATION",0.05,0.18,1500000),
             ("CNAMGS","Assurance Maladie Garantie Sociale","COTISATION",0.02,0.041,2500000),
             ("TCS","Taxe Complémentaire Salaires","RETENUE",0.05,None,None),
             ("FNH","Fonds National Habitat","COTISATION",None,0.02,1500000),
