@@ -385,9 +385,12 @@ def dashboard():
         periode=periode, masse=masse, nb_valides=nb_v, nb_brouillon=nb_b, derniers=derniers)
 
 @app.route("/salaries")
-@tenant_required
+@login_required
 def salaries():
-    t=get_tenant(); q=request.args.get("q",""); statut=request.args.get("statut","")
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("login"))
+    q=request.args.get("q",""); statut=request.args.get("statut","")
     query=Salarie.query.filter_by(tenant_id=t.id)
     if q: query=query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
     if statut: query=query.filter_by(statut=statut)
@@ -395,10 +398,12 @@ def salaries():
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(), q=q, statut=statut, tenant=t)
 
 @app.route("/salaries/nouveau", methods=["GET","POST"])
-@tenant_required
-@can_edit
+@login_required
 def salarie_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.can_edit: abort(403)
     cats=CategorieEmploi.query.filter_by(tenant_id=t.id).all()
     if request.method=="POST":
         if not t.est_dans_limite:
@@ -426,19 +431,23 @@ def salarie_nouveau():
     return render_template("tenant/salarie_form.html", salarie=None, categories=cats, action="nouveau", tenant=t)
 
 @app.route("/salaries/<int:id>")
-@tenant_required
+@login_required
 def salarie_detail(id):
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
+    if not t: return redirect(url_for("login"))
     s=Salarie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
     return render_template("tenant/salarie_detail.html", salarie=s, tenant=t,
         bulletins=BulletinPaie.query.filter_by(salarie_id=id,tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(12).all(),
         contrat=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first())
 
 @app.route("/salaries/<int:id>/modifier", methods=["GET","POST"])
-@tenant_required
-@can_edit
+@login_required
 def salarie_modifier(id):
-    t=get_tenant(); s=Salarie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.can_edit: abort(403); s=Salarie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
     cats=CategorieEmploi.query.filter_by(tenant_id=t.id).all()
     if request.method=="POST":
         for f,v in [("nom",request.form["nom"].strip().upper()),("prenom",request.form["prenom"].strip()),
@@ -456,9 +465,12 @@ def salarie_modifier(id):
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats, action="modifier", tenant=t)
 
 @app.route("/bulletins")
-@tenant_required
+@login_required
 def bulletins():
-    t=get_tenant(); pid=request.args.get("periode_id",type=int); sf=request.args.get("statut","")
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("login"))
+    pid=request.args.get("periode_id",type=int); sf=request.args.get("statut","")
     periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all()
     ps=None; buls=[]; masse={}
     if pid:
@@ -471,10 +483,12 @@ def bulletins():
         bulletins=buls, masse=masse, statut_filtre=sf, tenant=t)
 
 @app.route("/bulletins/saisie", methods=["GET","POST"])
-@tenant_required
-@can_edit
+@login_required
 def bulletin_saisie():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.can_edit: abort(403)
     sals=Salarie.query.filter_by(tenant_id=t.id,statut="ACTIF").order_by(Salarie.nom).all()
     pers=PeriodePaie.query.filter_by(tenant_id=t.id,statut="OUVERT").order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all()
     if request.method=="POST":
@@ -499,9 +513,11 @@ def bulletin_saisie():
     return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t)
 
 @app.route("/bulletins/<int:id>")
-@tenant_required
+@login_required
 def bulletin_detail(id):
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
+    if not t: return redirect(url_for("login"))
     return render_template("tenant/bulletin_detail.html",
         bulletin=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404(), tenant=t)
 
@@ -522,9 +538,11 @@ def bulletin_paye(id):
     return redirect(url_for("bulletin_detail",id=id))
 
 @app.route("/periodes")
-@tenant_required
+@login_required
 def periodes():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
+    if not t: return redirect(url_for("login"))
     return render_template("tenant/periodes.html", tenant=t,
         periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all())
 
