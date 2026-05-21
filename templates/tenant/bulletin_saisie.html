@@ -1,13 +1,6 @@
 {% extends "tenant/base.html" %}
 
-{% macro champ(label, name, value=0, required=False) %}
-<div>
-  <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}{% if required %} *{% endif %}</label>
-  <input type="number" name="{{ name }}" id="f_{{ name }}" value="{{ value or 0 }}" min="0" step="1"
-    style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
-    class="champ-calcul" {% if required %}required{% endif %}/>
-</div>
-{% endmacro %}
+
 
 {% block title %}Saisie bulletin — {{ tenant.denomination }}{% endblock %}
 {% block content %}
@@ -82,10 +75,30 @@
         <span style="font-size:.7rem;color:#9ca3af">En FCFA (montant total, pas le nombre d'heures)</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {{ champ("Nuit semaine +10%", "heures_sup_10") }}
-        {{ champ("Dimanche +30%", "heures_sup_30") }}
-        {{ champ("Nuit dimanche +40%", "heures_sup_40") }}
-        {{ champ("Jours fériés +70%", "heures_sup_70") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Nuit semaine +10%</label>
+          <input type="number" name="heures_sup_10" id="f_heures_sup_10" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Dimanche +30%</label>
+          <input type="number" name="heures_sup_30" id="f_heures_sup_30" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Nuit dimanche +40%</label>
+          <input type="number" name="heures_sup_40" id="f_heures_sup_40" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Jours fériés +70%</label>
+          <input type="number" name="heures_sup_70" id="f_heures_sup_70" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
         {% call champ("Absences (déduction)", "absences") %}{% endcall %}
       </div>
     </div>
@@ -94,16 +107,66 @@
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Primes & Indemnités imposables</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {{ champ("Prime de caisse", "prime_caisse") }}
-        {{ champ("Carburant", "carburant") }}
-        {{ champ("Prime d'ancienneté", "prime_anciennete") }}
-        {{ champ("Prime de transport", "prime_transport") }}
-        {{ champ("Prime de responsabilité", "prime_responsabilite") }}
-        {{ champ("Prime de rendement", "prime_rendement") }}
-        {{ champ("Prime d'assiduité", "prime_assiduité") }}
-        {{ champ("Prime de qualité", "prime_qualite") }}
-        {{ champ("Prime de performance", "prime_performance") }}
-        {{ champ("Allocations de congé", "allocations_conge") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de caisse</label>
+          <input type="number" name="prime_caisse" id="f_prime_caisse" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Carburant</label>
+          <input type="number" name="carburant" id="f_carburant" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime d'ancienneté</label>
+          <input type="number" name="prime_anciennete" id="f_prime_anciennete" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de transport</label>
+          <input type="number" name="prime_transport" id="f_prime_transport" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de responsabilité</label>
+          <input type="number" name="prime_responsabilite" id="f_prime_responsabilite" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de rendement</label>
+          <input type="number" name="prime_rendement" id="f_prime_rendement" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime d'assiduité</label>
+          <input type="number" name="prime_assiduité" id="f_prime_assiduité" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de qualité</label>
+          <input type="number" name="prime_qualite" id="f_prime_qualite" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de performance</label>
+          <input type="number" name="prime_performance" id="f_prime_performance" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Allocations de congé</label>
+          <input type="number" name="allocations_conge" id="f_allocations_conge" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
       </div>
     </div>
 
@@ -111,10 +174,30 @@
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Avantages en nature</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {{ champ("Indemnité de logement", "indem_logement") }}
-        {{ champ("Indemnité de domesticité", "indem_domesticite") }}
-        {{ champ("Eau & Électricité", "indem_eau_electricite") }}
-        {{ champ("Nourriture", "indem_nourriture") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indemnité de logement</label>
+          <input type="number" name="indem_logement" id="f_indem_logement" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indemnité de domesticité</label>
+          <input type="number" name="indem_domesticite" id="f_indem_domesticite" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Eau & Électricité</label>
+          <input type="number" name="indem_eau_electricite" id="f_indem_eau_electricite" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Nourriture</label>
+          <input type="number" name="indem_nourriture" id="f_indem_nourriture" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
       </div>
     </div>
 
@@ -125,11 +208,31 @@
         <span style="font-size:.7rem;color:#9ca3af;background:#f0fdf4;padding:.125rem .5rem;border-radius:9999px;color:#059669">Non soumis CNSS/IRPP</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {{ champ("Prime de panier", "prime_panier") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de panier</label>
+          <input type="number" name="prime_panier" id="f_prime_panier" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
         {% call champ("Indemnité transport (net)", "indem_transport") %}{% endcall %}
-        {{ champ("Indemnité de représentation", "indem_representation") }}
-        {{ champ("Prime de salisure", "prime_salisure") }}
-        {{ champ("Acompte à déduire", "acompte") }}
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indemnité de représentation</label>
+          <input type="number" name="indem_representation" id="f_indem_representation" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Prime de salisure</label>
+          <input type="number" name="prime_salisure" id="f_prime_salisure" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Acompte à déduire</label>
+          <input type="number" name="acompte" id="f_acompte" value="{{0 or 0}}" min="0" step="1"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+            class="champ-calcul" />
+        </div>
       </div>
     </div>
 
@@ -151,12 +254,7 @@
 
       <!-- Retenues salariales -->
       <div style="font-size:.7rem;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem">Retenues salariales</div>
-      {% macro ligne_r(label, id_r) %}
-      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
-        <span style="color:#6b7280">{{ label }}</span>
-        <span id="{{ id_r }}" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
-      </div>
-      {% endmacro %}
+      
       {{ ligne_r("CNSS salarié (5%)", "r_cnss") }}
       {{ ligne_r("CNAMGS salarié (2%)", "r_cnamgs") }}
       {{ ligne_r("TCS (5%)", "r_tcs") }}
@@ -181,12 +279,7 @@
       <!-- Charges patronales -->
       <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
         <div style="font-size:.7rem;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:.375rem">Charges patronales</div>
-        {% macro ligne_p(label, id_p) %}
-        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">{{ label }}</span>
-          <span id="{{ id_p }}" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
-        </div>
-        {% endmacro %}
+        
         {{ ligne_p("CNSS patronal (18%)", "r_cnss_pat") }}
         {{ ligne_p("CNAMGS patronal (4,1%)", "r_cnamgs_pat") }}
         {{ ligne_p("FNH (2%)", "r_fnh") }}
