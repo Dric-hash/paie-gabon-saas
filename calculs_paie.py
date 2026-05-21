@@ -12,7 +12,7 @@ CNAMGS_TAUX_SALARIE  = 0.02        # 2%
 CNAMGS_TAUX_PATRONAL = 0.041       # 4,1%
 CNAMGS_PLAFOND       = 2_500_000   # FCFA/mois
 
-FNH_TAUX             = 0.02        # 2% patronal
+FNH_TAUX             = 0.03        # 3% patronal
 FNH_PLAFOND          = 1_500_000   # FCFA/mois
 
 CFP_TAUX             = 0.005       # 0,5% patronal
