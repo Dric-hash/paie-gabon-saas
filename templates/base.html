@@ -2,109 +2,133 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>{% block title %}Paie Gabon{% endblock %}</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{% block title %}PaieGabon{% endblock %}</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <script>tailwind.config={theme:{extend:{colors:{primary:"#1a2332",accent:"#f59e0b"}}}}</script>
   <style>
     body{font-family:'Segoe UI',system-ui,sans-serif}
-    .nav-link{@apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all}
-    .nav-link:hover{@apply bg-white/10}
-    .nav-link.active{@apply bg-white text-primary}
-    .card{@apply bg-white rounded-2xl border border-gray-200 shadow-sm}
-    .btn-primary{@apply bg-primary text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-800 transition-all}
-    .btn-secondary{@apply bg-gray-100 text-gray-700 px-4 py-2 rounded-xl text-sm font-bold hover:bg-gray-200 transition-all}
-    .btn-danger{@apply bg-red-600 text-white px-4 py-2 rounded-xl text-sm font-bold hover:bg-red-700 transition-all}
-    .badge{@apply text-xs font-bold px-2 py-0.5 rounded-full border}
-    .badge-actif{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
-    .badge-inactif{@apply badge bg-red-100 text-red-600 border-red-200}
-    .badge-essai{@apply badge bg-amber-100 text-amber-700 border-amber-200}
-    .badge-suspendu{@apply badge bg-red-100 text-red-700 border-red-200}
-    .badge-validé{@apply badge bg-blue-100 text-blue-700 border-blue-200}
-    .badge-brouillon{@apply badge bg-amber-100 text-amber-700 border-amber-200}
-    .badge-payé{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
-    .badge-ouvert{@apply badge bg-emerald-100 text-emerald-700 border-emerald-200}
-    .badge-clôturé{@apply badge bg-gray-100 text-gray-600 border-gray-200}
-    input:focus,select:focus{outline:none;border-color:#1a2332!important}
-    .form-input{@apply w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm transition-colors}
+    .card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+    .btn-primary{background:#1a2332;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;display:inline-block;cursor:pointer;border:none}
+    .btn-primary:hover{background:#374151}
+    .btn-secondary{background:#f1f5f9;color:#374151;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;display:inline-block;cursor:pointer;border:none}
+    .badge-actif{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #a7f3d0}
+    .badge-inactif{background:#fee2e2;color:#991b1b;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #fca5a5}
+    .badge-suspendu{background:#fee2e2;color:#991b1b;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .badge-validé{background:#dbeafe;color:#1e40af;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #93c5fd}
+    .badge-brouillon{background:#fef3c7;color:#92400e;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #fcd34d}
+    .badge-payé{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;border:1px solid #a7f3d0}
+    .badge-ouvert{background:#d1fae5;color:#065f46;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .badge-clôturé{background:#f3f4f6;color:#6b7280;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px}
+    .form-input{width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem}
+    .form-input:focus{outline:none;border-color:#1a2332}
+    table{width:100%;border-collapse:collapse}
+    th{background:#f9fafb;padding:.625rem .75rem;text-align:left;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb}
+    td{padding:.75rem;border-bottom:1px solid #f3f4f6;font-size:.875rem}
+    tr:hover td{background:#fafafa}
   </style>
 </head>
 <body class="bg-gray-50 text-gray-800">
-
-{% if current_user.is_authenticated %}
 <div class="flex min-h-screen">
 
-  <!-- SIDEBAR -->
-  <aside class="w-60 bg-primary text-white flex flex-col fixed h-full z-20 shadow-2xl">
-
+  <!-- Sidebar -->
+  <aside class="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-2xl">
     <!-- Logo -->
-    <div class="px-5 py-4 border-b border-white/10">
-      {% if current_user.is_super_admin %}
-      <div class="text-base font-black">🛡️ Super Admin</div>
-      <div class="text-xs text-white/40 mt-0.5">Paie Gabon SaaS</div>
-      {% else %}
-      <div class="text-base font-black truncate">
-        {{ current_user.tenant.sigle or current_user.tenant.denomination[:15] if current_user.tenant else 'Paie Gabon' }}
+    <div class="px-6 py-5 border-b border-white/10">
+      <div class="text-lg font-black">🏗️ PaieGabon</div>
+      <div class="text-xs text-white/50 mt-0.5 truncate">
+        {% if tenant %}{{ tenant.denomination }}{% else %}Espace entreprise{% endif %}
       </div>
-      <div class="text-xs text-white/40 mt-0.5">
-        {% if current_user.tenant %}
-          <span class="badge-{{ current_user.tenant.statut|lower }} text-xs">{{ current_user.tenant.statut }}</span>
-          · {{ current_user.tenant.plan.nom if current_user.tenant.plan else '—' }}
-        {% endif %}
-      </div>
+      {% if tenant and tenant.plan %}
+      <span class="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full font-bold mt-1 inline-block">
+        {{ tenant.plan.nom }}
+      </span>
       {% endif %}
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto">
+    <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+      {% set ep = request.endpoint %}
+      <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
+        🏠 <span>Tableau de bord</span>
+      </a>
+      <a href="/salaries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'salari' in ep else 'text-white/80 hover:bg-white/10' }}">
+        👥 <span>Salariés</span>
+      </a>
+      <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
+        📄 <span>Saisie bulletin</span>
+      </a>
+      <a href="/bulletins" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletins' else 'text-white/80 hover:bg-white/10' }}">
+        📊 <span>Bulletins</span>
+      </a>
+      <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
+        📅 <span>Périodes</span>
+      </a>
+      <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🏖️ <span>Congés</span>
+      </a>
+      <a href="/acomptes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'acompte' in ep else 'text-white/80 hover:bg-white/10' }}">
+        💵 <span>Acomptes</span>
+      </a>
+      <div class="border-t border-white/10 my-2"></div>
+      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">Pointage</p>
+      <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">
+        📋 <span>Pointage</span>
+      </a>
+      <a href="/journaliers" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journalier' in ep else 'text-white/80 hover:bg-white/10' }}">
+        👷 <span>Journaliers</span>
+      </a>
+      <a href="/journaliers/paie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journaliers_paie' in ep else 'text-white/80 hover:bg-white/10' }}">
+        💵 <span>Paie journaliers</span>
+      </a>
+      <div class="border-t border-white/10 my-2"></div>
+      {% if current_user.is_tenant_admin %}
+      <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🔐 <span>Utilisateurs</span>
+      </a>
+      {% endif %}
+      <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
+        ⚙️ <span>Paramètres</span>
+      </a>
       {% if current_user.is_super_admin %}
-        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2">Admin</p>
-        <a href="{{ url_for('admin_dashboard') }}" class="nav-link {% if request.endpoint=='admin_dashboard' %}active{% endif %}">🏠 Dashboard</a>
-        <a href="{{ url_for('admin_tenants') }}" class="nav-link {% if 'tenant' in request.endpoint %}active{% endif %}">🏢 Entreprises</a>
-        <a href="{{ url_for('admin_plans') }}" class="nav-link {% if request.endpoint=='admin_plans' %}active{% endif %}">💳 Plans</a>
-        <a href="{{ url_for('admin_rubriques') }}" class="nav-link {% if request.endpoint=='admin_rubriques' %}active{% endif %}">⚙️ Rubriques paie</a>
-        <a href="{{ url_for('admin_import_excel') }}" class="nav-link {% if request.endpoint=='admin_import_excel' %}active{% endif %}">📥 Import Excel</a>
-        <a href="{{ url_for('admin_stats') }}" class="nav-link {% if request.endpoint=='admin_stats' %}active{% endif %}">📊 Statistiques</a>
-      {% else %}
-        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2">Paie</p>
-        <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">🏠 Tableau de bord</a>
-        <a href="{{ url_for('salaries') }}" class="nav-link {% if 'salari' in request.endpoint %}active{% endif %}">👥 Salariés</a>
-        <a href="{{ url_for('bulletin_saisie') }}" class="nav-link {% if request.endpoint=='bulletin_saisie' %}active{% endif %}">📄 Saisie bulletin</a>
-        <a href="{{ url_for('bulletins') }}" class="nav-link {% if request.endpoint=='bulletins' %}active{% endif %}">📊 Bulletins</a>
-        <a href="{{ url_for('periodes') }}" class="nav-link {% if request.endpoint=='periodes' %}active{% endif %}">📅 Périodes</a>
-        <p class="text-xs font-bold text-white/30 uppercase tracking-widest px-4 py-2 mt-3">Gestion</p>
-        {% if current_user.is_tenant_admin %}
-        <a href="{{ url_for('utilisateurs') }}" class="nav-link {% if 'utilisateur' in request.endpoint %}active{% endif %}">🔐 Utilisateurs</a>
-        {% endif %}
-        <a href="{{ url_for('parametres') }}" class="nav-link {% if request.endpoint=='parametres' %}active{% endif %}">⚙️ Paramètres</a>
+      <div class="border-t border-white/10 my-2"></div>
+      <a href="/admin" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-purple-300 hover:bg-white/10 transition-all">
+        🔑 <span>Retour admin</span>
+      </a>
       {% endif %}
     </nav>
 
-    <!-- Pied de sidebar -->
-    <div class="px-4 py-3 border-t border-white/10">
-      <div class="flex items-center gap-2">
-        <div class="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-xs font-black flex-shrink-0">
+    <!-- Utilisateur connecté -->
+    <div class="px-4 py-4 border-t border-white/10">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-sm font-black flex-shrink-0">
           {{ current_user.prenom[0] }}{{ current_user.nom[0] }}
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-xs font-bold truncate">{{ current_user.nom_complet }}</div>
-          <div class="text-xs text-white/40">{{ current_user.role }}</div>
+          <div class="text-sm font-bold truncate">{{ current_user.nom_complet }}</div>
+          <div class="text-xs text-white/50">{{ current_user.role }}</div>
         </div>
-        <a href="{{ url_for('logout') }}" class="text-white/40 hover:text-white text-lg" title="Déconnexion">⏏</a>
+        <a href="/logout" title="Déconnexion" class="text-white/40 hover:text-white text-lg">⏏</a>
       </div>
     </div>
+
+    <!-- Bandeau essai -->
+    {% if tenant and tenant.statut == 'ESSAI' %}
+    <div class="mx-3 mb-3 bg-amber-500/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 text-center font-semibold">
+      ⏳ Période d'essai gratuite
+    </div>
+    {% endif %}
   </aside>
 
-  <!-- CONTENU -->
-  <main class="ml-60 flex-1 p-8 min-h-screen">
+  <!-- Contenu principal -->
+  <main class="ml-64 flex-1 p-8 min-h-screen">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
       <div class="mb-6 space-y-2">
-        {% for cat,msg in messages %}
+        {% for cat, msg in messages %}
         <div class="px-4 py-3 rounded-xl text-sm font-semibold
-          {% if cat=='success' %}bg-emerald-50 text-emerald-800 border border-emerald-200
-          {% elif cat=='error' %}bg-red-50 text-red-800 border border-red-200
-          {% else %}bg-amber-50 text-amber-800 border border-amber-200{% endif %}">
+          {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+          else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+          else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
           {{ msg }}
         </div>
         {% endfor %}
@@ -114,11 +138,6 @@
     {% block content %}{% endblock %}
   </main>
 </div>
-
-{% else %}
-{% block auth_content %}{% endblock %}
-{% endif %}
-
 {% block scripts %}{% endblock %}
 </body>
 </html>
