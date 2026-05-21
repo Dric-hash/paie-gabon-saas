@@ -380,3 +380,103 @@ class Acompte(db.Model):
             if d[k]: d[k] = str(d[k])
         if d["montant"]: d["montant"] = float(d["montant"])
         return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOURNALIERS (travailleurs payés à l'heure, sans fiche salarié)
+# ─────────────────────────────────────────────────────────────────────────────
+class Journalier(db.Model):
+    __tablename__ = "journaliers"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    nom           = db.Column(db.String(100), nullable=False)
+    prenom        = db.Column(db.String(100), nullable=False)
+    telephone     = db.Column(db.String(20))
+    profession    = db.Column(db.String(100))        # Ex: Maçon, Coffreur, Ferrailleur
+    taux_horaire  = db.Column(db.Numeric(10,2), nullable=False)  # FCFA/heure
+    statut        = db.Column(db.String(20), default="ACTIF")    # ACTIF, INACTIF
+    date_creation = db.Column(db.DateTime, default=__import__('datetime').datetime.utcnow)
+
+    pointages = db.relationship("Pointage", backref="journalier", lazy=True,
+                foreign_keys="Pointage.journalier_id")
+
+    @property
+    def nom_complet(self): return f"{self.nom} {self.prenom}"
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        if d["taux_horaire"]: d["taux_horaire"] = float(d["taux_horaire"])
+        if d["date_creation"]: d["date_creation"] = str(d["date_creation"])
+        d["nom_complet"] = self.nom_complet
+        return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# POINTAGE (pour mensuels ET journaliers)
+# ─────────────────────────────────────────────────────────────────────────────
+class Pointage(db.Model):
+    __tablename__ = "pointages"
+    id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    date_pointage   = db.Column(db.Date, nullable=False)
+
+    # Soit un mensuel, soit un journalier (un seul rempli)
+    salarie_id      = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=True)
+    journalier_id   = db.Column(db.Integer, db.ForeignKey("journaliers.id"), nullable=True)
+
+    # Présence
+    present         = db.Column(db.Boolean, default=True)
+    heures_normales = db.Column(db.Numeric(5,2), default=8)   # heures travaillées
+    heures_sup      = db.Column(db.Numeric(5,2), default=0)   # heures supplémentaires
+    absent          = db.Column(db.Boolean, default=False)
+    motif_absence   = db.Column(db.String(100))                # MALADIE, CONGE, SANS_MOTIF
+    observation     = db.Column(db.String(200))
+
+    salarie    = db.relationship("Salarie", backref="pointages",
+                 foreign_keys=[salarie_id])
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "date_pointage", "salarie_id"),
+        db.UniqueConstraint("tenant_id", "date_pointage", "journalier_id"),
+    )
+
+    @property
+    def total_heures(self):
+        return float(self.heures_normales or 0) + float(self.heures_sup or 0)
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        if d["date_pointage"]: d["date_pointage"] = str(d["date_pointage"])
+        for k in ["heures_normales", "heures_sup"]:
+            if d[k] is not None: d[k] = float(d[k])
+        return d
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FEUILLE DE PAIE JOURNALIER (paiement bi-hebdomadaire)
+# ─────────────────────────────────────────────────────────────────────────────
+class FeuillePaieJournalier(db.Model):
+    __tablename__ = "feuilles_paie_journalier"
+    id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    journalier_id   = db.Column(db.Integer, db.ForeignKey("journaliers.id"), nullable=False)
+    date_debut      = db.Column(db.Date, nullable=False)   # début de la période (2 semaines)
+    date_fin        = db.Column(db.Date, nullable=False)   # fin (samedi)
+    date_paiement   = db.Column(db.Date)                   # samedi de paiement
+    nb_jours        = db.Column(db.Integer, default=0)
+    total_heures    = db.Column(db.Numeric(7,2), default=0)
+    taux_horaire    = db.Column(db.Numeric(10,2), nullable=False)
+    montant_brut    = db.Column(db.Numeric(15,2), default=0)
+    statut          = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE, PAYÉ
+    observation     = db.Column(db.String(200))
+    date_creation   = db.Column(db.DateTime, default=__import__('datetime').datetime.utcnow)
+
+    journalier = db.relationship("Journalier", backref="feuilles_paie")
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for k in ["date_debut","date_fin","date_paiement","date_creation"]:
+            if d[k]: d[k] = str(d[k])
+        for k in ["total_heures","taux_horaire","montant_brut"]:
+            if d[k] is not None: d[k] = float(d[k])
+        return d
