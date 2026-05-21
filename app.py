@@ -673,6 +673,15 @@ def parametres_societe():
     db.session.commit(); flash("Informations mises à jour.","success")
     return redirect(url_for("parametres"))
 
+@app.route("/utilisateurs")
+@login_required
+def utilisateurs():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    liste = Utilisateur.query.filter_by(tenant_id=t.id).order_by(Utilisateur.nom).all()
+    return render_template("tenant/utilisateurs.html", tenant=t, utilisateurs=liste, users=liste)
+
 @app.route("/utilisateurs/nouveau", methods=["POST"])
 @tenant_required
 def utilisateur_nouveau():
