@@ -40,16 +40,36 @@ BAREME_IRPP = [
 
 
 def calculer_irpp(base_imposable: float, nb_parts: float) -> float:
-    """Calcul de l'IRPP par quotient familial (barème progressif)."""
+    """Calcul de l'IRPP par quotient familial (barème progressif).
+    
+    Conformément au CGI Gabon :
+    1. Abattement forfaitaire de 20% sur la base imposable
+    2. Arrondi au millier de francs inférieur
+    3. Division par le nombre de parts (quotient familial)
+    4. Application du barème progressif
+    5. Multiplication par le nombre de parts
+    """
     if base_imposable <= 0 or nb_parts <= 0:
         return 0.0
-    revenu_par_part = base_imposable / nb_parts
+    
+    # Étape 1 : Abattement forfaitaire 20%
+    base_apres_abattement = base_imposable * 0.80
+    
+    # Étape 2 : Arrondi au millier de francs INFÉRIEUR
+    base_arrondie = (int(base_apres_abattement) // 1000) * 1000
+    
+    # Étape 3 : Quotient familial
+    revenu_par_part = base_arrondie / nb_parts
+    
+    # Étape 4 : Application du barème progressif
     impot_par_part = 0.0
     for borne_inf, borne_sup, taux in BAREME_IRPP:
         if revenu_par_part <= borne_inf:
             break
         tranche = min(revenu_par_part, borne_sup) - borne_inf
         impot_par_part += tranche * taux
+    
+    # Étape 5 : Multiplier par le nombre de parts
     return round(impot_par_part * nb_parts, 2)
 
 
