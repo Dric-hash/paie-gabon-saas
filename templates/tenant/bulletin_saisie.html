@@ -1,4 +1,14 @@
 {% extends "tenant/base.html" %}
+
+{% macro champ(label, name, value=0, required=False) %}
+<div>
+  <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}{% if required %} *{% endif %}</label>
+  <input type="number" name="{{ name }}" id="f_{{ name }}" value="{{ value or 0 }}" min="0" step="1"
+    style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
+    class="champ-calcul" {% if required %}required{% endif %}/>
+</div>
+{% endmacro %}
+
 {% block title %}Saisie bulletin — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
@@ -72,10 +82,10 @@
         <span style="font-size:.7rem;color:#9ca3af">En FCFA (montant total, pas le nombre d'heures)</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% call champ("Nuit semaine +10%", "heures_sup_10") %}{% endcall %}
-        {% call champ("Dimanche +30%", "heures_sup_30") %}{% endcall %}
-        {% call champ("Nuit dimanche +40%", "heures_sup_40") %}{% endcall %}
-        {% call champ("Jours fériés +70%", "heures_sup_70") %}{% endcall %}
+        {{ champ("Nuit semaine +10%", "heures_sup_10") }}
+        {{ champ("Dimanche +30%", "heures_sup_30") }}
+        {{ champ("Nuit dimanche +40%", "heures_sup_40") }}
+        {{ champ("Jours fériés +70%", "heures_sup_70") }}
         {% call champ("Absences (déduction)", "absences") %}{% endcall %}
       </div>
     </div>
@@ -84,16 +94,16 @@
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Primes & Indemnités imposables</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% call champ("Prime de caisse", "prime_caisse") %}{% endcall %}
-        {% call champ("Carburant", "carburant") %}{% endcall %}
-        {% call champ("Prime d'ancienneté", "prime_anciennete") %}{% endcall %}
-        {% call champ("Prime de transport", "prime_transport") %}{% endcall %}
-        {% call champ("Prime de responsabilité", "prime_responsabilite") %}{% endcall %}
-        {% call champ("Prime de rendement", "prime_rendement") %}{% endcall %}
-        {% call champ("Prime d'assiduité", "prime_assiduité") %}{% endcall %}
-        {% call champ("Prime de qualité", "prime_qualite") %}{% endcall %}
-        {% call champ("Prime de performance", "prime_performance") %}{% endcall %}
-        {% call champ("Allocations de congé", "allocations_conge") %}{% endcall %}
+        {{ champ("Prime de caisse", "prime_caisse") }}
+        {{ champ("Carburant", "carburant") }}
+        {{ champ("Prime d'ancienneté", "prime_anciennete") }}
+        {{ champ("Prime de transport", "prime_transport") }}
+        {{ champ("Prime de responsabilité", "prime_responsabilite") }}
+        {{ champ("Prime de rendement", "prime_rendement") }}
+        {{ champ("Prime d'assiduité", "prime_assiduité") }}
+        {{ champ("Prime de qualité", "prime_qualite") }}
+        {{ champ("Prime de performance", "prime_performance") }}
+        {{ champ("Allocations de congé", "allocations_conge") }}
       </div>
     </div>
 
@@ -101,10 +111,10 @@
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Avantages en nature</h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% call champ("Indemnité de logement", "indem_logement") %}{% endcall %}
-        {% call champ("Indemnité de domesticité", "indem_domesticite") %}{% endcall %}
-        {% call champ("Eau & Électricité", "indem_eau_electricite") %}{% endcall %}
-        {% call champ("Nourriture", "indem_nourriture") %}{% endcall %}
+        {{ champ("Indemnité de logement", "indem_logement") }}
+        {{ champ("Indemnité de domesticité", "indem_domesticite") }}
+        {{ champ("Eau & Électricité", "indem_eau_electricite") }}
+        {{ champ("Nourriture", "indem_nourriture") }}
       </div>
     </div>
 
@@ -115,11 +125,11 @@
         <span style="font-size:.7rem;color:#9ca3af;background:#f0fdf4;padding:.125rem .5rem;border-radius:9999px;color:#059669">Non soumis CNSS/IRPP</span>
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% call champ("Prime de panier", "prime_panier") %}{% endcall %}
+        {{ champ("Prime de panier", "prime_panier") }}
         {% call champ("Indemnité transport (net)", "indem_transport") %}{% endcall %}
-        {% call champ("Indemnité de représentation", "indem_representation") %}{% endcall %}
-        {% call champ("Prime de salisure", "prime_salisure") %}{% endcall %}
-        {% call champ("Acompte à déduire", "acompte") %}{% endcall %}
+        {{ champ("Indemnité de représentation", "indem_representation") }}
+        {{ champ("Prime de salisure", "prime_salisure") }}
+        {{ champ("Acompte à déduire", "acompte") }}
       </div>
     </div>
 
@@ -212,14 +222,7 @@
 
 {% endblock %}
 
-{% macro champ(label, name, value=0, required=False) %}
-<div>
-  <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}{% if required %} *{% endif %}</label>
-  <input type="number" name="{{ name }}" id="f_{{ name }}" value="{{ value or 0 }}" min="0" step="1"
-    style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"
-    class="champ-calcul" {% if required %}required{% endif %}/>
-</div>
-{% endmacro %}
+
 
 {% block scripts %}
 <script>
