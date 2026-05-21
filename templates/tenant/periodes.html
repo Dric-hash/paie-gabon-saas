@@ -15,8 +15,8 @@
       <div>
         <label class="block text-xs font-bold text-gray-500 mb-1.5">Mois</label>
         <select name="mois" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
-          {% for i, m in enumerate(['','JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE']) %}
-          {% if i > 0 %}<option value="{{ i }}">{{ m }}</option>{% endif %}
+          {% for m in ['JANVIER','FÉVRIER','MARS','AVRIL','MAI','JUIN','JUILLET','AOÛT','SEPTEMBRE','OCTOBRE','NOVEMBRE','DÉCEMBRE'] %}
+          <option value="{{ loop.index }}">{{ m }}</option>
           {% endfor %}
         </select>
       </div>
