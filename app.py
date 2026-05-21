@@ -1302,9 +1302,16 @@ def init_db():
 # Initialisation automatique au démarrage (Railway/Production)
 with app.app_context():
     try:
+        db.create_all()  # Crée TOUTES les tables manquantes (acomptes, journaliers, pointages...)
         init_db()
+        print("✅ Tables créées et base initialisée.")
     except Exception as e:
-        print(f"Erreur init_db: {e}")
+        print(f"Erreur init: {e}")
+        try:
+            db.session.rollback()
+            db.create_all()
+        except Exception as e2:
+            print(f"Erreur create_all: {e2}")
 
 if __name__=="__main__":
     with app.app_context(): init_db()
