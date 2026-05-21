@@ -32,6 +32,37 @@ def super_admin_required(f):
         return f(*a,**k)
     return d
 
+def calculer_parts_irpp(situation_matrimoniale: str, nb_enfants: int) -> float:
+    """Calcule automatiquement le nombre de parts IRPP selon la réglementation gabonaise."""
+    situation = (situation_matrimoniale or "").upper().strip()
+    nb_enf = int(nb_enfants or 0)
+
+    # Parts de base selon situation matrimoniale
+    if "CELIBATAIRE" in situation and "AEAC" in situation:
+        parts = 1.5  # Célibataire avec enfants à charge
+    elif "CELIBATAIRE" in situation:
+        parts = 1.0  # Célibataire sans enfants
+    elif "DIVORCE" in situation and "AEAC" in situation:
+        parts = 1.5  # Divorcé avec enfants à charge
+    elif "DIVORCE" in situation:
+        parts = 1.0  # Divorcé sans enfants
+    elif "MARIE" in situation or "MARIÉ" in situation:
+        parts = 2.0  # Marié(e)
+    elif "VEUF" in situation and "2 ANS" in situation:
+        parts = 1.5  # Veuf après 2 ans
+    elif "VEUF" in situation and "AEAC" in situation:
+        parts = 2.0  # Veuf avec enfants à charge
+    elif "VEUF" in situation:
+        parts = 2.0  # Veuf
+    else:
+        parts = 1.0  # Par défaut
+
+    # Ajouter 0.5 par enfant
+    parts += nb_enf * 0.5
+
+    return round(parts, 1)
+
+
 def tenant_required(f):
     @wraps(f)
     def d(*a,**k):
@@ -542,7 +573,10 @@ def salarie_modifier(id):
             ("sexe",request.form.get("sexe")),("date_naissance",_pd(request.form.get("date_naissance"))),
             ("situation_matrimoniale",request.form.get("situation_matrimoniale")),
             ("nb_enfants",int(request.form.get("nb_enfants") or 0)),
-            ("nombre_parts",float(request.form.get("nombre_parts") or 1)),
+            ("nombre_parts", calculer_parts_irpp(
+                request.form.get("situation_matrimoniale",""),
+                int(request.form.get("nb_enfants",0) or 0)
+            )),
             ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
             ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",datetime.utcnow())]:
