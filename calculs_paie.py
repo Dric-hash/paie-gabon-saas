@@ -25,15 +25,17 @@ LOGEMENT_PLAFOND_MAX = 250_000     # FCFA/mois (IRPP/CNAMGS/TCS)
 TRANSPORT_EXONERATION_IRPP  = 100_000  # FCFA/mois
 TRANSPORT_EXONERATION_CNSS  = 35_000   # FCFA/mois
 
-# Barème IRPP simplifié Gabon (à affiner selon l'arrêté en vigueur)
+# Barème IRPP mensuel Gabon — Source: CGI Gabon (arrêté en vigueur)
+# Appliqué par quotient familial (revenu/nb_parts)
 BAREME_IRPP = [
-    (0,        150_000,   0.00),
-    (150_001,  350_000,   0.05),
-    (350_001,  600_000,   0.10),
-    (600_001,  1_000_000, 0.15),
-    (1_000_001,1_500_000, 0.20),
-    (1_500_001,2_500_000, 0.30),
-    (2_500_001,float("inf"), 0.40),
+    (0,        125_000,   0.00),   # Exonéré
+    (125_001,  160_000,   0.05),   # 5%
+    (160_001,  225_000,   0.10),   # 10%
+    (225_001,  300_000,   0.15),   # 15%
+    (300_001,  430_000,   0.20),   # 20%
+    (430_001,  625_000,   0.25),   # 25%
+    (625_001,  916_667,   0.30),   # 30%
+    (916_668,  float("inf"), 0.35),# 35%
 ]
 
 
