@@ -533,8 +533,9 @@ def salarie_modifier(id):
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
     if not t: return redirect(url_for("login"))
-    if not current_user.can_edit: abort(403); s=Salarie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    cats=CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+    if not current_user.can_edit: abort(403)
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
     if request.method=="POST":
         for f,v in [("nom",request.form["nom"].strip().upper()),("prenom",request.form["prenom"].strip()),
             ("telephone",request.form.get("telephone")),("nationalite",request.form.get("nationalite")),
