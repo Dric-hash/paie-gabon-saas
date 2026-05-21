@@ -630,7 +630,8 @@ def periodes():
     t=get_tenant()
     if not t: return redirect(url_for("login"))
     return render_template("tenant/periodes.html", tenant=t,
-        periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all())
+        periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all(),
+        now=datetime.now())
 
 @app.route("/periodes/nouvelle", methods=["POST"])
 @tenant_required
@@ -951,10 +952,15 @@ def acomptes():
     annee = request.args.get("annee", now.year, type=int)
     salarie_id = request.args.get("salarie_id", type=int)
 
-    query = Acompte.query.filter_by(tenant_id=t.id, annee=annee, mois=mois)
-    if salarie_id:
-        query = query.filter_by(salarie_id=salarie_id)
-    liste = query.order_by(Acompte.date_acompte.desc()).all()
+    try:
+        query = Acompte.query.filter_by(tenant_id=t.id, annee=annee, mois=mois)
+        if salarie_id:
+            query = query.filter_by(salarie_id=salarie_id)
+        liste = query.order_by(Acompte.date_acompte.desc()).all()
+    except Exception:
+        db.create_all()
+        db.session.rollback()
+        liste = []
 
     # Total acomptes du mois
     total_mois = sum(float(a.montant) for a in liste if a.statut != "ANNULE")
