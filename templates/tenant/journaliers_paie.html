@@ -1,0 +1,93 @@
+{% extends "tenant/base.html" %}
+{% block title %}Paie Journaliers{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+  <div>
+    <h1 class="text-2xl font-black">Paie des Journaliers</h1>
+    <p class="text-gray-500 text-sm mt-1">Paiement bi-hebdomadaire (chaque 2 samedis)</p>
+  </div>
+  <a href="/journaliers" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Journaliers</a>
+</div>
+
+<!-- Générer une feuille de paie -->
+<div class="card p-5 mb-6">
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Générer les feuilles de paie</h2>
+  <form method="POST" action="/journaliers/paie/generer" style="display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;align-items:end">
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Début de période *</label>
+      <input type="date" name="date_debut" required
+        style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>
+    </div>
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Fin de période (samedi) *</label>
+      <input type="date" name="date_fin" required
+        style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>
+    </div>
+    <button type="submit" style="background:#2563eb;color:white;padding:.625rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;white-space:nowrap">
+      ⚙️ Générer les feuilles
+    </button>
+  </form>
+  <div style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">
+    Le système calcule automatiquement les heures de chaque journalier depuis les pointages de la période.
+  </div>
+</div>
+
+<!-- Liste feuilles de paie -->
+<div class="card overflow-hidden">
+  <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Feuilles de paie ({{ feuilles|length }})</h2>
+    <div style="font-size:.875rem;font-weight:700;color:#059669">
+      Total EN ATTENTE : {{ feuilles|selectattr('statut','equalto','EN_ATTENTE')|sum(attribute='montant_brut')|int|fcfa }}
+    </div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Journalier</th><th>Profession</th><th style="text-align:center">Période</th>
+      <th style="text-align:center">Jours</th><th style="text-align:center">Heures</th>
+      <th style="text-align:right">Taux/h</th><th style="text-align:right">Montant</th>
+      <th style="text-align:center">Statut</th><th style="text-align:center">Action</th>
+    </tr></thead>
+    <tbody>
+      {% for f in feuilles %}
+      <tr>
+        <td style="font-weight:700;font-size:.875rem">{{ f.journalier.nom_complet }}</td>
+        <td style="font-size:.8rem;color:#6b7280">{{ f.journalier.profession or '—' }}</td>
+        <td style="text-align:center;font-size:.8rem;color:#6b7280">
+          {{ f.date_debut|date_fr }} → {{ f.date_fin|date_fr }}
+        </td>
+        <td style="text-align:center;font-weight:700">{{ f.nb_jours }}j</td>
+        <td style="text-align:center;font-weight:700">{{ f.total_heures|int }}h</td>
+        <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ f.taux_horaire|int|fcfa }}</td>
+        <td style="text-align:right;font-weight:900;font-family:monospace;color:#1a2332">{{ f.montant_brut|int|fcfa }}</td>
+        <td style="text-align:center">
+          <span style="font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
+            {% if f.statut=='EN_ATTENTE' %}background:#fef3c7;color:#92400e
+            {% else %}background:#d1fae5;color:#065f46{% endif %}">
+            {{ f.statut.replace('_',' ') }}
+          </span>
+        </td>
+        <td style="text-align:center">
+          {% if f.statut == 'EN_ATTENTE' %}
+          <form method="POST" action="/journaliers/paie/{{ f.id }}/payer">
+            <button type="submit"
+              style="font-size:.75rem;background:#059669;color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer"
+              onclick="return confirm('Confirmer le paiement de {{ f.journalier.nom_complet }} ?')">
+              ✅ Payer
+            </button>
+          </form>
+          {% else %}
+          <span style="font-size:.75rem;color:#9ca3af">{{ f.date_paiement|date_fr }}</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="9" style="text-align:center;padding:3rem;color:#9ca3af">
+        <div style="font-size:2rem;margin-bottom:.5rem">💵</div>
+        <p>Aucune feuille de paie générée</p>
+        <p style="font-size:.75rem;margin-top:.25rem">Sélectionnez une période et cliquez "Générer"</p>
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

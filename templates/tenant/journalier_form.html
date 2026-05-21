@@ -1,0 +1,64 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ 'Modifier' if journalier else 'Nouveau' }} journalier{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/journaliers" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Journaliers</a>
+  <h1 class="text-2xl font-black">{{ 'Modifier' if journalier else 'Nouveau journalier' }}</h1>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+  <div class="card p-6">
+    <form method="POST" action="{{ '/journaliers/' ~ journalier.id ~ '/modifier' if journalier else '/journaliers/nouveau' }}" class="space-y-4">
+      {% macro fi(label, name, val='', type='text', req=False) %}
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">{{ label }}{% if req %} *{% endif %}</label>
+        <input type="{{ type }}" name="{{ name }}" value="{{ val }}" {% if req %}required{% endif %}
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+      </div>
+      {% endmacro %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        {{ fi("Nom *","nom",journalier.nom if journalier else '',req=True) }}
+        {{ fi("Prénom *","prenom",journalier.prenom if journalier else '',req=True) }}
+      </div>
+      {{ fi("Profession / Métier","profession",journalier.profession if journalier else '') }}
+      {{ fi("Téléphone","telephone",journalier.telephone if journalier else '') }}
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Taux horaire (FCFA/heure) *</label>
+        <input type="number" name="taux_horaire" value="{{ journalier.taux_horaire|int if journalier else '' }}" required min="0" step="100"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:1.25rem;font-weight:900;text-align:right;font-family:monospace;box-sizing:border-box"
+          placeholder="Ex: 2500"/>
+        <div style="font-size:.75rem;color:#6b7280;margin-top:.25rem">SMIG horaire Gabon ≈ 938 FCFA/h (150 000 FCFA ÷ 160h)</div>
+      </div>
+      {% if journalier %}
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Statut</label>
+        <select name="statut" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+          <option {% if journalier.statut=='ACTIF' %}selected{% endif %}>ACTIF</option>
+          <option {% if journalier.statut=='INACTIF' %}selected{% endif %}>INACTIF</option>
+        </select>
+      </div>
+      {% endif %}
+      <div style="display:flex;gap:.75rem;padding-top:.5rem">
+        <a href="/journaliers" style="flex:1;background:#f3f4f6;color:#374151;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-align:center;text-decoration:none">Annuler</a>
+        <button type="submit" style="flex:1;background:#2563eb;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          💾 {{ 'Enregistrer' if journalier else 'Créer le journalier' }}
+        </button>
+      </div>
+    </form>
+  </div>
+  <div class="card p-5">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Professions courantes BTP Gabon</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;font-size:.8rem">
+      {% for prof, taux in [('Maçon','2 500'),('Coffreur','2 800'),('Ferrailleur','2 500'),('Carreleur','3 000'),('Peintre','2 200'),('Électricien','3 500'),('Plombier','3 000'),('Menuisier','2 800'),('Conducteur engin','4 000'),('Aide-maçon','1 500'),('Manœuvre','1 200'),('Gardien','1 100')] %}
+      <div style="background:#f9fafb;border-radius:.5rem;padding:.5rem;cursor:pointer"
+        onclick="document.querySelector('[name=profession]').value='{{ prof }}';document.querySelector('[name=taux_horaire]').value='{{ taux.replace(' ','') }}'">
+        <div style="font-weight:700;color:#374151">{{ prof }}</div>
+        <div style="color:#2563eb;font-size:.75rem">≈ {{ taux }} FCFA/h</div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="margin-top:1rem;background:#eff6ff;border-radius:.75rem;padding:.75rem;font-size:.75rem;color:#1e40af">
+      💡 Cliquez sur un métier pour remplir automatiquement le formulaire.
+    </div>
+  </div>
+</div>
+{% endblock %}
