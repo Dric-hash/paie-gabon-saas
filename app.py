@@ -939,6 +939,42 @@ def api_pointage_semaine():
             stats[key]["absents"] += 1
     return jsonify(stats)
 
+# ── UTILISATEURS DU TENANT ────────────────────────────────────────────────────
+@app.route("/utilisateurs")
+@login_required
+def utilisateurs():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    liste = Utilisateur.query.filter_by(tenant_id=t.id).order_by(Utilisateur.nom).all()
+    return render_template("tenant/utilisateurs.html", tenant=t, utilisateurs=liste, users=liste)
+
+@app.route("/utilisateurs/nouveau", methods=["GET","POST"])
+@login_required
+def utilisateur_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("utilisateurs"))
+    if request.method == "POST":
+        email = request.form["email"].strip().lower()
+        if Utilisateur.query.filter_by(email=email).first():
+            flash("Cet email est déjà utilisé.", "error")
+        else:
+            u = Utilisateur(
+                nom=request.form["nom"].strip().upper(),
+                prenom=request.form["prenom"].strip(),
+                email=email,
+                role=request.form.get("role","GESTIONNAIRE"),
+                tenant_id=t.id, actif=True)
+            u.set_password(request.form["password"])
+            db.session.add(u); db.session.commit()
+            flash(f"Utilisateur {u.nom_complet} créé.", "success")
+            return redirect(url_for("utilisateurs"))
+    return render_template("tenant/utilisateur_form.html", tenant=t)
+
 # ── GESTION DES ACOMPTES ──────────────────────────────────────────────────────
 @app.route("/acomptes")
 @login_required
