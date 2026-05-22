@@ -390,6 +390,26 @@ def admin_import_excel():
             flash(f"❌ Erreur : {str(e)}","error")
     return render_template("admin/import_excel.html", tenants=tenants, resultats=resultats)
 
+@app.route("/admin/update-taux", methods=["POST"])
+@super_admin_required
+def admin_update_taux():
+    taux = {
+        "CNSS":  (0.05, 0.18),
+        "CNAMGS":(0.02, 0.041),
+        "FNH":   (0.0,  0.03),
+        "TCS":   (0.05, 0.0),
+        "CFP":   (0.0,  0.005),
+    }
+    nb = 0
+    for code, (sal, pat) in taux.items():
+        for r in RubriquePaie.query.filter_by(code=code).all():
+            r.taux_salarie = sal
+            r.taux_patronal = pat
+            nb += 1
+    db.session.commit()
+    flash(f"Taux mis a jour ({nb} rubriques).", "success")
+    return redirect(url_for("admin_rubriques"))
+
 @app.route("/admin/rubriques", methods=["GET","POST"])
 @super_admin_required
 def admin_rubriques():
