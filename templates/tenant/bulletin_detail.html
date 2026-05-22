@@ -138,6 +138,11 @@
       <form method="POST" action="/bulletins/{{ bulletin.id }}/valider">
         <button type="submit" style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">✅ Valider</button>
       </form>
+      <a href="/bulletins/saisie?bulletin_id={{ bulletin.id }}" style="display:block;text-align:center;background:#f59e0b;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">✏️ Modifier</a>
+      <form method="POST" action="/bulletins/{{ bulletin.id }}/supprimer"
+        onsubmit="return confirm('Supprimer ce bulletin ?')">
+        <button type="submit" style="width:100%;background:#dc2626;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">🗑️ Supprimer</button>
+      </form>
       {% endif %}
       {% if bulletin.statut == 'VALIDÉ' %}
       <form method="POST" action="/bulletins/{{ bulletin.id }}/paye">
