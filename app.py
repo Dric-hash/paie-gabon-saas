@@ -709,6 +709,22 @@ def parametres():
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
         users=Utilisateur.query.filter_by(tenant_id=t.id).all())
 
+@app.route("/parametres/logo", methods=["POST"])
+@login_required
+def parametres_logo():
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        import base64
+        file_data = logo_file.read()
+        ext = logo_file.filename.rsplit(".", 1)[-1].lower()
+        mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
+        b64 = base64.b64encode(file_data).decode("utf-8")
+        t.logo_url = f"data:{mime};base64,{b64}"
+        db.session.commit()
+        flash("Logo mis a jour.", "success")
+    return redirect(url_for("parametres"))
 @app.route("/parametres/societe", methods=["POST"])
 @tenant_required
 @can_edit
