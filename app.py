@@ -712,6 +712,7 @@ def parametres():
 @app.route("/parametres/logo", methods=["POST"])
 @login_required
 def parametres_logo():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     logo_file = request.files.get("logo")
@@ -724,7 +725,20 @@ def parametres_logo():
         t.logo_url = f"data:{mime};base64,{b64}"
         db.session.commit()
         flash("Logo mis a jour.", "success")
+    else:
+        flash("Aucun fichier.", "error")
     return redirect(url_for("parametres"))
+
+@app.route("/parametres/logo/supprimer", methods=["POST"])
+@login_required
+def parametres_logo_supprimer():
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    t.logo_url = None
+    db.session.commit()
+    flash("Logo supprime.", "success")
+    return redirect(url_for("parametres"))
+
 @app.route("/parametres/societe", methods=["POST"])
 @tenant_required
 @can_edit
