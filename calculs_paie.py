@@ -166,13 +166,14 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     cfp = round(salaire_brut * CFP_TAUX, 2)
 
     # ── 7. TCS ──────────────────────────────────────────────────────────────
-    # Art. 347 CGI : Base TCS = Base CNAMGS - cotisations salariales + avantages nature
-    # - (prime rendement + performance)
+    # Art. 347 CGI : Base TCS = Brut - cotisations salariales + avantages nature
+    # EXCLUSIONS : indemnité de logement, prime rendement, prime performance
     base_tcs = (
         base_cnamgs
         - cnss_salarie
         - cnamgs_salarie
         + (indem_domesticite + indem_eau_electricite + indem_nourriture)
+        - indem_logement          # ← EXCLU de la base TCS
         - (prime_rendement + prime_performance)
     )
     base_tcs_imposable = max(base_tcs - TCS_EXONERATION, 0)
