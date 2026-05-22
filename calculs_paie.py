@@ -159,11 +159,14 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     cnamgs_patronale = round(base_cnamgs * CNAMGS_TAUX_PATRONAL, 2)
 
     # ── 5. FNH ──────────────────────────────────────────────────────────────
-    base_fnh = min(salaire_brut, FNH_PLAFOND)
+    # Base FNH = Base CNSS - indemnité de logement (plafonnée à FNH_PLAFOND)
+    base_fnh = min(max(base_cnss - indem_logement, 0), FNH_PLAFOND)
     fnh = round(base_fnh * FNH_TAUX, 2)
 
     # ── 6. CFP ──────────────────────────────────────────────────────────────
-    cfp = round(salaire_brut * CFP_TAUX, 2)
+    # Base CFP = Base CNSS - indemnité de logement (même base que FNH)
+    base_cfp = max(base_cnss - indem_logement, 0)
+    cfp = round(base_cfp * CFP_TAUX, 2)
 
     # ── 7. TCS ──────────────────────────────────────────────────────────────
     # Art. 347 CGI : Base TCS = Brut - cotisations salariales + avantages nature
@@ -183,13 +186,9 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     net_avant_irpp = salaire_brut - cnss_salarie - cnamgs_salarie - tcs
 
     # ── 9. IRPP ─────────────────────────────────────────────────────────────
-    # Base IRPP = Net avant IRPP - transport exonéré - logement excédentaire
-    base_irpp = max(
-        net_avant_irpp
-        - transport_exo_cnamgs
-        - (indem_logement - logement_imposable),  # partie exonérée du logement
-        0
-    )
+    # Base IRPP = Base TCS (avant exonération) - TCS calculée
+    # Conformément au CGI Gabon : base_tcs est la base brute avant l'exonération 150K
+    base_irpp = max(base_tcs - tcs, 0)
     irpp = calculer_irpp(base_irpp, nb_parts)
 
     # ── 10. SALAIRE NET & NET À PAYER ────────────────────────────────────────
@@ -239,7 +238,9 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "base_cnamgs":           round(base_cnamgs, 2),
         "cnamgs_salarie":        round(cnamgs_salarie, 2),
         "cnamgs_patronale":      round(cnamgs_patronale, 2),
+        "base_fnh":              round(base_fnh, 2),
         "fnh":                   round(fnh, 2),
+        "base_cfp":              round(base_cfp, 2),
         "cfp":                   round(cfp, 2),
         "base_tcs":              round(base_tcs, 2),
         "tcs":                   round(tcs, 2),
