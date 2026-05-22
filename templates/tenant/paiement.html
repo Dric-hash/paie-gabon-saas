@@ -1,0 +1,195 @@
+{% extends "tenant/base.html" %}
+{% block title %}Paiement abonnement — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/parametres" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Paramètres</a>
+  <h1 class="text-2xl font-black text-gray-900">Renouveler l'abonnement</h1>
+</div>
+
+<!-- Plan actuel -->
+<div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center">
+  <div>
+    <div style="font-size:.75rem;opacity:.6;text-transform:uppercase;margin-bottom:.25rem">Plan actuel</div>
+    <div style="font-size:1.5rem;font-weight:900">{{ tenant.plan.nom if tenant.plan else 'Aucun plan' }}</div>
+    <div style="opacity:.7;margin-top:.25rem">{{ tenant.denomination }}</div>
+  </div>
+  <div style="text-align:right">
+    <div style="font-size:2rem;font-weight:900;color:#6ee7b7">
+      {{ tenant.plan.prix_mensuel|int|fcfa if tenant.plan else '—' }}<span style="font-size:.875rem;opacity:.7">/mois</span>
+    </div>
+    <div style="font-size:.75rem;opacity:.6;margin-top:.25rem">Statut : {{ tenant.statut }}</div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem">
+
+  <!-- Option 1 : Mobile Money -->
+  <div class="card p-5">
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:2.5rem;margin-bottom:.5rem">📱</div>
+      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Mobile Money</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Airtel Money · Moov Money</p>
+    </div>
+    <div style="background:#f0fdf4;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
+      <div style="font-size:.75rem;font-weight:700;color:#065f46;margin-bottom:.5rem">Numéros de paiement :</div>
+      <div style="font-size:.875rem;font-weight:900;color:#1a2332;margin-bottom:.25rem">
+        📲 Airtel Money : <span style="font-family:monospace">+241 07 XX XX XX</span>
+      </div>
+      <div style="font-size:.875rem;font-weight:900;color:#1a2332">
+        📲 Moov Money : <span style="font-family:monospace">+241 06 XX XX XX</span>
+      </div>
+      <div style="font-size:.7rem;color:#6b7280;margin-top:.5rem">Au nom de : <strong>PaieGabon SARL</strong></div>
+    </div>
+    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
+      1. Envoyez le montant au numéro ci-dessus<br/>
+      2. Notez votre référence de transaction<br/>
+      3. Remplissez le formulaire ci-dessous
+    </div>
+    <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="mode" value="MOBILE_MONEY"/>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Opérateur</label>
+        <select name="operateur" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          <option>Airtel Money</option>
+          <option>Moov Money</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">N° de transaction *</label>
+        <input type="text" name="reference" required placeholder="Ex: TXN123456789"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Votre numéro de téléphone *</label>
+        <input type="tel" name="telephone" required placeholder="Ex: 07 XX XX XX"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
+        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          <option value="1">1 mois</option>
+          <option value="3">3 mois (−5%)</option>
+          <option value="6">6 mois (−10%)</option>
+          <option value="12">12 mois (−15%)</option>
+        </select>
+      </div>
+      <button type="submit" style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+        ✅ Confirmer le paiement
+      </button>
+    </form>
+  </div>
+
+  <!-- Option 2 : Carte bancaire -->
+  <div class="card p-5">
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:2.5rem;margin-bottom:.5rem">💳</div>
+      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Carte bancaire</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Visa · Mastercard</p>
+    </div>
+    <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem;text-align:center">
+      <div style="font-size:.75rem;color:#1e40af;font-weight:700">Paiement sécurisé</div>
+      <div style="font-size:.7rem;color:#6b7280;margin-top:.25rem">Chiffrement SSL 256 bits</div>
+    </div>
+    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
+      1. Cliquez sur "Payer par carte"<br/>
+      2. Saisissez les infos de votre carte<br/>
+      3. Confirmation automatique
+    </div>
+    <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="mode" value="CARTE"/>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
+        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          <option value="1">1 mois</option>
+          <option value="3">3 mois (−5%)</option>
+          <option value="6">6 mois (−10%)</option>
+          <option value="12">12 mois (−15%)</option>
+        </select>
+      </div>
+      <div style="background:#fef3c7;border-radius:.5rem;padding:.5rem;font-size:.7rem;color:#92400e">
+        ⚠️ Intégration Stripe en cours. Contactez-nous pour activer cette option.
+      </div>
+      <input type="hidden" name="reference" value="CARTE-PENDING"/>
+      <button type="submit" style="width:100%;background:#2563eb;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+        💳 Payer par carte
+      </button>
+    </form>
+  </div>
+
+  <!-- Option 3 : Virement bancaire -->
+  <div class="card p-5">
+    <div style="text-align:center;margin-bottom:1rem">
+      <div style="font-size:2.5rem;margin-bottom:.5rem">🏦</div>
+      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Virement bancaire</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">BGFI · UGB · Ecobank</p>
+    </div>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
+      <div style="font-size:.7rem;font-weight:700;color:#374151;margin-bottom:.5rem">Coordonnées bancaires :</div>
+      <div style="font-size:.75rem;color:#374151;line-height:1.8">
+        <strong>Banque :</strong> BGFI Bank Gabon<br/>
+        <strong>Titulaire :</strong> PaieGabon SARL<br/>
+        <strong>IBAN :</strong> GA XX XXXX XXXX XXXX<br/>
+        <strong>BIC :</strong> BGFIGAXX<br/>
+        <strong>Réf. à indiquer :</strong> {{ tenant.slug|upper }}
+      </div>
+    </div>
+    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
+      1. Effectuez le virement avec votre référence<br/>
+      2. Envoyez le justificatif par email<br/>
+      3. Activation sous 24-48h ouvrables
+    </div>
+    <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="mode" value="VIREMENT"/>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">N° de virement / référence *</label>
+        <input type="text" name="reference" required placeholder="Référence du virement"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
+        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          <option value="1">1 mois</option>
+          <option value="3">3 mois (−5%)</option>
+          <option value="6">6 mois (−10%)</option>
+          <option value="12">12 mois (−15%)</option>
+        </select>
+      </div>
+      <button type="submit" style="width:100%;background:#374151;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+        📤 Soumettre le virement
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<!-- Tableau des tarifs -->
+<div class="card p-5 mt-5">
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Tarifs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Plan</th>
+        <th style="text-align:center">Salariés max</th>
+        <th style="text-align:right">Mensuel</th>
+        <th style="text-align:right">3 mois (−5%)</th>
+        <th style="text-align:right">6 mois (−10%)</th>
+        <th style="text-align:right">12 mois (−15%)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for plan in plans %}
+      <tr {% if tenant.plan_id == plan.id %}style="background:#f0fdf4;font-weight:700"{% endif %}>
+        <td>{{ plan.nom }}{% if tenant.plan_id == plan.id %} ✓{% endif %}</td>
+        <td style="text-align:center">{{ plan.max_salaries }}</td>
+        <td style="text-align:right;font-family:monospace">{{ plan.prix_mensuel|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 3 * 0.95)|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 6 * 0.90)|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 12 * 0.85)|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
