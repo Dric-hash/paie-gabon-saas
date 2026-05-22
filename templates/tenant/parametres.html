@@ -111,6 +111,62 @@
     </div>
   </div>
 
+  <!-- Logo entreprise -->
+  <div class="card p-5 mt-5">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Logo de l'entreprise</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:center">
+      <div>
+        <!-- Aperçu logo actuel -->
+        {% if tenant.logo_url %}
+        <div style="border:2px solid #e5e7eb;border-radius:.75rem;padding:1rem;text-align:center;background:#f9fafb;margin-bottom:1rem">
+          <img src="{{ tenant.logo_url }}" alt="Logo {{ tenant.denomination }}"
+            style="max-height:80px;max-width:200px;object-fit:contain"/>
+          <div style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Logo actuel</div>
+        </div>
+        <form method="POST" action="/parametres/logo/supprimer" style="margin-bottom:1rem">
+          <button type="submit" style="width:100%;background:#fee2e2;color:#dc2626;padding:.5rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:1px solid #fca5a5;cursor:pointer"
+            onclick="return confirm('Supprimer le logo ?')">
+            🗑️ Supprimer le logo
+          </button>
+        </form>
+        {% else %}
+        <div style="border:2px dashed #e5e7eb;border-radius:.75rem;padding:2rem;text-align:center;color:#9ca3af;margin-bottom:1rem">
+          <div style="font-size:2rem;margin-bottom:.5rem">🏢</div>
+          <p style="font-size:.875rem">Aucun logo chargé</p>
+        </div>
+        {% endif %}
+        <!-- Formulaire upload -->
+        <form method="POST" action="/parametres/logo" enctype="multipart/form-data">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
+            {{ 'Changer' if tenant.logo_url else 'Uploader' }} le logo
+          </label>
+          <input type="file" name="logo" accept=".png,.jpg,.jpeg,.svg,.webp" required
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem;font-size:.875rem;margin-bottom:.75rem"/>
+          <div style="font-size:.7rem;color:#9ca3af;margin-bottom:.75rem">
+            Formats : PNG, JPG, SVG · Maximum 500 Ko · Recommandé : fond transparent (PNG)
+          </div>
+          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+            📤 Uploader le logo
+          </button>
+        </form>
+      </div>
+      <div>
+        <div style="font-size:.8rem;color:#6b7280;line-height:1.6">
+          <p style="font-weight:700;color:#374151;margin-bottom:.5rem">💡 Conseils</p>
+          <p>✓ Utilisez un fichier <strong>PNG avec fond transparent</strong> pour un meilleur rendu</p>
+          <p style="margin-top:.5rem">✓ Taille recommandée : <strong>300×100 pixels</strong> minimum</p>
+          <p style="margin-top:.5rem">✓ Le logo apparaîtra sur tous vos <strong>bulletins de paie imprimés</strong></p>
+          <p style="margin-top:.5rem">✓ Format SVG pour une qualité optimale à toutes les tailles</p>
+        </div>
+        {% if tenant.logo_url %}
+        <div style="margin-top:1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.75rem;font-size:.75rem;color:#065f46">
+          ✅ Logo chargé — visible sur vos bulletins d'impression
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
   <!-- Aperçu bulletin -->
   <div class="card p-5 mt-5" style="background:linear-gradient(135deg,#1a2332,#374151);color:white">
     <div class="text-xs font-bold mb-3" style="opacity:.6;text-transform:uppercase;letter-spacing:.05em">Aperçu — En-tête bulletin de paie</div>
