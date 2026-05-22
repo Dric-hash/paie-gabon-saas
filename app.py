@@ -8,7 +8,8 @@ from functools import wraps
 import io, os, secrets as sec
 
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
-                    Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge)
+                    Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
+                    Acompte, Journalier, Pointage, FeuillePaieJournalier)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 
 app = Flask(__name__)
