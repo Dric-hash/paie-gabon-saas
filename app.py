@@ -422,6 +422,36 @@ def admin_rubriques():
         db.session.add(r); db.session.commit(); flash("Rubrique créée.","success")
     return render_template("admin/rubriques.html", rubriques=RubriquePaie.query.all())
 
+# ── SUPPRESSION TENANT (super admin) ─────────────────────────────────────────
+@app.route("/admin/tenants/<int:id>/supprimer", methods=["POST"])
+@super_admin_required
+def admin_tenant_supprimer(id):
+    t = Tenant.query.get_or_404(id)
+    nom = t.denomination
+    try:
+        # Supprimer dans l'ordre pour respecter les FK
+        for s in Salarie.query.filter_by(tenant_id=id).all():
+            BulletinPaie.query.filter_by(salarie_id=s.id).delete()
+            Contrat.query.filter_by(salarie_id=s.id).delete()
+            Pointage.query.filter_by(salarie_id=s.id).delete()
+            Acompte.query.filter_by(salarie_id=s.id).delete()
+            Conge.query.filter_by(salarie_id=s.id).delete()
+        Salarie.query.filter_by(tenant_id=id).delete()
+        PeriodePaie.query.filter_by(tenant_id=id).delete()
+        RubriquePaie.query.filter_by(tenant_id=id).delete()
+        CategorieEmploi.query.filter_by(tenant_id=id).delete()
+        Utilisateur.query.filter_by(tenant_id=id).delete()
+        Journalier.query.filter_by(tenant_id=id).delete()
+        Acompte.query.filter_by(tenant_id=id).delete()
+        Conge.query.filter_by(tenant_id=id).delete()
+        db.session.delete(t)
+        db.session.commit()
+        flash(f"Entreprise {nom} supprimée définitivement.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur suppression: {str(e)}", "error")
+    return redirect(url_for("admin_tenants"))
+
 # ── Tenant ────────────────────────────────────────────────────────────────────
 @app.route("/dashboard")
 @login_required
@@ -1188,11 +1218,19 @@ def api_acomptes_mois(id):
 @app.route("/bulletins/<int:id>/supprimer", methods=["POST"])
 @login_required
 def bulletin_supprimer(id):
+    # Super admin peut supprimer n'importe quel bulletin
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        salarie_id = b.salarie_id
+        db.session.delete(b)
+        db.session.commit()
+        flash("Bulletin supprimé (super admin).", "success")
+        return redirect(url_for("salarie_detail", id=salarie_id))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     if b.statut == "VALIDÉ":
-        flash("Impossible de supprimer un bulletin validé.", "error")
+        flash("Impossible de supprimer un bulletin validé. Contactez votre administrateur.", "error")
         return redirect(url_for("bulletin_detail", id=id))
     db.session.delete(b)
     db.session.commit()
