@@ -728,7 +728,7 @@ def utilisateurs():
     liste = Utilisateur.query.filter_by(tenant_id=t.id).order_by(Utilisateur.nom).all()
     return render_template("tenant/utilisateurs.html", tenant=t, utilisateurs=liste, users=liste)
 
-@app.route("/utilisateurs/nouveau", methods=["POST"])
+@app.route("/utilisateurs/nouveau", methods=["GET","POST"])
 @tenant_required
 def utilisateur_nouveau():
     t=get_tenant()
