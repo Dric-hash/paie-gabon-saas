@@ -11,12 +11,22 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
+from flask_mail import Mail, Message
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL","sqlite:///saas_paie.db")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db.init_app(app)
+
+# Configuration email Gmail
+app.config["MAIL_SERVER"]   = "smtp.gmail.com"
+app.config["MAIL_PORT"]     = 587
+app.config["MAIL_USE_TLS"]  = True
+app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
+app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
+app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
+mail = Mail(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -1247,6 +1257,97 @@ def bulletin_imprimer(id):
         if not t: return redirect(url_for("login"))
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     return render_template("tenant/bulletin_print.html", bulletin=b, tenant=t)
+
+# ── ENVOI BULLETIN PAR EMAIL ─────────────────────────────────────────────────
+@app.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
+@login_required
+def bulletin_envoyer_email(id):
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = b.salarie
+
+    # Vérifier que le salarié a un email
+    if not s.email:
+        flash(f"{s.nom_complet} n a pas d adresse email.", "error")
+        return redirect(url_for("bulletin_detail", id=id))
+
+    # Email personnalisé ou celui du formulaire
+    dest_email = request.form.get("email_dest", s.email).strip()
+
+    try:
+        # Générer le corps de l'email
+        corps = f"""Bonjour {s.prenom} {s.nom},
+
+Veuillez trouver ci-joint votre bulletin de paie pour la période : {b.periode.libelle_complet}
+
+RÉCAPITULATIF :
+• Salaire brut    : {int(b.salaire_brut or 0):,} FCFA
+• Retenues totales: {int((b.cnss_salarie or 0) + (b.cnamgs_salarie or 0) + (b.tcs or 0) + (b.irpp or 0)):,} FCFA
+• NET À PAYER     : {int(b.net_a_payer or 0):,} FCFA
+
+Pour consulter votre bulletin complet, connectez-vous sur :
+https://ameriack-paie.up.railway.app
+
+Cordialement,
+{t.denomination}
+""".replace(",", " ")
+
+        msg = Message(
+            subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
+            recipients=[dest_email],
+            body=corps,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        mail.send(msg)
+        flash(f"Bulletin envoyé à {dest_email}.", "success")
+    except Exception as e:
+        flash(f"Erreur envoi email: {str(e)}", "error")
+
+    return redirect(url_for("bulletin_detail", id=id))
+
+@app.route("/bulletins/envoyer-tous", methods=["POST"])
+@login_required
+def bulletins_envoyer_tous():
+    """Envoie les bulletins d une période à tous les salariés ayant un email."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    periode_id = request.form.get("periode_id", type=int)
+    if not periode_id:
+        flash("Période manquante.", "error")
+        return redirect(url_for("bulletins"))
+
+    bulletins = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode_id).all()
+    nb_ok = 0; nb_err = 0
+
+    for b in bulletins:
+        if not b.salarie.email: continue
+        try:
+            corps = f"""Bonjour {b.salarie.prenom},
+
+Votre bulletin de paie pour {b.periode.libelle_complet} :
+• Brut     : {int(b.salaire_brut or 0):,} FCFA
+• Net      : {int(b.net_a_payer or 0):,} FCFA
+
+Connectez-vous sur https://ameriack-paie.up.railway.app pour le détail.
+
+Cordialement, {t.denomination}
+""".replace(",", " ")
+            msg = Message(
+                subject=f"Bulletin de paie {b.periode.libelle_complet}",
+                recipients=[b.salarie.email],
+                body=corps,
+                sender=app.config["MAIL_DEFAULT_SENDER"]
+            )
+            mail.send(msg)
+            nb_ok += 1
+        except:
+            nb_err += 1
+
+    flash(f"{nb_ok} bulletin(s) envoyé(s). {nb_err} échec(s).", "success" if nb_ok > 0 else "error")
+    return redirect(url_for("bulletins"))
 
 # ── GESTION DES CONGÉS ────────────────────────────────────────────────────────
 @app.route("/conges")
