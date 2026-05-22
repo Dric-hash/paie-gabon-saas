@@ -729,23 +729,41 @@ def utilisateurs():
     return render_template("tenant/utilisateurs.html", tenant=t, utilisateurs=liste, users=liste)
 
 @app.route("/utilisateurs/nouveau", methods=["GET","POST"])
-@tenant_required
+@login_required
 def utilisateur_nouveau():
-    t=get_tenant()
-    if not current_user.is_tenant_admin: abort(403)
-    max_u=t.plan.max_utilisateurs if t.plan else 3
-    if max_u and Utilisateur.query.filter_by(tenant_id=t.id).count()>=max_u:
-        flash(f"Limite atteinte ({max_u} utilisateurs).","error"); return redirect(url_for("parametres"))
-    email=request.form.get("email","").strip().lower()
-    if Utilisateur.query.filter_by(email=email).first():
-        flash("Email déjà utilisé.","error"); return redirect(url_for("parametres"))
-    u=Utilisateur(nom=request.form["nom"].strip().upper(),prenom=request.form["prenom"].strip(),
-        email=email,role=request.form.get("role","GESTIONNAIRE"),tenant_id=t.id,actif=True)
-    u.set_password(request.form.get("password","changeme2026"))
-    db.session.add(u); db.session.commit(); flash(f"Utilisateur {u.nom_complet} créé.","success")
-    return redirect(url_for("parametres"))
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("utilisateurs"))
 
-# ── GESTION DES JOURNALIERS ───────────────────────────────────────────────────
+    if request.method == "GET":
+        return render_template("tenant/utilisateur_form.html", tenant=t)
+
+    # POST - traitement du formulaire
+    email = request.form.get("email", "").strip().lower()
+    nom = request.form.get("nom", "").strip().upper()
+    prenom = request.form.get("prenom", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "GESTIONNAIRE")
+
+    if not email or not nom or not password:
+        flash("Veuillez remplir tous les champs obligatoires.", "error")
+        return render_template("tenant/utilisateur_form.html", tenant=t)
+
+    if Utilisateur.query.filter_by(email=email).first():
+        flash("Cet email est déjà utilisé.", "error")
+        return render_template("tenant/utilisateur_form.html", tenant=t)
+
+    u = Utilisateur(
+        nom=nom, prenom=prenom, email=email,
+        role=role, tenant_id=t.id, actif=True)
+    u.set_password(password)
+    db.session.add(u)
+    db.session.commit()
+    flash(f"Utilisateur {u.nom_complet} créé avec succès.", "success")
+    return redirect(url_for("utilisateurs"))
 @app.route("/journaliers")
 @login_required
 def journaliers():
