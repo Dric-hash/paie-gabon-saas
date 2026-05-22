@@ -438,7 +438,6 @@ def admin_tenant_supprimer(id):
             Conge.query.filter_by(salarie_id=s.id).delete()
         Salarie.query.filter_by(tenant_id=id).delete()
         PeriodePaie.query.filter_by(tenant_id=id).delete()
-        RubriquePaie.query.filter_by(tenant_id=id).delete()
         CategorieEmploi.query.filter_by(tenant_id=id).delete()
         Utilisateur.query.filter_by(tenant_id=id).delete()
         Journalier.query.filter_by(tenant_id=id).delete()
