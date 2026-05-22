@@ -32,6 +32,16 @@ def super_admin_required(f):
         return f(*a,**k)
     return d
 
+def _parse_date(val):
+    """Convertit une chaîne date en objet date."""
+    if not val: return None
+    from datetime import datetime, date
+    if isinstance(val, date): return val
+    if isinstance(val, datetime): return val.date()
+    try: return datetime.strptime(str(val).strip()[:10], "%Y-%m-%d").date()
+    except: return None
+
+
 def calculer_parts_irpp(situation_matrimoniale: str, nb_enfants: int) -> float:
     """Calcule automatiquement le nombre de parts IRPP selon la réglementation gabonaise."""
     situation = (situation_matrimoniale or "").upper().strip()
@@ -1106,6 +1116,20 @@ def api_acomptes_mois(id):
     return jsonify({"total": float(total)})
 
 # ── IMPRESSION BULLETIN ───────────────────────────────────────────────────────
+@app.route("/bulletins/<int:id>/supprimer", methods=["POST"])
+@login_required
+def bulletin_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if b.statut == "VALIDÉ":
+        flash("Impossible de supprimer un bulletin validé.", "error")
+        return redirect(url_for("bulletin_detail", id=id))
+    db.session.delete(b)
+    db.session.commit()
+    flash("Bulletin supprimé.", "success")
+    return redirect(url_for("bulletins"))
+
 @app.route("/bulletins/<int:id>/imprimer")
 @login_required
 def bulletin_imprimer(id):
