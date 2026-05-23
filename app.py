@@ -759,6 +759,33 @@ def periode_cloturer(id):
     p.statut="CLÔTURÉ"; p.date_cloture=datetime.utcnow(); db.session.commit()
     flash("Période clôturée.","success"); return redirect(url_for("periodes"))
 
+@app.route("/paiement")
+@login_required
+def paiement():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
+    return render_template("tenant/paiement.html", tenant=t, plans=plans)
+
+@app.route("/paiement/confirmer", methods=["POST"])
+@login_required
+def paiement_confirmer():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    mode = request.form.get("mode", "")
+    reference = request.form.get("reference", "").strip()
+    duree = int(request.form.get("duree", 1) or 1)
+    if not reference:
+        flash("Veuillez indiquer une reference.", "error")
+        return redirect(url_for("paiement"))
+    t.notes = f"PAIEMENT {mode} - Ref: {reference} - {duree} mois - {datetime.now().strftime('%d/%m/%Y')}"
+    t.statut = "PAIEMENT_EN_ATTENTE"
+    db.session.commit()
+    flash(f"Paiement {mode} ref {reference} enregistre. Activation sous 48h.", "success")
+    return redirect(url_for("parametres"))
+
 @app.route("/parametres")
 @tenant_required
 def parametres():
