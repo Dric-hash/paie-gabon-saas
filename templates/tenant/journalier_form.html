@@ -23,7 +23,7 @@
       {{ fi("Téléphone","telephone",journalier.telephone if journalier else '') }}
       <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Taux horaire (FCFA/heure) *</label>
-        <input type="number" name="taux_horaire" value="{{ journalier.taux_horaire|int if journalier else '' }}" required min="0" step="100"
+        <input type="number" name="taux_horaire" value="{{ journalier.taux_horaire if journalier else '' }}" required min="0" step="0.01"
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:1.25rem;font-weight:900;text-align:right;font-family:monospace;box-sizing:border-box"
           placeholder="Ex: 2500"/>
         <div style="font-size:.75rem;color:#6b7280;margin-top:.25rem">SMIG horaire Gabon ≈ 938 FCFA/h (150 000 FCFA ÷ 160h)</div>
