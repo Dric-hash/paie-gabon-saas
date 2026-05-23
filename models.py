@@ -152,6 +152,7 @@ class Salarie(db.Model):
     nom                    = db.Column(db.String(100), nullable=False)
     prenom                 = db.Column(db.String(100), nullable=False)
     telephone              = db.Column(db.String(20))
+    email                  = db.Column(db.String(200))
     adresse                = db.Column(db.String(300))
     nationalite            = db.Column(db.String(100), default="GABONAISE")
     sexe                   = db.Column(db.String(1))
