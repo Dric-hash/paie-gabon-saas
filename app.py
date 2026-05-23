@@ -998,9 +998,12 @@ def pointage_sauvegarder():
             salarie_id = int(key.replace("sal_present_",""))
             present = val == "1"
             absent = not present
-            heures_n = float(request.form.get(f"sal_heures_{salarie_id}", 8) or 8)
-            heures_s = float(request.form.get(f"sal_sup_{salarie_id}", 0) or 0)
-            motif    = request.form.get(f"sal_motif_{salarie_id}", "")
+            heures_n   = float(request.form.get(f"sal_heures_{salarie_id}", 8) or 8)
+            heures_s10 = float(request.form.get(f"sal_sup10_{salarie_id}", 0) or 0)
+            heures_s30 = float(request.form.get(f"sal_sup30_{salarie_id}", 0) or 0)
+            heures_s40 = float(request.form.get(f"sal_sup40_{salarie_id}", 0) or 0)
+            heures_s70 = float(request.form.get(f"sal_sup70_{salarie_id}", 0) or 0)
+            motif      = request.form.get(f"sal_motif_{salarie_id}", "")
 
             pt = Pointage.query.filter_by(
                 tenant_id=t.id, date_pointage=date_p, salarie_id=salarie_id).first()
@@ -1008,7 +1011,11 @@ def pointage_sauvegarder():
                 pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=salarie_id)
                 db.session.add(pt)
             pt.present = present; pt.absent = absent
-            pt.heures_normales = heures_n; pt.heures_sup = heures_s
+            pt.heures_normales = heures_n
+            pt.heures_sup_10 = heures_s10
+            pt.heures_sup_30 = heures_s30
+            pt.heures_sup_40 = heures_s40
+            pt.heures_sup_70 = heures_s70
             pt.motif_absence = motif if absent else None
             nb_sauvegardes += 1
 
@@ -1105,6 +1112,47 @@ def journalier_payer(id):
     f.date_paiement = datetime.now().date()
     db.session.commit()
     flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
+    return redirect(url_for("journaliers_paie"))
+
+@app.route("/journaliers/paie/<int:id>/modifier", methods=["POST"])
+@login_required
+def journalier_feuille_modifier(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    f.montant_brut  = float(request.form.get("montant_brut", f.montant_brut) or f.montant_brut)
+    f.observation   = request.form.get("observation", "").strip()
+    db.session.commit()
+    flash("Feuille modifiée.", "success")
+    return redirect(url_for("journaliers_paie"))
+
+@app.route("/journaliers/paie/<int:id>/supprimer", methods=["POST"])
+@login_required
+def journalier_feuille_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(f)
+    db.session.commit()
+    flash("Feuille supprimée.", "success")
+    return redirect(url_for("journaliers_paie"))
+
+@app.route("/journaliers/paie/payer-selection", methods=["POST"])
+@login_required
+def journaliers_payer_selection():
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    ids_str = request.form.get("feuille_ids", "")
+    ids = [int(i) for i in ids_str.split(",") if i.strip().isdigit()]
+    nb = 0
+    for fid in ids:
+        f = FeuillePaieJournalier.query.filter_by(id=fid, tenant_id=t.id, statut="EN_ATTENTE").first()
+        if f:
+            f.statut = "PAYÉ"
+            f.date_paiement = datetime.now().date()
+            nb += 1
+    db.session.commit()
+    flash(f"{nb} journalier(s) marqué(s) comme payé(s).", "success")
     return redirect(url_for("journaliers_paie"))
 
 @app.route("/api/pointage/semaine")
