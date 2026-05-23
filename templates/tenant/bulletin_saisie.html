@@ -39,7 +39,7 @@
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
             <option value="">— Sélectionner —</option>
             {% for p in periodes %}
-            <option value="{{ p.id }}">{{ p.libelle_complet }}</option>
+            <option value="{{ p.id }}" data-mois="{{ p.mois }}" data-annee="{{ p.annee }}">{{ p.libelle_complet }}</option>
             {% endfor %}
           </select>
         </div>
@@ -55,6 +55,24 @@
         </div>
       </div>
     </div>
+
+    <!-- Alerte acomptes EN ATTENTE -->
+    {% if acomptes_attente %}
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.875rem 1rem;display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:1.25rem">⚠️</span>
+      <div>
+        <div style="font-size:.8rem;font-weight:700;color:#92400e">Acompte(s) EN ATTENTE — sera déduit automatiquement</div>
+        {% for a in acomptes_attente %}
+        <div style="font-size:.75rem;color:#78350f;margin-top:.125rem">
+          • {{ a.montant|int|fcfa }} — {{ a.motif or 'Sans motif' }} ({{ a.date_acompte|date_fr }})
+        </div>
+        {% endfor %}
+        <div style="font-size:.8rem;font-weight:900;color:#92400e;margin-top:.25rem">
+          Total à déduire : {{ total_acomptes|int|fcfa }}
+        </div>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Salaire de base -->
     <div class="card p-5">
@@ -183,7 +201,7 @@
           <span id="r_cnamgs_pat" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">FNH (2%)</span>
+          <span style="color:#1e40af">FNH (3%)</span>
           <span id="r_fnh" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
