@@ -26,6 +26,8 @@ app.config["MAIL_USE_TLS"]  = True
 app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
 app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
+# Désactiver mail si non configuré pour éviter le crash au démarrage
+app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
 mail = Mail(app)
 
 login_manager = LoginManager(app)
@@ -708,14 +710,26 @@ def bulletin_envoyer_email(id):
         flash(f"{s.nom_complet} n a pas d adresse email.", "error")
         return redirect(url_for("bulletin_detail", id=id))
     dest_email = request.form.get("email_dest", s.email).strip()
+    # Vérifier que l'email est configuré
+    if not os.environ.get("MAIL_USERNAME"):
+        flash("Email non configuré. Ajoutez MAIL_USERNAME et MAIL_PASSWORD dans les variables Railway.", "error")
+        return redirect(url_for("bulletin_detail", id=id))
     try:
-        corps = f"Bonjour {s.prenom},\n\nBulletin de paie {b.periode.libelle_complet}\nBrut: {int(b.salaire_brut or 0):,} FCFA\nNet a payer: {int(b.net_a_payer or 0):,} FCFA\n\nCordialement,\n{t.denomination}".replace(",", " ")
-        msg = Message(subject=f"Bulletin {b.periode.libelle_complet} — {t.denomination}",
-            recipients=[dest_email], body=corps, sender=app.config["MAIL_DEFAULT_SENDER"])
+        corps = (f"Bonjour {s.prenom},\n\n"
+                 f"Veuillez trouver votre bulletin de paie pour : {b.periode.libelle_complet}\n\n"
+                 f"Salaire brut    : {int(b.salaire_brut or 0):,} FCFA\n"
+                 f"Net a payer     : {int(b.net_a_payer or 0):,} FCFA\n\n"
+                 f"Cordialement,\n{t.denomination}").replace(",", " ")
+        msg = Message(
+            subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
+            recipients=[dest_email],
+            body=corps,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
         mail.send(msg)
-        flash(f"Bulletin envoyé à {dest_email}.", "success")
+        flash(f"Bulletin envoyé avec succes a {dest_email}.", "success")
     except Exception as e:
-        flash(f"Erreur email: {str(e)}", "error")
+        flash(f"Erreur envoi: {str(e)}", "error")
     return redirect(url_for("bulletin_detail", id=id))
 
 @app.route("/bulletins/envoyer-tous", methods=["POST"])
