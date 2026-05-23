@@ -942,8 +942,11 @@ def pointage():
     lundi = date_sel - __import__('datetime').timedelta(days=date_sel.weekday())
     semaine = [(lundi + __import__('datetime').timedelta(days=i)) for i in range(6)]  # Lundi→Samedi
 
+    from datetime import timedelta
     return render_template("tenant/pointage.html",
         tenant=t, date_sel=date_sel, semaine=semaine,
+        date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
         salaries=salaries, journaliers=journaliers_list,
         pts_salaries=pts_salaries, pts_journaliers=pts_journaliers,
         nb_presents_sal=nb_presents_sal, nb_presents_jour=nb_presents_jour,
