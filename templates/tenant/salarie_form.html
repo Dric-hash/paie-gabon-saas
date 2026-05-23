@@ -27,6 +27,14 @@
     {{ field("Nom", "nom", required=True, value=salarie.nom if salarie else '') }}
     {{ field("Prénom(s)", "prenom", required=True, value=salarie.prenom if salarie else '') }}
     {{ field("Téléphone", "telephone", value=salarie.telephone if salarie else '') }}
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+        Email <span style="font-weight:400;color:#9ca3af;font-size:.7rem">(pour envoi bulletin)</span>
+      </label>
+      <input type="email" name="email" value="{{ salarie.email or '' if salarie else '' }}"
+        placeholder="prenom.nom@entreprise.ga"
+        style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+    </div>
     {{ field("Nationalité", "nationalite", value=salarie.nationalite if salarie else 'GABONAISE') }}
 
     <div>
