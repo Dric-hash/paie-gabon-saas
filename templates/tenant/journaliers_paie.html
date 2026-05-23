@@ -4,12 +4,12 @@
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
   <div>
     <h1 class="text-2xl font-black">Paie des Journaliers</h1>
-    <p class="text-gray-500 text-sm mt-1">Paiement bi-hebdomadaire (chaque 2 samedis)</p>
+    <p class="text-gray-500 text-sm mt-1">Paiement bi-hebdomadaire — chaque 2 samedis</p>
   </div>
   <a href="/journaliers" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Journaliers</a>
 </div>
 
-<!-- Générer une feuille de paie -->
+<!-- Générer -->
 <div class="card p-5 mb-6">
   <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Générer les feuilles de paie</h2>
   <form method="POST" action="/journaliers/paie/generer" style="display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;align-items:end">
@@ -24,32 +24,51 @@
         style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>
     </div>
     <button type="submit" style="background:#2563eb;color:white;padding:.625rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;white-space:nowrap">
-      ⚙️ Générer les feuilles
+      ⚙️ Générer
     </button>
   </form>
-  <div style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">
-    Le système calcule automatiquement les heures de chaque journalier depuis les pointages de la période.
-  </div>
 </div>
 
-<!-- Liste feuilles de paie -->
+<!-- Liste feuilles -->
 <div class="card overflow-hidden">
   <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Feuilles de paie ({{ feuilles|length }})</h2>
-    <div style="font-size:.875rem;font-weight:700;color:#059669">
-      Total EN ATTENTE : {{ feuilles|selectattr('statut','equalto','EN_ATTENTE')|sum(attribute='montant_brut')|int|fcfa }}
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">
+      Feuilles de paie ({{ feuilles|length }})
+    </h2>
+    <div style="display:flex;gap:.75rem;align-items:center">
+      <span style="font-size:.875rem;font-weight:700;color:#059669">
+        EN ATTENTE : {{ feuilles|selectattr('statut','equalto','EN_ATTENTE')|sum(attribute='montant_brut')|int|fcfa }}
+      </span>
+      {% if feuilles %}
+      <button onclick="window.print()" style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+        🖨️ Imprimer tout
+      </button>
+      {% endif %}
     </div>
   </div>
   <table>
     <thead><tr>
-      <th>Journalier</th><th>Profession</th><th style="text-align:center">Période</th>
-      <th style="text-align:center">Jours</th><th style="text-align:center">Heures</th>
-      <th style="text-align:right">Taux/h</th><th style="text-align:right">Montant</th>
-      <th style="text-align:center">Statut</th><th style="text-align:center">Action</th>
+      <th style="width:30px">
+        <input type="checkbox" id="selectAll" onchange="toggleAll(this)" title="Tout sélectionner"/>
+      </th>
+      <th>Journalier</th>
+      <th>Profession</th>
+      <th style="text-align:center">Période</th>
+      <th style="text-align:center">Jours</th>
+      <th style="text-align:center">Heures</th>
+      <th style="text-align:right">Taux/h</th>
+      <th style="text-align:right">Montant</th>
+      <th style="text-align:center">Statut</th>
+      <th style="text-align:center">Actions</th>
     </tr></thead>
     <tbody>
       {% for f in feuilles %}
-      <tr>
+      <tr id="row_{{ f.id }}">
+        <td>
+          {% if f.statut == 'EN_ATTENTE' %}
+          <input type="checkbox" class="cb-feuille" value="{{ f.id }}" name="feuille_ids"/>
+          {% endif %}
+        </td>
         <td style="font-weight:700;font-size:.875rem">{{ f.journalier.nom_complet }}</td>
         <td style="font-size:.8rem;color:#6b7280">{{ f.journalier.profession or '—' }}</td>
         <td style="text-align:center;font-size:.8rem;color:#6b7280">
@@ -57,37 +76,123 @@
         </td>
         <td style="text-align:center;font-weight:700">{{ f.nb_jours }}j</td>
         <td style="text-align:center;font-weight:700">{{ f.total_heures|int }}h</td>
-        <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ f.taux_horaire|int|fcfa }}</td>
-        <td style="text-align:right;font-weight:900;font-family:monospace;color:#1a2332">{{ f.montant_brut|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ f.taux_horaire|fcfa }}</td>
+        <td style="text-align:right;font-weight:900;font-family:monospace">{{ f.montant_brut|int|fcfa }}</td>
         <td style="text-align:center">
           <span style="font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
             {% if f.statut=='EN_ATTENTE' %}background:#fef3c7;color:#92400e
             {% else %}background:#d1fae5;color:#065f46{% endif %}">
-            {{ f.statut.replace('_',' ') }}
+            {{ f.statut }}
           </span>
         </td>
         <td style="text-align:center">
-          {% if f.statut == 'EN_ATTENTE' %}
-          <form method="POST" action="/journaliers/paie/{{ f.id }}/payer">
-            <button type="submit"
-              style="font-size:.75rem;background:#059669;color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer"
-              onclick="return confirm('Confirmer le paiement de {{ f.journalier.nom_complet }} ?')">
-              ✅ Payer
-            </button>
-          </form>
-          {% else %}
-          <span style="font-size:.75rem;color:#9ca3af">{{ f.date_paiement|date_fr }}</span>
-          {% endif %}
+          <div style="display:flex;gap:.25rem;justify-content:center;flex-wrap:wrap">
+            {% if f.statut == 'EN_ATTENTE' %}
+            <!-- Modifier -->
+            <button onclick="ouvrirModif({{ f.id }}, {{ f.montant_brut|float }}, '{{ f.observation or '' }}')"
+              style="font-size:.7rem;background:#f59e0b;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer">✏️</button>
+            <!-- Payer -->
+            <form method="POST" action="/journaliers/paie/{{ f.id }}/payer" style="display:inline">
+              <button type="submit"
+                style="font-size:.7rem;background:#059669;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer"
+                onclick="return confirm('Confirmer le paiement de {{ f.journalier.nom_complet }} ?')">✅ Payer</button>
+            </form>
+            {% else %}
+            <span style="font-size:.75rem;color:#9ca3af">{{ f.date_paiement|date_fr if f.date_paiement else '—' }}</span>
+            {% endif %}
+            <!-- Supprimer -->
+            <form method="POST" action="/journaliers/paie/{{ f.id }}/supprimer" style="display:inline">
+              <button type="submit"
+                style="font-size:.7rem;background:#dc2626;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer"
+                onclick="return confirm('Supprimer cette feuille ?')">🗑️</button>
+            </form>
+          </div>
         </td>
       </tr>
       {% else %}
-      <tr><td colspan="9" style="text-align:center;padding:3rem;color:#9ca3af">
+      <tr><td colspan="10" style="text-align:center;padding:3rem;color:#9ca3af">
         <div style="font-size:2rem;margin-bottom:.5rem">💵</div>
-        <p>Aucune feuille de paie générée</p>
-        <p style="font-size:.75rem;margin-top:.25rem">Sélectionnez une période et cliquez "Générer"</p>
+        <p>Aucune feuille générée</p>
       </td></tr>
       {% endfor %}
     </tbody>
   </table>
+
+  <!-- Actions groupées -->
+  {% if feuilles|selectattr('statut','equalto','EN_ATTENTE')|list|length > 0 %}
+  <div style="padding:1rem 1.25rem;border-top:1px solid #f3f4f6;display:flex;gap:.75rem;align-items:center">
+    <span style="font-size:.8rem;color:#6b7280" id="nb_sel">0 sélectionné(s)</span>
+    <form method="POST" action="/journaliers/paie/payer-selection" style="display:inline" id="form_selection">
+      <input type="hidden" name="feuille_ids" id="ids_selectionnes"/>
+      <button type="submit" id="btn_payer_sel" disabled
+        style="background:#059669;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer;opacity:.5"
+        onclick="return prepSelection()">
+        ✅ Payer la sélection
+      </button>
+    </form>
+  </div>
+  {% endif %}
 </div>
+
+<!-- Modal modification -->
+<div id="modal_modif" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:1rem;padding:1.5rem;width:400px;max-width:90vw">
+    <h3 style="font-weight:900;margin-bottom:1rem">Modifier la feuille de paie</h3>
+    <form method="POST" id="form_modif">
+      <div style="margin-bottom:.75rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Montant (FCFA)</label>
+        <input type="number" name="montant_brut" id="mod_montant" step="100"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:1rem;font-family:monospace;box-sizing:border-box"/>
+      </div>
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Observation</label>
+        <input type="text" name="observation" id="mod_obs"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+      </div>
+      <div style="display:flex;gap:.75rem">
+        <button type="button" onclick="fermerModal()"
+          style="flex:1;background:#f3f4f6;color:#374151;padding:.625rem;border-radius:.75rem;font-weight:700;border:none;cursor:pointer">Annuler</button>
+        <button type="submit"
+          style="flex:1;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;border:none;cursor:pointer">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Style impression -->
+<style>
+@media print {
+  nav, .no-print, form, button, .btn-primary { display:none !important; }
+  body { font-size:11px; }
+  table { page-break-inside:auto; }
+}
+</style>
+
+<script>
+function ouvrirModif(id, montant, obs) {
+  document.getElementById('form_modif').action = `/journaliers/paie/${id}/modifier`;
+  document.getElementById('mod_montant').value = montant;
+  document.getElementById('mod_obs').value = obs;
+  document.getElementById('modal_modif').style.display = 'flex';
+}
+function fermerModal() {
+  document.getElementById('modal_modif').style.display = 'none';
+}
+function toggleAll(cb) {
+  document.querySelectorAll('.cb-feuille').forEach(c => c.checked = cb.checked);
+  majSelection();
+}
+function majSelection() {
+  const ids = [...document.querySelectorAll('.cb-feuille:checked')].map(c=>c.value);
+  document.getElementById('nb_sel').textContent = `${ids.length} sélectionné(s)`;
+  const btn = document.getElementById('btn_payer_sel');
+  if(btn){ btn.disabled = ids.length===0; btn.style.opacity = ids.length>0?'1':'.5'; }
+}
+function prepSelection() {
+  const ids = [...document.querySelectorAll('.cb-feuille:checked')].map(c=>c.value).join(',');
+  document.getElementById('ids_selectionnes').value = ids;
+  return confirm(`Confirmer le paiement de ${document.querySelectorAll('.cb-feuille:checked').length} journalier(s) ?`);
+}
+document.querySelectorAll('.cb-feuille').forEach(c => c.addEventListener('change', majSelection));
+</script>
 {% endblock %}
