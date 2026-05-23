@@ -1271,16 +1271,33 @@ def export_journal(periode_id):
         as_attachment=True,download_name=f"Journal_{p.libelle_mois}_{p.annee}_{t.slug}.xlsx")
 
 @app.route("/api/calculer-bulletin", methods=["POST"])
-@tenant_required
+@login_required
 def api_calculer():
-    t=get_tenant(); data=request.get_json(); sid=data.pop("salarie_id",None); nb_parts=1.0
-    if sid:
-        s=Salarie.query.filter_by(id=sid,tenant_id=t.id).first()
-        if s: nb_parts=float(s.nombre_parts or 1)
-    return jsonify(calculer_bulletin(data,nb_parts=nb_parts))
+    try:
+        t = get_tenant()
+        data = request.get_json() or {}
+        sid = data.pop("salarie_id", None)
+        nb_parts = 1.0
+        if sid and t:
+            s = Salarie.query.filter_by(id=sid, tenant_id=t.id).first()
+            if s: nb_parts = float(s.nombre_parts or 1)
+        # Récupérer les acomptes EN_ATTENTE pour ce salarié (calcul temps réel)
+        mois  = data.pop("mois_periode", None)
+        annee = data.pop("annee_periode", None)
+        total_acomptes = 0.0
+        if sid and t and mois and annee:
+            total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))                .filter_by(tenant_id=t.id, salarie_id=int(sid), mois=int(mois),
+                           annee=int(annee), statut="EN_ATTENTE").scalar() or 0)
+        if total_acomptes > 0:
+            data["acompte"] = max(float(data.get("acompte", 0)), total_acomptes)
+        res = calculer_bulletin(data, nb_parts=nb_parts)
+        res["acompte_auto"] = total_acomptes
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/api/salarie/<int:id>/contrat")
-@tenant_required
+@login_required
 def api_contrat(id):
     t=get_tenant()
     s=Salarie.query.filter_by(id=id,tenant_id=t.id).first()
