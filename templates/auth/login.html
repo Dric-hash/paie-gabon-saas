@@ -1,31 +1,64 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Connexion — PaieGabon</title><script src="https://cdn.tailwindcss.com"></script></head>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Connexion — Ameriack I.T. Solutions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
 <body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 flex items-center justify-center p-4">
 <div class="w-full max-w-md">
+
+  <!-- En-tête -->
   <div class="text-center mb-8">
-    <div class="inline-flex w-20 h-20 rounded-3xl bg-white/10 items-center justify-center text-4xl mb-4">🏗️</div>
-    <h1 class="text-3xl font-black text-white">PaieGabon</h1>
-    <p class="text-white/50 text-sm mt-1">Logiciel de paie multi-entreprises · Gabon</p>
+    <h1 class="text-3xl font-black text-white tracking-tight">Ameriack I.T. Solutions</h1>
+    <p class="text-amber-400 font-semibold text-sm mt-1">Logiciel de paie multi-entreprises · Gabon</p>
+    <div class="w-16 h-1 bg-amber-400 rounded-full mx-auto mt-3"></div>
   </div>
+
+  <!-- Carte connexion -->
   <div class="bg-white rounded-3xl shadow-2xl p-8">
     <h2 class="text-xl font-black text-gray-900 mb-6">Connexion</h2>
-    {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
-    <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold bg-red-50 text-red-700 border border-red-200">⚠️ {{msg}}</div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}{% for cat,msg in messages %}
+    <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold
+      {% if cat=='error' %}bg-red-50 text-red-700 border border-red-200
+      {% else %}bg-green-50 text-green-700 border border-green-200{% endif %}">
+      {{ '⚠️' if cat=='error' else '✅' }} {{ msg }}
+    </div>
     {% endfor %}{% endif %}{% endwith %}
+
     <form method="POST" class="space-y-4">
-      <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email</label>
-      <input type="email" name="email" required autofocus placeholder="vous@entreprise.ga"
-        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-slate-800"/></div>
-      <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Mot de passe</label>
-      <input type="password" name="password" required placeholder="••••••••"
-        class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-slate-800"/></div>
-      <button type="submit" class="w-full bg-slate-900 text-white rounded-xl py-3 font-black text-sm hover:bg-slate-700 transition-all mt-2">
-        Se connecter →</button>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email</label>
+        <input type="email" name="email" required autofocus placeholder="vous@entreprise.ga"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-slate-800"/>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Mot de passe</label>
+        <input type="password" name="password" required placeholder="••••••••"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-slate-800"/>
+      </div>
+      <button type="submit"
+        class="w-full bg-slate-900 text-white rounded-xl py-3 font-black text-sm hover:bg-slate-700 transition-all mt-2">
+        Se connecter →
+      </button>
     </form>
+
     <div class="border-t border-gray-100 mt-6 pt-5 text-center">
       <p class="text-sm text-gray-500">Pas encore de compte ?</p>
-      <a href="/inscription" class="mt-2 inline-block bg-amber-500 text-white rounded-xl px-6 py-2.5 font-bold text-sm hover:bg-amber-600 transition-all">
-        Créer mon espace entreprise →</a>
+      <a href="/inscription"
+        class="mt-2 inline-block bg-amber-500 text-white rounded-xl px-6 py-2.5 font-bold text-sm hover:bg-amber-600 transition-all">
+        Créer mon espace entreprise →
+      </a>
     </div>
   </div>
-</div></body></html>
+
+  <!-- Footer -->
+  <p class="text-center text-white/30 text-xs mt-6">
+    © 2026 Ameriack I.T. Solutions · Tous droits réservés
+  </p>
+</div>
+</body>
+</html>
