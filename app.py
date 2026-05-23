@@ -483,7 +483,8 @@ def salarie_nouveau():
             matricule=request.form["matricule"].strip().upper(),
             categorie_id=request.form.get("categorie_id") or None,
             nom=request.form["nom"].strip().upper(), prenom=request.form["prenom"].strip(),
-            telephone=request.form.get("telephone"), nationalite=request.form.get("nationalite","GABONAISE"),
+            telephone=request.form.get("telephone"), email=request.form.get("email","").strip() or None,
+            nationalite=request.form.get("nationalite","GABONAISE"),
             sexe=request.form.get("sexe"),
             date_naissance=_pd(request.form.get("date_naissance")),
             date_embauche=_pd(request.form["date_embauche"]),
@@ -535,7 +536,9 @@ def salarie_modifier(id):
     cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
     if request.method=="POST":
         for f,v in [("nom",request.form["nom"].strip().upper()),("prenom",request.form["prenom"].strip()),
-            ("telephone",request.form.get("telephone")),("nationalite",request.form.get("nationalite")),
+            ("telephone",request.form.get("telephone")),
+            ("email",request.form.get("email","").strip() or None),
+            ("nationalite",request.form.get("nationalite")),
             ("sexe",request.form.get("sexe")),("date_naissance",_pd(request.form.get("date_naissance"))),
             ("situation_matrimoniale",request.form.get("situation_matrimoniale")),
             ("nb_enfants",int(request.form.get("nb_enfants") or 0)),
@@ -1425,6 +1428,11 @@ with app.app_context():
             except Exception: db.session.rollback()
         try:
             db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        # Migration: ajouter email dans salaries
+        try:
+            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
             db.session.commit()
         except Exception: db.session.rollback()
         init_db()
