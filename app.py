@@ -801,14 +801,6 @@ def parametres_logo_supprimer():
 @app.route("/parametres/societe", methods=["POST"])
 @tenant_required
 @can_edit
-@app.route("/paiement")
-@login_required
-def paiement():
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
-    return render_template("tenant/paiement.html", tenant=t, plans=plans)
 def parametres_societe():
     t=get_tenant()
     for f in ["denomination","sigle","activite","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
