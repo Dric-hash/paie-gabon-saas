@@ -16,7 +16,7 @@
   </div>
   <div style="text-align:right">
     <div style="font-size:2rem;font-weight:900;color:#6ee7b7">
-      {{ tenant.plan.prix_mensuel|int|fcfa if tenant.plan else '—' }}<span style="font-size:.875rem;opacity:.7">/mois</span>
+      {{ (tenant.plan.prix_mensuel|float)|int|fcfa if tenant.plan else '—' }}<span style="font-size:.875rem;opacity:.7">/mois</span>
     </div>
     <div style="font-size:.75rem;opacity:.6;margin-top:.25rem">Statut : {{ tenant.statut }}</div>
   </div>
@@ -182,10 +182,10 @@
       <tr {% if tenant.plan_id == plan.id %}style="background:#f0fdf4;font-weight:700"{% endif %}>
         <td>{{ plan.nom }}{% if tenant.plan_id == plan.id %} ✓{% endif %}</td>
         <td style="text-align:center">{{ plan.max_salaries }}</td>
-        <td style="text-align:right;font-family:monospace">{{ plan.prix_mensuel|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 3 * 0.95)|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 6 * 0.90)|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel * 12 * 0.85)|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel|float)|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 3 * 0.95))|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 6 * 0.90))|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 12 * 0.85))|int|fcfa }}</td>
       </tr>
       {% endfor %}
     </tbody>
