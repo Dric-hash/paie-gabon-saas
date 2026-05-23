@@ -126,7 +126,7 @@
       {% endmacro %}
       {{ pat("CNSS patronal", bulletin.cnss_patronale, "18%") }}
       {{ pat("CNAMGS patronal", bulletin.cnamgs_patronale, "4,1%") }}
-      {{ pat("FNH", bulletin.fnh, "3%") }}
+      {{ pat("FNH", bulletin.fnh, "2%") }}
       {{ pat("CFP", bulletin.cfp, "0,5%") }}
     </div>
 
@@ -134,6 +134,28 @@
     <div class="card p-4" style="display:flex;flex-direction:column;gap:.5rem">
       <a href="/bulletins/{{ bulletin.id }}/imprimer" target="_blank"
          class="btn-primary" style="display:block;text-align:center">🖨️ Imprimer le bulletin</a>
+
+      <!-- Envoi par email -->
+      <div style="border-top:1px solid #f3f4f6;padding-top:.75rem;margin-top:.25rem">
+        <div style="font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+          📧 Envoyer par email
+        </div>
+        <form method="POST" action="/bulletins/{{ bulletin.id }}/envoyer-email">
+          <input type="email" name="email_dest"
+            value="{{ bulletin.salarie.email or '' }}"
+            placeholder="email@exemple.com"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem;margin-bottom:.375rem;box-sizing:border-box"/>
+          {% if not bulletin.salarie.email %}
+          <div style="font-size:.7rem;color:#dc2626;margin-bottom:.375rem">
+            ⚠️ Aucun email enregistré pour ce salarié
+          </div>
+          {% endif %}
+          <button type="submit"
+            style="width:100%;background:#2563eb;color:white;padding:.5rem;border-radius:.5rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+            📧 Envoyer le bulletin
+          </button>
+        </form>
+      </div>
       {% if bulletin.statut == 'BROUILLON' %}
       <form method="POST" action="/bulletins/{{ bulletin.id }}/valider">
         <button type="submit" style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">✅ Valider</button>
