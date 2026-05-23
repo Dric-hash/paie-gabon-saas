@@ -347,7 +347,6 @@ def admin_import_excel():
                     bul=BulletinPaie.query.filter_by(tenant_id=tenant.id,salarie_id=sal.id,periode_id=periodes_cache[pk].id).first()
                     if bul and not ecraser: continue
                     if not bul: bul=BulletinPaie(tenant_id=tenant.id,salarie_id=sal.id,periode_id=periodes_cache[pk].id); db.session.add(bul)
-                    # Indices exacts vérifiés sur PAIE_SOCIETE_SGTG_2026.xlsx
                     bul.nb_jours_travailles = int(nv(row[42]))
                     bul.salaire_base         = nv(row[5])
                     bul.heures_sup_10        = nv(row[7])
@@ -439,7 +438,6 @@ def admin_tenant_supprimer(id):
     t = Tenant.query.get_or_404(id)
     nom = t.denomination
     try:
-        # Supprimer dans l'ordre pour respecter les FK
         for s in Salarie.query.filter_by(tenant_id=id).all():
             BulletinPaie.query.filter_by(salarie_id=s.id).delete()
             Contrat.query.filter_by(salarie_id=s.id).delete()
@@ -473,17 +471,14 @@ def dashboard():
         return redirect(url_for("login"))
     now=datetime.now()
 
-    # ── Stats salariés ──────────────────────────────────────────
     nb_actifs   = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
     nb_inactifs = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
     nb_total    = Salarie.query.filter_by(tenant_id=t.id).count()
-    # Nouvelles embauches ce mois
     debut_mois  = datetime(now.year, now.month, 1).date()
     nb_new_mois = Salarie.query.filter(
         Salarie.tenant_id==t.id,
         Salarie.date_embauche>=debut_mois).count()
 
-    # ── Période en cours ──────────────────────────────────────
     periode = PeriodePaie.query.filter_by(
         tenant_id=t.id, annee=now.year, mois=now.month).first()
     masse={}; nb_v=nb_b=nb_p=0
@@ -494,7 +489,6 @@ def dashboard():
         nb_p = sum(1 for b in buls if b.statut=="PAYÉ")
         nb_b = sum(1 for b in buls if b.statut=="BROUILLON")
 
-    # ── Évolution masse salariale (6 derniers mois) ───────────
     evolution = []
     for i in range(5, -1, -1):
         m = now.month - i
@@ -510,33 +504,34 @@ def dashboard():
                                float(b.fnh or 0)+float(b.cfp or 0) for b in buls_p)
         else:
             total_net = total_brut = total_charges = 0
+            buls_p = []
         evolution.append({
             "mois": mois_noms[m],
             "annee": y,
             "brut": round(total_brut),
             "net": round(total_net),
             "charges": round(total_charges),
-            "nb_bulletins": len(buls_p) if p else 0
+            "nb_bulletins": len(buls_p)
         })
 
-    # ── Top 5 salaires les plus élevés (mois en cours) ────────
     top_salaries = []
     if periode:
-        top = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)              .order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
+        top = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)\
+              .order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
         top_salaries = top
 
-    # ── Répartition par catégorie ──────────────────────────────
     from sqlalchemy import func
     cats_stats = db.session.query(
         CategorieEmploi.code,
         CategorieEmploi.libelle,
         func.count(Salarie.id).label("nb")
-    ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)     .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")     .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+    ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
+     .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
+     .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
 
-    # ── Derniers bulletins ─────────────────────────────────────
-    derniers = BulletinPaie.query.filter_by(tenant_id=t.id)               .order_by(BulletinPaie.date_creation.desc()).limit(6).all()
+    derniers = BulletinPaie.query.filter_by(tenant_id=t.id)\
+               .order_by(BulletinPaie.date_creation.desc()).limit(6).all()
 
-    # ── Alertes ────────────────────────────────────────────────
     alertes = []
     if nb_b > 0:
         alertes.append({"type":"warning","msg":f"{nb_b} bulletin(s) en brouillon à valider"})
@@ -605,19 +600,18 @@ def salarie_detail(id):
     t=get_tenant()
     if not t: return redirect(url_for("login"))
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)                .order_by(BulletinPaie.date_creation.desc()).all()
+    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)\
+                .order_by(BulletinPaie.date_creation.desc()).all()
     contrat = Contrat.query.filter_by(salarie_id=id, tenant_id=t.id, actif=True).first()
     conge = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
                 annee=datetime.now().year).first()
 
-    # Statistiques du salarié
     total_brut = sum(float(b.salaire_brut or 0) for b in bulletins)
     total_net  = sum(float(b.net_a_payer or 0) for b in bulletins)
     total_cnss = sum(float(b.cnss_salarie or 0) for b in bulletins)
     total_irpp = sum(float(b.irpp or 0) for b in bulletins)
     nb_mois    = len(bulletins)
 
-    # Ancienneté
     anciennete_jours = (datetime.now().date() - s.date_embauche).days if s.date_embauche else 0
     anciennete_ans   = anciennete_jours // 365
     anciennete_mois  = (anciennete_jours % 365) // 30
@@ -857,7 +851,6 @@ def utilisateur_nouveau():
     if request.method == "GET":
         return render_template("tenant/utilisateur_form.html", tenant=t)
 
-    # POST - traitement du formulaire
     email = request.form.get("email", "").strip().lower()
     nom = request.form.get("nom", "").strip().upper()
     prenom = request.form.get("prenom", "").strip()
@@ -880,6 +873,7 @@ def utilisateur_nouveau():
     db.session.commit()
     flash(f"Utilisateur {u.nom_complet} créé avec succès.", "success")
     return redirect(url_for("utilisateurs"))
+
 @app.route("/journaliers")
 @login_required
 def journaliers():
@@ -961,15 +955,14 @@ def pointage():
         Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.journalier_id.isnot(None)).all()}
 
     # Stats du jour
-    nb_presents_sal = sum(1 for p in pts_salaries.values() if p.present)
+    nb_presents_sal  = sum(1 for p in pts_salaries.values() if p.present)
     nb_presents_jour = sum(1 for p in pts_journaliers.values() if p.present)
-    nb_absents = sum(1 for p in list(pts_salaries.values())+list(pts_journaliers.values()) if p.absent)
+    nb_absents       = sum(1 for p in list(pts_salaries.values()) + list(pts_journaliers.values()) if p.absent)
 
-    # Semaine en cours pour navigation
-    lundi = date_sel - __import__('datetime').timedelta(days=date_sel.weekday())
-    semaine = [(lundi + __import__('datetime').timedelta(days=i)) for i in range(6)]  # Lundi→Samedi
+    # ✅ CORRECTION : timedelta déjà importé en haut du fichier, plus besoin de __import__
+    lundi   = date_sel - timedelta(days=date_sel.weekday())
+    semaine = [lundi + timedelta(days=i) for i in range(6)]  # Lundi → Samedi
 
-    from datetime import timedelta
     return render_template("tenant/pointage.html",
         tenant=t, date_sel=date_sel, semaine=semaine,
         date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
@@ -992,7 +985,6 @@ def pointage_sauvegarder():
         return redirect(url_for("pointage"))
 
     nb_sauvegardes = 0
-    # Traiter les salariés mensuels
     for key, val in request.form.items():
         if key.startswith("sal_present_"):
             salarie_id = int(key.replace("sal_present_",""))
@@ -1049,8 +1041,8 @@ def journaliers_paie():
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     now = datetime.now()
-    # Prochains samedis (paiement bi-hebdo)
-    feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)               .order_by(FeuillePaieJournalier.date_fin.desc()).limit(50).all()
+    feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)\
+               .order_by(FeuillePaieJournalier.date_fin.desc()).limit(50).all()
     journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
     return render_template("tenant/journaliers_paie.html",
         tenant=t, feuilles=feuilles, journaliers=journaliers_list, now=now)
@@ -1058,7 +1050,6 @@ def journaliers_paie():
 @app.route("/journaliers/paie/generer", methods=["POST"])
 @login_required
 def journaliers_paie_generer():
-    """Génère les feuilles de paie pour une période de 2 semaines."""
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     date_debut = _parse_date(request.form.get("date_debut"))
@@ -1071,8 +1062,8 @@ def journaliers_paie_generer():
     nb_generes = 0
 
     for j in journaliers_list:
-        # Récupérer les pointages de la période
-        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)              .filter(Pointage.date_pointage >= date_debut,
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
+              .filter(Pointage.date_pointage >= date_debut,
                       Pointage.date_pointage <= date_fin,
                       Pointage.present == True).all()
 
@@ -1082,7 +1073,6 @@ def journaliers_paie_generer():
 
         if nb_jours == 0: continue
 
-        # Vérifier si feuille existe déjà
         exist = FeuillePaieJournalier.query.filter_by(
             tenant_id=t.id, journalier_id=j.id,
             date_debut=date_debut, date_fin=date_fin).first()
@@ -1158,16 +1148,15 @@ def journaliers_payer_selection():
 @app.route("/api/pointage/semaine")
 @login_required
 def api_pointage_semaine():
-    """Retourne les stats de pointage d'une semaine."""
     t = get_tenant()
     if not t: return jsonify({})
-    from datetime import timedelta
     date_str = request.args.get("date")
     try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
     except: date_sel = datetime.now().date()
-    lundi = date_sel - timedelta(days=date_sel.weekday())
+    lundi  = date_sel - timedelta(days=date_sel.weekday())
     samedi = lundi + timedelta(days=5)
-    pts = Pointage.query.filter_by(tenant_id=t.id)          .filter(Pointage.date_pointage >= lundi,
+    pts = Pointage.query.filter_by(tenant_id=t.id)\
+          .filter(Pointage.date_pointage >= lundi,
                   Pointage.date_pointage <= samedi).all()
     stats = {}
     for p in pts:
@@ -1202,10 +1191,9 @@ def acomptes():
         db.session.rollback()
         liste = []
 
-    # Total acomptes du mois
-    total_mois = sum(float(a.montant) for a in liste if a.statut != "ANNULE")
-    total_en_attente = sum(float(a.montant) for a in liste if a.statut == "EN_ATTENTE")
-    total_deduit = sum(float(a.montant) for a in liste if a.statut == "DEDUIT")
+    total_mois        = sum(float(a.montant) for a in liste if a.statut != "ANNULE")
+    total_en_attente  = sum(float(a.montant) for a in liste if a.statut == "EN_ATTENTE")
+    total_deduit      = sum(float(a.montant) for a in liste if a.statut == "DEDUIT")
 
     salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
     MOIS_NOMS = PeriodePaie.MOIS_NOMS
@@ -1236,7 +1224,6 @@ def acompte_nouveau():
         if not salarie_id or montant <= 0 or not date_ac:
             flash("Veuillez remplir tous les champs obligatoires.", "error")
         else:
-            # Vérifier limite : acompte ≤ 50% du salaire de base
             contrat = Contrat.query.filter_by(salarie_id=salarie_id, tenant_id=t.id, actif=True).first()
             if contrat and montant > float(contrat.salaire_base) * 0.5:
                 flash(f"L'acompte ne peut pas dépasser 50% du salaire de base ({float(contrat.salaire_base)*0.5:,.0f} FCFA).".replace(",", " "), "error")
@@ -1293,19 +1280,19 @@ def acompte_supprimer(id):
 @app.route("/api/salarie/<int:id>/acomptes-mois")
 @login_required
 def api_acomptes_mois(id):
-    """Retourne le total des acomptes EN_ATTENTE d'un salarié pour un mois donné."""
     t = get_tenant()
     mois  = request.args.get("mois", type=int)
     annee = request.args.get("annee", type=int)
     if not t or not mois or not annee: return jsonify({"total": 0})
-    total = db.session.query(db.func.sum(Acompte.montant))            .filter_by(tenant_id=t.id, salarie_id=id, mois=mois, annee=annee, statut="EN_ATTENTE")            .scalar() or 0
+    total = db.session.query(db.func.sum(Acompte.montant))\
+            .filter_by(tenant_id=t.id, salarie_id=id, mois=mois, annee=annee, statut="EN_ATTENTE")\
+            .scalar() or 0
     return jsonify({"total": float(total)})
 
 # ── IMPRESSION BULLETIN ───────────────────────────────────────────────────────
 @app.route("/bulletins/<int:id>/supprimer", methods=["POST"])
 @login_required
 def bulletin_supprimer(id):
-    # Super admin peut supprimer n'importe quel bulletin
     if current_user.is_super_admin:
         b = BulletinPaie.query.get_or_404(id)
         salarie_id = b.salarie_id
@@ -1346,16 +1333,13 @@ def bulletin_envoyer_email(id):
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     s = b.salarie
 
-    # Vérifier que le salarié a un email
     if not s.email:
         flash(f"{s.nom_complet} n a pas d adresse email.", "error")
         return redirect(url_for("bulletin_detail", id=id))
 
-    # Email personnalisé ou celui du formulaire
     dest_email = request.form.get("email_dest", s.email).strip()
 
     try:
-        # Générer le corps de l'email
         corps = f"""Bonjour {s.prenom} {s.nom},
 
 Veuillez trouver ci-joint votre bulletin de paie pour la période : {b.periode.libelle_complet}
@@ -1388,7 +1372,6 @@ Cordialement,
 @app.route("/bulletins/envoyer-tous", methods=["POST"])
 @login_required
 def bulletins_envoyer_tous():
-    """Envoie les bulletins d une période à tous les salariés ayant un email."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
@@ -1439,16 +1422,13 @@ def conges():
     salarie_id = request.args.get("salarie_id", type=int)
     q = request.args.get("q", "")
 
-    # Liste salariés avec leurs soldes congés
     salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
 
-    # Calculer les soldes pour chaque salarié
     soldes = []
     for s in salaries:
         if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower():
             continue
         conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=s.id, annee=annee).first()
-        # Calcul auto : 2.5 jours/mois travaillé (30 jours/an au Gabon)
         mois_anciennete = max(1, (datetime.now().date() - s.date_embauche).days // 30) if s.date_embauche else 12
         jours_acquis_auto = round(min(mois_anciennete, 12) * 2.0, 1)
         soldes.append({
@@ -1459,8 +1439,9 @@ def conges():
             "jours_restants": (float(conge.jours_acquis) - float(conge.jours_pris)) if conge else jours_acquis_auto,
         })
 
-    # Demandes de congé en cours
-    demandes = Conge.query.filter_by(tenant_id=t.id)               .filter(Conge.statut.in_(["DEMANDÉ","APPROUVÉ"]))               .order_by(Conge.date_depart).all()
+    demandes = Conge.query.filter_by(tenant_id=t.id)\
+               .filter(Conge.statut.in_(["DEMANDÉ","APPROUVÉ"]))\
+               .order_by(Conge.date_depart).all()
 
     return render_template("tenant/conges.html",
         tenant=t, soldes=soldes, demandes=demandes,
@@ -1482,12 +1463,10 @@ def conge_nouveau():
         date_ret = _parse_date(request.form.get("date_retour"))
         type_c = request.form.get("type_conge", "ANNUEL")
 
-        # Calculer les jours
         jours = 0
         if date_dep and date_ret:
             jours = (date_ret - date_dep).days + 1
 
-        # Trouver ou créer le solde annuel
         conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
         if not conge:
             s = Salarie.query.get(salarie_id)
@@ -1516,7 +1495,6 @@ def conge_approuver(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    # Déduire les jours du solde
     if c.date_depart and c.date_retour:
         jours = (c.date_retour - c.date_depart).days + 1
         c.jours_pris = float(c.jours_pris or 0) + jours
@@ -1655,7 +1633,7 @@ def init_db():
 # Initialisation automatique au démarrage (Railway/Production)
 with app.app_context():
     try:
-        db.create_all()  # Crée TOUTES les tables manquantes (acomptes, journaliers, pointages...)
+        db.create_all()
         init_db()
         print("✅ Tables créées et base initialisée.")
     except Exception as e:
