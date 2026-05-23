@@ -105,30 +105,6 @@ def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
 
-# ── Migration BDD (à utiliser une seule fois puis supprimer) ──────────────────
-@app.route("/migrate-pointages")
-def migrate_pointages():
-    try:
-        with db.engine.connect() as conn:
-            colonnes = [
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_10 NUMERIC(5,2) DEFAULT 0",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_30 NUMERIC(5,2) DEFAULT 0",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_40 NUMERIC(5,2) DEFAULT 0",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_70 NUMERIC(5,2) DEFAULT 0",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS absent BOOLEAN DEFAULT FALSE",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS motif_absence VARCHAR(100)",
-                "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS observation VARCHAR(200)",
-            ]
-            for sql in colonnes:
-                try:
-                    conn.execute(db.text(sql))
-                    conn.commit()
-                except Exception as e:
-                    print(f"Info: {e}")
-        return "✅ Migration OK ! Tu peux maintenant aller sur /pointage"
-    except Exception as e:
-        return f"❌ Erreur: {str(e)}"
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
