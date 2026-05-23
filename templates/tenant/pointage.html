@@ -9,14 +9,14 @@
   </div>
   <!-- Navigation dates -->
   <div style="display:flex;align-items:center;gap:.5rem">
-    <a href="/pointage?date={{ (date_sel - __import__('datetime').timedelta(days=1)).strftime('%Y-%m-%d') }}"
+    <a href="/pointage?date={{ date_hier }}"
        style="background:#f3f4f6;padding:.5rem .75rem;border-radius:.75rem;text-decoration:none;font-size:.875rem">← Hier</a>
     <form method="GET" style="display:flex;gap:.5rem">
       <input type="date" name="date" value="{{ date_sel.strftime('%Y-%m-%d') }}"
         style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .75rem;font-size:.875rem"
         onchange="this.form.submit()"/>
     </form>
-    <a href="/pointage?date={{ (date_sel + __import__('datetime').timedelta(days=1)).strftime('%Y-%m-%d') }}"
+    <a href="/pointage?date={{ date_demain }}"
        style="background:#f3f4f6;padding:.5rem .75rem;border-radius:.75rem;text-decoration:none;font-size:.875rem">Demain →</a>
     <a href="/pointage?date={{ now.strftime('%Y-%m-%d') }}"
        class="btn-primary">Aujourd'hui</a>
