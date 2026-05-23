@@ -426,8 +426,12 @@ class Pointage(db.Model):
 
     # Présence
     present         = db.Column(db.Boolean, default=True)
-    heures_normales = db.Column(db.Numeric(5,2), default=8)   # heures travaillées
-    heures_sup      = db.Column(db.Numeric(5,2), default=0)   # heures supplémentaires
+    heures_normales = db.Column(db.Numeric(5,2), default=8)
+    heures_sup      = db.Column(db.Numeric(5,2), default=0)   # journaliers
+    heures_sup_10   = db.Column(db.Numeric(5,2), default=0)   # mensuels +10%
+    heures_sup_30   = db.Column(db.Numeric(5,2), default=0)   # mensuels +30%
+    heures_sup_40   = db.Column(db.Numeric(5,2), default=0)   # mensuels +40%
+    heures_sup_70   = db.Column(db.Numeric(5,2), default=0)   # mensuels +70%
     absent          = db.Column(db.Boolean, default=False)
     motif_absence   = db.Column(db.String(100))                # MALADIE, CONGE, SANS_MOTIF
     observation     = db.Column(db.String(200))
