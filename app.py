@@ -628,20 +628,39 @@ def bulletin_detail(id):
         bulletin=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404(), tenant=t)
 
 @app.route("/bulletins/<int:id>/valider", methods=["POST"])
-@tenant_required
-@can_edit
+@login_required
 def bulletin_valider(id):
-    t=get_tenant(); b=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    b.statut="VALIDÉ"; b.date_validation=datetime.utcnow(); db.session.commit()
-    flash("Bulletin validé.","success"); return redirect(url_for("bulletin_detail",id=id))
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if b.statut == "VALIDÉ":
+        flash("Ce bulletin est déjà validé.", "info")
+        return redirect(url_for("bulletin_detail", id=id))
+    # Marquer aussi les acomptes EN_ATTENTE comme DÉDUITS
+    acomptes = Acompte.query.filter_by(
+        tenant_id=t.id, salarie_id=b.salarie_id,
+        mois=b.periode.mois, annee=b.periode.annee,
+        statut="EN_ATTENTE").all()
+    for a in acomptes:
+        a.statut = "DEDUIT"
+    b.statut = "VALIDÉ"
+    b.date_validation = datetime.utcnow()
+    db.session.commit()
+    flash("Bulletin validé avec succès.", "success")
+    return redirect(url_for("bulletin_detail", id=id))
 
 @app.route("/bulletins/<int:id>/payer", methods=["POST"])
-@tenant_required
-@can_edit
+@login_required
 def bulletin_paye(id):
-    t=get_tenant(); b=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    b.statut="PAYÉ"; db.session.commit(); flash("Payé.","success")
-    return redirect(url_for("bulletin_detail",id=id))
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    b.statut = "PAYÉ"
+    db.session.commit()
+    flash("Bulletin marqué comme payé.", "success")
+    return redirect(url_for("bulletin_detail", id=id))
 
 @app.route("/bulletins/<int:id>/supprimer", methods=["POST"])
 @login_required
