@@ -5,7 +5,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, date, timedelta
 from functools import wraps
-import io, os, secrets as sec
+import io, os, secrets as sec, threading
 
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
@@ -26,7 +26,6 @@ app.config["MAIL_USE_TLS"]  = True
 app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
 app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
-# Désactiver mail si non configuré pour éviter le crash au démarrage
 app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
 mail = Mail(app)
 
@@ -85,6 +84,19 @@ def can_edit(f):
 def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
+
+# ── Envoi email asynchrone (ne bloque pas le serveur) ─────────────────────────
+def send_email_async(msg):
+    """Envoie un email dans un thread séparé pour ne pas bloquer Gunicorn."""
+    def run(app_context, message):
+        with app_context:
+            try:
+                mail.send(message)
+            except Exception as e:
+                print(f"[EMAIL ERROR] {e}")
+    t = threading.Thread(target=run, args=(app.app_context(), msg))
+    t.daemon = True
+    t.start()
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -585,13 +597,11 @@ def bulletin_saisie():
         sid=int(request.form["salarie_id"]); pid=int(request.form["periode_id"])
         s=Salarie.query.filter_by(id=sid,tenant_id=t.id).first_or_404()
         periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
-        # Auto-déduire les acomptes EN_ATTENTE du salarié pour ce mois
         acomptes_en_attente = Acompte.query.filter_by(
             tenant_id=t.id, salarie_id=sid,
             mois=periode.mois, annee=periode.annee, statut="EN_ATTENTE").all()
         total_acomptes = sum(float(a.montant) for a in acomptes_en_attente)
         donnees={k:float(v) if v else 0 for k,v in request.form.items() if k not in("salarie_id","periode_id","csrf_token","action","nb_jours_travailles")}
-        # Injecter le total des acomptes
         if total_acomptes > 0:
             donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
         res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
@@ -604,9 +614,7 @@ def bulletin_saisie():
         action=request.form.get("action","brouillon")
         if action=="valider":
             b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
-            # Marquer les acomptes comme DÉDUITS
-            for a in acomptes_en_attente:
-                a.statut = "DEDUIT"
+            for a in acomptes_en_attente: a.statut = "DEDUIT"
         else:
             b.statut="BROUILLON"
         db.session.commit()
@@ -642,15 +650,11 @@ def bulletin_valider(id):
     if b.statut == "VALIDÉ":
         flash("Ce bulletin est déjà validé.", "info")
         return redirect(url_for("bulletin_detail", id=id))
-    # Marquer aussi les acomptes EN_ATTENTE comme DÉDUITS
     acomptes = Acompte.query.filter_by(
         tenant_id=t.id, salarie_id=b.salarie_id,
-        mois=b.periode.mois, annee=b.periode.annee,
-        statut="EN_ATTENTE").all()
-    for a in acomptes:
-        a.statut = "DEDUIT"
-    b.statut = "VALIDÉ"
-    b.date_validation = datetime.utcnow()
+        mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
+    for a in acomptes: a.statut = "DEDUIT"
+    b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
     db.session.commit()
     flash("Bulletin validé avec succès.", "success")
     return redirect(url_for("bulletin_detail", id=id))
@@ -662,8 +666,7 @@ def bulletin_paye(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    b.statut = "PAYÉ"
-    db.session.commit()
+    b.statut = "PAYÉ"; db.session.commit()
     flash("Bulletin marqué comme payé.", "success")
     return redirect(url_for("bulletin_detail", id=id))
 
@@ -698,6 +701,7 @@ def bulletin_imprimer(id):
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     return render_template("tenant/bulletin_print.html", bulletin=b, tenant=t)
 
+# ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
 @app.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
 @login_required
 def bulletin_envoyer_email(id):
@@ -706,30 +710,32 @@ def bulletin_envoyer_email(id):
     if not t: return redirect(url_for("login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     s = b.salarie
-    if not s.email:
-        flash(f"{s.nom_complet} n a pas d adresse email.", "error")
+    dest_email = request.form.get("email_dest", "").strip()
+    if not dest_email and s.email:
+        dest_email = s.email
+    if not dest_email:
+        flash(f"{s.nom_complet} n'a pas d'adresse email. Renseignez-en une dans le formulaire.", "error")
         return redirect(url_for("bulletin_detail", id=id))
-    dest_email = request.form.get("email_dest", s.email).strip()
-    # Vérifier que l'email est configuré
     if not os.environ.get("MAIL_USERNAME"):
-        flash("Email non configuré. Ajoutez MAIL_USERNAME et MAIL_PASSWORD dans les variables Railway.", "error")
+        flash("Email non configuré sur le serveur (MAIL_USERNAME manquant).", "error")
         return redirect(url_for("bulletin_detail", id=id))
     try:
         corps = (f"Bonjour {s.prenom},\n\n"
                  f"Veuillez trouver votre bulletin de paie pour : {b.periode.libelle_complet}\n\n"
-                 f"Salaire brut    : {int(b.salaire_brut or 0):,} FCFA\n"
-                 f"Net a payer     : {int(b.net_a_payer or 0):,} FCFA\n\n"
-                 f"Cordialement,\n{t.denomination}").replace(",", " ")
+                 f"Salaire brut : {int(b.salaire_brut or 0)} FCFA\n"
+                 f"Net a payer  : {int(b.net_a_payer or 0)} FCFA\n\n"
+                 f"Cordialement,\n{t.denomination}")
         msg = Message(
             subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
             recipients=[dest_email],
             body=corps,
             sender=app.config["MAIL_DEFAULT_SENDER"]
         )
-        mail.send(msg)
-        flash(f"Bulletin envoyé avec succes a {dest_email}.", "success")
+        # ✅ Thread séparé → répond immédiatement sans attendre Gmail
+        send_email_async(msg)
+        flash(f"Email en cours d'envoi à {dest_email}.", "success")
     except Exception as e:
-        flash(f"Erreur envoi: {str(e)}", "error")
+        flash(f"Erreur préparation email: {str(e)}", "error")
     return redirect(url_for("bulletin_detail", id=id))
 
 @app.route("/bulletins/envoyer-tous", methods=["POST"])
@@ -741,16 +747,22 @@ def bulletins_envoyer_tous():
     periode_id = request.form.get("periode_id", type=int)
     if not periode_id: flash("Période manquante.", "error"); return redirect(url_for("bulletins"))
     buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode_id).all()
-    nb_ok=0; nb_err=0
+    nb_ok=0; nb_sans_email=0
     for b in buls:
-        if not b.salarie.email: continue
+        if not b.salarie.email: nb_sans_email+=1; continue
         try:
-            corps = f"Bonjour {b.salarie.prenom},\nBulletin {b.periode.libelle_complet}\nNet: {int(b.net_a_payer or 0):,} FCFA\n{t.denomination}".replace(",", " ")
+            corps = (f"Bonjour {b.salarie.prenom},\n\n"
+                     f"Bulletin {b.periode.libelle_complet}\n"
+                     f"Net a payer : {int(b.net_a_payer or 0)} FCFA\n\n"
+                     f"Cordialement, {t.denomination}")
             msg = Message(subject=f"Bulletin {b.periode.libelle_complet}",
-                recipients=[b.salarie.email], body=corps, sender=app.config["MAIL_DEFAULT_SENDER"])
-            mail.send(msg); nb_ok+=1
-        except: nb_err+=1
-    flash(f"{nb_ok} envoyé(s). {nb_err} échec(s).", "success" if nb_ok > 0 else "error")
+                recipients=[b.salarie.email], body=corps,
+                sender=app.config["MAIL_DEFAULT_SENDER"])
+            send_email_async(msg)
+            nb_ok+=1
+        except Exception as e:
+            print(f"Erreur email {b.salarie.email}: {e}")
+    flash(f"{nb_ok} email(s) en cours d'envoi. {nb_sans_email} salarié(s) sans email.", "success")
     return redirect(url_for("bulletins"))
 
 # ── Périodes ──────────────────────────────────────────────────────────────────
@@ -835,8 +847,7 @@ def parametres_logo():
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
         t.logo_url = f"data:{mime};base64,{b64}"
-        db.session.commit()
-        flash("Logo mis a jour.", "success")
+        db.session.commit(); flash("Logo mis a jour.", "success")
     else:
         flash("Aucun fichier.", "error")
     return redirect(url_for("parametres"))
@@ -846,8 +857,7 @@ def parametres_logo():
 def parametres_logo_supprimer():
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    t.logo_url = None
-    db.session.commit()
+    t.logo_url = None; db.session.commit()
     flash("Logo supprime.", "success")
     return redirect(url_for("parametres"))
 
@@ -872,7 +882,7 @@ def annuler_abonnement():
     t.statut = "ANNULATION_DEMANDEE"
     t.notes = f"Annulation demandée le {datetime.now().strftime('%d/%m/%Y')}. Motif: {motif}"
     db.session.commit()
-    flash("Demande d annulation enregistrée. L équipe PaieGabon vous contactera sous 48h.", "success")
+    flash("Demande d annulation enregistrée. L equipe PaieGabon vous contactera sous 48h.", "success")
     return redirect(url_for("parametres"))
 
 # ── Utilisateurs ──────────────────────────────────────────────────────────────
@@ -1168,294 +1178,3 @@ def acompte_valider(id):
     a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     a.statut = "DEDUIT"; db.session.commit()
     flash("Acompte marqué comme déduit.", "success")
-    return redirect(url_for("acomptes", mois=a.mois, annee=a.annee))
-
-@app.route("/acomptes/<int:id>/annuler", methods=["POST"])
-@login_required
-def acompte_annuler(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    a.statut = "ANNULE"; db.session.commit()
-    flash("Acompte annulé.", "success")
-    return redirect(url_for("acomptes", mois=a.mois, annee=a.annee))
-
-@app.route("/acomptes/<int:id>/supprimer", methods=["POST"])
-@login_required
-def acompte_supprimer(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    mois, annee = a.mois, a.annee
-    db.session.delete(a); db.session.commit()
-    flash("Acompte supprimé.", "success")
-    return redirect(url_for("acomptes", mois=mois, annee=annee))
-
-# ── Congés ────────────────────────────────────────────────────────────────────
-@app.route("/conges")
-@login_required
-def conges():
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    now = datetime.now()
-    annee = request.args.get("annee", now.year, type=int)
-    q = request.args.get("q", "")
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
-    soldes = []
-    for s in salaries_list:
-        if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower(): continue
-        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=s.id, annee=annee).first()
-        mois_anc = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
-        jours_auto = round(min(mois_anc,12)*2.0,1)
-        soldes.append({"salarie":s,"conge":conge,
-            "jours_acquis":float(conge.jours_acquis) if conge else jours_auto,
-            "jours_pris":float(conge.jours_pris) if conge else 0,
-            "jours_restants":(float(conge.jours_acquis)-float(conge.jours_pris)) if conge else jours_auto})
-    demandes = Conge.query.filter_by(tenant_id=t.id).filter(Conge.statut.in_(["DEMANDÉ","APPROUVÉ"])).order_by(Conge.date_depart).all()
-    return render_template("tenant/conges.html", tenant=t, soldes=soldes, demandes=demandes,
-        annee=annee, now=now, q=q, salaries=salaries_list)
-
-@app.route("/conges/nouveau", methods=["GET","POST"])
-@login_required
-def conge_nouveau():
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
-    if request.method == "POST":
-        salarie_id = request.form.get("salarie_id", type=int)
-        annee = request.form.get("annee", datetime.now().year, type=int)
-        date_dep = _parse_date(request.form.get("date_depart"))
-        date_ret = _parse_date(request.form.get("date_retour"))
-        type_c = request.form.get("type_conge", "ANNUEL")
-        jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
-        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
-        if not conge:
-            s = Salarie.query.get(salarie_id)
-            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
-            conge = Conge(tenant_id=t.id, salarie_id=salarie_id, annee=annee,
-                jours_acquis=round(min(mois,12)*2.0,1), jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
-            db.session.add(conge)
-        conge.date_depart=date_dep; conge.date_retour=date_ret; conge.type_conge=type_c; conge.statut="DEMANDÉ"
-        db.session.commit()
-        flash(f"Demande de congé enregistrée ({jours} jours).", "success")
-        return redirect(url_for("conges"))
-    return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
-
-@app.route("/conges/<int:id>/approuver", methods=["POST"])
-@login_required
-def conge_approuver(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    if c.date_depart and c.date_retour:
-        c.jours_pris = float(c.jours_pris or 0) + (c.date_retour-c.date_depart).days + 1
-    c.statut = "APPROUVÉ"; db.session.commit()
-    flash(f"Congé de {c.salarie.nom_complet} approuvé.", "success")
-    return redirect(url_for("conges"))
-
-@app.route("/conges/<int:id>/refuser", methods=["POST"])
-@login_required
-def conge_refuser(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    c.statut="REFUSÉ"; db.session.commit()
-    flash(f"Congé refusé.", "success")
-    return redirect(url_for("conges"))
-
-@app.route("/conges/<int:id>/supprimer", methods=["POST"])
-@login_required
-def conge_supprimer(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    db.session.delete(c); db.session.commit()
-    flash("Demande supprimée.", "success")
-    return redirect(url_for("conges"))
-
-# ── Export & API ──────────────────────────────────────────────────────────────
-@app.route("/bulletins/export/<int:periode_id>")
-@tenant_required
-def export_journal(periode_id):
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
-    t=get_tenant()
-    p=PeriodePaie.query.filter_by(id=periode_id,tenant_id=t.id).first_or_404()
-    buls=BulletinPaie.query.filter_by(periode_id=periode_id,tenant_id=t.id).join(Salarie).order_by(Salarie.nom).all()
-    wb=Workbook(); ws=wb.active; ws.title=f"Journal {p.libelle_complet}"
-    ws.merge_cells("A1:R1"); ws["A1"]=f"JOURNAL DE PAIE — {p.libelle_complet} — {t.denomination}"
-    ws["A1"].font=Font(bold=True,size=13); ws["A1"].alignment=Alignment(horizontal="center")
-    hdrs=["Matricule","Nom","Prénom","Emploi","Cat.","Base","Brut","CNSS Sal.","CNAMGS Sal.","TCS","IRPP","Net","Net à Payer","CNSS Pat.","CNAMGS Pat.","FNH","CFP","Statut"]
-    for col,h in enumerate(hdrs,1):
-        c=ws.cell(row=3,column=col,value=h); c.font=Font(bold=True,color="FFFFFF")
-        c.fill=PatternFill("solid",fgColor="1a2332"); c.alignment=Alignment(horizontal="center")
-    for row,b in enumerate(buls,4):
-        s=b.salarie
-        vals=[s.matricule,s.nom,s.prenom,s.emploi,s.categorie.code if s.categorie else "",
-              float(b.salaire_base or 0),float(b.salaire_brut or 0),float(b.cnss_salarie or 0),
-              float(b.cnamgs_salarie or 0),float(b.tcs or 0),float(b.irpp or 0),
-              float(b.salaire_net or 0),float(b.net_a_payer or 0),float(b.cnss_patronale or 0),
-              float(b.cnamgs_patronale or 0),float(b.fnh or 0),float(b.cfp or 0),b.statut]
-        for col,v in enumerate(vals,1):
-            cell=ws.cell(row=row,column=col,value=v)
-            if isinstance(v,float): cell.number_format='#,##0'
-            if row%2==0: cell.fill=PatternFill("solid",fgColor="F5F5F5")
-    out=io.BytesIO(); wb.save(out); out.seek(0)
-    return send_file(out,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True,download_name=f"Journal_{p.libelle_mois}_{p.annee}_{t.slug}.xlsx")
-
-@app.route("/api/calculer-bulletin", methods=["POST"])
-@login_required
-def api_calculer():
-    try:
-        t = get_tenant()
-        data = request.get_json() or {}
-        sid = data.pop("salarie_id", None)
-        nb_parts = 1.0
-        if sid and t:
-            s = Salarie.query.filter_by(id=sid, tenant_id=t.id).first()
-            if s: nb_parts = float(s.nombre_parts or 1)
-        # Récupérer les acomptes EN_ATTENTE pour ce salarié (calcul temps réel)
-        mois  = data.pop("mois_periode", None)
-        annee = data.pop("annee_periode", None)
-        total_acomptes = 0.0
-        if sid and t and mois and annee:
-            total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))                .filter_by(tenant_id=t.id, salarie_id=int(sid), mois=int(mois),
-                           annee=int(annee), statut="EN_ATTENTE").scalar() or 0)
-        if total_acomptes > 0:
-            data["acompte"] = max(float(data.get("acompte", 0)), total_acomptes)
-        res = calculer_bulletin(data, nb_parts=nb_parts)
-        res["acompte_auto"] = total_acomptes
-        return jsonify(res)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route("/api/salarie/<int:id>/contrat")
-@login_required
-def api_contrat(id):
-    t=get_tenant()
-    s=Salarie.query.filter_by(id=id,tenant_id=t.id).first()
-    if not s: return jsonify({})
-    c=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first()
-    base={"nom":s.nom_complet,"poste":s.emploi,"matricule":s.matricule,"nombre_parts":float(s.nombre_parts or 1)}
-    if c: base["salaire_base"]=float(c.salaire_base); base["poste"]=c.poste or s.emploi
-    return jsonify(base)
-
-@app.route("/api/salarie/<int:id>/acomptes-mois")
-@login_required
-def api_acomptes_mois(id):
-    t = get_tenant()
-    mois=request.args.get("mois",type=int); annee=request.args.get("annee",type=int)
-    if not t or not mois or not annee: return jsonify({"total":0})
-    total = db.session.query(db.func.sum(Acompte.montant))\
-            .filter_by(tenant_id=t.id,salarie_id=id,mois=mois,annee=annee,statut="EN_ATTENTE").scalar() or 0
-    return jsonify({"total":float(total)})
-
-@app.route("/api/pointage/semaine")
-@login_required
-def api_pointage_semaine():
-    t = get_tenant()
-    if not t: return jsonify({})
-    date_str = request.args.get("date")
-    try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except: date_sel = datetime.now().date()
-    lundi=date_sel-timedelta(days=date_sel.weekday()); samedi=lundi+timedelta(days=5)
-    pts = Pointage.query.filter_by(tenant_id=t.id).filter(Pointage.date_pointage>=lundi,Pointage.date_pointage<=samedi).all()
-    stats={}
-    for p in pts:
-        key=str(p.date_pointage)
-        if key not in stats: stats[key]={"presents":0,"absents":0,"heures":0}
-        if p.present: stats[key]["presents"]+=1; stats[key]["heures"]+=p.total_heures
-        else: stats[key]["absents"]+=1
-    return jsonify(stats)
-
-# ── Helpers ───────────────────────────────────────────────────────────────────
-def _pd(v):
-    if not v: return None
-    try: return datetime.strptime(v,"%Y-%m-%d").date()
-    except: return None
-
-@app.template_filter("fcfa")
-def fcfa_filter(v):
-    try: return f"{int(float(v)):,}".replace(","," ")+" FCFA"
-    except: return "— FCFA"
-
-@app.template_filter("date_fr")
-def date_fr_filter(v):
-    if not v: return "—"
-    if isinstance(v,str):
-        try: v=datetime.strptime(v[:10],"%Y-%m-%d").date()
-        except: return v
-    return v.strftime("%d/%m/%Y")
-
-@app.context_processor
-def inject_globals(): return {"now":datetime.now(),"enumerate":enumerate}
-
-@app.errorhandler(403)
-def forbidden(e): return render_template("auth/403.html"),403
-
-# ── Init DB ───────────────────────────────────────────────────────────────────
-def init_db():
-    db.create_all()
-    if not Plan.query.first():
-        for code,nom,prix,ms,mu,desc in [
-            ("STARTER","Starter",15000,10,1,"10 salariés max, 1 utilisateur"),
-            ("PRO","Pro",35000,50,3,"50 salariés max, 3 utilisateurs"),
-            ("CABINET","Cabinet",100000,None,10,"Illimité, 10 utilisateurs"),
-        ]: db.session.add(Plan(code=code,nom=nom,prix_mensuel=prix,max_salaries=ms,max_utilisateurs=mu,description=desc))
-    if not RubriquePaie.query.first():
-        for code,lib,typ,ts,tp,plaf in [
-            ("CNSS","Caisse Nationale Sécurité Sociale","COTISATION",0.05,0.18,1500000),
-            ("CNAMGS","Assurance Maladie Garantie Sociale","COTISATION",0.02,0.041,2500000),
-            ("TCS","Taxe Complémentaire Salaires","RETENUE",0.05,None,None),
-            ("FNH","Fonds National Habitat","COTISATION",None,0.03,1500000),
-            ("CFP","Contribution Formation Professionnelle","COTISATION",None,0.005,None),
-        ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
-    if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
-        sa.set_password("Admin2026!"); db.session.add(sa)
-    if not Tenant.query.first():
-        db.session.flush()
-        plan=Plan.query.filter_by(code="PRO").first()
-        t=Tenant(slug="demo",denomination="ENTREPRISE DEMO",sigle="DEMO",activite="À RENSEIGNER",
-                 nif="",ville="Libreville",pays="Gabon",
-                 plan_id=plan.id if plan else None,statut="ACTIF")
-        t.token_api=sec.token_hex(32)
-        db.session.add(t); db.session.flush()
-        for code,lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
-            db.session.add(CategorieEmploi(tenant_id=t.id,code=code,libelle=lib))
-        u=Utilisateur(nom="DEMO",prenom="Responsable",email="demo@paiegalon.ga",role="TENANT_ADMIN",tenant_id=t.id,actif=True)
-        u.set_password("Demo2026!"); db.session.add(u)
-    db.session.commit()
-    print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
-
-with app.app_context():
-    try:
-        db.create_all()
-        # Migrations colonnes manquantes
-        for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
-            try:
-                db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
-                db.session.commit()
-            except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        # Migration: ajouter email dans salaries
-        try:
-            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        init_db()
-        print("✅ Tables créées et base initialisée.")
-    except Exception as e:
-        print(f"Erreur init: {e}")
-        try: db.session.rollback(); db.create_all()
-        except Exception as e2: print(f"Erreur create_all: {e2}")
-
-if __name__=="__main__":
-    with app.app_context(): init_db()
-    app.run(debug=True,port=5000)
