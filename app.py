@@ -235,8 +235,25 @@ def admin_import_excel():
         tenant_id = request.form.get("tenant_id", type=int)
         tenant = Tenant.query.get_or_404(tenant_id)
         f = request.files.get("excel_file")
-        if not f or not f.filename.endswith(".xlsx"):
-            flash("Fichier invalide. Utilisez un fichier .xlsx", "error")
+        # Validation serveur : existence fichier
+        if not f or not f.filename:
+            flash("Aucun fichier sélectionné.", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation extension
+        if not f.filename.lower().endswith(".xlsx"):
+            flash("Format invalide. Utilisez uniquement un fichier .xlsx", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation taille (max 10 Mo)
+        f.seek(0, 2)  # aller à la fin
+        taille = f.tell()
+        f.seek(0)     # revenir au début
+        if taille > 10 * 1024 * 1024:
+            flash(f"Fichier trop lourd ({taille//1024//1024} Mo). Maximum 10 Mo.", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation type MIME réel (magic bytes XLSX = PK zip)
+        header = f.read(4); f.seek(0)
+        if header[:2] != b'PK':
+            flash("Le fichier ne semble pas être un vrai fichier Excel. Vérifiez le format.", "error")
             return render_template("admin/import_excel.html", tenants=tenants)
         imp_societe  = "import_societe"  in request.form
         imp_salaries = "import_salaries" in request.form
@@ -256,6 +273,16 @@ def admin_import_excel():
                 if isinstance(v,d2): return v
                 try: return dt2.strptime(str(v)[:10],"%Y-%m-%d").date()
                 except: return None
+            # Vérifier que les feuilles demandées existent bien
+            feuilles_manquantes = []
+            if imp_salaries and "INFOS SALARIES" not in wb.sheetnames:
+                feuilles_manquantes.append("INFOS SALARIES")
+            if imp_bulletins and "DONNEES DU BULLETIN" not in wb.sheetnames:
+                feuilles_manquantes.append("DONNEES DU BULLETIN")
+            if feuilles_manquantes:
+                flash(f"Feuille(s) introuvable(s) dans le fichier : {', '.join(feuilles_manquantes)}. Vérifiez le fichier Excel.", "error")
+                return render_template("admin/import_excel.html", tenants=tenants, resultats=None)
+
             if imp_societe and "INFOS SOCIETE" in wb.sheetnames:
                 ws=wb["INFOS SOCIETE"]; infos={}
                 for row in ws.iter_rows(values_only=True):
@@ -356,8 +383,12 @@ def admin_import_excel():
                     bul.acompte=nv(row[82]); bul.net_a_payer=nv(row[83]) if len(row)>83 else 0
                     bul.statut="VALIDÉ"; bul.date_validation=datetime.utcnow(); nb_bul+=1
             db.session.commit()
-            resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,"erreurs":nb_err}
-            flash(f"Import réussi ! {nb_sal} salariés, {nb_bul} bulletins, {nb_per} périodes.","success")
+            resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,
+                        "erreurs":nb_err,"taille_ko":round(taille/1024,1)}
+            msg = f"Import terminé : {nb_sal} salarié(s), {nb_bul} bulletin(s), {nb_per} période(s)"
+            if nb_err > 0:
+                msg += f" — {nb_err} ligne(s) ignorée(s) (matricule inconnu ou données manquantes)"
+            flash(msg, "success" if nb_err == 0 else "warning")
         except Exception as e:
             db.session.rollback()
             flash(f"Erreur : {str(e)}","error")
