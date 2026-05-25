@@ -40,7 +40,9 @@
             <div class="text-3xl mb-2">📊</div>
             <label class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold cursor-pointer">
               Choisir le fichier
-              <input type="file" name="excel_file" accept=".xlsx" required class="hidden" onchange="document.getElementById('fname').textContent=this.files[0].name"/>
+              <input type="file" name="excel_file" accept=".xlsx" required class="hidden" onchange="if(this.files.length){
+      document.getElementById('fname').textContent=this.files[0].name;
+  }"/>
             </label>
             <p id="fname" class="text-xs text-gray-400 mt-2">Aucun fichier</p>
           </div>
