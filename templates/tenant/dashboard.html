@@ -1,217 +1,180 @@
-{% extends "tenant/base.html" %}
-{% block title %}Dashboard — {{ tenant.denomination }}{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Super-Admin — Ameriack I.T. Solutions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; }
+    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
 
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-2xl font-black text-gray-900">Tableau de bord</h1>
-    <p class="text-gray-500 text-sm mt-1">
-      {{ tenant.denomination }} ·
-      {% if periode %}{{ periode.libelle_complet }}{% else %}Aucune période ouverte{% endif %}
-      · {{ now.strftime('%d/%m/%Y') }}
-    </p>
+<!-- ── Topbar admin ── -->
+<nav class="bg-purple-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
+  <div class="flex items-center gap-4">
+    <span class="text-xl font-black">Ameriack I.T. Solutions</span>
+    <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
   </div>
-  {% if not periode %}
-  <a href="/periodes" class="btn-primary">📅 Ouvrir une période</a>
+  <div class="flex items-center gap-5 text-sm">
+    <a href="/admin"          class="font-semibold hover:text-purple-200">Dashboard</a>
+    <a href="/admin/tenants"  class="hover:text-purple-200">Entreprises</a>
+    <a href="/admin/plans"    class="hover:text-purple-200">Plans</a>
+    <a href="/admin/rubriques"class="hover:text-purple-200">Rubriques</a>
+    <a href="/admin/import"   class="hover:text-purple-200">Import Excel</a>
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">
+      Déconnexion
+    </a>
+  </div>
+</nav>
+
+<main class="max-w-6xl mx-auto p-8">
+
+  <!-- Messages flash -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-6 space-y-2">
+    {% for cat, msg in messages %}
+    <div class="px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
   {% endif %}
-</div>
+  {% endwith %}
 
-<!-- ALERTES -->
-{% for a in alertes %}
-<div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1rem;border-radius:.75rem;margin-bottom:.75rem;font-size:.875rem;font-weight:600;
-  {% if a.type=='warning' %}background:#fffbeb;border:1px solid #fcd34d;color:#92400e
-  {% elif a.type=='danger' %}background:#fef2f2;border:1px solid #fca5a5;color:#991b1b
-  {% else %}background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af{% endif %}">
-  <span>{% if a.type=='warning' %}⚠️{% elif a.type=='danger' %}🚨{% else %}ℹ️{% endif %}</span>
-  <span>{{ a.msg }}</span>
-  {% if a.type=='warning' %}<a href="/bulletins" style="margin-left:auto;font-weight:700;text-decoration:underline">Voir →</a>{% endif %}
-</div>
-{% endfor %}
-
-<!-- KPIs PRINCIPAUX -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
-  <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.25rem;color:white">
-    <div style="font-size:1.75rem;margin-bottom:.25rem">👷</div>
-    <div style="font-size:2rem;font-weight:900">{{ nb_actifs }}</div>
-    <div style="font-size:.875rem;font-weight:600;opacity:.8">Salariés actifs</div>
-    <div style="font-size:.75rem;opacity:.5;margin-top:.25rem">
-      {{ nb_inactifs }} inactif(s) · {{ nb_total }} total
-      {% if nb_new_mois > 0 %} · <span style="color:#6ee7b7">+{{ nb_new_mois }} ce mois</span>{% endif %}
-    </div>
-  </div>
-  <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:1rem;padding:1.25rem;color:white">
-    <div style="font-size:1.75rem;margin-bottom:.25rem">💰</div>
-    <div style="font-size:1.25rem;font-weight:900">{{ masse.get('total_brut',0)|int|fcfa if masse else '—' }}</div>
-    <div style="font-size:.875rem;font-weight:600;opacity:.8">Masse salariale brute</div>
-    <div style="font-size:.75rem;opacity:.5;margin-top:.25rem">
-      Net : {{ masse.get('total_net',0)|int|fcfa if masse else '—' }}
-    </div>
-  </div>
-  <div style="background:linear-gradient(135deg,#059669,#047857);border-radius:1rem;padding:1.25rem;color:white">
-    <div style="font-size:1.75rem;margin-bottom:.25rem">✅</div>
-    <div style="font-size:2rem;font-weight:900">{{ nb_valides + nb_payes }}/{{ nb_actifs }}</div>
-    <div style="font-size:.875rem;font-weight:600;opacity:.8">Bulletins validés</div>
-    <div style="font-size:.75rem;opacity:.5;margin-top:.25rem">
-      {{ nb_payes }} payé(s) · {{ nb_brouillon }} brouillon(s)
-    </div>
-  </div>
-  <div style="background:linear-gradient(135deg,#2563eb,#1d4ed8);border-radius:1rem;padding:1.25rem;color:white">
-    <div style="font-size:1.75rem;margin-bottom:.25rem">🏦</div>
-    <div style="font-size:1.25rem;font-weight:900">{{ masse.get('total_charges_patronales',0)|int|fcfa if masse else '—' }}</div>
-    <div style="font-size:.875rem;font-weight:600;opacity:.8">Charges patronales</div>
-    <div style="font-size:.75rem;opacity:.5;margin-top:.25rem">CNSS + CNAMGS + FNH + CFP</div>
-  </div>
-</div>
-
-<!-- LIGNE 2 : Graphique évolution + Répartition catégories -->
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem;margin-bottom:1.5rem">
-
-  <!-- Évolution masse salariale -->
-  <div class="card p-6">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Évolution sur 6 mois</h2>
-      <div style="display:flex;gap:1rem;font-size:.75rem">
-        <span style="display:flex;align-items:center;gap:.375rem"><span style="width:.75rem;height:.75rem;border-radius:50%;background:#1a2332;display:inline-block"></span>Brut</span>
-        <span style="display:flex;align-items:center;gap:.375rem"><span style="width:.75rem;height:.75rem;border-radius:50%;background:#059669;display:inline-block"></span>Net</span>
-        <span style="display:flex;align-items:center;gap:.375rem"><span style="width:.75rem;height:.75rem;border-radius:50%;background:#dc2626;display:inline-block"></span>Charges</span>
-      </div>
-    </div>
-
-    {% if evolution %}
-    {% set max_val = evolution|map(attribute='brut')|max %}
-    <div style="display:flex;align-items:flex-end;gap:.75rem;height:140px;padding:0 .5rem">
-      {% for e in evolution %}
-      <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.25rem;height:100%">
-        <div style="flex:1;width:100%;display:flex;flex-direction:column;justify-content:flex-end;gap:2px">
-          {% if max_val > 0 %}
-          <!-- Barre brut -->
-          <div title="Brut: {{ e.brut|fcfa }}" style="width:100%;background:#1a2332;border-radius:.25rem .25rem 0 0;height:{{ ((e.brut / max_val) * 120)|int }}px;min-height:{% if e.brut > 0 %}4{% else %}0{% endif %}px;transition:height .3s"></div>
-          {% endif %}
-        </div>
-        <div style="font-size:.7rem;font-weight:700;color:#6b7280">{{ e.mois }}</div>
-        {% if e.nb_bulletins > 0 %}
-        <div style="font-size:.65rem;color:#9ca3af">{{ e.nb_bulletins }}b</div>
-        {% endif %}
-      </div>
-      {% endfor %}
-    </div>
-
-    <!-- Tableau récap -->
-    <div style="margin-top:1rem;border-top:1px solid #f3f4f6;padding-top:1rem">
-      <div style="display:grid;grid-template-columns:repeat({{ evolution|length }},1fr);gap:.25rem;text-align:center">
-        {% for e in evolution %}
-        <div style="font-size:.65rem">
-          <div style="font-weight:700;color:#1a2332">{{ e.mois }}</div>
-          <div style="color:#6b7280">{{ (e.net/1000)|int }}K</div>
-        </div>
-        {% endfor %}
-      </div>
-    </div>
-    {% else %}
-    <div style="text-align:center;padding:2rem;color:#9ca3af">
-      <div style="font-size:2rem;margin-bottom:.5rem">📊</div>
-      <p style="font-size:.875rem">Aucune donnée disponible</p>
-    </div>
-    {% endif %}
+  <div class="mb-6">
+    <h1 class="text-2xl font-black text-gray-900">Tableau de bord Super-Admin</h1>
+    <p class="text-gray-500 text-sm mt-1">Vue globale — {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
   </div>
 
-  <!-- Répartition par catégorie -->
-  <div class="card p-6">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Répartition salariés</h2>
-    {% if cats_stats %}
-    <div style="display:flex;flex-direction:column;gap:.75rem">
-      {% for cat in cats_stats %}
-      <div>
-        <div style="display:flex;justify-content:space-between;font-size:.875rem;margin-bottom:.25rem">
-          <span style="font-weight:700">{{ cat.code }}</span>
-          <span style="color:#6b7280">{{ cat.nb }} salarié(s)</span>
-        </div>
-        <div style="background:#f3f4f6;border-radius:9999px;height:.5rem;overflow:hidden">
-          <div style="background:#1a2332;height:100%;border-radius:9999px;width:{{ ((cat.nb / nb_actifs) * 100)|int if nb_actifs > 0 else 0 }}%;transition:width .5s"></div>
-        </div>
-        <div style="font-size:.7rem;color:#9ca3af;margin-top:.125rem">{{ cat.libelle }}</div>
-      </div>
-      {% endfor %}
+  <!-- KPIs globaux -->
+  <div class="grid grid-cols-4 gap-5 mb-8">
+    <div class="bg-gradient-to-br from-purple-700 to-purple-900 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-2">🏢</div>
+      <div class="text-3xl font-black">{{ nb_tenants }}</div>
+      <div class="text-sm opacity-80">Entreprises</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_suspendus }} suspendue(s)</div>
     </div>
-    {% else %}
-    <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">Aucune donnée</div>
-    {% endif %}
-
-    <!-- Accès rapides -->
-    <div style="border-top:1px solid #f3f4f6;margin-top:1.5rem;padding-top:1rem">
-      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Accès rapides</div>
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        <a href="/salaries/nouveau" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#f9fafb;border-radius:.75rem;font-size:.875rem;font-weight:600;text-decoration:none;color:#374151">👤 Nouveau salarié</a>
-        <a href="/bulletins/saisie" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#f9fafb;border-radius:.75rem;font-size:.875rem;font-weight:600;text-decoration:none;color:#374151">📄 Saisir un bulletin</a>
-        {% if periode %}
-        <a href="/bulletins/export/{{ periode.id }}" style="display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;background:#f9fafb;border-radius:.75rem;font-size:.875rem;font-weight:600;text-decoration:none;color:#374151">📥 Export Excel</a>
-        {% endif %}
-      </div>
+    <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-2">✅</div>
+      <div class="text-3xl font-black">{{ nb_actifs }}</div>
+      <div class="text-sm opacity-80">Actives</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_essai }} en essai</div>
+    </div>
+    <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-2">👷</div>
+      <div class="text-3xl font-black">{{ total_sal }}</div>
+      <div class="text-sm opacity-80">Salariés total</div>
+      <div class="text-xs opacity-60 mt-1">{{ total_bul }} bulletins</div>
+    </div>
+    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-2">💰</div>
+      <div class="text-2xl font-black">{{ revenus|int|fcfa }}</div>
+      <div class="text-sm opacity-80">Revenus/mois</div>
+      <div class="text-xs opacity-60 mt-1">clients ACTIFS uniquement</div>
     </div>
   </div>
-</div>
 
-<!-- LIGNE 3 : Top salaires + Derniers bulletins -->
-<div style="display:grid;grid-template-columns:1fr 2fr;gap:1.5rem">
-
-  <!-- Top 5 salaires -->
-  <div class="card p-6">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
-      Top 5 nets à payer
-      {% if periode %}<span style="font-weight:400;text-transform:none;color:#9ca3af"> — {{ periode.libelle_mois }}</span>{% endif %}
-    </h2>
-    {% if top_salaries %}
-    <div style="display:flex;flex-direction:column;gap:.5rem">
-      {% for b in top_salaries %}
-      <div style="display:flex;align-items:center;gap:.75rem;padding:.5rem;border-radius:.75rem;background:#f9fafb">
-        <div style="width:1.5rem;height:1.5rem;border-radius:50%;background:{% if loop.index==1 %}#f59e0b{% elif loop.index==2 %}#9ca3af{% elif loop.index==3 %}#d97706{% else %}#e5e7eb{% endif %};color:{% if loop.index<=3 %}white{% else %}#6b7280{% endif %};display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:900;flex-shrink:0">
-          {{ loop.index }}
-        </div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:.8rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ b.salarie.nom }} {{ b.salarie.prenom }}</div>
-          <div style="font-size:.7rem;color:#9ca3af">{{ b.salarie.emploi or '—' }}</div>
-        </div>
-        <div style="font-size:.8rem;font-weight:900;color:#1a2332;flex-shrink:0">{{ b.net_a_payer|fcfa }}</div>
-      </div>
-      {% endfor %}
-    </div>
-    {% else %}
-    <div style="text-align:center;padding:1.5rem;color:#9ca3af;font-size:.875rem">Aucun bulletin ce mois</div>
-    {% endif %}
-  </div>
-
-  <!-- Derniers bulletins -->
-  <div class="card overflow-hidden">
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Derniers bulletins</h2>
-      <a href="/bulletins" style="font-size:.75rem;color:#1a2332;font-weight:700;text-decoration:none">Voir tout →</a>
-    </div>
-    {% if derniers %}
-    {% for b in derniers %}
-    <a href="/bulletins/{{ b.id }}" style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-bottom:1px solid #f9fafb;text-decoration:none;color:inherit">
-      <div style="display:flex;align-items:center;gap:.75rem">
-        <div style="width:2.25rem;height:2.25rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
-          {{ b.salarie.nom[0] }}{{ b.salarie.prenom[0] }}
-        </div>
-        <div>
-          <div style="font-size:.875rem;font-weight:700">{{ b.salarie.nom_complet }}</div>
-          <div style="font-size:.75rem;color:#9ca3af">{{ b.periode.libelle_complet }}</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:.875rem;font-weight:900">{{ b.net_a_payer|fcfa }}</div>
-        <span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span>
-      </div>
+  <!-- Accès rapides -->
+  <div class="grid grid-cols-4 gap-4 mb-8">
+    {% for icon, label, href, color in [
+      ('🏢', 'Toutes les entreprises', '/admin/tenants', '#7c3aed'),
+      ('📊', 'Import Excel', '/admin/import', '#0369a1'),
+      ('📋', 'Plans & tarifs', '/admin/plans', '#047857'),
+      ('⚙️', 'Rubriques légales', '/admin/rubriques', '#92400e'),
+    ] %}
+    <a href="{{ href }}"
+       style="background:{{ color }};color:white;border-radius:1rem;padding:1rem;display:flex;align-items:center;gap:.75rem;text-decoration:none;font-weight:700;font-size:.875rem;transition:opacity .2s"
+       onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <span style="font-size:1.5rem">{{ icon }}</span>
+      <span>{{ label }}</span>
     </a>
     {% endfor %}
-    {% else %}
-    <div style="text-align:center;padding:3rem;color:#9ca3af">
-      <div style="font-size:3rem;margin-bottom:.5rem">📭</div>
-      <p style="font-size:.875rem">Aucun bulletin saisi</p>
-      <a href="/bulletins/saisie" class="btn-primary" style="display:inline-block;margin-top:.75rem">Créer le premier</a>
+  </div>
+
+  <!-- Liste entreprises -->
+  <div class="card overflow-hidden">
+    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+      <div>
+        <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
+        <p class="text-xs text-gray-400 mt-0.5">10 sur {{ nb_tenants }} — <a href="/admin/tenants" class="text-purple-600 font-bold">voir toutes →</a></p>
+      </div>
+      <a href="/admin/tenants" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">
+        Voir toutes ({{ nb_tenants }}) →
+      </a>
+    </div>
+
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <th class="px-4 py-3 text-left">Entreprise</th>
+          <th class="px-4 py-3 text-left">Plan</th>
+          <th class="px-4 py-3 text-center">Salariés</th>
+          <th class="px-4 py-3 text-center">Bulletins</th>
+          <th class="px-4 py-3 text-center">Statut</th>
+          <th class="px-4 py-3 text-center">Inscription</th>
+          <th class="px-4 py-3 text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tenants[:10] %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="font-bold">{{ t.denomination }}</div>
+            <div class="text-xs text-gray-400">{{ t.activite or '—' }} · {{ t.ville or '' }}</div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+              {{ t.plan.nom if t.plan else '—' }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
+          <td class="px-4 py-3 text-center text-gray-500 text-xs">—</td>
+          <td class="px-4 py-3 text-center">
+            {% set sc = {
+              'ACTIF':               'bg-emerald-100 text-emerald-700',
+              'ESSAI':               'bg-amber-100 text-amber-700',
+              'SUSPENDU':            'bg-red-100 text-red-600',
+              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-700',
+              'ANNULATION_DEMANDEE': 'bg-orange-100 text-orange-700',
+            } %}
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(t.statut, 'bg-gray-100 text-gray-500') }}">
+              {{ t.statut.replace('_',' ') }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center text-gray-400 text-xs">
+            {{ t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—' }}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <a href="/admin/tenants/{{ t.id }}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
+            <a href="/admin/tenants/{{ t.id }}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-10 text-gray-400 text-sm">
+            Aucune entreprise enregistrée
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% if nb_tenants > 10 %}
+    <div class="p-4 border-t border-gray-100 text-center">
+      <a href="/admin/tenants" class="text-purple-600 font-bold text-sm hover:underline">
+        Voir les {{ nb_tenants - 10 }} autres entreprises →
+      </a>
     </div>
     {% endif %}
   </div>
-</div>
 
-{% endblock %}
+</main>
+</body>
+</html>
