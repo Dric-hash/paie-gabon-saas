@@ -12,6 +12,11 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
+try:
+    from flask_wtf.csrf import CSRFProtect
+    USE_CSRF = True
+except ImportError:
+    USE_CSRF = False
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
@@ -29,6 +34,10 @@ app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@pai
 # Désactiver mail si non configuré pour éviter le crash au démarrage
 app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
 mail = Mail(app)
+
+# Protection CSRF globale
+if USE_CSRF:
+    csrf = CSRFProtect(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -381,24 +390,29 @@ def admin_tenant_supprimer(id):
     t = Tenant.query.get_or_404(id)
     nom = t.denomination
     try:
-        for s in Salarie.query.filter_by(tenant_id=id).all():
-            BulletinPaie.query.filter_by(salarie_id=s.id).delete()
-            Contrat.query.filter_by(salarie_id=s.id).delete()
-            Pointage.query.filter_by(salarie_id=s.id).delete()
-            Acompte.query.filter_by(salarie_id=s.id).delete()
-            Conge.query.filter_by(salarie_id=s.id).delete()
-        Salarie.query.filter_by(tenant_id=id).delete()
-        PeriodePaie.query.filter_by(tenant_id=id).delete()
-        CategorieEmploi.query.filter_by(tenant_id=id).delete()
-        Utilisateur.query.filter_by(tenant_id=id).delete()
-        Journalier.query.filter_by(tenant_id=id).delete()
-        Acompte.query.filter_by(tenant_id=id).delete()
-        Conge.query.filter_by(tenant_id=id).delete()
-        db.session.delete(t); db.session.commit()
-        flash(f"Entreprise {nom} supprimée.", "success")
+        # Suppression ordonnée pour respecter les FK
+        sal_ids = [s.id for s in Salarie.query.filter_by(tenant_id=id).all()]
+        jour_ids = [j.id for j in Journalier.query.filter_by(tenant_id=id).all()]
+        if sal_ids:
+            BulletinPaie.query.filter(BulletinPaie.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
+            Contrat.query.filter(Contrat.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
+            Pointage.query.filter(Pointage.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
+            Acompte.query.filter(Acompte.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
+            Conge.query.filter(Conge.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
+        if jour_ids:
+            Pointage.query.filter(Pointage.journalier_id.in_(jour_ids)).delete(synchronize_session=False)
+            FeuillePaieJournalier.query.filter(FeuillePaieJournalier.journalier_id.in_(jour_ids)).delete(synchronize_session=False)
+        Salarie.query.filter_by(tenant_id=id).delete(synchronize_session=False)
+        Journalier.query.filter_by(tenant_id=id).delete(synchronize_session=False)
+        PeriodePaie.query.filter_by(tenant_id=id).delete(synchronize_session=False)
+        CategorieEmploi.query.filter_by(tenant_id=id).delete(synchronize_session=False)
+        Utilisateur.query.filter_by(tenant_id=id).delete(synchronize_session=False)
+        db.session.delete(t)
+        db.session.commit()
+        flash(f"Entreprise {nom} supprimée définitivement.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Erreur: {str(e)}", "error")
+        flash(f"Erreur suppression: {str(e)}", "error")
     return redirect(url_for("admin_tenants"))
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -439,7 +453,7 @@ def dashboard():
     top_salaries = []
     if periode:
         top_salaries = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
-    from sqlalchemy import func
+    from sqlalchemy import or_, func
     cats_stats = db.session.query(CategorieEmploi.code, CategorieEmploi.libelle, func.count(Salarie.id).label("nb"))\
         .join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
         .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
@@ -464,7 +478,7 @@ def salaries():
     if not t: return redirect(url_for("login"))
     q=request.args.get("q",""); statut=request.args.get("statut","")
     query=Salarie.query.filter_by(tenant_id=t.id)
-    if q: query=query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
+    if q: query=query.filter(or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
     if statut: query=query.filter_by(statut=statut)
     return render_template("tenant/salaries.html", salaries=query.order_by(Salarie.nom).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(), q=q, statut=statut, tenant=t)
@@ -831,7 +845,14 @@ def parametres_logo():
     if logo_file and logo_file.filename:
         import base64
         file_data = logo_file.read()
+        # Limite 500 Ko
+        if len(file_data) > 500 * 1024:
+            flash("Logo trop lourd. Maximum 500 Ko.", "error")
+            return redirect(url_for("parametres"))
         ext = logo_file.filename.rsplit(".", 1)[-1].lower()
+        if ext not in ("png","jpg","jpeg","svg","webp"):
+            flash("Format non accepté. Utilisez PNG, JPG ou SVG.", "error")
+            return redirect(url_for("parametres"))
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
         t.logo_url = f"data:{mime};base64,{b64}"
@@ -922,7 +943,7 @@ def journaliers():
     if not t: return redirect(url_for("login"))
     q = request.args.get("q","")
     query = Journalier.query.filter_by(tenant_id=t.id)
-    if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"),Journalier.prenom.ilike(f"%{q}%"),Journalier.profession.ilike(f"%{q}%")))
+    if q: query = query.filter(or_(Journalier.nom.ilike(f"%{q}%"),Journalier.prenom.ilike(f"%{q}%"),Journalier.profession.ilike(f"%{q}%")))
     return render_template("tenant/journaliers.html", tenant=t, journaliers=query.order_by(Journalier.nom).all(), q=q)
 
 @app.route("/journaliers/nouveau", methods=["GET","POST"])
@@ -1396,6 +1417,11 @@ def inject_globals(): return {"now":datetime.now(),"enumerate":enumerate}
 @app.errorhandler(403)
 def forbidden(e): return render_template("auth/403.html"),403
 
+@app.errorhandler(500)
+def server_error(e):
+    db.session.rollback()
+    return render_template("auth/403.html"), 500  # réutilise la page erreur
+
 # ── Init DB ───────────────────────────────────────────────────────────────────
 def init_db():
     db.create_all()
@@ -1415,7 +1441,7 @@ def init_db():
         ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
     if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
         sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
-        sa.set_password("Admin2026!"); db.session.add(sa)
+        sa.set_password(os.environ.get("SUPER_ADMIN_PASSWORD","Admin2026!")); db.session.add(sa)
     if not Tenant.query.first():
         db.session.flush()
         plan=Plan.query.filter_by(code="PRO").first()
@@ -1427,7 +1453,7 @@ def init_db():
         for code,lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
             db.session.add(CategorieEmploi(tenant_id=t.id,code=code,libelle=lib))
         u=Utilisateur(nom="DEMO",prenom="Responsable",email="demo@paiegalon.ga",role="TENANT_ADMIN",tenant_id=t.id,actif=True)
-        u.set_password("Demo2026!"); db.session.add(u)
+        u.set_password(os.environ.get("DEMO_PASSWORD","Demo2026!")); db.session.add(u)
     db.session.commit()
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
 
