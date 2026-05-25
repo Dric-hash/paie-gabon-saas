@@ -35,9 +35,12 @@ app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@pai
 app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
 mail = Mail(app)
 
-# Protection CSRF globale
-if USE_CSRF:
-    csrf = CSRFProtect(app)
+# Protection CSRF globale — désactivé en attendant les templates
+# Pour activer : ajouter {{ csrf_token() }} dans chaque formulaire HTML
+# puis passer USE_CSRF = True
+USE_CSRF = False
+# if USE_CSRF:
+#     csrf = CSRFProtect(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
