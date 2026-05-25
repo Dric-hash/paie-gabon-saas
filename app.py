@@ -5,18 +5,13 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, date, timedelta
 from functools import wraps
-import io, os, secrets as sec
+import io, os, secrets as sec, threading
 
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
-try:
-    from flask_wtf.csrf import CSRFProtect
-    USE_CSRF = True
-except ImportError:
-    USE_CSRF = False
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
@@ -31,16 +26,8 @@ app.config["MAIL_USE_TLS"]  = True
 app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
 app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
-# Désactiver mail si non configuré pour éviter le crash au démarrage
 app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
 mail = Mail(app)
-
-# Protection CSRF globale — désactivé en attendant les templates
-# Pour activer : ajouter {{ csrf_token() }} dans chaque formulaire HTML
-# puis passer USE_CSRF = True
-USE_CSRF = False
-# if USE_CSRF:
-#     csrf = CSRFProtect(app)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -52,12 +39,7 @@ def load_user(uid): return Utilisateur.query.get(int(uid))
 def super_admin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if not current_user.is_authenticated:
-            flash("Connectez-vous avec un compte super-administrateur.", "error")
-            return redirect(url_for("login"))
-        if not current_user.is_super_admin:
-            flash(f"Accès refusé : le rôle « {current_user.role} » n'a pas accès à l'administration plateforme.", "error")
-            abort(403)
+        if not current_user.is_authenticated or not current_user.is_super_admin: abort(403)
         return f(*a,**k)
     return d
 
@@ -103,85 +85,18 @@ def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
 
-def _super_admin_emails_from_env():
-    """Emails à promouvoir en SUPER_ADMIN (SUPER_ADMIN_EMAIL ou SUPER_ADMIN_EMAILS)."""
-    raw = os.environ.get("SUPER_ADMIN_EMAIL") or os.environ.get("SUPER_ADMIN_EMAILS") or ""
-    return [e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()]
-
-def _default_super_admin_email():
-    return (
-        os.environ.get("SUPER_ADMIN_DEFAULT_EMAIL", "superadmin@paiegalon.com")
-        .strip()
-        .lower()
-    )
-
-def _find_user_by_email(email):
-    """Recherche insensible à la casse (emails historiques en base mixtes)."""
-    email = (email or "").strip().lower()
-    if not email:
-        return None
-    return Utilisateur.query.filter(
-        db.func.lower(Utilisateur.email) == email
-    ).first()
-
-def _promote_to_super_admin(user, reset_password=False):
-    """Force le rôle SUPER_ADMIN sur un compte existant."""
-    changed = False
-    if user.role != "SUPER_ADMIN":
-        user.role = "SUPER_ADMIN"
-        changed = True
-    if user.tenant_id is not None:
-        user.tenant_id = None
-        changed = True
-    if not user.actif:
-        user.actif = True
-        changed = True
-    if reset_password and os.environ.get("SUPER_ADMIN_PASSWORD"):
-        user.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
-        changed = True
-    return changed
-
-def ensure_super_admin_accounts():
-    """
-    À chaque démarrage : garantir que les emails configurés (dont le compte
-    par défaut) ont bien le rôle SUPER_ADMIN, même si un autre super-admin
-    existe déjà en base.
-    """
-    changed = False
-    emails = set(_super_admin_emails_from_env())
-    emails.add(_default_super_admin_email())
-
-    for email in emails:
-        user = _find_user_by_email(email)
-        if user:
-            if _promote_to_super_admin(user, reset_password=bool(os.environ.get("SUPER_ADMIN_PASSWORD"))):
-                changed = True
-            if user.email != email:
-                user.email = email
-                changed = True
-
-    if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        default_email = _default_super_admin_email()
-        existing = _find_user_by_email(default_email)
-        if existing:
-            if _promote_to_super_admin(existing, reset_password=bool(os.environ.get("SUPER_ADMIN_PASSWORD"))):
-                changed = True
-        else:
-            sa = Utilisateur(
-                nom="ADMIN",
-                prenom="Super",
-                email=default_email,
-                role="SUPER_ADMIN",
-                tenant_id=None,
-                actif=True,
-            )
-            sa.set_password(os.environ.get("SUPER_ADMIN_PASSWORD", "Admin2026!"))
-            db.session.add(sa)
-            changed = True
-
-    if changed:
-        db.session.commit()
-        print("✅ Comptes super-admin synchronisés.")
+# ── Envoi email asynchrone (ne bloque pas le serveur) ─────────────────────────
+def send_email_async(msg):
+    """Envoie un email dans un thread séparé pour ne pas bloquer Gunicorn."""
+    def run(app_context, message):
+        with app_context:
+            try:
+                mail.send(message)
+            except Exception as e:
+                print(f"[EMAIL ERROR] {e}")
+    t = threading.Thread(target=run, args=(app.app_context(), msg))
+    t.daemon = True
+    t.start()
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -196,9 +111,7 @@ def login():
     if request.method == "POST":
         email = request.form.get("email","").strip().lower()
         pw    = request.form.get("password","")
-        user  = _find_user_by_email(email)
-        if user and not user.actif:
-            user = None
+        user  = Utilisateur.query.filter_by(email=email, actif=True).first()
         if user and user.check_password(pw):
             login_user(user)
             user.derniere_connexion = datetime.utcnow()
@@ -480,29 +393,24 @@ def admin_tenant_supprimer(id):
     t = Tenant.query.get_or_404(id)
     nom = t.denomination
     try:
-        # Suppression ordonnée pour respecter les FK
-        sal_ids = [s.id for s in Salarie.query.filter_by(tenant_id=id).all()]
-        jour_ids = [j.id for j in Journalier.query.filter_by(tenant_id=id).all()]
-        if sal_ids:
-            BulletinPaie.query.filter(BulletinPaie.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
-            Contrat.query.filter(Contrat.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
-            Pointage.query.filter(Pointage.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
-            Acompte.query.filter(Acompte.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
-            Conge.query.filter(Conge.salarie_id.in_(sal_ids)).delete(synchronize_session=False)
-        if jour_ids:
-            Pointage.query.filter(Pointage.journalier_id.in_(jour_ids)).delete(synchronize_session=False)
-            FeuillePaieJournalier.query.filter(FeuillePaieJournalier.journalier_id.in_(jour_ids)).delete(synchronize_session=False)
-        Salarie.query.filter_by(tenant_id=id).delete(synchronize_session=False)
-        Journalier.query.filter_by(tenant_id=id).delete(synchronize_session=False)
-        PeriodePaie.query.filter_by(tenant_id=id).delete(synchronize_session=False)
-        CategorieEmploi.query.filter_by(tenant_id=id).delete(synchronize_session=False)
-        Utilisateur.query.filter_by(tenant_id=id).delete(synchronize_session=False)
-        db.session.delete(t)
-        db.session.commit()
-        flash(f"Entreprise {nom} supprimée définitivement.", "success")
+        for s in Salarie.query.filter_by(tenant_id=id).all():
+            BulletinPaie.query.filter_by(salarie_id=s.id).delete()
+            Contrat.query.filter_by(salarie_id=s.id).delete()
+            Pointage.query.filter_by(salarie_id=s.id).delete()
+            Acompte.query.filter_by(salarie_id=s.id).delete()
+            Conge.query.filter_by(salarie_id=s.id).delete()
+        Salarie.query.filter_by(tenant_id=id).delete()
+        PeriodePaie.query.filter_by(tenant_id=id).delete()
+        CategorieEmploi.query.filter_by(tenant_id=id).delete()
+        Utilisateur.query.filter_by(tenant_id=id).delete()
+        Journalier.query.filter_by(tenant_id=id).delete()
+        Acompte.query.filter_by(tenant_id=id).delete()
+        Conge.query.filter_by(tenant_id=id).delete()
+        db.session.delete(t); db.session.commit()
+        flash(f"Entreprise {nom} supprimée.", "success")
     except Exception as e:
         db.session.rollback()
-        flash(f"Erreur suppression: {str(e)}", "error")
+        flash(f"Erreur: {str(e)}", "error")
     return redirect(url_for("admin_tenants"))
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
@@ -543,7 +451,7 @@ def dashboard():
     top_salaries = []
     if periode:
         top_salaries = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
-    from sqlalchemy import or_, func
+    from sqlalchemy import func
     cats_stats = db.session.query(CategorieEmploi.code, CategorieEmploi.libelle, func.count(Salarie.id).label("nb"))\
         .join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
         .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
@@ -568,7 +476,7 @@ def salaries():
     if not t: return redirect(url_for("login"))
     q=request.args.get("q",""); statut=request.args.get("statut","")
     query=Salarie.query.filter_by(tenant_id=t.id)
-    if q: query=query.filter(or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
+    if q: query=query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
     if statut: query=query.filter_by(statut=statut)
     return render_template("tenant/salaries.html", salaries=query.order_by(Salarie.nom).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(), q=q, statut=statut, tenant=t)
@@ -689,13 +597,11 @@ def bulletin_saisie():
         sid=int(request.form["salarie_id"]); pid=int(request.form["periode_id"])
         s=Salarie.query.filter_by(id=sid,tenant_id=t.id).first_or_404()
         periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
-        # Auto-déduire les acomptes EN_ATTENTE du salarié pour ce mois
         acomptes_en_attente = Acompte.query.filter_by(
             tenant_id=t.id, salarie_id=sid,
             mois=periode.mois, annee=periode.annee, statut="EN_ATTENTE").all()
         total_acomptes = sum(float(a.montant) for a in acomptes_en_attente)
         donnees={k:float(v) if v else 0 for k,v in request.form.items() if k not in("salarie_id","periode_id","csrf_token","action","nb_jours_travailles")}
-        # Injecter le total des acomptes
         if total_acomptes > 0:
             donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
         res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
@@ -708,9 +614,7 @@ def bulletin_saisie():
         action=request.form.get("action","brouillon")
         if action=="valider":
             b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
-            # Marquer les acomptes comme DÉDUITS
-            for a in acomptes_en_attente:
-                a.statut = "DEDUIT"
+            for a in acomptes_en_attente: a.statut = "DEDUIT"
         else:
             b.statut="BROUILLON"
         db.session.commit()
@@ -746,15 +650,11 @@ def bulletin_valider(id):
     if b.statut == "VALIDÉ":
         flash("Ce bulletin est déjà validé.", "info")
         return redirect(url_for("bulletin_detail", id=id))
-    # Marquer aussi les acomptes EN_ATTENTE comme DÉDUITS
     acomptes = Acompte.query.filter_by(
         tenant_id=t.id, salarie_id=b.salarie_id,
-        mois=b.periode.mois, annee=b.periode.annee,
-        statut="EN_ATTENTE").all()
-    for a in acomptes:
-        a.statut = "DEDUIT"
-    b.statut = "VALIDÉ"
-    b.date_validation = datetime.utcnow()
+        mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
+    for a in acomptes: a.statut = "DEDUIT"
+    b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
     db.session.commit()
     flash("Bulletin validé avec succès.", "success")
     return redirect(url_for("bulletin_detail", id=id))
@@ -766,8 +666,7 @@ def bulletin_paye(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    b.statut = "PAYÉ"
-    db.session.commit()
+    b.statut = "PAYÉ"; db.session.commit()
     flash("Bulletin marqué comme payé.", "success")
     return redirect(url_for("bulletin_detail", id=id))
 
@@ -802,6 +701,7 @@ def bulletin_imprimer(id):
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     return render_template("tenant/bulletin_print.html", bulletin=b, tenant=t)
 
+# ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
 @app.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
 @login_required
 def bulletin_envoyer_email(id):
@@ -810,30 +710,32 @@ def bulletin_envoyer_email(id):
     if not t: return redirect(url_for("login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     s = b.salarie
-    if not s.email:
-        flash(f"{s.nom_complet} n a pas d adresse email.", "error")
+    dest_email = request.form.get("email_dest", "").strip()
+    if not dest_email and s.email:
+        dest_email = s.email
+    if not dest_email:
+        flash(f"{s.nom_complet} n'a pas d'adresse email. Renseignez-en une dans le formulaire.", "error")
         return redirect(url_for("bulletin_detail", id=id))
-    dest_email = request.form.get("email_dest", s.email).strip()
-    # Vérifier que l'email est configuré
     if not os.environ.get("MAIL_USERNAME"):
-        flash("Email non configuré. Ajoutez MAIL_USERNAME et MAIL_PASSWORD dans les variables Railway.", "error")
+        flash("Email non configuré sur le serveur (MAIL_USERNAME manquant).", "error")
         return redirect(url_for("bulletin_detail", id=id))
     try:
         corps = (f"Bonjour {s.prenom},\n\n"
                  f"Veuillez trouver votre bulletin de paie pour : {b.periode.libelle_complet}\n\n"
-                 f"Salaire brut    : {int(b.salaire_brut or 0):,} FCFA\n"
-                 f"Net a payer     : {int(b.net_a_payer or 0):,} FCFA\n\n"
-                 f"Cordialement,\n{t.denomination}").replace(",", " ")
+                 f"Salaire brut : {int(b.salaire_brut or 0)} FCFA\n"
+                 f"Net a payer  : {int(b.net_a_payer or 0)} FCFA\n\n"
+                 f"Cordialement,\n{t.denomination}")
         msg = Message(
             subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
             recipients=[dest_email],
             body=corps,
             sender=app.config["MAIL_DEFAULT_SENDER"]
         )
-        mail.send(msg)
-        flash(f"Bulletin envoyé avec succes a {dest_email}.", "success")
+        # ✅ Envoi dans un thread séparé → le serveur répond immédiatement
+        send_email_async(msg)
+        flash(f"Email en cours d'envoi à {dest_email}.", "success")
     except Exception as e:
-        flash(f"Erreur envoi: {str(e)}", "error")
+        flash(f"Erreur préparation email: {str(e)}", "error")
     return redirect(url_for("bulletin_detail", id=id))
 
 @app.route("/bulletins/envoyer-tous", methods=["POST"])
@@ -845,16 +747,22 @@ def bulletins_envoyer_tous():
     periode_id = request.form.get("periode_id", type=int)
     if not periode_id: flash("Période manquante.", "error"); return redirect(url_for("bulletins"))
     buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode_id).all()
-    nb_ok=0; nb_err=0
+    nb_ok=0; nb_sans_email=0
     for b in buls:
-        if not b.salarie.email: continue
+        if not b.salarie.email: nb_sans_email+=1; continue
         try:
-            corps = f"Bonjour {b.salarie.prenom},\nBulletin {b.periode.libelle_complet}\nNet: {int(b.net_a_payer or 0):,} FCFA\n{t.denomination}".replace(",", " ")
+            corps = (f"Bonjour {b.salarie.prenom},\n\n"
+                     f"Bulletin {b.periode.libelle_complet}\n"
+                     f"Net a payer : {int(b.net_a_payer or 0)} FCFA\n\n"
+                     f"Cordialement, {t.denomination}")
             msg = Message(subject=f"Bulletin {b.periode.libelle_complet}",
-                recipients=[b.salarie.email], body=corps, sender=app.config["MAIL_DEFAULT_SENDER"])
-            mail.send(msg); nb_ok+=1
-        except: nb_err+=1
-    flash(f"{nb_ok} envoyé(s). {nb_err} échec(s).", "success" if nb_ok > 0 else "error")
+                recipients=[b.salarie.email], body=corps,
+                sender=app.config["MAIL_DEFAULT_SENDER"])
+            send_email_async(msg)
+            nb_ok+=1
+        except Exception as e:
+            print(f"Erreur email {b.salarie.email}: {e}")
+    flash(f"{nb_ok} email(s) en cours d'envoi. {nb_sans_email} salarié(s) sans email.", "success")
     return redirect(url_for("bulletins"))
 
 # ── Périodes ──────────────────────────────────────────────────────────────────
@@ -935,19 +843,11 @@ def parametres_logo():
     if logo_file and logo_file.filename:
         import base64
         file_data = logo_file.read()
-        # Limite 500 Ko
-        if len(file_data) > 500 * 1024:
-            flash("Logo trop lourd. Maximum 500 Ko.", "error")
-            return redirect(url_for("parametres"))
         ext = logo_file.filename.rsplit(".", 1)[-1].lower()
-        if ext not in ("png","jpg","jpeg","svg","webp"):
-            flash("Format non accepté. Utilisez PNG, JPG ou SVG.", "error")
-            return redirect(url_for("parametres"))
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
         t.logo_url = f"data:{mime};base64,{b64}"
-        db.session.commit()
-        flash("Logo mis a jour.", "success")
+        db.session.commit(); flash("Logo mis a jour.", "success")
     else:
         flash("Aucun fichier.", "error")
     return redirect(url_for("parametres"))
@@ -957,8 +857,7 @@ def parametres_logo():
 def parametres_logo_supprimer():
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    t.logo_url = None
-    db.session.commit()
+    t.logo_url = None; db.session.commit()
     flash("Logo supprime.", "success")
     return redirect(url_for("parametres"))
 
@@ -983,7 +882,7 @@ def annuler_abonnement():
     t.statut = "ANNULATION_DEMANDEE"
     t.notes = f"Annulation demandée le {datetime.now().strftime('%d/%m/%Y')}. Motif: {motif}"
     db.session.commit()
-    flash("Demande d annulation enregistrée. L équipe PaieGabon vous contactera sous 48h.", "success")
+    flash("Demande d annulation enregistrée. L equipe PaieGabon vous contactera sous 48h.", "success")
     return redirect(url_for("parametres"))
 
 # ── Utilisateurs ──────────────────────────────────────────────────────────────
@@ -1033,7 +932,7 @@ def journaliers():
     if not t: return redirect(url_for("login"))
     q = request.args.get("q","")
     query = Journalier.query.filter_by(tenant_id=t.id)
-    if q: query = query.filter(or_(Journalier.nom.ilike(f"%{q}%"),Journalier.prenom.ilike(f"%{q}%"),Journalier.profession.ilike(f"%{q}%")))
+    if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"),Journalier.prenom.ilike(f"%{q}%"),Journalier.profession.ilike(f"%{q}%")))
     return render_template("tenant/journaliers.html", tenant=t, journaliers=query.order_by(Journalier.nom).all(), q=q)
 
 @app.route("/journaliers/nouveau", methods=["GET","POST"])
@@ -1373,7 +1272,7 @@ def conge_refuser(id):
     if not t: return redirect(url_for("login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     c.statut="REFUSÉ"; db.session.commit()
-    flash(f"Congé refusé.", "success")
+    flash("Congé refusé.", "success")
     return redirect(url_for("conges"))
 
 @app.route("/conges/<int:id>/supprimer", methods=["POST"])
@@ -1428,12 +1327,12 @@ def api_calculer():
         if sid and t:
             s = Salarie.query.filter_by(id=sid, tenant_id=t.id).first()
             if s: nb_parts = float(s.nombre_parts or 1)
-        # Récupérer les acomptes EN_ATTENTE pour ce salarié (calcul temps réel)
         mois  = data.pop("mois_periode", None)
         annee = data.pop("annee_periode", None)
         total_acomptes = 0.0
         if sid and t and mois and annee:
-            total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))                .filter_by(tenant_id=t.id, salarie_id=int(sid), mois=int(mois),
+            total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))
+                .filter_by(tenant_id=t.id, salarie_id=int(sid), mois=int(mois),
                            annee=int(annee), statut="EN_ATTENTE").scalar() or 0)
         if total_acomptes > 0:
             data["acompte"] = max(float(data.get("acompte", 0)), total_acomptes)
@@ -1507,11 +1406,6 @@ def inject_globals(): return {"now":datetime.now(),"enumerate":enumerate}
 @app.errorhandler(403)
 def forbidden(e): return render_template("auth/403.html"),403
 
-@app.errorhandler(500)
-def server_error(e):
-    db.session.rollback()
-    return render_template("auth/403.html"), 500  # réutilise la page erreur
-
 # ── Init DB ───────────────────────────────────────────────────────────────────
 def init_db():
     db.create_all()
@@ -1529,7 +1423,9 @@ def init_db():
             ("FNH","Fonds National Habitat","COTISATION",None,0.03,1500000),
             ("CFP","Contribution Formation Professionnelle","COTISATION",None,0.005,None),
         ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
-    ensure_super_admin_accounts()
+    if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
+        sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
+        sa.set_password("Admin2026!"); db.session.add(sa)
     if not Tenant.query.first():
         db.session.flush()
         plan=Plan.query.filter_by(code="PRO").first()
@@ -1541,50 +1437,33 @@ def init_db():
         for code,lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
             db.session.add(CategorieEmploi(tenant_id=t.id,code=code,libelle=lib))
         u=Utilisateur(nom="DEMO",prenom="Responsable",email="demo@paiegalon.ga",role="TENANT_ADMIN",tenant_id=t.id,actif=True)
-        u.set_password(os.environ.get("DEMO_PASSWORD","Demo2026!")); db.session.add(u)
+        u.set_password("Demo2026!"); db.session.add(u)
     db.session.commit()
-    sa = Utilisateur.query.filter_by(role="SUPER_ADMIN").first()
-    sa_line = f"  Super-admin: {sa.email}\n" if sa else ""
-    extra = ""
-    if _super_admin_emails_from_env():
-        extra = f"  SUPER_ADMIN_EMAIL configuré: {', '.join(_super_admin_emails_from_env())}\n"
-    print(f"Base initialisée.\n{sa_line}{extra}  Compte démo: demo@paiegalon.ga / Demo2026!")
-
-def _run_startup_migrations():
-    """Migrations légères (colonnes manquantes). Ne doit pas bloquer le bootstrap admin."""
-    for col in ["heures_sup_10", "heures_sup_30", "heures_sup_40", "heures_sup_70"]:
-        try:
-            db.session.execute(db.text(
-                f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"
-            ))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
-    for stmt in (
-        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)",
-        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
-    ):
-        try:
-            db.session.execute(db.text(stmt))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+    print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
 
 with app.app_context():
     try:
         db.create_all()
-        _run_startup_migrations()
+        # Migrations colonnes manquantes
+        for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
+            try:
+                db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
+                db.session.commit()
+            except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
         init_db()
         print("✅ Tables créées et base initialisée.")
     except Exception as e:
         print(f"Erreur init: {e}")
-        try:
-            db.session.rollback()
-            db.create_all()
-            ensure_super_admin_accounts()
-            print("⚠️ Init partielle : super-admin synchronisé malgré l'erreur.")
-        except Exception as e2:
-            print(f"Erreur create_all: {e2}")
+        try: db.session.rollback(); db.create_all()
+        except Exception as e2: print(f"Erreur create_all: {e2}")
 
 if __name__=="__main__":
     with app.app_context(): init_db()
