@@ -6,113 +6,93 @@
   <title>Dashboard — {{ tenant.denomination }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <style>
-    body { font-family:'Segoe UI',system-ui,sans-serif; }
-    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-  </style>
+  <style>body{font-family:'Segoe UI',system-ui,sans-serif;}.card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06);}</style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
-<!-- ── Topbar tenant ── -->
-<nav class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
-  <div class="flex items-center gap-4">
-    {% if tenant.logo_url %}
-      <img src="{{ tenant.logo_url }}" alt="Logo" class="h-8 w-auto rounded">
-    {% endif %}
-    <span class="text-lg font-black">{{ tenant.denomination }}</span>
+<nav class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+  <div class="flex items-center gap-3">
+    {% if tenant.logo_url %}<img src="{{ tenant.logo_url }}" alt="Logo" class="h-8 w-auto rounded">{% endif %}
+    <span class="text-base font-black">{{ tenant.denomination }}</span>
     <span class="bg-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ tenant.statut }}</span>
   </div>
-  <div class="flex items-center gap-4 text-sm">
-    <a href="/dashboard"    class="font-semibold hover:text-slate-200">Dashboard</a>
-    <a href="/salaries"     class="hover:text-slate-200">Salariés</a>
-    <a href="/bulletins"    class="hover:text-slate-200">Bulletins</a>
-    <a href="/periodes"     class="hover:text-slate-200">Périodes</a>
-    <a href="/pointage"     class="hover:text-slate-200">Pointage</a>
-    <a href="/acomptes"     class="hover:text-slate-200">Acomptes</a>
-    <a href="/conges"       class="hover:text-slate-200">Congés</a>
-    <a href="/journaliers"  class="hover:text-slate-200">Journaliers</a>
-    <a href="/parametres"   class="hover:text-slate-200">⚙️</a>
-    <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">
-      Déconnexion
-    </a>
+  <div class="flex items-center gap-3 text-sm flex-wrap">
+    <a href="/dashboard" class="font-semibold hover:text-slate-200">Dashboard</a>
+    <a href="/salaries" class="hover:text-slate-200">Salariés</a>
+    <a href="/bulletins" class="hover:text-slate-200">Bulletins</a>
+    <a href="/periodes" class="hover:text-slate-200">Périodes</a>
+    <a href="/pointage" class="hover:text-slate-200">Pointage</a>
+    <a href="/acomptes" class="hover:text-slate-200">Acomptes</a>
+    <a href="/conges" class="hover:text-slate-200">Congés</a>
+    <a href="/journaliers" class="hover:text-slate-200">Journaliers</a>
+    <a href="/parametres" class="hover:text-slate-200">⚙️</a>
+    <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
   </div>
 </nav>
 
-<main class="max-w-7xl mx-auto p-6">
+<main class="max-w-7xl mx-auto p-5">
 
-  <!-- Messages flash -->
   {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-  <div class="mb-5 space-y-2">
-    {% for cat, msg in messages %}
-    <div class="px-4 py-3 rounded-xl text-sm font-semibold
-      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
-      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
-      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
-      {{ msg }}
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-  {% endwith %}
+  {% if messages %}<div class="mb-4 space-y-2">{% for cat, msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold
+    {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+    else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+    else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
+  {% endfor %}</div>{% endif %}{% endwith %}
 
-  <!-- Alertes -->
   {% for a in alertes %}
   <div class="mb-3 px-4 py-3 rounded-xl text-sm font-semibold border
-    {{ 'bg-amber-50 text-amber-800 border-amber-200' if a.type=='warning'
-    else 'bg-blue-50 text-blue-800 border-blue-200' }}">
+    {{ 'bg-amber-50 text-amber-800 border-amber-200' if a.type=='warning' else 'bg-blue-50 text-blue-800 border-blue-200' }}">
     {{ a.msg }}
-  </div>
-  {% endfor %}
+  </div>{% endfor %}
 
-  <!-- En-tête -->
-  <div class="flex items-center justify-between mb-6">
+  <div class="flex items-center justify-between mb-5">
     <div>
       <h1 class="text-2xl font-black text-gray-900">Tableau de bord</h1>
-      <p class="text-gray-500 text-sm mt-1">{{ now.strftime('%A %d %B %Y') }} — {{ tenant.denomination }}</p>
+      <p class="text-gray-500 text-sm mt-0.5">{{ now.strftime('%A %d %B %Y') }} — {{ tenant.denomination }}</p>
     </div>
-    <div class="flex gap-3">
-      <a href="/bulletins/saisie" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        + Nouveau bulletin
-      </a>
-      <a href="/salaries/nouveau" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        + Nouveau salarié
-      </a>
+    <div class="flex gap-2">
+      <a href="/bulletins/saisie" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold">+ Nouveau bulletin</a>
+      <a href="/salaries/nouveau" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold">+ Nouveau salarié</a>
     </div>
   </div>
 
-  <!-- KPIs salariés -->
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-1">👷</div>
+  <!-- KPIs — 5 cartes dont total employés -->
+  <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-5">
+    <div class="bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-4 text-white">
+      <div class="text-2xl mb-1">👥</div>
+      <div class="text-3xl font-black">{{ nb_total_employes }}</div>
+      <div class="text-xs opacity-80">Total employés</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_actifs }} mensuel(s) · {{ nb_journaliers }} jour.</div>
+    </div>
+    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-4 text-white">
+      <div class="text-2xl mb-1">👷</div>
       <div class="text-3xl font-black">{{ nb_actifs }}</div>
-      <div class="text-sm opacity-80">Salariés actifs</div>
+      <div class="text-xs opacity-80">Salariés actifs</div>
       <div class="text-xs opacity-60 mt-1">{{ nb_inactifs }} inactif(s)</div>
     </div>
-    <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-1">✅</div>
+    <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-4 text-white">
+      <div class="text-2xl mb-1">✅</div>
       <div class="text-3xl font-black">{{ nb_valides }}</div>
-      <div class="text-sm opacity-80">Bulletins validés</div>
+      <div class="text-xs opacity-80">Bulletins validés</div>
       <div class="text-xs opacity-60 mt-1">{{ nb_payes }} payé(s)</div>
     </div>
-    <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-1">📋</div>
+    <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-4 text-white">
+      <div class="text-2xl mb-1">📋</div>
       <div class="text-3xl font-black">{{ nb_brouillon }}</div>
-      <div class="text-sm opacity-80">En brouillon</div>
+      <div class="text-xs opacity-80">En brouillon</div>
       <div class="text-xs opacity-60 mt-1">à valider</div>
     </div>
-    <div class="bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-1">💰</div>
-      <div class="text-xl font-black">{{ masse.get('total_net',0)|int|fcfa }}</div>
-      <div class="text-sm opacity-80">Masse nette</div>
+    <div class="bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-4 text-white">
+      <div class="text-2xl mb-1">💰</div>
+      <div class="text-lg font-black">{{ masse.get('total_net',0)|int|fcfa }}</div>
+      <div class="text-xs opacity-80">Masse nette</div>
       <div class="text-xs opacity-60 mt-1">{{ periode.libelle_complet if periode else 'ce mois' }}</div>
     </div>
   </div>
 
-  <!-- Période courante + accès rapides -->
-  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-
-    <!-- Période -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+    <!-- Période courante -->
     <div class="card p-5">
       <h3 class="font-black text-gray-900 mb-3">Période courante</h3>
       {% if periode %}
@@ -122,14 +102,10 @@
         <div class="flex justify-between"><span>Net total</span><span class="font-bold text-emerald-600">{{ masse.get('total_net',0)|int|fcfa }}</span></div>
         <div class="flex justify-between"><span>Charges pat.</span><span class="font-bold text-red-500">{{ masse.get('total_charges_pat',0)|int|fcfa }}</span></div>
       </div>
-      <a href="/bulletins?periode_id={{ periode.id }}" class="block mt-3 text-center bg-blue-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-blue-700">
-        Voir les bulletins →
-      </a>
+      <a href="/bulletins?periode_id={{ periode.id }}" class="block mt-3 text-center bg-blue-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-blue-700">Voir les bulletins →</a>
       {% else %}
       <p class="text-gray-400 text-sm">Aucune période ouverte ce mois.</p>
-      <a href="/periodes/nouvelle" class="block mt-3 text-center bg-emerald-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-emerald-700">
-        Créer la période →
-      </a>
+      <a href="/periodes" class="block mt-3 text-center bg-emerald-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-emerald-700">Créer la période →</a>
       {% endif %}
     </div>
 
@@ -143,18 +119,16 @@
           ('📅', 'Pointage', '/pointage', '#7c3aed'),
           ('💵', 'Acomptes', '/acomptes', '#b45309'),
           ('🏖️', 'Congés', '/conges', '#0891b2'),
-          ('⚙️', 'Paramètres', '/parametres', '#374151'),
+          ('🔧', 'Journaliers', '/journaliers', '#374151'),
         ] %}
-        <a href="{{ href }}"
-           style="background:{{ color }};color:white;border-radius:.75rem;padding:.6rem;display:flex;align-items:center;gap:.5rem;text-decoration:none;font-weight:700;font-size:.8rem"
+        <a href="{{ href }}" style="background:{{ color }};color:white;border-radius:.75rem;padding:.5rem;display:flex;align-items:center;gap:.4rem;text-decoration:none;font-weight:700;font-size:.75rem"
            onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
           <span>{{ icon }}</span><span>{{ label }}</span>
-        </a>
-        {% endfor %}
+        </a>{% endfor %}
       </div>
     </div>
 
-    <!-- Répartition par catégorie -->
+    <!-- Répartition -->
     <div class="card p-5">
       <h3 class="font-black text-gray-900 mb-3">Répartition salariés</h3>
       {% if cats_stats %}
@@ -168,101 +142,66 @@
           <div class="bg-gray-100 rounded-full h-2">
             <div class="bg-blue-500 h-2 rounded-full" style="width:{{ (nb / nb_actifs * 100)|int if nb_actifs else 0 }}%"></div>
           </div>
-        </div>
-        {% endfor %}
+        </div>{% endfor %}
       </div>
-      {% else %}
-      <p class="text-gray-400 text-sm">Aucune donnée.</p>
-      {% endif %}
+      {% else %}<p class="text-gray-400 text-sm">Aucune donnée.</p>{% endif %}
     </div>
   </div>
 
-  <!-- Évolution masse salariale -->
-  <div class="card p-5 mb-6">
+  <!-- Graphique -->
+  <div class="card p-5 mb-5">
     <h3 class="font-black text-gray-900 mb-4">Évolution masse salariale (6 mois)</h3>
     <canvas id="chartEvolution" height="80"></canvas>
   </div>
 
   <!-- Top salariés + derniers bulletins -->
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-    <!-- Top 5 salariés -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
     <div class="card overflow-hidden">
-      <div class="p-4 border-b border-gray-100">
-        <h3 class="font-black text-gray-900">Top 5 salariés (net)</h3>
-      </div>
-      <table class="w-full text-sm">
-        <tbody>
-          {% for b in top_salaries %}
-          <tr class="border-b border-gray-50 hover:bg-gray-50">
-            <td class="px-4 py-3">
-              <div class="font-bold">{{ b.salarie.nom_complet }}</div>
-              <div class="text-xs text-gray-400">{{ b.salarie.emploi or '—' }}</div>
-            </td>
-            <td class="px-4 py-3 text-right font-black text-emerald-700">
-              {{ b.net_a_payer|int|fcfa }}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="2" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin ce mois</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="p-4 border-b border-gray-100"><h3 class="font-black text-gray-900">Top 5 salariés (net)</h3></div>
+      <table class="w-full text-sm"><tbody>
+        {% for b in top_salaries %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3"><div class="font-bold">{{ b.salarie.nom_complet }}</div><div class="text-xs text-gray-400">{{ b.salarie.emploi or '—' }}</div></td>
+          <td class="px-4 py-3 text-right font-black text-emerald-700">{{ b.net_a_payer|int|fcfa }}</td>
+        </tr>
+        {% else %}<tr><td colspan="2" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin ce mois</td></tr>{% endfor %}
+      </tbody></table>
     </div>
 
-    <!-- Derniers bulletins -->
     <div class="card overflow-hidden">
       <div class="flex items-center justify-between p-4 border-b border-gray-100">
         <h3 class="font-black text-gray-900">Derniers bulletins</h3>
         <a href="/bulletins" class="text-blue-600 text-xs font-bold hover:underline">Voir tous →</a>
       </div>
-      <table class="w-full text-sm">
-        <tbody>
-          {% for b in derniers %}
-          <tr class="border-b border-gray-50 hover:bg-gray-50">
-            <td class="px-4 py-3">
-              <div class="font-bold">{{ b.salarie.nom_complet }}</div>
-              <div class="text-xs text-gray-400">{{ b.periode.libelle_complet if b.periode else '—' }}</div>
-            </td>
-            <td class="px-4 py-3 text-center">
-              {% set sc = {'VALIDÉ':'bg-emerald-100 text-emerald-700','PAYÉ':'bg-blue-100 text-blue-700','BROUILLON':'bg-amber-100 text-amber-700'} %}
-              <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(b.statut,'bg-gray-100 text-gray-500') }}">
-                {{ b.statut }}
-              </span>
-            </td>
-            <td class="px-4 py-3 text-right font-black text-gray-800 text-xs">
-              {{ b.net_a_payer|int|fcfa }}
-            </td>
-          </tr>
-          {% else %}
-          <tr><td colspan="3" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <table class="w-full text-sm"><tbody>
+        {% for b in derniers %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3"><div class="font-bold">{{ b.salarie.nom_complet }}</div><div class="text-xs text-gray-400">{{ b.periode.libelle_complet if b.periode else '—' }}</div></td>
+          <td class="px-4 py-3 text-center">
+            {% set sc = {'VALIDÉ':'bg-emerald-100 text-emerald-700','PAYÉ':'bg-blue-100 text-blue-700','BROUILLON':'bg-amber-100 text-amber-700'} %}
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(b.statut,'bg-gray-100 text-gray-500') }}">{{ b.statut }}</span>
+          </td>
+          <td class="px-4 py-3 text-right font-black text-gray-800 text-xs">{{ b.net_a_payer|int|fcfa }}</td>
+        </tr>
+        {% else %}<tr><td colspan="3" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin</td></tr>{% endfor %}
+      </tbody></table>
     </div>
   </div>
-
 </main>
 
 <script>
 const evo = {{ evolution | tojson }};
-const labels = evo.map(e => e.mois + ' ' + e.annee);
-const dataBrut = evo.map(e => e.brut);
-const dataNet  = evo.map(e => e.net);
 new Chart(document.getElementById('chartEvolution'), {
   type: 'bar',
   data: {
-    labels: labels,
+    labels: evo.map(e => e.mois + ' ' + e.annee),
     datasets: [
-      { label: 'Brut', data: dataBrut, backgroundColor: 'rgba(59,130,246,0.5)', borderColor: '#3b82f6', borderWidth: 1 },
-      { label: 'Net',  data: dataNet,  backgroundColor: 'rgba(16,185,129,0.5)', borderColor: '#10b981', borderWidth: 1 }
+      { label: 'Brut', data: evo.map(e => e.brut), backgroundColor: 'rgba(59,130,246,0.5)', borderColor: '#3b82f6', borderWidth: 1 },
+      { label: 'Net',  data: evo.map(e => e.net),  backgroundColor: 'rgba(16,185,129,0.5)', borderColor: '#10b981', borderWidth: 1 }
     ]
   },
-  options: {
-    responsive: true,
-    plugins: { legend: { position: 'top' } },
-    scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('fr') + ' F' } } }
-  }
+  options: { responsive: true, plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('fr') + ' F' } } } }
 });
 </script>
 </body>
