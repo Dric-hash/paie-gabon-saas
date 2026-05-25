@@ -164,23 +164,14 @@ def logout():
 @app.route("/admin")
 @super_admin_required
 def admin_dashboard():
-    tenants      = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
-    total_sal    = db.session.query(db.func.count(Salarie.id)).scalar() or 0
-    total_bul    = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
-    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
-    nb_tenants   = len(tenants)
-    nb_actifs    = sum(1 for t in tenants if t.statut=="ACTIF")
-    nb_essai     = sum(1 for t in tenants if t.statut=="ESSAI")
-    nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
+    tenants   = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
+    total_sal = db.session.query(db.func.count(Salarie.id)).scalar() or 0
+    total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
+    revenus   = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
     return render_template("admin/dashboard.html",
-        tenants=tenants,
-        nb_tenants=nb_tenants,
-        nb_actifs=nb_actifs,
-        nb_essai=nb_essai,
-        nb_suspendus=nb_suspendus,
-        total_sal=total_sal,
-        total_bul=total_bul,
-        revenus=revenus)
+        tenants=tenants, nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
+        nb_essai=sum(1 for t in tenants if t.statut=="ESSAI"),
+        total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
 @super_admin_required
