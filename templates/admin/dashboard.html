@@ -1,83 +1,180 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Super-Admin — PaieGabon</title><script src="https://cdn.tailwindcss.com"></script>
-<style>body{font-family:'Segoe UI',system-ui,sans-serif}.card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06)}</style>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Super-Admin — Ameriack I.T. Solutions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; }
+    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
-<!-- Topbar admin -->
+
+<!-- ── Topbar admin ── -->
 <nav class="bg-purple-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
   <div class="flex items-center gap-4">
     <span class="text-xl font-black">Ameriack I.T. Solutions</span>
     <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
   </div>
-  <div class="flex items-center gap-6 text-sm">
-    <a href="/admin" class="hover:text-purple-200 font-semibold">Dashboard</a>
-    <a href="/admin/tenants" class="hover:text-purple-200">Entreprises</a>
-    <a href="/admin/plans" class="hover:text-purple-200">Plans</a>
-    <a href="/admin/rubriques" class="hover:text-purple-200">Rubriques</a>
-    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  <div class="flex items-center gap-5 text-sm">
+    <a href="/admin"          class="font-semibold hover:text-purple-200">Dashboard</a>
+    <a href="/admin/tenants"  class="hover:text-purple-200">Entreprises</a>
+    <a href="/admin/plans"    class="hover:text-purple-200">Plans</a>
+    <a href="/admin/rubriques"class="hover:text-purple-200">Rubriques</a>
+    <a href="/admin/import"   class="hover:text-purple-200">Import Excel</a>
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">
+      Déconnexion
+    </a>
   </div>
 </nav>
 
 <main class="max-w-6xl mx-auto p-8">
+
+  <!-- Messages flash -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-6 space-y-2">
+    {% for cat, msg in messages %}
+    <div class="px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
+      {{ msg }}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
   <div class="mb-6">
     <h1 class="text-2xl font-black text-gray-900">Tableau de bord Super-Admin</h1>
-    <p class="text-gray-500 text-sm mt-1">Vue globale de toutes les entreprises clientes</p>
+    <p class="text-gray-500 text-sm mt-1">Vue globale — {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
   </div>
 
   <!-- KPIs globaux -->
   <div class="grid grid-cols-4 gap-5 mb-8">
     <div class="bg-gradient-to-br from-purple-700 to-purple-900 rounded-2xl p-5 text-white">
       <div class="text-3xl mb-2">🏢</div>
-      <div class="text-3xl font-black">{{nb_tenants}}</div>
+      <div class="text-3xl font-black">{{ nb_tenants }}</div>
       <div class="text-sm opacity-80">Entreprises</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_suspendus }} suspendue(s)</div>
     </div>
     <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white">
       <div class="text-3xl mb-2">✅</div>
-      <div class="text-3xl font-black">{{nb_actifs}}</div>
-      <div class="text-sm opacity-80">Actives · {{nb_essai}} en essai</div>
+      <div class="text-3xl font-black">{{ nb_actifs }}</div>
+      <div class="text-sm opacity-80">Actives</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_essai }} en essai</div>
     </div>
     <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 text-white">
       <div class="text-3xl mb-2">👷</div>
-      <div class="text-3xl font-black">{{total_sal}}</div>
+      <div class="text-3xl font-black">{{ total_sal }}</div>
       <div class="text-sm opacity-80">Salariés total</div>
+      <div class="text-xs opacity-60 mt-1">{{ total_bul }} bulletins</div>
     </div>
     <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
       <div class="text-3xl mb-2">💰</div>
-      <div class="text-2xl font-black">{{revenus|int|string}} FCFA</div>
+      <div class="text-2xl font-black">{{ revenus|int|fcfa }}</div>
       <div class="text-sm opacity-80">Revenus/mois</div>
+      <div class="text-xs opacity-60 mt-1">clients ACTIFS uniquement</div>
     </div>
+  </div>
+
+  <!-- Accès rapides -->
+  <div class="grid grid-cols-4 gap-4 mb-8">
+    {% for icon, label, href, color in [
+      ('🏢', 'Toutes les entreprises', '/admin/tenants', '#7c3aed'),
+      ('📊', 'Import Excel', '/admin/import', '#0369a1'),
+      ('📋', 'Plans & tarifs', '/admin/plans', '#047857'),
+      ('⚙️', 'Rubriques légales', '/admin/rubriques', '#92400e'),
+    ] %}
+    <a href="{{ href }}"
+       style="background:{{ color }};color:white;border-radius:1rem;padding:1rem;display:flex;align-items:center;gap:.75rem;text-decoration:none;font-weight:700;font-size:.875rem;transition:opacity .2s"
+       onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <span style="font-size:1.5rem">{{ icon }}</span>
+      <span>{{ label }}</span>
+    </a>
+    {% endfor %}
   </div>
 
   <!-- Liste entreprises -->
   <div class="card overflow-hidden">
     <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
-      <a href="/admin/tenants" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">Voir toutes →</a>
+      <div>
+        <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
+        <p class="text-xs text-gray-400 mt-0.5">10 sur {{ nb_tenants }} — <a href="/admin/tenants" class="text-purple-600 font-bold">voir toutes →</a></p>
+      </div>
+      <a href="/admin/tenants" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">
+        Voir toutes ({{ nb_tenants }}) →
+      </a>
     </div>
+
     <table class="w-full text-sm">
-      <thead><tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-        <th class="px-4 py-3 text-left">Entreprise</th>
-        <th class="px-4 py-3 text-left">Plan</th>
-        <th class="px-4 py-3 text-center">Salariés</th>
-        <th class="px-4 py-3 text-center">Statut</th>
-        <th class="px-4 py-3 text-center">Inscription</th>
-        <th class="px-4 py-3 text-center">Actions</th>
-      </tr></thead>
-      <tbody>{% for t in tenants[:10] %}
-      <tr class="border-b border-gray-50 hover:bg-gray-50">
-        <td class="px-4 py-3"><div class="font-bold">{{t.denomination}}</div><div class="text-xs text-gray-400">{{t.activite or '—'}}</div></td>
-        <td class="px-4 py-3"><span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">{{t.plan.nom if t.plan else '—'}}</span></td>
-        <td class="px-4 py-3 text-center font-bold">{{t.nb_salaries_actifs}}</td>
-        <td class="px-4 py-3 text-center">
-          <span class="text-xs font-bold px-2 py-0.5 rounded-full
-            {{'bg-emerald-100 text-emerald-700' if t.statut=='ACTIF' else 'bg-amber-100 text-amber-700' if t.statut=='ESSAI' else 'bg-red-100 text-red-600'}}">
-            {{t.statut}}</span></td>
-        <td class="px-4 py-3 text-center text-gray-400 text-xs">{{t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—'}}</td>
-        <td class="px-4 py-3 text-center">
-          <a href="/admin/tenants/{{t.id}}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
-          <a href="/admin/tenants/{{t.id}}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
-        </td>
-      </tr>{% endfor %}</tbody>
+      <thead>
+        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <th class="px-4 py-3 text-left">Entreprise</th>
+          <th class="px-4 py-3 text-left">Plan</th>
+          <th class="px-4 py-3 text-center">Salariés</th>
+          <th class="px-4 py-3 text-center">Bulletins</th>
+          <th class="px-4 py-3 text-center">Statut</th>
+          <th class="px-4 py-3 text-center">Inscription</th>
+          <th class="px-4 py-3 text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tenants[:10] %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="font-bold">{{ t.denomination }}</div>
+            <div class="text-xs text-gray-400">{{ t.activite or '—' }} · {{ t.ville or '' }}</div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+              {{ t.plan.nom if t.plan else '—' }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
+          <td class="px-4 py-3 text-center text-gray-500 text-xs">—</td>
+          <td class="px-4 py-3 text-center">
+            {% set sc = {
+              'ACTIF':               'bg-emerald-100 text-emerald-700',
+              'ESSAI':               'bg-amber-100 text-amber-700',
+              'SUSPENDU':            'bg-red-100 text-red-600',
+              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-700',
+              'ANNULATION_DEMANDEE': 'bg-orange-100 text-orange-700',
+            } %}
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(t.statut, 'bg-gray-100 text-gray-500') }}">
+              {{ t.statut.replace('_',' ') }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center text-gray-400 text-xs">
+            {{ t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—' }}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <a href="/admin/tenants/{{ t.id }}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
+            <a href="/admin/tenants/{{ t.id }}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="7" class="text-center py-10 text-gray-400 text-sm">
+            Aucune entreprise enregistrée
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
+
+    {% if nb_tenants > 10 %}
+    <div class="p-4 border-t border-gray-100 text-center">
+      <a href="/admin/tenants" class="text-purple-600 font-bold text-sm hover:underline">
+        Voir les {{ nb_tenants - 10 }} autres entreprises →
+      </a>
+    </div>
+    {% endif %}
   </div>
-</main></body></html>
+
+</main>
+</body>
+</html>
