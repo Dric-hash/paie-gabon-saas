@@ -52,7 +52,12 @@ def load_user(uid): return Utilisateur.query.get(int(uid))
 def super_admin_required(f):
     @wraps(f)
     def d(*a,**k):
-        if not current_user.is_authenticated or not current_user.is_super_admin: abort(403)
+        if not current_user.is_authenticated:
+            flash("Connectez-vous avec un compte super-administrateur.", "error")
+            return redirect(url_for("login"))
+        if not current_user.is_super_admin:
+            flash(f"Accès refusé : le rôle « {current_user.role} » n'a pas accès à l'administration plateforme.", "error")
+            abort(403)
         return f(*a,**k)
     return d
 
@@ -103,41 +108,64 @@ def _super_admin_emails_from_env():
     raw = os.environ.get("SUPER_ADMIN_EMAIL") or os.environ.get("SUPER_ADMIN_EMAILS") or ""
     return [e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()]
 
+def _default_super_admin_email():
+    return (
+        os.environ.get("SUPER_ADMIN_DEFAULT_EMAIL", "superadmin@paiegalon.com")
+        .strip()
+        .lower()
+    )
+
+def _find_user_by_email(email):
+    """Recherche insensible à la casse (emails historiques en base mixtes)."""
+    email = (email or "").strip().lower()
+    if not email:
+        return None
+    return Utilisateur.query.filter(
+        db.func.lower(Utilisateur.email) == email
+    ).first()
+
+def _promote_to_super_admin(user, reset_password=False):
+    """Force le rôle SUPER_ADMIN sur un compte existant."""
+    changed = False
+    if user.role != "SUPER_ADMIN":
+        user.role = "SUPER_ADMIN"
+        changed = True
+    if user.tenant_id is not None:
+        user.tenant_id = None
+        changed = True
+    if not user.actif:
+        user.actif = True
+        changed = True
+    if reset_password and os.environ.get("SUPER_ADMIN_PASSWORD"):
+        user.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
+        changed = True
+    return changed
+
 def ensure_super_admin_accounts():
     """
-    Promouvoir les comptes listés dans SUPER_ADMIN_EMAIL(S) et garantir
-    au moins un super-admin (compte par défaut si aucun n'existe).
+    À chaque démarrage : garantir que les emails configurés (dont le compte
+    par défaut) ont bien le rôle SUPER_ADMIN, même si un autre super-admin
+    existe déjà en base.
     """
     changed = False
-    for email in _super_admin_emails_from_env():
-        user = Utilisateur.query.filter_by(email=email, actif=True).first()
-        if not user:
-            continue
-        user_changed = False
-        if user.role != "SUPER_ADMIN":
-            user.role = "SUPER_ADMIN"
-            user_changed = True
-        if user.tenant_id is not None:
-            user.tenant_id = None
-            user_changed = True
-        if user_changed:
-            changed = True
-            if os.environ.get("SUPER_ADMIN_PASSWORD"):
-                user.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
+    emails = set(_super_admin_emails_from_env())
+    emails.add(_default_super_admin_email())
+
+    for email in emails:
+        user = _find_user_by_email(email)
+        if user:
+            if _promote_to_super_admin(user, reset_password=bool(os.environ.get("SUPER_ADMIN_PASSWORD"))):
+                changed = True
+            if user.email != email:
+                user.email = email
+                changed = True
 
     if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        default_email = (
-            os.environ.get("SUPER_ADMIN_DEFAULT_EMAIL", "superadmin@paiegalon.com")
-            .strip()
-            .lower()
-        )
-        existing = Utilisateur.query.filter_by(email=default_email).first()
+        default_email = _default_super_admin_email()
+        existing = _find_user_by_email(default_email)
         if existing:
-            existing.role = "SUPER_ADMIN"
-            existing.tenant_id = None
-            existing.actif = True
-            if os.environ.get("SUPER_ADMIN_PASSWORD"):
-                existing.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
+            if _promote_to_super_admin(existing, reset_password=bool(os.environ.get("SUPER_ADMIN_PASSWORD"))):
+                changed = True
         else:
             sa = Utilisateur(
                 nom="ADMIN",
@@ -149,10 +177,11 @@ def ensure_super_admin_accounts():
             )
             sa.set_password(os.environ.get("SUPER_ADMIN_PASSWORD", "Admin2026!"))
             db.session.add(sa)
-        changed = True
+            changed = True
 
     if changed:
         db.session.commit()
+        print("✅ Comptes super-admin synchronisés.")
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/")
@@ -167,7 +196,9 @@ def login():
     if request.method == "POST":
         email = request.form.get("email","").strip().lower()
         pw    = request.form.get("password","")
-        user  = Utilisateur.query.filter_by(email=email, actif=True).first()
+        user  = _find_user_by_email(email)
+        if user and not user.actif:
+            user = None
         if user and user.check_password(pw):
             login_user(user)
             user.derniere_connexion = datetime.utcnow()
@@ -1519,30 +1550,41 @@ def init_db():
         extra = f"  SUPER_ADMIN_EMAIL configuré: {', '.join(_super_admin_emails_from_env())}\n"
     print(f"Base initialisée.\n{sa_line}{extra}  Compte démo: demo@paiegalon.ga / Demo2026!")
 
+def _run_startup_migrations():
+    """Migrations légères (colonnes manquantes). Ne doit pas bloquer le bootstrap admin."""
+    for col in ["heures_sup_10", "heures_sup_30", "heures_sup_40", "heures_sup_70"]:
+        try:
+            db.session.execute(db.text(
+                f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    for stmt in (
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)",
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
+    ):
+        try:
+            db.session.execute(db.text(stmt))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
 with app.app_context():
     try:
         db.create_all()
-        # Migrations colonnes manquantes
-        for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
-            try:
-                db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
-                db.session.commit()
-            except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        # Migration: ajouter email dans salaries
-        try:
-            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
+        _run_startup_migrations()
         init_db()
         print("✅ Tables créées et base initialisée.")
     except Exception as e:
         print(f"Erreur init: {e}")
-        try: db.session.rollback(); db.create_all()
-        except Exception as e2: print(f"Erreur create_all: {e2}")
+        try:
+            db.session.rollback()
+            db.create_all()
+            ensure_super_admin_accounts()
+            print("⚠️ Init partielle : super-admin synchronisé malgré l'erreur.")
+        except Exception as e2:
+            print(f"Erreur create_all: {e2}")
 
 if __name__=="__main__":
     with app.app_context(): init_db()
