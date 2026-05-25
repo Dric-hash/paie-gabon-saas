@@ -169,8 +169,11 @@ def admin_dashboard():
     total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
     revenus   = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
     return render_template("admin/dashboard.html",
-        tenants=tenants, nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
+        tenants=tenants,
+        nb_tenants=len(tenants),
+        nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
         nb_essai=sum(1 for t in tenants if t.statut=="ESSAI"),
+        nb_suspendus=sum(1 for t in tenants if t.statut not in ("ACTIF","ESSAI")),
         total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
@@ -235,8 +238,25 @@ def admin_import_excel():
         tenant_id = request.form.get("tenant_id", type=int)
         tenant = Tenant.query.get_or_404(tenant_id)
         f = request.files.get("excel_file")
-        if not f or not f.filename.endswith(".xlsx"):
-            flash("Fichier invalide. Utilisez un fichier .xlsx", "error")
+        # Validation serveur : existence fichier
+        if not f or not f.filename:
+            flash("Aucun fichier sélectionné.", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation extension
+        if not f.filename.lower().endswith(".xlsx"):
+            flash("Format invalide. Utilisez uniquement un fichier .xlsx", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation taille (max 10 Mo)
+        f.seek(0, 2)  # aller à la fin
+        taille = f.tell()
+        f.seek(0)     # revenir au début
+        if taille > 10 * 1024 * 1024:
+            flash(f"Fichier trop lourd ({taille//1024//1024} Mo). Maximum 10 Mo.", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Validation type MIME réel (magic bytes XLSX = PK zip)
+        header = f.read(4); f.seek(0)
+        if header[:2] != b'PK':
+            flash("Le fichier ne semble pas être un vrai fichier Excel. Vérifiez le format.", "error")
             return render_template("admin/import_excel.html", tenants=tenants)
         imp_societe  = "import_societe"  in request.form
         imp_salaries = "import_salaries" in request.form
@@ -256,6 +276,16 @@ def admin_import_excel():
                 if isinstance(v,d2): return v
                 try: return dt2.strptime(str(v)[:10],"%Y-%m-%d").date()
                 except: return None
+            # Vérifier que les feuilles demandées existent bien
+            feuilles_manquantes = []
+            if imp_salaries and "INFOS SALARIES" not in wb.sheetnames:
+                feuilles_manquantes.append("INFOS SALARIES")
+            if imp_bulletins and "DONNEES DU BULLETIN" not in wb.sheetnames:
+                feuilles_manquantes.append("DONNEES DU BULLETIN")
+            if feuilles_manquantes:
+                flash(f"Feuille(s) introuvable(s) dans le fichier : {', '.join(feuilles_manquantes)}. Vérifiez le fichier Excel.", "error")
+                return render_template("admin/import_excel.html", tenants=tenants, resultats=None)
+
             if imp_societe and "INFOS SOCIETE" in wb.sheetnames:
                 ws=wb["INFOS SOCIETE"]; infos={}
                 for row in ws.iter_rows(values_only=True):
@@ -356,8 +386,12 @@ def admin_import_excel():
                     bul.acompte=nv(row[82]); bul.net_a_payer=nv(row[83]) if len(row)>83 else 0
                     bul.statut="VALIDÉ"; bul.date_validation=datetime.utcnow(); nb_bul+=1
             db.session.commit()
-            resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,"erreurs":nb_err}
-            flash(f"Import réussi ! {nb_sal} salariés, {nb_bul} bulletins, {nb_per} périodes.","success")
+            resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,
+                        "erreurs":nb_err,"taille_ko":round(taille/1024,1)}
+            msg = f"Import terminé : {nb_sal} salarié(s), {nb_bul} bulletin(s), {nb_per} période(s)"
+            if nb_err > 0:
+                msg += f" — {nb_err} ligne(s) ignorée(s) (matricule inconnu ou données manquantes)"
+            flash(msg, "success" if nb_err == 0 else "warning")
         except Exception as e:
             db.session.rollback()
             flash(f"Erreur : {str(e)}","error")
@@ -465,6 +499,15 @@ def dashboard():
     alertes = []
     if nb_b > 0: alertes.append({"type":"warning","msg":f"{nb_b} bulletin(s) en brouillon à valider"})
     if not periode: alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
+    # Alerte expiration essai
+    if t.statut == "ESSAI" and t.date_expiration:
+        jours_restants = (t.date_expiration - datetime.utcnow()).days
+        if jours_restants <= 7:
+            alertes.append({"type":"danger","msg":f"Votre essai gratuit expire dans {max(0,jours_restants)} jour(s). Abonnez-vous pour continuer."})
+    # Alerte acomptes en attente
+    nb_acomptes = Acompte.query.filter_by(tenant_id=t.id, statut="EN_ATTENTE").count()
+    if nb_acomptes > 0:
+        alertes.append({"type":"warning","msg":f"{nb_acomptes} acompte(s) EN ATTENTE à déduire sur les bulletins."})
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
         nb_new_mois=nb_new_mois, periode=periode, masse=masse,
