@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Super-Admin — Ameriack I.T. Solutions</title>
+  <title>Dashboard — {{ tenant.denomination }}</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     body { font-family:'Segoe UI',system-ui,sans-serif; }
     .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
@@ -12,30 +13,37 @@
 </head>
 <body class="bg-gray-50 min-h-screen">
 
-<!-- ── Topbar admin ── -->
-<nav class="bg-purple-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
+<!-- ── Topbar tenant ── -->
+<nav class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
   <div class="flex items-center gap-4">
-    <span class="text-xl font-black">Ameriack I.T. Solutions</span>
-    <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+    {% if tenant.logo_url %}
+      <img src="{{ tenant.logo_url }}" alt="Logo" class="h-8 w-auto rounded">
+    {% endif %}
+    <span class="text-lg font-black">{{ tenant.denomination }}</span>
+    <span class="bg-slate-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ tenant.statut }}</span>
   </div>
-  <div class="flex items-center gap-5 text-sm">
-    <a href="/admin"          class="font-semibold hover:text-purple-200">Dashboard</a>
-    <a href="/admin/tenants"  class="hover:text-purple-200">Entreprises</a>
-    <a href="/admin/plans"    class="hover:text-purple-200">Plans</a>
-    <a href="/admin/rubriques"class="hover:text-purple-200">Rubriques</a>
-    <a href="/admin/import"   class="hover:text-purple-200">Import Excel</a>
-    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">
+  <div class="flex items-center gap-4 text-sm">
+    <a href="/dashboard"    class="font-semibold hover:text-slate-200">Dashboard</a>
+    <a href="/salaries"     class="hover:text-slate-200">Salariés</a>
+    <a href="/bulletins"    class="hover:text-slate-200">Bulletins</a>
+    <a href="/periodes"     class="hover:text-slate-200">Périodes</a>
+    <a href="/pointage"     class="hover:text-slate-200">Pointage</a>
+    <a href="/acomptes"     class="hover:text-slate-200">Acomptes</a>
+    <a href="/conges"       class="hover:text-slate-200">Congés</a>
+    <a href="/journaliers"  class="hover:text-slate-200">Journaliers</a>
+    <a href="/parametres"   class="hover:text-slate-200">⚙️</a>
+    <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">
       Déconnexion
     </a>
   </div>
 </nav>
 
-<main class="max-w-6xl mx-auto p-8">
+<main class="max-w-7xl mx-auto p-6">
 
   <!-- Messages flash -->
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-  <div class="mb-6 space-y-2">
+  <div class="mb-5 space-y-2">
     {% for cat, msg in messages %}
     <div class="px-4 py-3 rounded-xl text-sm font-semibold
       {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
@@ -48,133 +56,214 @@
   {% endif %}
   {% endwith %}
 
-  <div class="mb-6">
-    <h1 class="text-2xl font-black text-gray-900">Tableau de bord Super-Admin</h1>
-    <p class="text-gray-500 text-sm mt-1">Vue globale — {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
+  <!-- Alertes -->
+  {% for a in alertes %}
+  <div class="mb-3 px-4 py-3 rounded-xl text-sm font-semibold border
+    {{ 'bg-amber-50 text-amber-800 border-amber-200' if a.type=='warning'
+    else 'bg-blue-50 text-blue-800 border-blue-200' }}">
+    {{ a.msg }}
+  </div>
+  {% endfor %}
+
+  <!-- En-tête -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-black text-gray-900">Tableau de bord</h1>
+      <p class="text-gray-500 text-sm mt-1">{{ now.strftime('%A %d %B %Y') }} — {{ tenant.denomination }}</p>
+    </div>
+    <div class="flex gap-3">
+      <a href="/bulletins/saisie" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
+        + Nouveau bulletin
+      </a>
+      <a href="/salaries/nouveau" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
+        + Nouveau salarié
+      </a>
+    </div>
   </div>
 
-  <!-- KPIs globaux -->
-  <div class="grid grid-cols-4 gap-5 mb-8">
-    <div class="bg-gradient-to-br from-purple-700 to-purple-900 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">🏢</div>
-      <div class="text-3xl font-black">{{ nb_tenants }}</div>
-      <div class="text-sm opacity-80">Entreprises</div>
-      <div class="text-xs opacity-60 mt-1">{{ nb_suspendus }} suspendue(s)</div>
+  <!-- KPIs salariés -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-1">👷</div>
+      <div class="text-3xl font-black">{{ nb_actifs }}</div>
+      <div class="text-sm opacity-80">Salariés actifs</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_inactifs }} inactif(s)</div>
     </div>
     <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">✅</div>
-      <div class="text-3xl font-black">{{ nb_actifs }}</div>
-      <div class="text-sm opacity-80">Actives</div>
-      <div class="text-xs opacity-60 mt-1">{{ nb_essai }} en essai</div>
+      <div class="text-3xl mb-1">✅</div>
+      <div class="text-3xl font-black">{{ nb_valides }}</div>
+      <div class="text-sm opacity-80">Bulletins validés</div>
+      <div class="text-xs opacity-60 mt-1">{{ nb_payes }} payé(s)</div>
     </div>
     <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">👷</div>
-      <div class="text-3xl font-black">{{ total_sal }}</div>
-      <div class="text-sm opacity-80">Salariés total</div>
-      <div class="text-xs opacity-60 mt-1">{{ total_bul }} bulletins</div>
+      <div class="text-3xl mb-1">📋</div>
+      <div class="text-3xl font-black">{{ nb_brouillon }}</div>
+      <div class="text-sm opacity-80">En brouillon</div>
+      <div class="text-xs opacity-60 mt-1">à valider</div>
     </div>
-    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">💰</div>
-      <div class="text-2xl font-black">{{ revenus|int|fcfa }}</div>
-      <div class="text-sm opacity-80">Revenus/mois</div>
-      <div class="text-xs opacity-60 mt-1">clients ACTIFS uniquement</div>
+    <div class="bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl p-5 text-white">
+      <div class="text-3xl mb-1">💰</div>
+      <div class="text-xl font-black">{{ masse.get('total_net',0)|int|fcfa }}</div>
+      <div class="text-sm opacity-80">Masse nette</div>
+      <div class="text-xs opacity-60 mt-1">{{ periode.libelle_complet if periode else 'ce mois' }}</div>
     </div>
   </div>
 
-  <!-- Accès rapides -->
-  <div class="grid grid-cols-4 gap-4 mb-8">
-    {% for icon, label, href, color in [
-      ('🏢', 'Toutes les entreprises', '/admin/tenants', '#7c3aed'),
-      ('📊', 'Import Excel', '/admin/import', '#0369a1'),
-      ('📋', 'Plans & tarifs', '/admin/plans', '#047857'),
-      ('⚙️', 'Rubriques légales', '/admin/rubriques', '#92400e'),
-    ] %}
-    <a href="{{ href }}"
-       style="background:{{ color }};color:white;border-radius:1rem;padding:1rem;display:flex;align-items:center;gap:.75rem;text-decoration:none;font-weight:700;font-size:.875rem;transition:opacity .2s"
-       onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-      <span style="font-size:1.5rem">{{ icon }}</span>
-      <span>{{ label }}</span>
-    </a>
-    {% endfor %}
-  </div>
+  <!-- Période courante + accès rapides -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
 
-  <!-- Liste entreprises -->
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
-      <div>
-        <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
-        <p class="text-xs text-gray-400 mt-0.5">10 sur {{ nb_tenants }} — <a href="/admin/tenants" class="text-purple-600 font-bold">voir toutes →</a></p>
+    <!-- Période -->
+    <div class="card p-5">
+      <h3 class="font-black text-gray-900 mb-3">Période courante</h3>
+      {% if periode %}
+      <div class="text-xl font-black text-blue-700 mb-2">{{ periode.libelle_complet }}</div>
+      <div class="space-y-1 text-sm text-gray-600">
+        <div class="flex justify-between"><span>Brut total</span><span class="font-bold">{{ masse.get('total_brut',0)|int|fcfa }}</span></div>
+        <div class="flex justify-between"><span>Net total</span><span class="font-bold text-emerald-600">{{ masse.get('total_net',0)|int|fcfa }}</span></div>
+        <div class="flex justify-between"><span>Charges pat.</span><span class="font-bold text-red-500">{{ masse.get('total_charges_pat',0)|int|fcfa }}</span></div>
       </div>
-      <a href="/admin/tenants" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        Voir toutes ({{ nb_tenants }}) →
+      <a href="/bulletins?periode_id={{ periode.id }}" class="block mt-3 text-center bg-blue-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-blue-700">
+        Voir les bulletins →
       </a>
+      {% else %}
+      <p class="text-gray-400 text-sm">Aucune période ouverte ce mois.</p>
+      <a href="/periodes/nouvelle" class="block mt-3 text-center bg-emerald-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-emerald-700">
+        Créer la période →
+      </a>
+      {% endif %}
     </div>
 
-    <table class="w-full text-sm">
-      <thead>
-        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-          <th class="px-4 py-3 text-left">Entreprise</th>
-          <th class="px-4 py-3 text-left">Plan</th>
-          <th class="px-4 py-3 text-center">Salariés</th>
-          <th class="px-4 py-3 text-center">Bulletins</th>
-          <th class="px-4 py-3 text-center">Statut</th>
-          <th class="px-4 py-3 text-center">Inscription</th>
-          <th class="px-4 py-3 text-center">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for t in tenants[:10] %}
-        <tr class="border-b border-gray-50 hover:bg-gray-50">
-          <td class="px-4 py-3">
-            <div class="font-bold">{{ t.denomination }}</div>
-            <div class="text-xs text-gray-400">{{ t.activite or '—' }} · {{ t.ville or '' }}</div>
-          </td>
-          <td class="px-4 py-3">
-            <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
-              {{ t.plan.nom if t.plan else '—' }}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
-          <td class="px-4 py-3 text-center text-gray-500 text-xs">—</td>
-          <td class="px-4 py-3 text-center">
-            {% set sc = {
-              'ACTIF':               'bg-emerald-100 text-emerald-700',
-              'ESSAI':               'bg-amber-100 text-amber-700',
-              'SUSPENDU':            'bg-red-100 text-red-600',
-              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-700',
-              'ANNULATION_DEMANDEE': 'bg-orange-100 text-orange-700',
-            } %}
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(t.statut, 'bg-gray-100 text-gray-500') }}">
-              {{ t.statut.replace('_',' ') }}
-            </span>
-          </td>
-          <td class="px-4 py-3 text-center text-gray-400 text-xs">
-            {{ t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—' }}
-          </td>
-          <td class="px-4 py-3 text-center">
-            <a href="/admin/tenants/{{ t.id }}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
-            <a href="/admin/tenants/{{ t.id }}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
-          </td>
-        </tr>
-        {% else %}
-        <tr>
-          <td colspan="7" class="text-center py-10 text-gray-400 text-sm">
-            Aucune entreprise enregistrée
-          </td>
-        </tr>
+    <!-- Accès rapides -->
+    <div class="card p-5">
+      <h3 class="font-black text-gray-900 mb-3">Accès rapides</h3>
+      <div class="grid grid-cols-2 gap-2">
+        {% for icon, label, href, color in [
+          ('📋', 'Bulletins', '/bulletins', '#1d4ed8'),
+          ('👷', 'Salariés', '/salaries', '#047857'),
+          ('📅', 'Pointage', '/pointage', '#7c3aed'),
+          ('💵', 'Acomptes', '/acomptes', '#b45309'),
+          ('🏖️', 'Congés', '/conges', '#0891b2'),
+          ('⚙️', 'Paramètres', '/parametres', '#374151'),
+        ] %}
+        <a href="{{ href }}"
+           style="background:{{ color }};color:white;border-radius:.75rem;padding:.6rem;display:flex;align-items:center;gap:.5rem;text-decoration:none;font-weight:700;font-size:.8rem"
+           onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <span>{{ icon }}</span><span>{{ label }}</span>
+        </a>
         {% endfor %}
-      </tbody>
-    </table>
-
-    {% if nb_tenants > 10 %}
-    <div class="p-4 border-t border-gray-100 text-center">
-      <a href="/admin/tenants" class="text-purple-600 font-bold text-sm hover:underline">
-        Voir les {{ nb_tenants - 10 }} autres entreprises →
-      </a>
+      </div>
     </div>
-    {% endif %}
+
+    <!-- Répartition par catégorie -->
+    <div class="card p-5">
+      <h3 class="font-black text-gray-900 mb-3">Répartition salariés</h3>
+      {% if cats_stats %}
+      <div class="space-y-2">
+        {% for code, libelle, nb in cats_stats %}
+        <div>
+          <div class="flex justify-between text-sm mb-1">
+            <span class="font-semibold text-gray-700">{{ libelle }}</span>
+            <span class="font-black text-gray-900">{{ nb }}</span>
+          </div>
+          <div class="bg-gray-100 rounded-full h-2">
+            <div class="bg-blue-500 h-2 rounded-full" style="width:{{ (nb / nb_actifs * 100)|int if nb_actifs else 0 }}%"></div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="text-gray-400 text-sm">Aucune donnée.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Évolution masse salariale -->
+  <div class="card p-5 mb-6">
+    <h3 class="font-black text-gray-900 mb-4">Évolution masse salariale (6 mois)</h3>
+    <canvas id="chartEvolution" height="80"></canvas>
+  </div>
+
+  <!-- Top salariés + derniers bulletins -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+    <!-- Top 5 salariés -->
+    <div class="card overflow-hidden">
+      <div class="p-4 border-b border-gray-100">
+        <h3 class="font-black text-gray-900">Top 5 salariés (net)</h3>
+      </div>
+      <table class="w-full text-sm">
+        <tbody>
+          {% for b in top_salaries %}
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="px-4 py-3">
+              <div class="font-bold">{{ b.salarie.nom_complet }}</div>
+              <div class="text-xs text-gray-400">{{ b.salarie.emploi or '—' }}</div>
+            </td>
+            <td class="px-4 py-3 text-right font-black text-emerald-700">
+              {{ b.net_a_payer|int|fcfa }}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin ce mois</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Derniers bulletins -->
+    <div class="card overflow-hidden">
+      <div class="flex items-center justify-between p-4 border-b border-gray-100">
+        <h3 class="font-black text-gray-900">Derniers bulletins</h3>
+        <a href="/bulletins" class="text-blue-600 text-xs font-bold hover:underline">Voir tous →</a>
+      </div>
+      <table class="w-full text-sm">
+        <tbody>
+          {% for b in derniers %}
+          <tr class="border-b border-gray-50 hover:bg-gray-50">
+            <td class="px-4 py-3">
+              <div class="font-bold">{{ b.salarie.nom_complet }}</div>
+              <div class="text-xs text-gray-400">{{ b.periode.libelle_complet if b.periode else '—' }}</div>
+            </td>
+            <td class="px-4 py-3 text-center">
+              {% set sc = {'VALIDÉ':'bg-emerald-100 text-emerald-700','PAYÉ':'bg-blue-100 text-blue-700','BROUILLON':'bg-amber-100 text-amber-700'} %}
+              <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(b.statut,'bg-gray-100 text-gray-500') }}">
+                {{ b.statut }}
+              </span>
+            </td>
+            <td class="px-4 py-3 text-right font-black text-gray-800 text-xs">
+              {{ b.net_a_payer|int|fcfa }}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="text-center py-6 text-gray-400 text-sm">Aucun bulletin</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 
 </main>
+
+<script>
+const evo = {{ evolution | tojson }};
+const labels = evo.map(e => e.mois + ' ' + e.annee);
+const dataBrut = evo.map(e => e.brut);
+const dataNet  = evo.map(e => e.net);
+new Chart(document.getElementById('chartEvolution'), {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [
+      { label: 'Brut', data: dataBrut, backgroundColor: 'rgba(59,130,246,0.5)', borderColor: '#3b82f6', borderWidth: 1 },
+      { label: 'Net',  data: dataNet,  backgroundColor: 'rgba(16,185,129,0.5)', borderColor: '#10b981', borderWidth: 1 }
+    ]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { position: 'top' } },
+    scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('fr') + ' F' } } }
+  }
+});
+</script>
 </body>
 </html>
