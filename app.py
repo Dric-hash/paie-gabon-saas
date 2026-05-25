@@ -85,6 +85,7 @@ def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
 
+
 # ── Envoi email asynchrone (ne bloque pas le serveur) ─────────────────────────
 def send_email_async(msg):
     """Envoie un email dans un thread séparé pour ne pas bloquer Gunicorn."""
@@ -164,13 +165,18 @@ def logout():
 @app.route("/admin")
 @super_admin_required
 def admin_dashboard():
-    tenants   = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
-    total_sal = db.session.query(db.func.count(Salarie.id)).scalar() or 0
-    total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
-    revenus   = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
+    tenants      = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
+    total_sal    = db.session.query(db.func.count(Salarie.id)).scalar() or 0
+    total_bul    = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
+    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
+    nb_tenants   = len(tenants)
+    nb_actifs    = sum(1 for t in tenants if t.statut=="ACTIF")
+    nb_essai     = sum(1 for t in tenants if t.statut=="ESSAI")
+    nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
     return render_template("admin/dashboard.html",
-        tenants=tenants, nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
-        nb_essai=sum(1 for t in tenants if t.statut=="ESSAI"),
+        tenants=tenants, nb_tenants=nb_tenants,
+        nb_actifs=nb_actifs, nb_essai=nb_essai,
+        nb_suspendus=nb_suspendus,
         total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
@@ -421,9 +427,11 @@ def dashboard():
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("login"))
     now=datetime.now()
-    nb_actifs   = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-    nb_inactifs = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
-    nb_total    = Salarie.query.filter_by(tenant_id=t.id).count()
+    nb_actifs        = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_inactifs      = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
+    nb_total         = Salarie.query.filter_by(tenant_id=t.id).count()
+    nb_journaliers   = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_total_employes = nb_actifs + nb_journaliers
     debut_mois  = datetime(now.year, now.month, 1).date()
     nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id, Salarie.date_embauche>=debut_mois).count()
     periode = PeriodePaie.query.filter_by(tenant_id=t.id, annee=now.year, mois=now.month).first()
@@ -462,6 +470,7 @@ def dashboard():
     if not periode: alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
+        nb_journaliers=nb_journaliers, nb_total_employes=nb_total_employes,
         nb_new_mois=nb_new_mois, periode=periode, masse=masse,
         nb_valides=nb_v, nb_payes=nb_p, nb_brouillon=nb_b,
         evolution=evolution, top_salaries=top_salaries,
@@ -948,6 +957,7 @@ def journalier_nouveau():
             telephone=request.form.get("telephone","").strip(),
             profession=request.form.get("profession","").strip().upper(),
             taux_horaire=float(request.form.get("taux_horaire",0) or 0),
+            date_embauche=_parse_date(request.form.get("date_embauche")),
             statut="ACTIF")
         db.session.add(j); db.session.commit()
         flash(f"Journalier {j.nom_complet} créé.", "success")
@@ -965,6 +975,7 @@ def journalier_modifier(id):
         j.telephone=request.form.get("telephone","").strip()
         j.profession=request.form.get("profession","").strip().upper()
         j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
+        j.date_embauche=_parse_date(request.form.get("date_embauche"))
         j.statut=request.form.get("statut","ACTIF")
         db.session.commit(); flash("Journalier mis à jour.", "success")
         return redirect(url_for("journaliers"))
@@ -1285,6 +1296,30 @@ def conge_supprimer(id):
     flash("Demande supprimée.", "success")
     return redirect(url_for("conges"))
 
+
+# ── Impression listes ─────────────────────────────────────────────────────────
+@app.route("/salaries/imprimer")
+@login_required
+def salaries_imprimer():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    from sqlalchemy.orm import joinedload
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
+    # Charger le contrat actif pour chaque salarié
+    for s in salaries_list:
+        s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
+    return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
+
+@app.route("/journaliers/imprimer")
+@login_required
+def journaliers_imprimer():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    journaliers_list = Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all()
+    return render_template("tenant/journaliers_print.html", journaliers=journaliers_list, tenant=t, now=datetime.now())
+
 # ── Export & API ──────────────────────────────────────────────────────────────
 @app.route("/bulletins/export/<int:periode_id>")
 @tenant_required
@@ -1456,6 +1491,10 @@ with app.app_context():
         except Exception: db.session.rollback()
         try:
             db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE"))
             db.session.commit()
         except Exception: db.session.rollback()
         init_db()
