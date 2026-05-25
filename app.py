@@ -499,6 +499,15 @@ def dashboard():
     alertes = []
     if nb_b > 0: alertes.append({"type":"warning","msg":f"{nb_b} bulletin(s) en brouillon à valider"})
     if not periode: alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
+    # Alerte expiration essai
+    if t.statut == "ESSAI" and t.date_expiration:
+        jours_restants = (t.date_expiration - datetime.utcnow()).days
+        if jours_restants <= 7:
+            alertes.append({"type":"danger","msg":f"Votre essai gratuit expire dans {max(0,jours_restants)} jour(s). Abonnez-vous pour continuer."})
+    # Alerte acomptes en attente
+    nb_acomptes = Acompte.query.filter_by(tenant_id=t.id, statut="EN_ATTENTE").count()
+    if nb_acomptes > 0:
+        alertes.append({"type":"warning","msg":f"{nb_acomptes} acompte(s) EN ATTENTE à déduire sur les bulletins."})
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
         nb_new_mois=nb_new_mois, periode=periode, masse=masse,
