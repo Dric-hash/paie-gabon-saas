@@ -169,8 +169,11 @@ def admin_dashboard():
     total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
     revenus   = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
     return render_template("admin/dashboard.html",
-        tenants=tenants, nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
+        tenants=tenants,
+        nb_tenants=len(tenants),
+        nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
         nb_essai=sum(1 for t in tenants if t.statut=="ESSAI"),
+        nb_suspendus=sum(1 for t in tenants if t.statut not in ("ACTIF","ESSAI")),
         total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
