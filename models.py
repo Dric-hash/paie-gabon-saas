@@ -106,13 +106,17 @@ class Utilisateur(db.Model, UserMixin):
     def nom_complet(self): return f"{self.prenom} {self.nom}"
 
     @property
-    def is_super_admin(self): return self.role == "SUPER_ADMIN"
+    def role_normalized(self):
+        return (self.role or "").strip().upper()
 
     @property
-    def is_tenant_admin(self): return self.role in ("SUPER_ADMIN","TENANT_ADMIN")
+    def is_super_admin(self): return self.role_normalized == "SUPER_ADMIN"
 
     @property
-    def can_edit(self): return self.role in ("SUPER_ADMIN","TENANT_ADMIN","GESTIONNAIRE")
+    def is_tenant_admin(self): return self.role_normalized in ("SUPER_ADMIN", "TENANT_ADMIN")
+
+    @property
+    def can_edit(self): return self.role_normalized in ("SUPER_ADMIN", "TENANT_ADMIN", "GESTIONNAIRE")
 
     def to_dict(self):
         return {"id":self.id,"nom":self.nom,"prenom":self.prenom,

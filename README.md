@@ -33,6 +33,16 @@ http://localhost:5000
 
 > Changez ces mots de passe avant toute mise en production.
 
+### Promouvoir votre compte en super-admin (production)
+
+Définissez la variable d'environnement `SUPER_ADMIN_EMAIL` avec l'email de votre compte, puis redéployez ou redémarrez l'application :
+
+```
+SUPER_ADMIN_EMAIL=votre.email@entreprise.ga
+```
+
+Au démarrage, ce compte reçoit le rôle `SUPER_ADMIN` et peut accéder à `/admin`.
+
 ---
 
 ## Fonctionnalités

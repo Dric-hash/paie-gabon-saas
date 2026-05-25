@@ -98,6 +98,62 @@ def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
 
+def _super_admin_emails_from_env():
+    """Emails à promouvoir en SUPER_ADMIN (SUPER_ADMIN_EMAIL ou SUPER_ADMIN_EMAILS)."""
+    raw = os.environ.get("SUPER_ADMIN_EMAIL") or os.environ.get("SUPER_ADMIN_EMAILS") or ""
+    return [e.strip().lower() for e in raw.replace(";", ",").split(",") if e.strip()]
+
+def ensure_super_admin_accounts():
+    """
+    Promouvoir les comptes listés dans SUPER_ADMIN_EMAIL(S) et garantir
+    au moins un super-admin (compte par défaut si aucun n'existe).
+    """
+    changed = False
+    for email in _super_admin_emails_from_env():
+        user = Utilisateur.query.filter_by(email=email, actif=True).first()
+        if not user:
+            continue
+        user_changed = False
+        if user.role != "SUPER_ADMIN":
+            user.role = "SUPER_ADMIN"
+            user_changed = True
+        if user.tenant_id is not None:
+            user.tenant_id = None
+            user_changed = True
+        if user_changed:
+            changed = True
+            if os.environ.get("SUPER_ADMIN_PASSWORD"):
+                user.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
+
+    if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
+        default_email = (
+            os.environ.get("SUPER_ADMIN_DEFAULT_EMAIL", "superadmin@paiegalon.com")
+            .strip()
+            .lower()
+        )
+        existing = Utilisateur.query.filter_by(email=default_email).first()
+        if existing:
+            existing.role = "SUPER_ADMIN"
+            existing.tenant_id = None
+            existing.actif = True
+            if os.environ.get("SUPER_ADMIN_PASSWORD"):
+                existing.set_password(os.environ["SUPER_ADMIN_PASSWORD"])
+        else:
+            sa = Utilisateur(
+                nom="ADMIN",
+                prenom="Super",
+                email=default_email,
+                role="SUPER_ADMIN",
+                tenant_id=None,
+                actif=True,
+            )
+            sa.set_password(os.environ.get("SUPER_ADMIN_PASSWORD", "Admin2026!"))
+            db.session.add(sa)
+        changed = True
+
+    if changed:
+        db.session.commit()
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 @app.route("/")
 def index():
@@ -1442,9 +1498,7 @@ def init_db():
             ("FNH","Fonds National Habitat","COTISATION",None,0.03,1500000),
             ("CFP","Contribution Formation Professionnelle","COTISATION",None,0.005,None),
         ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
-    if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
-        sa.set_password(os.environ.get("SUPER_ADMIN_PASSWORD","Admin2026!")); db.session.add(sa)
+    ensure_super_admin_accounts()
     if not Tenant.query.first():
         db.session.flush()
         plan=Plan.query.filter_by(code="PRO").first()
@@ -1458,7 +1512,12 @@ def init_db():
         u=Utilisateur(nom="DEMO",prenom="Responsable",email="demo@paiegalon.ga",role="TENANT_ADMIN",tenant_id=t.id,actif=True)
         u.set_password(os.environ.get("DEMO_PASSWORD","Demo2026!")); db.session.add(u)
     db.session.commit()
-    print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
+    sa = Utilisateur.query.filter_by(role="SUPER_ADMIN").first()
+    sa_line = f"  Super-admin: {sa.email}\n" if sa else ""
+    extra = ""
+    if _super_admin_emails_from_env():
+        extra = f"  SUPER_ADMIN_EMAIL configuré: {', '.join(_super_admin_emails_from_env())}\n"
+    print(f"Base initialisée.\n{sa_line}{extra}  Compte démo: demo@paiegalon.ga / Demo2026!")
 
 with app.app_context():
     try:
