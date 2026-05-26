@@ -31,9 +31,24 @@
       </div>
     </div>
   </div>
-  <div style="display:flex;gap:.75rem">
-    <a href="/salaries/{{ salarie.id }}/modifier" style="background:rgba(255,255,255,.15);color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">✏️ Modifier</a>
-    <a href="/bulletins/saisie?salarie_id={{ salarie.id }}" style="background:#f59e0b;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">📄 Nouveau bulletin</a>
+  <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:flex-end">
+    <a href="/salaries/{{ salarie.id }}/modifier"
+       style="background:rgba(255,255,255,.15);color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      ✏️ Modifier
+    </a>
+    <a href="/bulletins/saisie?salarie_id={{ salarie.id }}"
+       style="background:#f59e0b;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      📄 Nouveau bulletin
+    </a>
+    {% if current_user.is_tenant_admin %}
+    <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="margin:0"
+      onsubmit="return confirm('⚠️ Supprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données (bulletins brouillon, contrats, pointages, acomptes, congés) seront effacées.\n\nCette action est IRRÉVERSIBLE.')">
+      <button type="submit"
+        style="background:#dc2626;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+        🗑️ Supprimer
+      </button>
+    </form>
+    {% endif %}
   </div>
 </div>
 
@@ -170,6 +185,30 @@
       {% endif %}
     </div>
 
+    <!-- Zone danger — suppression -->
+    {% if current_user.is_tenant_admin %}
+    <div class="card p-5" style="border:1px solid #fca5a5;background:#fef2f2">
+      <h2 class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#dc2626">⚠️ Zone dangereuse</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-bottom:1rem;line-height:1.6">
+        La suppression est <strong>définitive et irréversible</strong>.<br/>
+        Si ce salarié a des bulletins validés, préférez le passer en <strong>INACTIF</strong>.
+      </p>
+      <div style="display:flex;gap:.75rem">
+        <a href="/salaries/{{ salarie.id }}/modifier"
+           style="flex:1;text-align:center;background:#f3f4f6;color:#374151;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;text-decoration:none">
+          👤 Passer en INACTIF
+        </a>
+        <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="flex:1;margin:0"
+          onsubmit="return confirm('⚠️ ATTENTION\n\nSupprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données seront effacées.\nCette action est IRRÉVERSIBLE.')">
+          <button type="submit"
+            style="width:100%;background:#dc2626;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+            🗑️ Supprimer définitivement
+          </button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+
   </div>
 
   <!-- Colonne droite : historique bulletins -->
@@ -207,7 +246,6 @@
           </tr>
           {% endfor %}
         </tbody>
-        <!-- Total -->
         <tfoot>
           <tr style="background:#f9fafb;font-weight:900">
             <td style="padding:.5rem .75rem;font-size:.8rem">TOTAL ({{ nb_mois }} mois)</td>
@@ -231,7 +269,6 @@
 {% endblock %}
 {% block scripts %}
 <script>
-// Injecter la date courante pour les congés
 const now = new Date();
 </script>
 {% endblock %}
