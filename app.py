@@ -1569,6 +1569,21 @@ with app.app_context():
             db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
             db.session.commit()
         except Exception: db.session.rollback()
+        # Agrandir colonnes VARCHAR trop courtes pour les imports Excel
+        for sql in [
+            "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
+            "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
+            "ALTER TABLE salaries ALTER COLUMN prenom TYPE VARCHAR(100)",
+            "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
+            "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
+            "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
+            "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
+            "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
+        ]:
+            try:
+                db.session.execute(db.text(sql))
+                db.session.commit()
+            except Exception: db.session.rollback()
         init_db()
         print("✅ Tables créées et base initialisée.")
     except Exception as e:
