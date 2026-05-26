@@ -175,28 +175,13 @@ def mot_de_passe_oublie():
             db.session.commit()
             lien = url_for("reinitialiser_mdp", token=token, _external=True)
             try:
-                msg = Message(
-                    subject="Réinitialisation de votre mot de passe — PaieGabon",
+                msg = Message(subject="Réinitialisation mot de passe — PaieGabon",
                     recipients=[email],
-                    body=f"""Bonjour {user.prenom or user.nom},
-
-Vous avez demandé la réinitialisation de votre mot de passe.
-
-Cliquez sur ce lien pour créer un nouveau mot de passe (valable 2 heures) :
-{lien}
-
-Si vous n'avez pas fait cette demande, ignorez cet email.
-
-Cordialement,
-L'équipe PaieGabon — Ameriack I.T. Solutions
-""",
-                    sender=app.config["MAIL_DEFAULT_SENDER"]
-                )
+                    body=f"Bonjour {user.prenom or user.nom},\n\nLien valable 2h :\n{lien}\n\nCordialement,\nPaieGabon",
+                    sender=app.config["MAIL_DEFAULT_SENDER"])
                 send_email_async(msg)
-            except Exception as e:
-                print(f"[RESET EMAIL ERROR] {e}")
-        # Toujours afficher le même message (sécurité anti-énumération)
-        flash("Si cet email existe dans notre système, vous recevrez un lien de réinitialisation.", "success")
+            except Exception as e: print(f"[RESET EMAIL ERROR] {e}")
+        flash("Si cet email existe, vous recevrez un lien de réinitialisation.", "success")
         return redirect(url_for("login"))
     return render_template("auth/mot_de_passe_oublie.html")
 
@@ -205,22 +190,15 @@ def reinitialiser_mdp(token):
     if current_user.is_authenticated: return redirect(url_for("index"))
     user = Utilisateur.query.filter_by(reset_token=token, actif=True).first()
     if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
-        flash("Lien invalide ou expiré. Veuillez faire une nouvelle demande.", "error")
+        flash("Lien invalide ou expiré.", "error")
         return redirect(url_for("mot_de_passe_oublie"))
     if request.method == "POST":
-        pw1 = request.form.get("password","")
-        pw2 = request.form.get("password2","")
-        if len(pw1) < 6:
-            flash("Le mot de passe doit contenir au moins 6 caractères.", "error")
-            return render_template("auth/reinitialiser_mdp.html", token=token)
-        if pw1 != pw2:
-            flash("Les mots de passe ne correspondent pas.", "error")
-            return render_template("auth/reinitialiser_mdp.html", token=token)
-        user.set_password(pw1)
-        user.reset_token = None
-        user.reset_token_expiry = None
+        pw1 = request.form.get("password",""); pw2 = request.form.get("password2","")
+        if len(pw1) < 6: flash("Minimum 6 caractères.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
+        if pw1 != pw2: flash("Mots de passe différents.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
+        user.set_password(pw1); user.reset_token = None; user.reset_token_expiry = None
         db.session.commit()
-        flash("Mot de passe mis à jour ! Vous pouvez maintenant vous connecter.", "success")
+        flash("Mot de passe mis à jour !", "success")
         return redirect(url_for("login"))
     return render_template("auth/reinitialiser_mdp.html", token=token)
 
@@ -918,13 +896,26 @@ def parametres_logo():
     if logo_file and logo_file.filename:
         import base64
         file_data = logo_file.read()
+        if len(file_data) > 1_000_000:  # 1 Mo max
+            flash("Fichier trop volumineux. Maximum 1 Mo.", "error")
+            return redirect(url_for("parametres"))
         ext = logo_file.filename.rsplit(".", 1)[-1].lower()
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
-        t.logo_url = f"data:{mime};base64,{b64}"
-        db.session.commit(); flash("Logo mis a jour.", "success")
+        logo_data = f"data:{mime};base64,{b64}"
+        # Mise à jour directe via SQL pour contourner limite VARCHAR
+        try:
+            db.session.execute(
+                db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),
+                {"logo": logo_data, "id": t.id}
+            )
+            db.session.commit()
+            flash("Logo mis à jour avec succès.", "success")
+        except Exception as e:
+            db.session.rollback()
+            flash(f"Erreur sauvegarde logo: {str(e)}", "error")
     else:
-        flash("Aucun fichier.", "error")
+        flash("Aucun fichier sélectionné.", "error")
     return redirect(url_for("parametres"))
 
 @app.route("/parametres/logo/supprimer", methods=["POST"])
@@ -941,8 +932,9 @@ def parametres_logo_supprimer():
 @can_edit
 def parametres_societe():
     t=get_tenant()
-    for f in ["denomination","sigle","activite","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
-        setattr(t,f,request.form.get(f,"").strip() or None)
+    for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
+        try: setattr(t,f,request.form.get(f,"").strip() or None)
+        except: pass  # champ inexistant dans le modèle
     db.session.commit(); flash("Informations mises à jour.","success")
     return redirect(url_for("parametres"))
 
@@ -1550,7 +1542,15 @@ with app.app_context():
                 db.session.commit()
             except Exception: db.session.rollback()
         try:
-            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
+            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)"))
             db.session.commit()
         except Exception: db.session.rollback()
         try:
@@ -1569,7 +1569,6 @@ with app.app_context():
             db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
             db.session.commit()
         except Exception: db.session.rollback()
-        # Agrandir colonnes VARCHAR trop courtes pour les imports Excel
         for sql in [
             "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
             "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
