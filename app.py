@@ -628,11 +628,10 @@ def salarie_supprimer(id):
         return redirect(url_for("salaries"))
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     nom = s.nom_complet
-    # Vérifier bulletins validés ou payés
     bulletins_actifs = BulletinPaie.query.filter_by(salarie_id=id).filter(
         BulletinPaie.statut.in_(["VALIDÉ","PAYÉ"])).count()
     if bulletins_actifs > 0:
-        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s) ou payé(s) existent. Mettez le salarié en INACTIF à la place.", "error")
+        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s). Passez-le en INACTIF.", "error")
         return redirect(url_for("salarie_detail", id=id))
     try:
         BulletinPaie.query.filter_by(salarie_id=id).delete()
@@ -640,12 +639,10 @@ def salarie_supprimer(id):
         Pointage.query.filter_by(salarie_id=id).delete()
         Acompte.query.filter_by(salarie_id=id).delete()
         Conge.query.filter_by(salarie_id=id).delete()
-        db.session.delete(s)
-        db.session.commit()
-        flash(f"Salarié {nom} supprimé définitivement.", "success")
+        db.session.delete(s); db.session.commit()
+        flash(f"Salarié {nom} supprimé.", "success")
     except Exception as e:
-        db.session.rollback()
-        flash(f"Erreur lors de la suppression : {str(e)}", "error")
+        db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
         return redirect(url_for("salarie_detail", id=id))
     return redirect(url_for("salaries"))
 
@@ -936,12 +933,10 @@ def parametres_logo():
         logo_data = f"data:{mime};base64,{b64}"
         try:
             db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
-            db.session.commit()
-            db.session.expire(t)  # forcer le rechargement depuis la BDD
+            db.session.commit(); db.session.expire(t)
             flash("Logo mis à jour avec succès.", "success")
         except Exception as e:
-            db.session.rollback()
-            flash(f"Erreur sauvegarde logo: {str(e)}", "error")
+            db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
     else:
         flash("Aucun fichier sélectionné.", "error")
     return redirect(url_for("parametres"))
@@ -1151,21 +1146,55 @@ def journaliers_paie_generer():
     if not t: return redirect(url_for("login"))
     date_debut = _parse_date(request.form.get("date_debut"))
     date_fin   = _parse_date(request.form.get("date_fin"))
-    if not date_debut or not date_fin: flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
-    nb = 0
-    for j in Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all():
-        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
-              .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin, Pointage.present==True).all()
-        total_h = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
-        nb_jours = len(pts)
-        if nb_jours == 0: continue
-        if FeuillePaieJournalier.query.filter_by(tenant_id=t.id, journalier_id=j.id, date_debut=date_debut, date_fin=date_fin).first(): continue
-        db.session.add(FeuillePaieJournalier(tenant_id=t.id, journalier_id=j.id,
-            date_debut=date_debut, date_fin=date_fin, nb_jours=nb_jours, total_heures=total_h,
-            taux_horaire=j.taux_horaire, montant_brut=round(total_h*float(j.taux_horaire),2), statut="EN_ATTENTE"))
+    if not date_debut or not date_fin:
+        flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
+    # Récupérer les journaliers sélectionnés (ou tous si aucun coché)
+    ids_selectionnes = request.form.getlist("journalier_ids")
+    nb = 0; nb_skip = 0
+    if ids_selectionnes:
+        journaliers_list = [Journalier.query.filter_by(id=int(jid), tenant_id=t.id).first()
+                            for jid in ids_selectionnes if jid]
+        journaliers_list = [j for j in journaliers_list if j]
+    else:
+        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+    for j in journaliers_list:
+        # Récupérer heures depuis pointage OU utiliser les heures saisies manuellement
+        heures_manuelles = request.form.get(f"heures_{j.id}", "").strip()
+        if heures_manuelles:
+            # Saisie manuelle des heures
+            try:
+                total_h = float(heures_manuelles)
+                nb_jours = 0  # non dispo en saisie manuelle
+            except: continue
+        else:
+            # Depuis le pointage
+            pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
+                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
+                          Pointage.present==True).all()
+            # Heures sup = même taux que normales (pas de majoration)
+            total_h = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
+            nb_jours = len(pts)
+            if total_h == 0: nb_skip += 1; continue
+        # Taux personnalisé si saisi
+        taux_str = request.form.get(f"taux_{j.id}", "").strip()
+        taux = float(taux_str) if taux_str else float(j.taux_horaire)
+        # Éviter doublons
+        if FeuillePaieJournalier.query.filter_by(
+                tenant_id=t.id, journalier_id=j.id,
+                date_debut=date_debut, date_fin=date_fin).first():
+            nb_skip += 1; continue
+        db.session.add(FeuillePaieJournalier(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin,
+            nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=taux,
+            montant_brut=round(total_h * taux, 2),
+            statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
-    flash(f"{nb} feuille(s) générée(s).", "success")
+    msg = f"{nb} feuille(s) générée(s)."
+    if nb_skip: msg += f" {nb_skip} ignorée(s) (doublon ou 0h)."
+    flash(msg, "success" if nb > 0 else "warning")
     return redirect(url_for("journaliers_paie"))
 
 @app.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
@@ -1184,6 +1213,10 @@ def journalier_feuille_modifier(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.form.get("total_heures"):
+        f.total_heures = float(request.form.get("total_heures"))
+    if request.form.get("taux_horaire_modif"):
+        f.taux_horaire = float(request.form.get("taux_horaire_modif"))
     f.montant_brut = float(request.form.get("montant_brut", f.montant_brut) or f.montant_brut)
     f.observation  = request.form.get("observation", "").strip()
     db.session.commit(); flash("Feuille modifiée.", "success")
@@ -1562,13 +1595,12 @@ def init_db():
 with app.app_context():
     try:
         db.create_all()
-        # ── Migrations colonnes manquantes ──────────────────────────────────
+        # ── Migrations ──────────────────────────────────────────────────────
         for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
             try:
                 db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
                 db.session.commit()
             except Exception: db.session.rollback()
-        # Colonnes tenant
         for sql in [
             "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
             "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
@@ -1576,11 +1608,6 @@ with app.app_context():
             "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
             "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
             "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
-        ]:
-            try: db.session.execute(db.text(sql)); db.session.commit()
-            except Exception: db.session.rollback()
-        # Colonnes salaries
-        for sql in [
             "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
             "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
             "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
@@ -1588,14 +1615,15 @@ with app.app_context():
             "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
             "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
             "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
-        ]:
-            try: db.session.execute(db.text(sql)); db.session.commit()
-            except Exception: db.session.rollback()
-        # Autres colonnes
-        for sql in [
             "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
+            "ALTER TABLE journaliers ALTER COLUMN taux_horaire TYPE NUMERIC(12,2)",
             "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
             "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
+            # Nouveaux éléments de salaire dans bulletins_paie
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
         ]:
             try: db.session.execute(db.text(sql)); db.session.commit()
             except Exception: db.session.rollback()
