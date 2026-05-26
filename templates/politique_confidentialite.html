@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Politique de confidentialité — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<nav class="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shadow">
+  <div>
+    <span class="text-lg font-black">Ameriack I.T. Solutions</span>
+    <span class="text-slate-400 text-sm ml-2">— PaieGabon</span>
+  </div>
+  <a href="/login" class="text-sm text-slate-300 hover:text-white font-semibold">← Retour à la connexion</a>
+</nav>
+
+<main class="max-w-3xl mx-auto p-6 py-10">
+  <div class="bg-white rounded-2xl shadow border border-gray-100 p-8">
+
+    <h1 class="text-3xl font-black text-gray-900 mb-2">Politique de Confidentialité</h1>
+    <p class="text-gray-500 text-sm mb-8">Dernière mise à jour : 26 mai 2026 — Ameriack I.T. Solutions</p>
+
+    <!-- 1 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">1</span>
+        Qui sommes-nous ?
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        <strong>Ameriack I.T. Solutions</strong> est l'éditeur de <strong>PaieGabon</strong>, un logiciel SaaS de gestion de la paie destiné aux entreprises opérant au Gabon. Notre siège social est au Gabon. Vous pouvez nous contacter à l'adresse <a href="mailto:ameriack5@gmail.com" class="text-blue-600 hover:underline">ameriack5@gmail.com</a>.
+      </p>
+    </section>
+
+    <!-- 2 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">2</span>
+        Données collectées
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed mb-3">Dans le cadre de l'utilisation de PaieGabon, nous collectons les données suivantes :</p>
+      <ul class="space-y-2 text-sm text-gray-600">
+        {% for item in [
+          ('🏢', 'Données entreprise', 'dénomination sociale, NIF, adresse, contacts, secteur d\'activité'),
+          ('👤', 'Données utilisateurs', 'nom, prénom, adresse email, mot de passe chiffré, rôle'),
+          ('👷', 'Données salariés', 'identité, numéro CNSS/CNAMGS, situation familiale, salaire, bulletins de paie'),
+          ('📊', 'Données de paie', 'bulletins, cotisations sociales, IRPP, heures supplémentaires, acomptes'),
+          ('📋', 'Données de pointage', 'présences, absences, heures travaillées'),
+        ] %}
+        <li class="flex items-start gap-3 bg-gray-50 rounded-xl p-3">
+          <span class="text-xl">{{ item[0] }}</span>
+          <div>
+            <span class="font-bold text-gray-800">{{ item[1] }} :</span>
+            <span class="text-gray-500"> {{ item[2] }}</span>
+          </div>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+
+    <!-- 3 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">3</span>
+        Finalités du traitement
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+        {% for f in [
+          ('✅', 'Calcul et gestion de la paie'),
+          ('📧', 'Envoi des bulletins de paie par email'),
+          ('🔐', 'Authentification et sécurité des accès'),
+          ('📉', 'Statistiques internes anonymisées'),
+          ('💳', 'Gestion des abonnements'),
+          ('⚖️', 'Conformité légale et fiscale gabonaise'),
+        ] %}
+        <div class="flex items-center gap-2 bg-gray-50 rounded-xl px-3 py-2">
+          <span>{{ f[0] }}</span><span class="text-gray-700">{{ f[1] }}</span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- 4 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">4</span>
+        Hébergement et sécurité
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        PaieGabon est hébergé sur <strong>Railway</strong> (infrastructure cloud sécurisée). Les données sont stockées dans une base de données <strong>PostgreSQL</strong> chiffrée. Les mots de passe sont hachés (non lisibles). Les communications sont chiffrées via <strong>HTTPS/TLS</strong>. Seul le personnel autorisé d'Ameriack I.T. Solutions a accès aux données de production.
+      </p>
+    </section>
+
+    <!-- 5 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">5</span>
+        Partage des données
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        Vos données ne sont <strong>jamais vendues ni cédées</strong> à des tiers. Elles peuvent être partagées uniquement avec :
+      </p>
+      <ul class="mt-2 space-y-1 text-sm text-gray-600 list-disc list-inside">
+        <li>Les prestataires techniques indispensables (hébergeur Railway, service email Gmail)</li>
+        <li>Les autorités compétentes gabonaises en cas d'obligation légale</li>
+      </ul>
+    </section>
+
+    <!-- 6 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">6</span>
+        Durée de conservation
+      </h2>
+      <div class="space-y-2 text-sm">
+        {% for d in [
+          ('Données de paie', '10 ans', 'obligation légale gabonaise'),
+          ('Données compte utilisateur', 'Durée de l\'abonnement + 1 an', 'après résiliation'),
+          ('Tokens de réinitialisation', '2 heures', 'expiration automatique'),
+          ('Données de pointage', '5 ans', 'archive réglementaire'),
+        ] %}
+        <div class="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-2">
+          <span class="font-semibold text-gray-700">{{ d[0] }}</span>
+          <div class="text-right">
+            <span class="font-black text-blue-700">{{ d[1] }}</span>
+            <span class="text-gray-400 text-xs ml-1">({{ d[2] }})</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    <!-- 7 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">7</span>
+        Vos droits
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed mb-3">Conformément aux principes de protection des données personnels, vous disposez des droits suivants :</p>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+        {% for r in [
+          ('👁️', 'Accès', 'consulter vos données'),
+          ('✏️', 'Rectification', 'corriger vos données'),
+          ('🗑️', 'Suppression', 'effacer vos données'),
+          ('📦', 'Portabilité', 'exporter vos données'),
+          ('🚫', 'Opposition', 'refuser certains traitements'),
+          ('⏸️', 'Limitation', 'restreindre le traitement'),
+        ] %}
+        <div class="bg-blue-50 rounded-xl p-3 text-center">
+          <div class="text-xl mb-1">{{ r[0] }}</div>
+          <div class="font-black text-blue-800 text-xs">{{ r[1] }}</div>
+          <div class="text-gray-500 text-xs mt-0.5">{{ r[2] }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      <p class="text-gray-500 text-sm mt-3">
+        Pour exercer ces droits, contactez-nous : <a href="mailto:ameriack5@gmail.com" class="text-blue-600 font-bold hover:underline">ameriack5@gmail.com</a>
+      </p>
+    </section>
+
+    <!-- 8 -->
+    <section class="mb-7">
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">8</span>
+        Cookies
+      </h2>
+      <p class="text-gray-600 text-sm leading-relaxed">
+        PaieGabon utilise uniquement des cookies de session strictement nécessaires au fonctionnement de l'application (authentification). Aucun cookie publicitaire ou de traçage tiers n'est utilisé.
+      </p>
+    </section>
+
+    <!-- 9 -->
+    <section>
+      <h2 class="text-lg font-black text-slate-800 mb-3 flex items-center gap-2">
+        <span class="bg-blue-100 text-blue-700 w-7 h-7 rounded-full flex items-center justify-center text-sm font-black">9</span>
+        Contact & réclamations
+      </h2>
+      <div class="bg-slate-50 rounded-xl p-4 text-sm text-gray-600">
+        <p><strong>Ameriack I.T. Solutions</strong></p>
+        <p>Email : <a href="mailto:ameriack5@gmail.com" class="text-blue-600 hover:underline">ameriack5@gmail.com</a></p>
+        <p class="mt-2 text-gray-400 text-xs">En cas de litige non résolu, vous pouvez saisir l'Agence Nationale des Infrastructures Numériques et des Fréquences (ANINF) du Gabon.</p>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="text-center py-6 text-gray-400 text-xs">
+  © 2026 Ameriack I.T. Solutions — PaieGabon · Tous droits réservés
+</footer>
+</body>
+</html>
