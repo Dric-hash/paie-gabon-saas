@@ -53,7 +53,7 @@
   </div>
 </div>
 
-<form method="POST" action="/pointage/sauvegarder">
+<form method="POST" action="/pointage/sauvegarder" id="form_pointage">
   <input type="hidden" name="date_pointage" value="{{ date_sel.strftime('%Y-%m-%d') }}"/>
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
 
@@ -61,19 +61,37 @@
     <div class="card overflow-hidden">
       <div style="background:#1a2332;color:white;padding:.75rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
         <h2 style="font-size:.8rem;font-weight:900;text-transform:uppercase">👔 Salariés Mensuels ({{ salaries|length }})</h2>
-        <button type="button" onclick="tousPresents('sal')"
-          style="font-size:.7rem;background:rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer">
-          ✅ Tous présents
-        </button>
+        <div style="display:flex;gap:.5rem;align-items:center">
+          <!-- ✅ Sélection rapide mensuels -->
+          <button type="button" onclick="toggleSelSal(true)"
+            style="font-size:.65rem;background:rgba(255,255,255,.15);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☑ Tous</button>
+          <button type="button" onclick="toggleSelSal(false)"
+            style="font-size:.65rem;background:rgba(255,255,255,.1);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☐ Aucun</button>
+          <button type="button" onclick="tousPresents('sal')"
+            style="font-size:.7rem;background:rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer">
+            ✅ Tous présents
+          </button>
+        </div>
       </div>
       <div style="max-height:600px;overflow-y:auto">
         {% for s in salaries %}
         {% set pt = pts_salaries.get(s.id) %}
-        <div id="row_sal_{{ s.id }}" style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;{% if pt and pt.absent %}background:#fef2f2{% elif pt and pt.present %}background:#f0fdf4{% endif %}">
+        <div id="row_sal_{{ s.id }}"
+          style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;transition:opacity .2s;
+          {% if pt and pt.absent %}background:#fef2f2{% elif pt and pt.present %}background:#f0fdf4{% endif %}">
+
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-            <div>
-              <div style="font-weight:700;font-size:.875rem">{{ s.nom }} {{ s.prenom }}</div>
-              <div style="font-size:.7rem;color:#9ca3af">{{ s.emploi or '—' }} · {{ s.categorie.code if s.categorie else '—' }}</div>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <!-- ✅ Case à cocher sélection -->
+              <input type="checkbox" name="sel_sal_{{ s.id }}" value="{{ s.id }}"
+                class="cb-sel-sal" checked
+                onchange="toggleBlocSal({{ s.id }}, this.checked)"
+                style="width:1rem;height:1rem;accent-color:#1a2332;cursor:pointer;flex-shrink:0"
+                title="Inclure dans le pointage"/>
+              <div>
+                <div style="font-weight:700;font-size:.875rem">{{ s.nom }} {{ s.prenom }}</div>
+                <div style="font-size:.7rem;color:#9ca3af">{{ s.emploi or '—' }} · {{ s.categorie.code if s.categorie else '—' }}</div>
+              </div>
             </div>
             <div style="display:flex;gap:.5rem">
               <label style="cursor:pointer;display:flex;align-items:center;gap:.25rem;font-size:.75rem;font-weight:700">
@@ -150,6 +168,11 @@
       <div style="background:#2563eb;color:white;padding:.75rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
         <h2 style="font-size:.8rem;font-weight:900;text-transform:uppercase">👷 Journaliers ({{ journaliers|length }})</h2>
         <div style="display:flex;gap:.5rem">
+          <!-- ✅ Sélection rapide journaliers -->
+          <button type="button" onclick="toggleSelJour(true)"
+            style="font-size:.65rem;background:rgba(255,255,255,.15);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☑ Tous</button>
+          <button type="button" onclick="toggleSelJour(false)"
+            style="font-size:.65rem;background:rgba(255,255,255,.1);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☐ Aucun</button>
           <button type="button" onclick="tousPresents('jour')"
             style="font-size:.7rem;background:rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer">
             ✅ Tous présents
@@ -161,11 +184,22 @@
       <div style="max-height:600px;overflow-y:auto">
         {% for j in journaliers %}
         {% set pt = pts_journaliers.get(j.id) %}
-        <div id="row_jour_{{ j.id }}" style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;{% if pt and pt.absent %}background:#fef2f2{% elif pt and pt.present %}background:#f0fdf4{% endif %}">
+        <div id="row_jour_{{ j.id }}"
+          style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;transition:opacity .2s;
+          {% if pt and pt.absent %}background:#fef2f2{% elif pt and pt.present %}background:#f0fdf4{% endif %}">
+
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-            <div>
-              <div style="font-weight:700;font-size:.875rem">{{ j.nom }} {{ j.prenom }}</div>
-              <div style="font-size:.7rem;color:#9ca3af">{{ j.profession or '—' }} · <strong style="color:#2563eb">{{ j.taux_horaire }}/h</strong></div>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <!-- ✅ Case à cocher sélection -->
+              <input type="checkbox" name="sel_jour_{{ j.id }}" value="{{ j.id }}"
+                class="cb-sel-jour" checked
+                onchange="toggleBlocJour({{ j.id }}, this.checked)"
+                style="width:1rem;height:1rem;accent-color:#2563eb;cursor:pointer;flex-shrink:0"
+                title="Inclure dans le pointage"/>
+              <div>
+                <div style="font-weight:700;font-size:.875rem">{{ j.nom }} {{ j.prenom }}</div>
+                <div style="font-size:.7rem;color:#9ca3af">{{ j.profession or '—' }} · <strong style="color:#2563eb">{{ j.taux_horaire }}/h</strong></div>
+              </div>
             </div>
             <div style="display:flex;gap:.5rem">
               <label style="cursor:pointer;display:flex;align-items:center;gap:.25rem;font-size:.75rem;font-weight:700">
@@ -184,27 +218,34 @@
               </label>
             </div>
           </div>
-          <!-- Journaliers : normales + sup seulement -->
+
+          <!-- ✅ Journaliers : H. sup SANS majoration (taux normal) -->
           <div id="jour_heures_div_{{ j.id }}" style="{% if pt and pt.absent %}display:none{% endif %}">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.375rem">
               <div>
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">H. normales</label>
-                <input type="number" name="jour_heures_{{ j.id }}" value="{{ pt.heures_normales|int if pt else 8 }}"
+                <input type="number" name="jour_heures_{{ j.id }}" id="jh_{{ j.id }}"
+                  value="{{ pt.heures_normales|int if pt else 8 }}"
                   min="0" max="12" step="0.5"
                   style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
               <div>
-                <label style="font-size:.6rem;color:#f59e0b;font-weight:700;display:block;text-align:center">H. sup (+25%)</label>
-                <input type="number" name="jour_sup_{{ j.id }}" value="{{ pt.heures_sup|int if pt else 0 }}"
-                  min="0" max="8" step="0.5"
-                  style="width:100%;border:1px solid #fcd34d;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
+                <!-- ✅ Label corrigé : plus de +25% -->
+                <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">H. sup</label>
+                <input type="number" name="jour_sup_{{ j.id }}" id="js_{{ j.id }}"
+                  value="{{ pt.heures_sup|int if pt else 0 }}"
+                  min="0" max="12" step="0.5"
+                  style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
               <div style="text-align:center">
                 <label style="font-size:.6rem;color:#059669;font-weight:700;display:block">Gain du jour</label>
                 <div id="gain_{{ j.id }}" style="font-size:.875rem;font-weight:900;color:#059669;padding:.375rem 0">
-                  {{ ((pt.heures_normales|float * j.taux_horaire|float) + (pt.heures_sup|float * j.taux_horaire|float * 1.25))|int|fcfa if pt else (8 * j.taux_horaire|float)|int|fcfa }}
+                  {% set h = pt.heures_normales|float if pt else 8.0 %}
+                  {% set hs = pt.heures_sup|float if pt else 0.0 %}
+                  <!-- ✅ Gain = (h_norm + h_sup) * taux — SANS majoration -->
+                  {{ ((h + hs) * j.taux_horaire|float)|int|fcfa }}
                 </div>
               </div>
             </div>
@@ -236,22 +277,74 @@
 </form>
 
 <script>
+// ── Afficher/masquer motif absence ───────────────────────────────────────────
 function toggleAbsence(type, id, absent) {
   const hDiv = document.getElementById(`${type}_heures_div_${id}`);
   const mDiv = document.getElementById(`${type}_motif_div_${id}`);
   if(absent){ hDiv.style.display='none'; mDiv.style.display='block'; }
   else{ hDiv.style.display=''; mDiv.style.display='none'; }
 }
-function calcGain(id, taux) {
-  const h = parseFloat(document.querySelector(`[name="jour_heures_${id}"]`).value)||0;
-  const s = parseFloat(document.querySelector(`[name="jour_sup_${id}"]`).value)||0;
-  const gain = Math.round(h*taux + s*taux*1.25);
-  document.getElementById(`gain_${id}`).textContent = new Intl.NumberFormat('fr-FR').format(gain)+' FCFA';
-}
+
+// ── Tous présents ────────────────────────────────────────────────────────────
 function tousPresents(type) {
   document.querySelectorAll(`[name^="${type}_present_"]`).forEach(r => {
     if(r.value==='1'){ r.checked=true; const id=r.name.replace(`${type}_present_`,''); toggleAbsence(type,id,false); }
   });
 }
+
+// ── Gain journalier : (h_norm + h_sup) * taux — SANS majoration ──────────────
+function calcGain(id, taux) {
+  const h  = parseFloat(document.getElementById('jh_' + id)?.value || 0) || 0;
+  const hs = parseFloat(document.getElementById('js_' + id)?.value || 0) || 0;
+  // ✅ Pas de majoration : h_sup au même taux que h_norm
+  const gain = Math.round((h + hs) * taux);
+  const el = document.getElementById('gain_' + id);
+  if(el) el.textContent = new Intl.NumberFormat('fr-FR').format(gain) + ' FCFA';
+}
+
+// ── Sélection mensuels ───────────────────────────────────────────────────────
+function toggleBlocSal(id, checked) {
+  const row = document.getElementById('row_sal_' + id);
+  if(!row) return;
+  row.style.opacity = checked ? '1' : '0.35';
+  row.querySelectorAll('input[type=number], input[type=radio], select').forEach(el => el.disabled = !checked);
+  // Laisser la checkbox elle-même active
+  const cb = row.querySelector('.cb-sel-sal');
+  if(cb) cb.disabled = false;
+}
+function toggleSelSal(checked) {
+  document.querySelectorAll('.cb-sel-sal').forEach(cb => {
+    cb.checked = checked;
+    toggleBlocSal(cb.value, checked);
+  });
+}
+
+// ── Sélection journaliers ────────────────────────────────────────────────────
+function toggleBlocJour(id, checked) {
+  const row = document.getElementById('row_jour_' + id);
+  if(!row) return;
+  row.style.opacity = checked ? '1' : '0.35';
+  row.querySelectorAll('input[type=number], input[type=radio], select').forEach(el => el.disabled = !checked);
+  const cb = row.querySelector('.cb-sel-jour');
+  if(cb) cb.disabled = false;
+}
+function toggleSelJour(checked) {
+  document.querySelectorAll('.cb-sel-jour').forEach(cb => {
+    cb.checked = checked;
+    toggleBlocJour(cb.value, checked);
+  });
+}
+
+// ── Au submit : désactiver les blocs non sélectionnés ────────────────────────
+document.getElementById('form_pointage').addEventListener('submit', function() {
+  document.querySelectorAll('.cb-sel-sal:not(:checked)').forEach(cb => {
+    const row = document.getElementById('row_sal_' + cb.value);
+    if(row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
+  });
+  document.querySelectorAll('.cb-sel-jour:not(:checked)').forEach(cb => {
+    const row = document.getElementById('row_jour_' + cb.value);
+    if(row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
+  });
+});
 </script>
 {% endblock %}
