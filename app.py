@@ -616,6 +616,39 @@ def salarie_modifier(id):
         return redirect(url_for("salarie_detail",id=s.id))
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats, action="modifier", tenant=t)
 
+
+@app.route("/salaries/<int:id>/supprimer", methods=["POST"])
+@login_required
+def salarie_supprimer(id):
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Seul l'administrateur peut supprimer un salarié.", "error")
+        return redirect(url_for("salaries"))
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    nom = s.nom_complet
+    # Vérifier bulletins validés ou payés
+    bulletins_actifs = BulletinPaie.query.filter_by(salarie_id=id).filter(
+        BulletinPaie.statut.in_(["VALIDÉ","PAYÉ"])).count()
+    if bulletins_actifs > 0:
+        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s) ou payé(s) existent. Mettez le salarié en INACTIF à la place.", "error")
+        return redirect(url_for("salarie_detail", id=id))
+    try:
+        BulletinPaie.query.filter_by(salarie_id=id).delete()
+        Contrat.query.filter_by(salarie_id=id).delete()
+        Pointage.query.filter_by(salarie_id=id).delete()
+        Acompte.query.filter_by(salarie_id=id).delete()
+        Conge.query.filter_by(salarie_id=id).delete()
+        db.session.delete(s)
+        db.session.commit()
+        flash(f"Salarié {nom} supprimé définitivement.", "success")
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Erreur lors de la suppression : {str(e)}", "error")
+        return redirect(url_for("salarie_detail", id=id))
+    return redirect(url_for("salaries"))
+
 # ── Bulletins ─────────────────────────────────────────────────────────────────
 @app.route("/bulletins")
 @login_required
