@@ -160,65 +160,17 @@ def inscription():
 def logout():
     logout_user(); return redirect(url_for("login"))
 
-
-@app.route("/mot-de-passe-oublie", methods=["GET","POST"])
-def mot_de_passe_oublie():
-    if current_user.is_authenticated: return redirect(url_for("index"))
-    if request.method == "POST":
-        email = request.form.get("email","").strip().lower()
-        user = Utilisateur.query.filter_by(email=email, actif=True).first()
-        if user:
-            token = sec.token_urlsafe(32)
-            user.reset_token = token
-            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=2)
-            db.session.commit()
-            lien = url_for("reinitialiser_mdp", token=token, _external=True)
-            try:
-                msg = Message(subject="Réinitialisation mot de passe — PaieGabon",
-                    recipients=[email],
-                    body=f"Bonjour {user.prenom or user.nom},\n\nLien valable 2h :\n{lien}\n\nCordialement,\nPaieGabon",
-                    sender=app.config["MAIL_DEFAULT_SENDER"])
-                send_email_async(msg)
-            except Exception as e: print(f"[RESET EMAIL ERROR] {e}")
-        flash("Si cet email existe, vous recevrez un lien de réinitialisation.", "success")
-        return redirect(url_for("login"))
-    return render_template("auth/mot_de_passe_oublie.html")
-
-@app.route("/reinitialiser-mdp/<token>", methods=["GET","POST"])
-def reinitialiser_mdp(token):
-    if current_user.is_authenticated: return redirect(url_for("index"))
-    user = Utilisateur.query.filter_by(reset_token=token, actif=True).first()
-    if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
-        flash("Lien invalide ou expiré.", "error")
-        return redirect(url_for("mot_de_passe_oublie"))
-    if request.method == "POST":
-        pw1 = request.form.get("password",""); pw2 = request.form.get("password2","")
-        if len(pw1) < 6: flash("Minimum 6 caractères.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
-        if pw1 != pw2: flash("Mots de passe différents.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
-        user.set_password(pw1); user.reset_token = None; user.reset_token_expiry = None
-        db.session.commit(); flash("Mot de passe mis à jour !", "success")
-        return redirect(url_for("login"))
-    return render_template("auth/reinitialiser_mdp.html", token=token)
-
-@app.route("/politique-confidentialite")
-def politique_confidentialite():
-    return render_template("politique_confidentialite.html")
-
 # ── Super-Admin ───────────────────────────────────────────────────────────────
 @app.route("/admin")
 @super_admin_required
 def admin_dashboard():
-    tenants      = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
-    total_sal    = db.session.query(db.func.count(Salarie.id)).scalar() or 0
-    total_bul    = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
-    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
-    nb_tenants   = len(tenants)
-    nb_actifs    = sum(1 for t in tenants if t.statut=="ACTIF")
-    nb_essai     = sum(1 for t in tenants if t.statut=="ESSAI")
-    nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
+    tenants   = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
+    total_sal = db.session.query(db.func.count(Salarie.id)).scalar() or 0
+    total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
+    revenus   = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
     return render_template("admin/dashboard.html",
-        tenants=tenants, nb_tenants=nb_tenants,
-        nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
+        tenants=tenants, nb_actifs=sum(1 for t in tenants if t.statut=="ACTIF"),
+        nb_essai=sum(1 for t in tenants if t.statut=="ESSAI"),
         total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
@@ -469,11 +421,9 @@ def dashboard():
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("login"))
     now=datetime.now()
-    nb_actifs         = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-    nb_inactifs       = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
-    nb_total          = Salarie.query.filter_by(tenant_id=t.id).count()
-    nb_journaliers    = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-    nb_total_employes = nb_actifs + nb_journaliers
+    nb_actifs   = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_inactifs = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
+    nb_total    = Salarie.query.filter_by(tenant_id=t.id).count()
     debut_mois  = datetime(now.year, now.month, 1).date()
     nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id, Salarie.date_embauche>=debut_mois).count()
     periode = PeriodePaie.query.filter_by(tenant_id=t.id, annee=now.year, mois=now.month).first()
@@ -512,7 +462,6 @@ def dashboard():
     if not periode: alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
-        nb_journaliers=nb_journaliers, nb_total_employes=nb_total_employes,
         nb_new_mois=nb_new_mois, periode=periode, masse=masse,
         nb_valides=nb_v, nb_payes=nb_p, nb_brouillon=nb_b,
         evolution=evolution, top_salaries=top_salaries,
@@ -615,36 +564,6 @@ def salarie_modifier(id):
         db.session.commit(); flash("Fiche mise à jour.","success")
         return redirect(url_for("salarie_detail",id=s.id))
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats, action="modifier", tenant=t)
-
-
-@app.route("/salaries/<int:id>/supprimer", methods=["POST"])
-@login_required
-def salarie_supprimer(id):
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    if not current_user.is_tenant_admin:
-        flash("Seul l'administrateur peut supprimer un salarié.", "error")
-        return redirect(url_for("salaries"))
-    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    nom = s.nom_complet
-    bulletins_actifs = BulletinPaie.query.filter_by(salarie_id=id).filter(
-        BulletinPaie.statut.in_(["VALIDÉ","PAYÉ"])).count()
-    if bulletins_actifs > 0:
-        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s). Passez-le en INACTIF.", "error")
-        return redirect(url_for("salarie_detail", id=id))
-    try:
-        BulletinPaie.query.filter_by(salarie_id=id).delete()
-        Contrat.query.filter_by(salarie_id=id).delete()
-        Pointage.query.filter_by(salarie_id=id).delete()
-        Acompte.query.filter_by(salarie_id=id).delete()
-        Conge.query.filter_by(salarie_id=id).delete()
-        db.session.delete(s); db.session.commit()
-        flash(f"Salarié {nom} supprimé.", "success")
-    except Exception as e:
-        db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
-        return redirect(url_for("salarie_detail", id=id))
-    return redirect(url_for("salaries"))
 
 # ── Bulletins ─────────────────────────────────────────────────────────────────
 @app.route("/bulletins")
@@ -924,21 +843,13 @@ def parametres_logo():
     if logo_file and logo_file.filename:
         import base64
         file_data = logo_file.read()
-        if len(file_data) > 1_000_000:
-            flash("Fichier trop volumineux. Maximum 1 Mo.", "error")
-            return redirect(url_for("parametres"))
         ext = logo_file.filename.rsplit(".", 1)[-1].lower()
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
-        logo_data = f"data:{mime};base64,{b64}"
-        try:
-            db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
-            db.session.commit(); db.session.expire(t)
-            flash("Logo mis à jour avec succès.", "success")
-        except Exception as e:
-            db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
+        t.logo_url = f"data:{mime};base64,{b64}"
+        db.session.commit(); flash("Logo mis a jour.", "success")
     else:
-        flash("Aucun fichier sélectionné.", "error")
+        flash("Aucun fichier.", "error")
     return redirect(url_for("parametres"))
 
 @app.route("/parametres/logo/supprimer", methods=["POST"])
@@ -955,9 +866,8 @@ def parametres_logo_supprimer():
 @can_edit
 def parametres_societe():
     t=get_tenant()
-    for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
-        try: setattr(t,f,request.form.get(f,"").strip() or None)
-        except: pass
+    for f in ["denomination","sigle","activite","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
+        setattr(t,f,request.form.get(f,"").strip() or None)
     db.session.commit(); flash("Informations mises à jour.","success")
     return redirect(url_for("parametres"))
 
@@ -1038,7 +948,6 @@ def journalier_nouveau():
             telephone=request.form.get("telephone","").strip(),
             profession=request.form.get("profession","").strip().upper(),
             taux_horaire=float(request.form.get("taux_horaire",0) or 0),
-            date_embauche=_parse_date(request.form.get("date_embauche")),
             statut="ACTIF")
         db.session.add(j); db.session.commit()
         flash(f"Journalier {j.nom_complet} créé.", "success")
@@ -1056,7 +965,6 @@ def journalier_modifier(id):
         j.telephone=request.form.get("telephone","").strip()
         j.profession=request.form.get("profession","").strip().upper()
         j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
-        j.date_embauche=_parse_date(request.form.get("date_embauche"))
         j.statut=request.form.get("statut","ACTIF")
         db.session.commit(); flash("Journalier mis à jour.", "success")
         return redirect(url_for("journaliers"))
@@ -1100,9 +1008,15 @@ def pointage_sauvegarder():
     try: date_p = datetime.strptime(date_str, "%Y-%m-%d").date()
     except: flash("Date invalide.", "error"); return redirect(url_for("pointage"))
     nb = 0
+    # ✅ Récupérer les IDs sélectionnés (cases cochées = inclus dans le pointage)
+    sel_sal  = {v for k,v in request.form.items() if k.startswith("sel_sal_")}
+    sel_jour = {v for k,v in request.form.items() if k.startswith("sel_jour_")}
     for key, val in request.form.items():
         if key.startswith("sal_present_"):
-            sid = int(key.replace("sal_present_",""))
+            sid_str = key.replace("sal_present_","")
+            # ✅ Ignorer si non sélectionné
+            if sid_str not in sel_sal: continue
+            sid = int(sid_str)
             present = val == "1"; absent = not present
             pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, salarie_id=sid).first()
             if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=sid); db.session.add(pt)
@@ -1115,11 +1029,15 @@ def pointage_sauvegarder():
             pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
             nb += 1
         if key.startswith("jour_present_"):
-            jid = int(key.replace("jour_present_",""))
+            jid_str = key.replace("jour_present_","")
+            # ✅ Ignorer si non sélectionné
+            if jid_str not in sel_jour: continue
+            jid = int(jid_str)
             present = val == "1"; absent = not present
             pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, journalier_id=jid).first()
             if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=jid); db.session.add(pt)
             pt.present=present; pt.absent=absent
+            # ✅ Heures sup journaliers sans majoration (même taux que normales)
             pt.heures_normales = float(request.form.get(f"jour_heures_{jid}", 8) or 8)
             pt.heures_sup      = float(request.form.get(f"jour_sup_{jid}", 0) or 0)
             pt.motif_absence   = request.form.get(f"jour_motif_{jid}", "") if absent else None
@@ -1146,55 +1064,21 @@ def journaliers_paie_generer():
     if not t: return redirect(url_for("login"))
     date_debut = _parse_date(request.form.get("date_debut"))
     date_fin   = _parse_date(request.form.get("date_fin"))
-    if not date_debut or not date_fin:
-        flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
-    # Récupérer les journaliers sélectionnés (ou tous si aucun coché)
-    ids_selectionnes = request.form.getlist("journalier_ids")
-    nb = 0; nb_skip = 0
-    if ids_selectionnes:
-        journaliers_list = [Journalier.query.filter_by(id=int(jid), tenant_id=t.id).first()
-                            for jid in ids_selectionnes if jid]
-        journaliers_list = [j for j in journaliers_list if j]
-    else:
-        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
-    for j in journaliers_list:
-        # Récupérer heures depuis pointage OU utiliser les heures saisies manuellement
-        heures_manuelles = request.form.get(f"heures_{j.id}", "").strip()
-        if heures_manuelles:
-            # Saisie manuelle des heures
-            try:
-                total_h = float(heures_manuelles)
-                nb_jours = 0  # non dispo en saisie manuelle
-            except: continue
-        else:
-            # Depuis le pointage
-            pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
-                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
-                          Pointage.present==True).all()
-            # Heures sup = même taux que normales (pas de majoration)
-            total_h = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
-            nb_jours = len(pts)
-            if total_h == 0: nb_skip += 1; continue
-        # Taux personnalisé si saisi
-        taux_str = request.form.get(f"taux_{j.id}", "").strip()
-        taux = float(taux_str) if taux_str else float(j.taux_horaire)
-        # Éviter doublons
-        if FeuillePaieJournalier.query.filter_by(
-                tenant_id=t.id, journalier_id=j.id,
-                date_debut=date_debut, date_fin=date_fin).first():
-            nb_skip += 1; continue
-        db.session.add(FeuillePaieJournalier(
-            tenant_id=t.id, journalier_id=j.id,
-            date_debut=date_debut, date_fin=date_fin,
-            nb_jours=nb_jours, total_heures=total_h,
-            taux_horaire=taux,
-            montant_brut=round(total_h * taux, 2),
-            statut="EN_ATTENTE"))
+    if not date_debut or not date_fin: flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
+    nb = 0
+    for j in Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all():
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
+              .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin, Pointage.present==True).all()
+        total_h = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
+        nb_jours = len(pts)
+        if nb_jours == 0: continue
+        if FeuillePaieJournalier.query.filter_by(tenant_id=t.id, journalier_id=j.id, date_debut=date_debut, date_fin=date_fin).first(): continue
+        db.session.add(FeuillePaieJournalier(tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin, nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=j.taux_horaire, montant_brut=round(total_h*float(j.taux_horaire),2), statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
-    msg = f"{nb} feuille(s) générée(s)."
-    if nb_skip: msg += f" {nb_skip} ignorée(s) (doublon ou 0h)."
-    flash(msg, "success" if nb > 0 else "warning")
+    flash(f"{nb} feuille(s) générée(s).", "success")
     return redirect(url_for("journaliers_paie"))
 
 @app.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
@@ -1213,10 +1097,6 @@ def journalier_feuille_modifier(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    if request.form.get("total_heures"):
-        f.total_heures = float(request.form.get("total_heures"))
-    if request.form.get("taux_horaire_modif"):
-        f.taux_horaire = float(request.form.get("taux_horaire_modif"))
     f.montant_brut = float(request.form.get("montant_brut", f.montant_brut) or f.montant_brut)
     f.observation  = request.form.get("observation", "").strip()
     db.session.commit(); flash("Feuille modifiée.", "success")
@@ -1415,27 +1295,6 @@ def conge_supprimer(id):
     flash("Demande supprimée.", "success")
     return redirect(url_for("conges"))
 
-
-@app.route("/salaries/imprimer")
-@login_required
-def salaries_imprimer():
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
-    for s in salaries_list:
-        s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
-    return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
-
-@app.route("/journaliers/imprimer")
-@login_required
-def journaliers_imprimer():
-    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    journaliers_list = Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all()
-    return render_template("tenant/journaliers_print.html", journaliers=journaliers_list, tenant=t, now=datetime.now())
-
 # ── Export & API ──────────────────────────────────────────────────────────────
 @app.route("/bulletins/export/<int:periode_id>")
 @tenant_required
@@ -1595,38 +1454,20 @@ def init_db():
 with app.app_context():
     try:
         db.create_all()
-        # ── Migrations ──────────────────────────────────────────────────────
+        # Migrations colonnes manquantes
         for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
             try:
                 db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
                 db.session.commit()
             except Exception: db.session.rollback()
-        for sql in [
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
-            "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
-            "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
-            "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
-            "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
-            "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
-            "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
-            "ALTER TABLE salaries ALTER COLUMN prenom TYPE VARCHAR(100)",
-            "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
-            "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
-            "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
-            "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
-            "ALTER TABLE journaliers ALTER COLUMN taux_horaire TYPE NUMERIC(12,2)",
-            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
-            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
-            # Nouveaux éléments de salaire dans bulletins_paie
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
-        ]:
-            try: db.session.execute(db.text(sql)); db.session.commit()
-            except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url VARCHAR(500)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
         init_db()
         print("✅ Tables créées et base initialisée.")
     except Exception as e:
