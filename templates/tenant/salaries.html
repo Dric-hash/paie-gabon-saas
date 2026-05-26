@@ -1,90 +1,134 @@
-{% extends "tenant/base.html" %}
-{% block title %}Salariés — {{ tenant.denomination }}{% endblock %}
-{% block content %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Salariés — {{ tenant.denomination }}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>body{font-family:'Segoe UI',system-ui,sans-serif;}.card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06);}</style>
+</head>
+<body class="bg-gray-50 min-h-screen">
 
-<div class="flex items-center justify-between mb-6">
-  <div>
-    <h1 class="text-2xl font-black text-gray-900">Salariés</h1>
-    <p class="text-gray-500 text-sm mt-1">{{ salaries|length }} salarié(s) trouvé(s)</p>
+<nav class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
+  <div class="flex items-center gap-3">
+    {% if tenant.logo_url %}<img src="{{ tenant.logo_url }}" alt="Logo" class="h-8 w-auto rounded">{% endif %}
+    <span class="font-black">{{ tenant.denomination }}</span>
   </div>
-  <a href="/salaries/nouveau" class="btn-primary">+ Nouveau salarié</a>
-</div>
+  <div class="flex items-center gap-3 text-sm">
+    <a href="/dashboard" class="hover:text-slate-200">Dashboard</a>
+    <a href="/salaries" class="font-semibold hover:text-slate-200">Salariés</a>
+    <a href="/bulletins" class="hover:text-slate-200">Bulletins</a>
+    <a href="/periodes" class="hover:text-slate-200">Périodes</a>
+    <a href="/pointage" class="hover:text-slate-200">Pointage</a>
+    <a href="/journaliers" class="hover:text-slate-200">Journaliers</a>
+    <a href="/parametres" class="hover:text-slate-200">⚙️</a>
+    <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  </div>
+</nav>
 
-<!-- Filtres -->
-<div class="card p-4 mb-6">
-  <form method="GET" class="flex gap-3">
-    <input type="text" name="q" value="{{ q }}" placeholder="🔍 Rechercher nom, matricule, poste..."
-      class="flex-1 form-input"/>
-    <select name="statut" class="form-input" style="width:180px">
-      <option value="">Tous les statuts</option>
-      <option value="ACTIF" {% if statut=='ACTIF' %}selected{% endif %}>Actifs</option>
-      <option value="INACTIF" {% if statut=='INACTIF' %}selected{% endif %}>Inactifs</option>
-    </select>
-    <button type="submit" class="btn-primary">Filtrer</button>
-    {% if q or statut %}
-    <a href="/salaries" class="btn-secondary">Effacer</a>
-    {% endif %}
+<main class="max-w-7xl mx-auto p-5">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}<div class="mb-4 space-y-2">{% for cat, msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold
+    {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+    else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+    else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
+  {% endfor %}</div>{% endif %}{% endwith %}
+
+  <div class="flex items-center justify-between mb-5">
+    <div>
+      <h1 class="text-2xl font-black text-gray-900">Salariés</h1>
+      <p class="text-gray-500 text-sm mt-0.5">{{ salaries|length }} salarié(s) trouvé(s)</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/salaries/imprimer" target="_blank"
+         class="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-bold border border-gray-200">
+        🖨️ Imprimer la liste
+      </a>
+      <a href="/salaries/nouveau" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
+        + Nouveau salarié
+      </a>
+    </div>
+  </div>
+
+  <!-- Filtres -->
+  <form method="GET" class="card p-4 mb-5 flex gap-3 items-end">
+    <div class="flex-1">
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Rechercher</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Nom, prénom, matricule..."
+        class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Statut</label>
+      <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+        <option value="">Tous les statuts</option>
+        <option value="ACTIF" {{ 'selected' if statut=='ACTIF' }}>Actif</option>
+        <option value="INACTIF" {{ 'selected' if statut=='INACTIF' }}>Inactif</option>
+      </select>
+    </div>
+    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold">Filtrer</button>
+    <a href="/salaries" class="text-gray-500 text-sm font-bold py-2 px-3 hover:text-gray-700">Réinitialiser</a>
   </form>
-</div>
 
-<!-- Tableau -->
-<div class="card overflow-hidden">
-  <table>
-    <thead>
-      <tr>
-        <th>Matricule</th>
-        <th>Nom & Prénom</th>
-        <th>Emploi</th>
-        <th style="text-align:center">Catégorie</th>
-        <th style="text-align:right">Salaire base</th>
-        <th style="text-align:center">Statut</th>
-        <th style="text-align:center">Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for s in salaries %}
-      <tr>
-        <td class="font-mono text-xs text-gray-500">{{ s.matricule }}</td>
-        <td>
-          <div class="flex items-center gap-3">
-            <div style="width:2rem;height:2rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
-              {{ s.nom[0] }}{{ s.prenom[0] }}
+  <div class="card overflow-hidden">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <th class="px-4 py-3 text-left">Matricule</th>
+          <th class="px-4 py-3 text-left">Nom & Prénom</th>
+          <th class="px-4 py-3 text-left">Emploi</th>
+          <th class="px-4 py-3 text-center">Catégorie</th>
+          <th class="px-4 py-3 text-right">Salaire base</th>
+          <th class="px-4 py-3 text-center">Statut</th>
+          <th class="px-4 py-3 text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in salaries %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50">
+          <td class="px-4 py-3">
+            <div class="font-bold text-gray-900">{{ s.matricule }}</div>
+            <div class="text-xs text-gray-400">{{ s.date_embauche|date_fr if s.date_embauche else '' }}</div>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex items-center gap-2">
+              <div class="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                {{ s.nom[0] }}{{ s.prenom[0] if s.prenom else '' }}
+              </div>
+              <div>
+                <div class="font-bold">{{ s.nom }} {{ s.prenom }}</div>
+                <div class="text-xs text-gray-400">{{ s.telephone or '' }}</div>
+              </div>
             </div>
-            <div>
-              <div class="font-bold text-gray-900">{{ s.nom }} {{ s.prenom }}</div>
-              <div class="text-xs text-gray-400">Embauché le {{ s.date_embauche|date_fr }}</div>
-            </div>
-          </div>
-        </td>
-        <td class="text-gray-700">{{ s.emploi or '—' }}</td>
-        <td style="text-align:center">
-          <span style="background:#f3f4f6;color:#374151;font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:.5rem">
-            {{ s.categorie.code if s.categorie else '—' }}
-          </span>
-        </td>
-        <td style="text-align:right" class="font-bold text-gray-900">
-          {% if s.contrats %}{{ s.contrats[-1].salaire_base|fcfa }}{% else %}—{% endif %}
-        </td>
-        <td style="text-align:center">
-          <span class="badge-{{ s.statut|lower }}">{{ s.statut }}</span>
-        </td>
-        <td style="text-align:center">
-          <a href="/salaries/{{ s.id }}" class="text-blue-600 text-xs font-bold hover:underline">Voir</a>
-          <span class="text-gray-300 mx-1">|</span>
-          <a href="/bulletins/saisie?salarie_id={{ s.id }}" class="text-amber-600 text-xs font-bold hover:underline">Bulletin</a>
-        </td>
-      </tr>
-      {% else %}
-      <tr>
-        <td colspan="7" style="text-align:center;padding:3rem;color:#9ca3af">
-          <div style="font-size:2rem;margin-bottom:.5rem">👤</div>
-          <p>Aucun salarié trouvé</p>
-          <a href="/salaries/nouveau" class="btn-primary" style="display:inline-block;margin-top:.75rem">Créer le premier salarié</a>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</div>
-
-{% endblock %}
+          </td>
+          <td class="px-4 py-3 text-gray-600">{{ s.emploi or '—' }}</td>
+          <td class="px-4 py-3 text-center">
+            {% if s.categorie %}
+            <span class="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-0.5 rounded-full">{{ s.categorie.code }}</span>
+            {% else %}—{% endif %}
+          </td>
+          <td class="px-4 py-3 text-right font-bold text-gray-900">
+            {% set c = s.contrats|selectattr('actif')|list %}
+            {{ c[0].salaire_base|int|fcfa if c else '—' }}
+          </td>
+          <td class="px-4 py-3 text-center">
+            {% set sc = {'ACTIF':'bg-emerald-100 text-emerald-700','INACTIF':'bg-red-100 text-red-600'} %}
+            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(s.statut,'bg-gray-100 text-gray-500') }}">{{ s.statut }}</span>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <a href="/salaries/{{ s.id }}" class="text-blue-600 font-bold text-xs hover:underline mr-2">Voir</a>
+            <a href="/bulletins/saisie?salarie_id={{ s.id }}" class="text-emerald-600 font-bold text-xs hover:underline">Bulletin</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center py-10 text-gray-400 text-sm">
+          {% if q %}Aucun résultat pour "{{ q }}"{% else %}Aucun salarié enregistré{% endif %}
+        </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</main>
+</body>
+</html>
