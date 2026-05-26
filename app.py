@@ -85,7 +85,6 @@ def get_tenant():
     if current_user.is_super_admin: return None
     return current_user.tenant
 
-
 # ── Envoi email asynchrone (ne bloque pas le serveur) ─────────────────────────
 def send_email_async(msg):
     """Envoie un email dans un thread séparé pour ne pas bloquer Gunicorn."""
@@ -161,6 +160,74 @@ def inscription():
 def logout():
     logout_user(); return redirect(url_for("login"))
 
+
+# ── Réinitialisation mot de passe ────────────────────────────────────────────
+@app.route("/mot-de-passe-oublie", methods=["GET","POST"])
+def mot_de_passe_oublie():
+    if current_user.is_authenticated: return redirect(url_for("index"))
+    if request.method == "POST":
+        email = request.form.get("email","").strip().lower()
+        user = Utilisateur.query.filter_by(email=email, actif=True).first()
+        if user:
+            token = sec.token_urlsafe(32)
+            user.reset_token = token
+            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=2)
+            db.session.commit()
+            lien = url_for("reinitialiser_mdp", token=token, _external=True)
+            try:
+                msg = Message(
+                    subject="Réinitialisation de votre mot de passe — PaieGabon",
+                    recipients=[email],
+                    body=f"""Bonjour {user.prenom or user.nom},
+
+Vous avez demandé la réinitialisation de votre mot de passe.
+
+Cliquez sur ce lien pour créer un nouveau mot de passe (valable 2 heures) :
+{lien}
+
+Si vous n'avez pas fait cette demande, ignorez cet email.
+
+Cordialement,
+L'équipe PaieGabon — Ameriack I.T. Solutions
+""",
+                    sender=app.config["MAIL_DEFAULT_SENDER"]
+                )
+                send_email_async(msg)
+            except Exception as e:
+                print(f"[RESET EMAIL ERROR] {e}")
+        # Toujours afficher le même message (sécurité anti-énumération)
+        flash("Si cet email existe dans notre système, vous recevrez un lien de réinitialisation.", "success")
+        return redirect(url_for("login"))
+    return render_template("auth/mot_de_passe_oublie.html")
+
+@app.route("/reinitialiser-mdp/<token>", methods=["GET","POST"])
+def reinitialiser_mdp(token):
+    if current_user.is_authenticated: return redirect(url_for("index"))
+    user = Utilisateur.query.filter_by(reset_token=token, actif=True).first()
+    if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
+        flash("Lien invalide ou expiré. Veuillez faire une nouvelle demande.", "error")
+        return redirect(url_for("mot_de_passe_oublie"))
+    if request.method == "POST":
+        pw1 = request.form.get("password","")
+        pw2 = request.form.get("password2","")
+        if len(pw1) < 6:
+            flash("Le mot de passe doit contenir au moins 6 caractères.", "error")
+            return render_template("auth/reinitialiser_mdp.html", token=token)
+        if pw1 != pw2:
+            flash("Les mots de passe ne correspondent pas.", "error")
+            return render_template("auth/reinitialiser_mdp.html", token=token)
+        user.set_password(pw1)
+        user.reset_token = None
+        user.reset_token_expiry = None
+        db.session.commit()
+        flash("Mot de passe mis à jour ! Vous pouvez maintenant vous connecter.", "success")
+        return redirect(url_for("login"))
+    return render_template("auth/reinitialiser_mdp.html", token=token)
+
+@app.route("/politique-confidentialite")
+def politique_confidentialite():
+    return render_template("politique_confidentialite.html")
+
 # ── Super-Admin ───────────────────────────────────────────────────────────────
 @app.route("/admin")
 @super_admin_required
@@ -175,8 +242,7 @@ def admin_dashboard():
     nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
     return render_template("admin/dashboard.html",
         tenants=tenants, nb_tenants=nb_tenants,
-        nb_actifs=nb_actifs, nb_essai=nb_essai,
-        nb_suspendus=nb_suspendus,
+        nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
         total_sal=total_sal, total_bul=total_bul, revenus=revenus)
 
 @app.route("/admin/tenants")
@@ -427,10 +493,10 @@ def dashboard():
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("login"))
     now=datetime.now()
-    nb_actifs        = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-    nb_inactifs      = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
-    nb_total         = Salarie.query.filter_by(tenant_id=t.id).count()
-    nb_journaliers   = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_actifs         = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_inactifs       = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
+    nb_total          = Salarie.query.filter_by(tenant_id=t.id).count()
+    nb_journaliers    = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
     nb_total_employes = nb_actifs + nb_journaliers
     debut_mois  = datetime(now.year, now.month, 1).date()
     nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id, Salarie.date_embauche>=debut_mois).count()
@@ -1297,16 +1363,14 @@ def conge_supprimer(id):
     return redirect(url_for("conges"))
 
 
-# ── Impression listes ─────────────────────────────────────────────────────────
+# ── Impression listes ────────────────────────────────────────────────────────
 @app.route("/salaries/imprimer")
 @login_required
 def salaries_imprimer():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    from sqlalchemy.orm import joinedload
     salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
-    # Charger le contrat actif pour chaque salarié
     for s in salaries_list:
         s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
     return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
@@ -1495,6 +1559,14 @@ with app.app_context():
         except Exception: db.session.rollback()
         try:
             db.session.execute(db.text("ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)"))
+            db.session.commit()
+        except Exception: db.session.rollback()
+        try:
+            db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
             db.session.commit()
         except Exception: db.session.rollback()
         init_db()
