@@ -161,7 +161,6 @@ def logout():
     logout_user(); return redirect(url_for("login"))
 
 
-# ── Réinitialisation mot de passe ────────────────────────────────────────────
 @app.route("/mot-de-passe-oublie", methods=["GET","POST"])
 def mot_de_passe_oublie():
     if current_user.is_authenticated: return redirect(url_for("index"))
@@ -197,8 +196,7 @@ def reinitialiser_mdp(token):
         if len(pw1) < 6: flash("Minimum 6 caractères.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
         if pw1 != pw2: flash("Mots de passe différents.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
         user.set_password(pw1); user.reset_token = None; user.reset_token_expiry = None
-        db.session.commit()
-        flash("Mot de passe mis à jour !", "success")
+        db.session.commit(); flash("Mot de passe mis à jour !", "success")
         return redirect(url_for("login"))
     return render_template("auth/reinitialiser_mdp.html", token=token)
 
@@ -896,20 +894,17 @@ def parametres_logo():
     if logo_file and logo_file.filename:
         import base64
         file_data = logo_file.read()
-        if len(file_data) > 1_000_000:  # 1 Mo max
+        if len(file_data) > 1_000_000:
             flash("Fichier trop volumineux. Maximum 1 Mo.", "error")
             return redirect(url_for("parametres"))
         ext = logo_file.filename.rsplit(".", 1)[-1].lower()
         mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
         b64 = base64.b64encode(file_data).decode("utf-8")
         logo_data = f"data:{mime};base64,{b64}"
-        # Mise à jour directe via SQL pour contourner limite VARCHAR
         try:
-            db.session.execute(
-                db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),
-                {"logo": logo_data, "id": t.id}
-            )
+            db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
             db.session.commit()
+            db.session.expire(t)  # forcer le rechargement depuis la BDD
             flash("Logo mis à jour avec succès.", "success")
         except Exception as e:
             db.session.rollback()
@@ -934,7 +929,7 @@ def parametres_societe():
     t=get_tenant()
     for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
         try: setattr(t,f,request.form.get(f,"").strip() or None)
-        except: pass  # champ inexistant dans le modèle
+        except: pass
     db.session.commit(); flash("Informations mises à jour.","success")
     return redirect(url_for("parametres"))
 
@@ -1355,7 +1350,6 @@ def conge_supprimer(id):
     return redirect(url_for("conges"))
 
 
-# ── Impression listes ────────────────────────────────────────────────────────
 @app.route("/salaries/imprimer")
 @login_required
 def salaries_imprimer():
@@ -1535,53 +1529,42 @@ def init_db():
 with app.app_context():
     try:
         db.create_all()
-        # Migrations colonnes manquantes
+        # ── Migrations colonnes manquantes ──────────────────────────────────
         for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
             try:
                 db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
                 db.session.commit()
             except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)"))
-            db.session.commit()
-        except Exception: db.session.rollback()
-        try:
-            db.session.execute(db.text("ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP"))
-            db.session.commit()
-        except Exception: db.session.rollback()
+        # Colonnes tenant
         for sql in [
+            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
+            "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
+            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
+            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
+            "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
+            "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
+        ]:
+            try: db.session.execute(db.text(sql)); db.session.commit()
+            except Exception: db.session.rollback()
+        # Colonnes salaries
+        for sql in [
+            "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
             "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
             "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
             "ALTER TABLE salaries ALTER COLUMN prenom TYPE VARCHAR(100)",
             "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
             "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
             "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
-            "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
-            "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
         ]:
-            try:
-                db.session.execute(db.text(sql))
-                db.session.commit()
+            try: db.session.execute(db.text(sql)); db.session.commit()
+            except Exception: db.session.rollback()
+        # Autres colonnes
+        for sql in [
+            "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
+            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
+            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
+        ]:
+            try: db.session.execute(db.text(sql)); db.session.commit()
             except Exception: db.session.rollback()
         init_db()
         print("✅ Tables créées et base initialisée.")
