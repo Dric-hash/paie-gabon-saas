@@ -95,7 +95,7 @@
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Heures supplémentaires <span style="font-size:.65rem;color:#9ca3af;font-weight:400">(montant en FCFA)</span></h2>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% for label, name in [('Nuit semaine +10%','heures_sup_10'),('Dimanche +30%','heures_sup_30'),('Nuit dimanche +40%','heures_sup_40'),('Jours fériés +70%','heures_sup_70'),('Absences (déduction)','absences')] %}
+        {% for label, name in [("Nuit semaine +10%","heures_sup_10"),("Dimanche +30%","heures_sup_30"),("Nuit dimanche +40%","heures_sup_40"),("Jours fériés +70%","heures_sup_70"),("Absences (déduction)","absences")] %}
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
           <input type="number" name="{{ name }}" id="f_{{ name }}" value="0" min="0" step="1"
@@ -130,6 +130,36 @@
             class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
         </div>
         {% endfor %}
+      </div>
+    </div>
+
+    <!-- ✅ NOUVEAUX : Indemnités de fin de contrat -->
+    <div class="card p-5" style="border-left:4px solid #dc2626">
+      <h2 class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#dc2626">
+        Indemnités de fin de contrat
+        <span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:600;margin-left:.5rem">Intégrées dans le brut</span>
+      </h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. compensatrice de congé</label>
+          <input type="number" name="indem_compensatrice_conge" id="f_indem_compensatrice_conge" value="0" min="0" step="1"
+            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. de services rendus</label>
+          <input type="number" name="indem_services_rendus" id="f_indem_services_rendus" value="0" min="0" step="1"
+            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. compensatrice de préavis</label>
+          <input type="number" name="indem_compensatrice_preavis" id="f_indem_compensatrice_preavis" value="0" min="0" step="1"
+            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indemnité de licenciement</label>
+          <input type="number" name="indem_licenciement" id="f_indem_licenciement" value="0" min="0" step="1"
+            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
+        </div>
       </div>
     </div>
 
@@ -227,65 +257,65 @@
 </form>
 
 <script>
-const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n || 0)) + ' FCFA';
+const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " FCFA";
 let timer;
 
-function g(id) { return parseFloat(document.getElementById('f_' + id)?.value || 0) || 0; }
+function g(id) { return parseFloat(document.getElementById("f_" + id)?.value || 0) || 0; }
 function set(id, val) { const el = document.getElementById(id); if(el) el.textContent = fmt(val); }
 
 function recalculer() {
-  document.getElementById('spinner').style.display = 'inline';
+  document.getElementById("spinner").style.display = "inline";
   clearTimeout(timer);
   timer = setTimeout(() => {
-    const data = { salarie_id: document.getElementById('sel_salarie').value };
-    document.querySelectorAll('.champ-calcul').forEach(inp => {
+    const data = { salarie_id: document.getElementById("sel_salarie").value };
+    document.querySelectorAll(".champ-calcul").forEach(inp => {
       data[inp.name] = parseFloat(inp.value) || 0;
     });
-    fetch('/api/calculer-bulletin', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+    fetch("/api/calculer-bulletin", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
       body: JSON.stringify(data)
     })
     .then(r => r.json())
     .then(res => {
-      set('r_brut', res.salaire_brut);
-      set('r_cnss', res.cnss_salarie);
-      set('r_cnamgs', res.cnamgs_salarie);
-      set('r_tcs', res.tcs);
-      set('r_irpp', res.irpp);
-      set('r_net', res.salaire_net);
-      set('r_net_payer', res.net_a_payer);
-      document.getElementById('r_cnss_pat').textContent = fmt(res.cnss_patronale);
-      document.getElementById('r_cnamgs_pat').textContent = fmt(res.cnamgs_patronale);
-      document.getElementById('r_fnh').textContent = fmt(res.fnh);
-      document.getElementById('r_cfp').textContent = fmt(res.cfp);
-      document.getElementById('spinner').style.display = 'none';
+      set("r_brut", res.salaire_brut);
+      set("r_cnss", res.cnss_salarie);
+      set("r_cnamgs", res.cnamgs_salarie);
+      set("r_tcs", res.tcs);
+      set("r_irpp", res.irpp);
+      set("r_net", res.salaire_net);
+      set("r_net_payer", res.net_a_payer);
+      document.getElementById("r_cnss_pat").textContent = fmt(res.cnss_patronale);
+      document.getElementById("r_cnamgs_pat").textContent = fmt(res.cnamgs_patronale);
+      document.getElementById("r_fnh").textContent = fmt(res.fnh);
+      document.getElementById("r_cfp").textContent = fmt(res.cfp);
+      document.getElementById("spinner").style.display = "none";
     })
-    .catch(() => document.getElementById('spinner').style.display = 'none');
+    .catch(() => document.getElementById("spinner").style.display = "none");
   }, 400);
 }
 
-document.querySelectorAll('.champ-calcul').forEach(inp => {
-  inp.addEventListener('input', recalculer);
+document.querySelectorAll(".champ-calcul").forEach(inp => {
+  inp.addEventListener("input", recalculer);
 });
 
 function chargerContrat(id) {
-  if(!id) { document.getElementById('info_salarie').style.display='none'; return; }
-  fetch('/api/salarie/' + id + '/contrat')
+  if(!id) { document.getElementById("info_salarie").style.display="none"; return; }
+  fetch("/api/salarie/" + id + "/contrat")
     .then(r => r.json())
     .then(data => {
       if(data.salaire_base) {
-        document.getElementById('f_salaire_base').value = data.salaire_base;
-        document.getElementById('info_nom').textContent = data.nom || '—';
-        document.getElementById('info_poste').textContent = data.poste || '—';
-        document.getElementById('info_salaire').textContent = fmt(data.salaire_base) + '/mois';
-        document.getElementById('info_salarie').style.display = 'block';
+        document.getElementById("f_salaire_base").value = data.salaire_base;
+        document.getElementById("info_nom").textContent = data.nom || "—";
+        document.getElementById("info_poste").textContent = data.poste || "—";
+        document.getElementById("info_salaire").textContent = fmt(data.salaire_base) + "/mois";
+        document.getElementById("info_salarie").style.display = "block";
         recalculer();
       }
     });
 }
 
-{% if salarie_sel %}chargerContrat('{{ salarie_sel.id }}');{% endif %}
+{% if salarie_sel %}chargerContrat("{{ salarie_sel.id }}");{% endif %}
 recalculer();
 </script>
 
