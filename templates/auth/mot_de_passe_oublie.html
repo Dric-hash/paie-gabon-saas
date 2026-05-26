@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Mot de passe oublié — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-md">
+
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-black text-white">Ameriack I.T. Solutions</h1>
+    <p class="text-amber-400 font-semibold mt-1">Logiciel de paie multi-entreprises · Gabon</p>
+    <div class="w-12 h-1 bg-amber-400 mx-auto mt-2 rounded-full"></div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-4 space-y-2">{% for cat, msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold
+    {{ 'bg-emerald-50 text-emerald-800' if cat=='success' else 'bg-red-50 text-red-800' }}">
+    {{ msg }}
+  </div>{% endfor %}</div>
+  {% endif %}{% endwith %}
+
+  <div class="bg-white rounded-2xl shadow-2xl p-8">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🔑</div>
+      <h2 class="text-xl font-black text-gray-900">Mot de passe oublié</h2>
+      <p class="text-gray-500 text-sm mt-1">Entrez votre email pour recevoir un lien de réinitialisation</p>
+    </div>
+
+    <form method="POST" class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Adresse email</label>
+        <input type="email" name="email" required autofocus
+          placeholder="votre@email.com"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+      </div>
+
+      <button type="submit"
+        class="w-full bg-slate-900 hover:bg-slate-700 text-white font-black py-3 rounded-xl text-sm transition-colors">
+        Envoyer le lien de réinitialisation →
+      </button>
+    </form>
+
+    <div class="mt-5 text-center text-sm">
+      <a href="/login" class="text-blue-600 font-bold hover:underline">← Retour à la connexion</a>
+    </div>
+  </div>
+
+  <p class="text-center text-slate-400 text-xs mt-6">
+    <a href="/politique-confidentialite" class="hover:text-slate-200">Politique de confidentialité</a>
+    · © 2026 Ameriack I.T. Solutions
+  </p>
+</div>
+</body>
+</html>

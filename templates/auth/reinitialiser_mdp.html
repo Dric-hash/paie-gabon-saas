@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Nouveau mot de passe — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-md">
+
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-black text-white">Ameriack I.T. Solutions</h1>
+    <p class="text-amber-400 font-semibold mt-1">Logiciel de paie multi-entreprises · Gabon</p>
+    <div class="w-12 h-1 bg-amber-400 mx-auto mt-2 rounded-full"></div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-4 space-y-2">{% for cat, msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold
+    {{ 'bg-emerald-50 text-emerald-800' if cat=='success' else 'bg-red-50 text-red-800' }}">
+    {{ msg }}
+  </div>{% endfor %}</div>
+  {% endif %}{% endwith %}
+
+  <div class="bg-white rounded-2xl shadow-2xl p-8">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">🔒</div>
+      <h2 class="text-xl font-black text-gray-900">Nouveau mot de passe</h2>
+      <p class="text-gray-500 text-sm mt-1">Choisissez un nouveau mot de passe sécurisé</p>
+    </div>
+
+    <form method="POST" class="space-y-4">
+      <input type="hidden" name="token" value="{{ token }}">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nouveau mot de passe</label>
+        <input type="password" name="password" required minlength="6" autofocus
+          placeholder="Minimum 6 caractères"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Confirmer le mot de passe</label>
+        <input type="password" name="password2" required minlength="6"
+          placeholder="Répétez le mot de passe"
+          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+      </div>
+
+      <!-- Indicateur force mot de passe -->
+      <div id="strength-bar" class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+        <div id="strength-fill" class="h-full rounded-full transition-all duration-300 w-0"></div>
+      </div>
+      <p id="strength-text" class="text-xs text-gray-400"></p>
+
+      <button type="submit"
+        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl text-sm transition-colors">
+        ✅ Enregistrer le nouveau mot de passe
+      </button>
+    </form>
+
+    <div class="mt-5 text-center text-sm">
+      <a href="/login" class="text-blue-600 font-bold hover:underline">← Retour à la connexion</a>
+    </div>
+  </div>
+
+  <p class="text-center text-slate-400 text-xs mt-6">
+    © 2026 Ameriack I.T. Solutions — PaieGabon
+  </p>
+</div>
+
+<script>
+const pwInput = document.querySelector('input[name="password"]');
+const bar = document.getElementById('strength-fill');
+const txt = document.getElementById('strength-text');
+pwInput.addEventListener('input', () => {
+  const v = pwInput.value;
+  let score = 0;
+  if (v.length >= 6) score++;
+  if (v.length >= 10) score++;
+  if (/[A-Z]/.test(v)) score++;
+  if (/[0-9]/.test(v)) score++;
+  if (/[^A-Za-z0-9]/.test(v)) score++;
+  const levels = [
+    {w:'0%', c:'bg-gray-200', t:''},
+    {w:'25%', c:'bg-red-400', t:'Faible'},
+    {w:'50%', c:'bg-amber-400', t:'Moyen'},
+    {w:'75%', c:'bg-blue-400', t:'Bon'},
+    {w:'100%', c:'bg-emerald-500', t:'Excellent'},
+  ];
+  const l = levels[Math.min(score, 4)];
+  bar.className = `h-full rounded-full transition-all duration-300 ${l.c}`;
+  bar.style.width = l.w;
+  txt.textContent = l.t;
+  txt.className = `text-xs font-semibold ${l.c.replace('bg-','text-')}`;
+});
+</script>
+</body>
+</html>
