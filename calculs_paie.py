@@ -130,11 +130,12 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     cnss_salarie   = round(base_cnss * CNSS_TAUX_SALARIE, 2)
     cnss_patronale = round(base_cnss * CNSS_TAUX_PATRONAL, 2)
 
-    # ── 4. CNAMGS — plafond strict 2 500 000 ────────────────────────────────
+    # ── 4. CNAMGS — plafond strict 2 500 000 — prime_qualite EXCLUE ────────
     transport_exo_cnamgs = min(prime_transport, TRANSPORT_EXONERATION_IRPP)
     logement_imposable = min(indem_logement, salaire_brut * LOGEMENT_PLAFOND_PCT, LOGEMENT_PLAFOND_MAX)
     base_cnamgs = min(
-        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable,
+        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable
+        - prime_qualite,   # ✅ Prime de qualité exclue de la base CNAMGS
         CNAMGS_PLAFOND
     )
     base_cnamgs = max(base_cnamgs, 0)
@@ -149,14 +150,18 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     base_cfp = max(base_cnss - indem_logement, 0)
     cfp = round(base_cfp * CFP_TAUX, 2)
 
-    # ── 7. TCS ──────────────────────────────────────────────────────────────
+    # ── 7. TCS — exclut prime_qualite, prime_rendement, prime_performance ──
+    # La base TCS = brut imposable - cotisations salariales - exclusions
     base_tcs = (
-        base_cnamgs
+        salaire_brut
+        - prime_qualite            # ✅ exclue de TCS
+        - prime_rendement          # exclue de TCS
+        - prime_performance        # exclue de TCS
+        - transport_exo_cnamgs     # transport exonéré
+        - indem_logement           # logement exonéré
         - cnss_salarie
         - cnamgs_salarie
         + (indem_domesticite + indem_eau_electricite + indem_nourriture)
-        - indem_logement
-        - (prime_rendement + prime_performance)
     )
     base_tcs_imposable = max(base_tcs - TCS_EXONERATION, 0)
     tcs = round(base_tcs_imposable * TCS_TAUX, 2)
