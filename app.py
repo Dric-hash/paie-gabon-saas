@@ -164,18 +164,79 @@ def logout():
 @app.route("/admin")
 @super_admin_required
 def admin_dashboard():
+    from datetime import timedelta
     tenants      = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
     total_sal    = db.session.query(db.func.count(Salarie.id)).scalar() or 0
     total_bul    = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
-    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
     nb_tenants   = len(tenants)
     nb_actifs    = sum(1 for t in tenants if t.statut=="ACTIF")
     nb_essai     = sum(1 for t in tenants if t.statut=="ESSAI")
     nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
+    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
+
+    # ── KPI conversion essai → payant ───────────────────────────────────────
+    # Tous les tenants qui ont été ou sont en ACTIF (ont converti)
+    nb_convertis  = sum(1 for t in tenants if t.statut == "ACTIF")
+    # Tous les tenants inscrits (ACTIF + ESSAI + SUSPENDU)
+    nb_inscrits_total = len(tenants)
+    taux_conversion = round((nb_convertis / nb_inscrits_total * 100) if nb_inscrits_total else 0)
+
+    # ── Essais qui expirent dans 7 jours ────────────────────────────────────
+    now = datetime.utcnow()
+    essais_urgents = [
+        t for t in tenants
+        if t.statut == "ESSAI" and t.date_expiration and t.date_expiration <= now + timedelta(days=7)
+    ]
+
+    # ── Revenus simulés sur 6 mois glissants (basé sur inscriptions ACTIF) ──
+    # On simule l'évolution : pour chaque mois des 6 derniers mois,
+    # on compte les tenants ACTIF inscrits avant la fin de ce mois
+    revenus_6mois = []
+    mois_labels   = []
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+    for i in range(5, -1, -1):
+        # Date de fin du mois i mois avant maintenant
+        d = now - timedelta(days=i*30)
+        label = f"{MOIS_FR[d.month]} {str(d.year)[2:]}"
+        mois_labels.append(label)
+        rev = sum(
+            (float(t.plan.prix_mensuel) if t.plan else 0)
+            for t in tenants
+            if t.statut == "ACTIF" and t.date_inscription and t.date_inscription <= d
+        )
+        revenus_6mois.append(int(rev))
+
+    # ── Répartition par plan ─────────────────────────────────────────────────
+    plans_tous = Plan.query.filter_by(actif=True).all()
+    repartition_plans = []
+    for p in plans_tous:
+        nb = sum(1 for t in tenants if t.plan_id == p.id and t.statut == "ACTIF")
+        if nb > 0:
+            repartition_plans.append({"nom": p.nom, "nb": nb, "prix": float(p.prix_mensuel)})
+
+    # ── Bulletins par mois (6 derniers) ──────────────────────────────────────
+    bul_6mois   = []
+    bul_labels  = []
+    for i in range(5, -1, -1):
+        d = now - timedelta(days=i*30)
+        label = f"{MOIS_FR[d.month]} {str(d.year)[2:]}"
+        bul_labels.append(label)
+        nb_bul = BulletinPaie.query.join(PeriodePaie).filter(
+            PeriodePaie.annee == d.year,
+            PeriodePaie.mois  == d.month
+        ).count()
+        bul_6mois.append(nb_bul)
+
     return render_template("admin/dashboard.html",
         tenants=tenants, nb_tenants=nb_tenants,
         nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
-        total_sal=total_sal, total_bul=total_bul, revenus=revenus)
+        total_sal=total_sal, total_bul=total_bul, revenus=revenus,
+        taux_conversion=taux_conversion,
+        essais_urgents=essais_urgents,
+        revenus_6mois=revenus_6mois, mois_labels=mois_labels,
+        repartition_plans=repartition_plans,
+        bul_6mois=bul_6mois, bul_labels=bul_labels,
+        now=now)
 
 @app.route("/admin/tenants")
 @super_admin_required
