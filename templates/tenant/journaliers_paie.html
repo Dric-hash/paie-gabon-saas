@@ -65,13 +65,13 @@
               {{ "%.2f"|format(j.taux_horaire|float) }} FCFA/h
             </td>
             <td style="padding:.5rem .75rem;text-align:right">
-              <input type="number" name="taux_{{ j.id }}" step="0.01" min="0"
+              <input type="number" name="taux_{{ j.id }}" step="any" min="0"
                 placeholder="{{ "%.2f"|format(j.taux_horaire|float) }}"
                 style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right;font-family:monospace"
                 class="inp-taux" data-id="{{ j.id }}"/>
             </td>
             <td style="padding:.5rem .75rem;text-align:right">
-              <input type="number" name="heures_{{ j.id }}" step="0.5" min="0"
+              <input type="number" name="heures_{{ j.id }}" step="any" min="0"
                 placeholder="Auto (pointage)"
                 style="width:110px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right"
                 class="inp-heures" data-id="{{ j.id }}"/>
@@ -211,20 +211,20 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Heures totales</label>
-          <input type="number" name="total_heures" id="mod_heures" step="0.5" min="0"
+          <input type="number" name="total_heures" id="mod_heures" step="any" min="0"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;font-family:monospace;box-sizing:border-box"
             oninput="recalcMontant()"/>
         </div>
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Taux horaire (FCFA)</label>
-          <input type="number" name="taux_horaire_modif" id="mod_taux" step="0.01" min="0"
+          <input type="number" name="taux_horaire_modif" id="mod_taux" step="any" min="0"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;font-family:monospace;box-sizing:border-box"
             oninput="recalcMontant()"/>
         </div>
       </div>
       <div style="margin-bottom:.75rem">
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Montant total (FCFA)</label>
-        <input type="number" name="montant_brut" id="mod_montant" step="1"
+        <input type="number" name="montant_brut" id="mod_montant" step="any"
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:1rem;font-family:monospace;font-weight:900;box-sizing:border-box"/>
         <div style="font-size:.7rem;color:#9ca3af;margin-top:.25rem">Calculé automatiquement ou saisissez manuellement</div>
       </div>
