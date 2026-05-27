@@ -367,6 +367,33 @@ def admin_plan_supprimer(id):
     flash(f"Plan « {nom} » supprimé.", "success")
     return redirect(url_for("admin_plans"))
 
+@app.route("/admin/stats")
+@super_admin_required
+def admin_stats():
+    tenants = Tenant.query.order_by(Tenant.denomination).all()
+    stats = []
+    total_revenus = 0
+    for t in tenants:
+        nb_sal = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+        nb_bul = BulletinPaie.query.filter_by(tenant_id=t.id).count()
+        nb_per = PeriodePaie.query.filter_by(tenant_id=t.id).count()
+        nb_jou = Journalier.query.filter_by(tenant_id=t.id).count()
+        rev    = float(t.plan.prix_mensuel) if t.plan and t.statut == "ACTIF" else 0
+        total_revenus += rev
+        stats.append({
+            "tenant": t, "nb_salaries": nb_sal, "nb_bulletins": nb_bul,
+            "nb_periodes": nb_per, "nb_journaliers": nb_jou, "revenus": rev
+        })
+    # Taux conversion global
+    nb_actifs = sum(1 for t in tenants if t.statut == "ACTIF")
+    taux_conv = round(nb_actifs / len(tenants) * 100) if tenants else 0
+    return render_template("admin/stats.html",
+        stats=stats, tenants=tenants,
+        total_revenus=total_revenus,
+        nb_actifs=nb_actifs,
+        taux_conv=taux_conv,
+        now=datetime.utcnow())
+
 @app.route("/admin/import", methods=["GET","POST"])
 @login_required
 @super_admin_required
