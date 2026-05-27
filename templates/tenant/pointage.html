@@ -116,32 +116,32 @@
             <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.25rem">
               <div>
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">Normales</label>
-                <input type="number" name="sal_heures_{{ s.id }}" value="{{ pt.heures_normales|int if pt else 8 }}"
-                  min="0" max="12" step="0.5"
+                <input type="number" step="any" name="sal_heures_{{ s.id }}" value="{{ pt.heures_normales|int if pt else 8 }}"
+                  min="0" max="12" step="any"
                   style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#f59e0b;font-weight:700;display:block;text-align:center">Sup +10%</label>
-                <input type="number" name="sal_sup10_{{ s.id }}" value="{{ pt.heures_sup_10|int if pt and pt.heures_sup_10 else 0 }}"
-                  min="0" max="8" step="0.5"
+                <input type="number" step="any" name="sal_sup10_{{ s.id }}" value="{{ pt.heures_sup_10|int if pt and pt.heures_sup_10 else 0 }}"
+                  min="0" max="8" step="any"
                   style="width:100%;border:1px solid #fcd34d;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#f97316;font-weight:700;display:block;text-align:center">Sup +30%</label>
-                <input type="number" name="sal_sup30_{{ s.id }}" value="{{ pt.heures_sup_30|int if pt and pt.heures_sup_30 else 0 }}"
-                  min="0" max="8" step="0.5"
+                <input type="number" step="any" name="sal_sup30_{{ s.id }}" value="{{ pt.heures_sup_30|int if pt and pt.heures_sup_30 else 0 }}"
+                  min="0" max="8" step="any"
                   style="width:100%;border:1px solid #fdba74;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#dc2626;font-weight:700;display:block;text-align:center">Sup +40%</label>
-                <input type="number" name="sal_sup40_{{ s.id }}" value="{{ pt.heures_sup_40|int if pt and pt.heures_sup_40 else 0 }}"
-                  min="0" max="8" step="0.5"
+                <input type="number" step="any" name="sal_sup40_{{ s.id }}" value="{{ pt.heures_sup_40|int if pt and pt.heures_sup_40 else 0 }}"
+                  min="0" max="8" step="any"
                   style="width:100%;border:1px solid #fca5a5;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#7c3aed;font-weight:700;display:block;text-align:center">Sup +70%</label>
-                <input type="number" name="sal_sup70_{{ s.id }}" value="{{ pt.heures_sup_70|int if pt and pt.heures_sup_70 else 0 }}"
-                  min="0" max="8" step="0.5"
+                <input type="number" step="any" name="sal_sup70_{{ s.id }}" value="{{ pt.heures_sup_70|int if pt and pt.heures_sup_70 else 0 }}"
+                  min="0" max="8" step="any"
                   style="width:100%;border:1px solid #c4b5fd;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
               </div>
             </div>
@@ -224,18 +224,18 @@
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.375rem">
               <div>
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">H. normales</label>
-                <input type="number" name="jour_heures_{{ j.id }}" id="jh_{{ j.id }}"
+                <input type="number" step="any" name="jour_heures_{{ j.id }}" id="jh_{{ j.id }}"
                   value="{{ pt.heures_normales|int if pt else 8 }}"
-                  min="0" max="12" step="0.5"
+                  min="0" max="12" step="any"
                   style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
               <div>
                 <!-- ✅ Label corrigé : plus de +25% -->
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">H. sup</label>
-                <input type="number" name="jour_sup_{{ j.id }}" id="js_{{ j.id }}"
+                <input type="number" step="any" name="jour_sup_{{ j.id }}" id="js_{{ j.id }}"
                   value="{{ pt.heures_sup|int if pt else 0 }}"
-                  min="0" max="12" step="0.5"
+                  min="0" max="12" step="any"
                   style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
