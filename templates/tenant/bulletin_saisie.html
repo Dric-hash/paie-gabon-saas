@@ -13,7 +13,6 @@
 <form method="POST" action="/bulletins/saisie" id="formBulletin">
 <div style="display:grid;grid-template-columns:1fr 360px;gap:1.5rem">
 
-  <!-- COLONNE GAUCHE -->
   <div style="display:flex;flex-direction:column;gap:1rem">
 
     <!-- Salarié & Période -->
@@ -35,7 +34,7 @@
         </div>
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Période *</label>
-          <select name="periode_id" required id="sel_periode"
+          <select name="periode_id" id="sel_periode" required
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
             <option value="">— Sélectionner —</option>
             {% for p in periodes %}
@@ -69,138 +68,364 @@
     </div>
     {% endif %}
 
-    <!-- Légende des colonnes Base/Taux -->
     <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.625rem 1rem;font-size:.75rem;color:#065f46">
-      💡 <strong>Base</strong> = valeur unitaire (taux horaire, taux journalier…) &nbsp;·&nbsp;
-      <strong>Taux</strong> = quantité (nombre de jours, heures…) &nbsp;·&nbsp;
-      Le <strong>Montant</strong> = Base × Taux se calcule automatiquement. Pour un forfait fixe, saisissez le montant directement dans Montant et laissez Base/Taux vides.
+      💡 <strong>Base</strong> = valeur unitaire &nbsp;·&nbsp; <strong>Taux/Qté</strong> = nombre d'unités &nbsp;·&nbsp;
+      <strong>Montant</strong> = Base × Taux (calculé auto). Pour un forfait, saisissez directement le montant.
     </div>
 
-    <!-- ══════════════════════════════════════════════════════════════ -->
-    <!-- TABLEAU DE SAISIE avec colonnes Base / Taux / Montant         -->
-    <!-- ══════════════════════════════════════════════════════════════ -->
-
-    <!-- Salaire de base & compléments -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Salaire de base</h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("salaire_base", "Salaire de base", required=True) }}
-        {{ rubrique_row("sursalaire", "Sursalaire") }}
-        {{ rubrique_row("absences", "Absences (déduction)", is_retenue=True) }}
-      {% endcall %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Salaire de base * <span style="color:#dc2626">*</span></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_salaire_base" id="base_salaire_base" step="1" min="0" placeholder="0" oninput="calcMontant('salaire_base')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_salaire_base" id="taux_salaire_base" placeholder="1" oninput="calcMontant('salaire_base')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="salaire_base" id="f_salaire_base" value="0" step="1" min="0" required class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Sursalaire</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_sursalaire" id="base_sursalaire" step="1" min="0" placeholder="0" oninput="calcMontant('sursalaire')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_sursalaire" id="taux_sursalaire" placeholder="1" oninput="calcMontant('sursalaire')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="sursalaire" id="f_sursalaire" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#991b1b">Absences (déduction)</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_absences" id="base_absences" step="1" min="0" placeholder="0" oninput="calcMontant('absences')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_absences" id="taux_absences" placeholder="1" oninput="calcMontant('absences')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="absences" id="f_absences" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #fca5a5;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Heures supplémentaires -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Heures supplémentaires</h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("heures_sup_10", "H. sup nuit semaine +10%") }}
-        {{ rubrique_row("heures_sup_30", "H. sup dimanche +30%") }}
-        {{ rubrique_row("heures_sup_40", "H. sup nuit dim. +40%") }}
-        {{ rubrique_row("heures_sup_70", "H. sup jours fériés +70%") }}
-      {% endcall %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup nuit semaine +10%</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_heures_sup_10" id="base_heures_sup_10" step="1" min="0" placeholder="0" oninput="calcMontant('heures_sup_10')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_heures_sup_10" id="taux_heures_sup_10" placeholder="1" oninput="calcMontant('heures_sup_10')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="heures_sup_10" id="f_heures_sup_10" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup dimanche +30%</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_heures_sup_30" id="base_heures_sup_30" step="1" min="0" placeholder="0" oninput="calcMontant('heures_sup_30')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_heures_sup_30" id="taux_heures_sup_30" placeholder="1" oninput="calcMontant('heures_sup_30')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="heures_sup_30" id="f_heures_sup_30" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup nuit dim. +40%</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_heures_sup_40" id="base_heures_sup_40" step="1" min="0" placeholder="0" oninput="calcMontant('heures_sup_40')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_heures_sup_40" id="taux_heures_sup_40" placeholder="1" oninput="calcMontant('heures_sup_40')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="heures_sup_40" id="f_heures_sup_40" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup jours fériés +70%</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_heures_sup_70" id="base_heures_sup_70" step="1" min="0" placeholder="0" oninput="calcMontant('heures_sup_70')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_heures_sup_70" id="taux_heures_sup_70" placeholder="1" oninput="calcMontant('heures_sup_70')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="heures_sup_70" id="f_heures_sup_70" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Primes & Indemnités imposables -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Primes & Indemnités imposables</h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("prime_caisse",        "Prime de caisse") }}
-        {{ rubrique_row("carburant",            "Carburant") }}
-        {{ rubrique_row("prime_anciennete",     "Prime d'ancienneté") }}
-        {{ rubrique_row("prime_transport",      "Prime de transport") }}
-        {{ rubrique_row("prime_responsabilite", "Prime de responsabilité") }}
-        {{ rubrique_row("prime_rendement",      "Prime de rendement") }}
-        {{ rubrique_row("prime_assiduité",      "Prime d'assiduité") }}
-        {{ rubrique_row("prime_qualite",        "Prime de qualité") }}
-        {{ rubrique_row("prime_performance",    "Prime de performance") }}
-        {{ rubrique_row("allocations_conge",    "Allocations de congé") }}
-      {% endcall %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de caisse</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_caisse" id="base_prime_caisse" step="1" min="0" placeholder="0" oninput="calcMontant('prime_caisse')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_caisse" id="taux_prime_caisse" placeholder="1" oninput="calcMontant('prime_caisse')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_caisse" id="f_prime_caisse" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Carburant</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_carburant" id="base_carburant" step="1" min="0" placeholder="0" oninput="calcMontant('carburant')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_carburant" id="taux_carburant" placeholder="1" oninput="calcMontant('carburant')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="carburant" id="f_carburant" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime d'ancienneté</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_anciennete" id="base_prime_anciennete" step="1" min="0" placeholder="0" oninput="calcMontant('prime_anciennete')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_anciennete" id="taux_prime_anciennete" placeholder="1" oninput="calcMontant('prime_anciennete')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_anciennete" id="f_prime_anciennete" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de transport</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_transport" id="base_prime_transport" step="1" min="0" placeholder="0" oninput="calcMontant('prime_transport')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_transport" id="taux_prime_transport" placeholder="1" oninput="calcMontant('prime_transport')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_transport" id="f_prime_transport" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de responsabilité</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_responsabilite" id="base_prime_responsabilite" step="1" min="0" placeholder="0" oninput="calcMontant('prime_responsabilite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_responsabilite" id="taux_prime_responsabilite" placeholder="1" oninput="calcMontant('prime_responsabilite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_responsabilite" id="f_prime_responsabilite" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de rendement</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_rendement" id="base_prime_rendement" step="1" min="0" placeholder="0" oninput="calcMontant('prime_rendement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_rendement" id="taux_prime_rendement" placeholder="1" oninput="calcMontant('prime_rendement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_rendement" id="f_prime_rendement" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime d'assiduité</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_assiduité" id="base_prime_assiduité" step="1" min="0" placeholder="0" oninput="calcMontant('prime_assiduité')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_assiduité" id="taux_prime_assiduité" placeholder="1" oninput="calcMontant('prime_assiduité')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_assiduité" id="f_prime_assiduité" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de qualité</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_qualite" id="base_prime_qualite" step="1" min="0" placeholder="0" oninput="calcMontant('prime_qualite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_qualite" id="taux_prime_qualite" placeholder="1" oninput="calcMontant('prime_qualite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_qualite" id="f_prime_qualite" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de performance</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_performance" id="base_prime_performance" step="1" min="0" placeholder="0" oninput="calcMontant('prime_performance')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_performance" id="taux_prime_performance" placeholder="1" oninput="calcMontant('prime_performance')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_performance" id="f_prime_performance" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Allocations de congé</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_allocations_conge" id="base_allocations_conge" step="1" min="0" placeholder="0" oninput="calcMontant('allocations_conge')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_allocations_conge" id="taux_allocations_conge" placeholder="1" oninput="calcMontant('allocations_conge')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="allocations_conge" id="f_allocations_conge" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Avantages en nature -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Avantages en nature</h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("indem_logement",        "Logement") }}
-        {{ rubrique_row("indem_domesticite",      "Domesticité") }}
-        {{ rubrique_row("indem_eau_electricite",  "Eau & Électricité") }}
-        {{ rubrique_row("indem_nourriture",       "Nourriture") }}
-      {% endcall %}
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Logement</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_logement" id="base_indem_logement" step="1" min="0" placeholder="0" oninput="calcMontant('indem_logement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_logement" id="taux_indem_logement" placeholder="1" oninput="calcMontant('indem_logement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_logement" id="f_indem_logement" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Domesticité</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_domesticite" id="base_indem_domesticite" step="1" min="0" placeholder="0" oninput="calcMontant('indem_domesticite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_domesticite" id="taux_indem_domesticite" placeholder="1" oninput="calcMontant('indem_domesticite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_domesticite" id="f_indem_domesticite" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Eau & Électricité</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_eau_electricite" id="base_indem_eau_electricite" step="1" min="0" placeholder="0" oninput="calcMontant('indem_eau_electricite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_eau_electricite" id="taux_indem_eau_electricite" placeholder="1" oninput="calcMontant('indem_eau_electricite')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_eau_electricite" id="f_indem_eau_electricite" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Nourriture</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_nourriture" id="base_indem_nourriture" step="1" min="0" placeholder="0" oninput="calcMontant('indem_nourriture')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_nourriture" id="taux_indem_nourriture" placeholder="1" oninput="calcMontant('indem_nourriture')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_nourriture" id="f_indem_nourriture" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Indemnités de fin de contrat -->
     <div class="card p-5" style="border-left:4px solid #dc2626">
-      <h2 class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#dc2626">
-        Indemnités de fin de contrat
-        <span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:600;margin-left:.5rem">Dans le brut</span>
-      </h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("indem_compensatrice_conge",   "Indem. compensatrice de congé") }}
-        {{ rubrique_row("indem_services_rendus",       "Indem. de services rendus") }}
-        {{ rubrique_row("indem_compensatrice_preavis", "Indem. compensatrice de préavis") }}
-        {{ rubrique_row("indem_licenciement",          "Indemnité de licenciement") }}
-      {% endcall %}
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3" style="color:#dc2626">Indemnités de fin de contrat <span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:600;margin-left:.5rem">Dans le brut</span></h2>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Indem. compensatrice de congé</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_compensatrice_conge" id="base_indem_compensatrice_conge" step="1" min="0" placeholder="0" oninput="calcMontant('indem_compensatrice_conge')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_compensatrice_conge" id="taux_indem_compensatrice_conge" placeholder="1" oninput="calcMontant('indem_compensatrice_conge')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_compensatrice_conge" id="f_indem_compensatrice_conge" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Indem. de services rendus</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_services_rendus" id="base_indem_services_rendus" step="1" min="0" placeholder="0" oninput="calcMontant('indem_services_rendus')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_services_rendus" id="taux_indem_services_rendus" placeholder="1" oninput="calcMontant('indem_services_rendus')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_services_rendus" id="f_indem_services_rendus" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Indem. compensatrice de préavis</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_compensatrice_preavis" id="base_indem_compensatrice_preavis" step="1" min="0" placeholder="0" oninput="calcMontant('indem_compensatrice_preavis')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_compensatrice_preavis" id="taux_indem_compensatrice_preavis" placeholder="1" oninput="calcMontant('indem_compensatrice_preavis')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_compensatrice_preavis" id="f_indem_compensatrice_preavis" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Indemnité de licenciement</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_licenciement" id="base_indem_licenciement" step="1" min="0" placeholder="0" oninput="calcMontant('indem_licenciement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_licenciement" id="taux_indem_licenciement" placeholder="1" oninput="calcMontant('indem_licenciement')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_licenciement" id="f_indem_licenciement" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <!-- Hors cotisations -->
     <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
-        Hors cotisations
-        <span style="font-size:.65rem;color:#059669;background:#f0fdf4;padding:.125rem .5rem;border-radius:9999px">Non soumis CNSS/IRPP</span>
-      </h2>
-      {% call rubriques_table() %}
-        {{ rubrique_row("prime_panier",       "Prime de panier") }}
-        {{ rubrique_row("indem_transport",    "Transport net") }}
-        {{ rubrique_row("indem_representation","Représentation") }}
-        {{ rubrique_row("prime_salisure",     "Salisure") }}
-        {{ rubrique_row("acompte",            "Acompte à déduire", is_retenue=True) }}
-      {% endcall %}
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Hors cotisations (non soumis CNSS/IRPP)</h2>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:36%;text-align:left">Rubrique</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:18%;text-align:right">Base</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:8%;text-align:center">×</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:12%;text-align:center">Taux/Qté</th>
+          <th style="padding:.3rem .5rem;font-weight:700;border-bottom:1px solid #e5e7eb" style="width:26%;text-align:right">Montant (FCFA)</th>
+        </tr></thead>
+        <tbody>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime de panier</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_panier" id="base_prime_panier" step="1" min="0" placeholder="0" oninput="calcMontant('prime_panier')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_panier" id="taux_prime_panier" placeholder="1" oninput="calcMontant('prime_panier')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_panier" id="f_prime_panier" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Transport net</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_transport" id="base_indem_transport" step="1" min="0" placeholder="0" oninput="calcMontant('indem_transport')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_transport" id="taux_indem_transport" placeholder="1" oninput="calcMontant('indem_transport')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_transport" id="f_indem_transport" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Représentation</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_indem_representation" id="base_indem_representation" step="1" min="0" placeholder="0" oninput="calcMontant('indem_representation')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_indem_representation" id="taux_indem_representation" placeholder="1" oninput="calcMontant('indem_representation')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="indem_representation" id="f_indem_representation" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Salisure</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_prime_salisure" id="base_prime_salisure" step="1" min="0" placeholder="0" oninput="calcMontant('prime_salisure')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_prime_salisure" id="taux_prime_salisure" placeholder="1" oninput="calcMontant('prime_salisure')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="prime_salisure" id="f_prime_salisure" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#991b1b">Acompte à déduire</td>
+            <td style="padding:.3rem .25rem"><input type="number" name="base_acompte" id="base_acompte" step="1" min="0" placeholder="0" oninput="calcMontant('acompte')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td style="padding:.3rem .25rem"><input type="text" name="taux_acompte" id="taux_acompte" placeholder="1" oninput="calcMontant('acompte')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="acompte" id="f_acompte" value="0" step="1" min="0"  class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #fca5a5;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
   </div>
 
-  <!-- COLONNE DROITE : Calcul temps réel -->
+  <!-- COLONNE DROITE -->
   <div>
     <div class="card p-5" style="position:sticky;top:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Calcul temps réel</h2>
         <span id="spinner" style="display:none;font-size:.75rem;color:#f59e0b">⟳</span>
       </div>
-
       <div style="background:#f8fafc;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem;display:flex;justify-content:space-between">
         <span style="font-size:.875rem;font-weight:700">Salaire BRUT</span>
         <span id="r_brut" style="font-family:monospace;font-weight:900">— FCFA</span>
       </div>
-
       <div style="font-size:.7rem;font-weight:700;color:#dc2626;text-transform:uppercase;margin-bottom:.375rem">Retenues salariales</div>
-      {% for rid, label, taux in [("r_cnss","CNSS salarié","5%"),("r_cnamgs","CNAMGS salarié","2%"),("r_tcs","TCS","5%"),("r_irpp","IRPP","barème")] %}
       <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
-        <span style="color:#6b7280">{{ label }} ({{ taux }})</span>
-        <span id="{{ rid }}" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
+        <span style="color:#6b7280">CNSS salarié (5%)</span>
+        <span id="r_cnss" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
       </div>
-      {% endfor %}
-
+      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
+        <span style="color:#6b7280">CNAMGS salarié (2%)</span>
+        <span id="r_cnamgs" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
+        <span style="color:#6b7280">TCS (5%)</span>
+        <span id="r_tcs" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #e5e7eb">
+        <span style="color:#6b7280">IRPP (barème)</span>
+        <span id="r_irpp" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
+      </div>
       <div style="display:flex;justify-content:space-between;padding:.5rem 0;font-size:.875rem;font-weight:700;border-bottom:1px solid #e5e7eb">
         <span>Salaire NET</span>
         <span id="r_net" style="font-family:monospace">— FCFA</span>
       </div>
-
       <div style="background:#1a2332;border-radius:.75rem;padding:1rem;margin:.75rem 0">
         <div style="font-size:.7rem;color:rgba(255,255,255,.6);text-transform:uppercase;margin-bottom:.375rem">Net à payer</div>
         <div id="r_net_payer" style="font-size:1.75rem;font-weight:900;color:#6ee7b7;font-family:monospace">— FCFA</div>
       </div>
-
       <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
         <div style="font-size:.7rem;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:.375rem">Charges patronales</div>
-        {% for rid, label in [("r_cnss_pat","CNSS pat. (18%)"),("r_cnamgs_pat","CNAMGS pat. (4,1%)"),("r_fnh","FNH (3%)"),("r_cfp","CFP (0,5%)")] %}
         <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">{{ label }}</span>
-          <span id="{{ rid }}" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
+          <span style="color:#1e40af">CNSS pat. (18%)</span><span id="r_cnss_pat" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
         </div>
-        {% endfor %}
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
+          <span style="color:#1e40af">CNAMGS pat. (4,1%)</span><span id="r_cnamgs_pat" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
+          <span style="color:#1e40af">FNH (3%)</span><span id="r_fnh" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
+          <span style="color:#1e40af">CFP (0,5%)</span><span id="r_cfp" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
+        </div>
       </div>
-
       <div style="display:flex;flex-direction:column;gap:.5rem">
         <button type="submit" name="action" value="brouillon"
           style="width:100%;background:#f59e0b;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
@@ -217,75 +442,22 @@
 </div>
 </form>
 
-{# ── Macros pour les lignes de saisie ── #}
-{% macro rubriques_table() %}
-<table style="width:100%;border-collapse:collapse">
-  <thead>
-    <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
-      <th style="padding:.3rem .5rem;text-align:left;width:38%">Rubrique</th>
-      <th style="padding:.3rem .5rem;text-align:right;width:18%">Base</th>
-      <th style="padding:.3rem .5rem;text-align:center;width:10%">×</th>
-      <th style="padding:.3rem .5rem;text-align:center;width:12%">Taux/Qté</th>
-      <th style="padding:.3rem .5rem;text-align:right;width:22%">Montant</th>
-    </tr>
-  </thead>
-  <tbody>
-    {{ caller() }}
-  </tbody>
-</table>
-{% endmacro %}
-
-{% macro rubrique_row(name, label, required=False, is_retenue=False) %}
-<tr style="border-bottom:1px solid #f3f4f6">
-  <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:{% if is_retenue %}#991b1b{% else %}#374151{% endif %}">
-    {{ label }}{% if required %} <span style="color:#dc2626">*</span>{% endif %}
-  </td>
-  <td style="padding:.3rem .25rem">
-    <input type="number" name="base_{{ name }}" id="base_{{ name }}"
-      step="1" min="0" placeholder="0"
-      oninput="calcMontant('{{ name }}')"
-      style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/>
-  </td>
-  <td style="text-align:center;font-size:.8rem;color:#9ca3af;padding:0">×</td>
-  <td style="padding:.3rem .25rem">
-    <input type="text" name="taux_{{ name }}" id="taux_{{ name }}"
-      placeholder="1"
-      oninput="calcMontant('{{ name }}')"
-      style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/>
-  </td>
-  <td style="padding:.3rem .25rem">
-    <input type="number" name="{{ name }}" id="f_{{ name }}"
-      value="0" step="1" min="0"
-      {% if required %}required{% endif %}
-      class="champ-calcul"
-      oninput="recalculer()"
-      style="width:100%;border:1px solid {% if is_retenue %}#fca5a5{% else %}#e5e7eb{% endif %};border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/>
-  </td>
-</tr>
-{% endmacro %}
-
 <script>
 const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " FCFA";
 let timer;
 
-// Calcul Base × Taux → Montant pour une rubrique
 function calcMontant(name) {
   const base = parseFloat(document.getElementById("base_" + name)?.value || 0) || 0;
-  const tauxRaw = document.getElementById("taux_" + name)?.value?.trim() || "";
-  const taux = parseFloat(tauxRaw) || (tauxRaw === "" ? 1 : 1);
-  const montant = document.getElementById("f_" + name);
-  if (montant && base > 0) {
-    montant.value = Math.round(base * taux);
-    recalculer();
-  } else if (montant && base === 0 && tauxRaw === "") {
-    // Ne pas écraser si montant saisi directement
-  } else if (montant && base > 0 && taux > 0) {
-    montant.value = Math.round(base * taux);
+  const tauxEl = document.getElementById("taux_" + name);
+  const tauxRaw = tauxEl ? tauxEl.value.trim() : "";
+  const taux = parseFloat(tauxRaw) || 1;
+  const montantEl = document.getElementById("f_" + name);
+  if (montantEl && base > 0) {
+    montantEl.value = Math.round(base * taux);
     recalculer();
   }
 }
 
-// Recalcul global via API
 function recalculer() {
   document.getElementById("spinner").style.display = "inline";
   clearTimeout(timer);
@@ -307,13 +479,13 @@ function recalculer() {
     .then(r => r.json())
     .then(res => {
       const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmt(v); };
-      set("r_brut",      res.salaire_brut);
-      set("r_cnss",      res.cnss_salarie);
-      set("r_cnamgs",    res.cnamgs_salarie);
-      set("r_tcs",       res.tcs);
-      set("r_irpp",      res.irpp);
-      set("r_net",       res.salaire_net);
-      set("r_net_payer", res.net_a_payer);
+      set("r_brut",     res.salaire_brut);
+      set("r_cnss",     res.cnss_salarie);
+      set("r_cnamgs",   res.cnamgs_salarie);
+      set("r_tcs",      res.tcs);
+      set("r_irpp",     res.irpp);
+      set("r_net",      res.salaire_net);
+      set("r_net_payer",res.net_a_payer);
       document.getElementById("r_cnss_pat").textContent  = fmt(res.cnss_patronale);
       document.getElementById("r_cnamgs_pat").textContent = fmt(res.cnamgs_patronale);
       document.getElementById("r_fnh").textContent        = fmt(res.fnh);
