@@ -2,296 +2,478 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <title>Bulletin — {{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}</title>
+  <title>Bulletin de paie — {{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 9.5px; color: #000; background: #fff; }
-
-    /* Boutons impression */
-    .no-print { position:fixed; top:0; left:0; right:0; z-index:100; background:#1a2332; padding:8px 20px; display:flex; align-items:center; gap:10px; }
-    .btn { padding:6px 16px; border-radius:6px; border:none; cursor:pointer; font-size:12px; font-weight:bold; }
-    .btn-print { background:#10b981; color:white; }
-    .btn-back  { background:#6b7280; color:white; }
-    @media print { .no-print { display:none !important; } body { margin:0; } }
-
-    /* Page A4 pleine page */
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; background: #fff; }
+    .no-print {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: #1a2332; padding: 10px 20px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .btn { padding: 6px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: bold; }
+    .btn-print { background: #10b981; color: white; }
+    .btn-back  { background: #6b7280; color: white; }
+    .btn-print:hover { background: #059669; }
+    @media print { .no-print { display: none !important; } }
     .page {
-      width: 210mm;
-      min-height: 297mm;
-      margin: 50px auto 20px;
-      padding: 10mm 12mm;
-      background: white;
-      box-shadow: 0 0 20px rgba(0,0,0,.1);
-      position: relative;
+      width: 210mm; min-height: 297mm;
+      margin: 60px auto 20px; padding: 12mm 14mm;
+      background: white; box-shadow: 0 0 20px rgba(0,0,0,.1);
     }
     @media print {
-      .page { margin: 0; padding: 8mm 10mm; box-shadow: none; min-height: 297mm; }
-      @page { size: A4 portrait; margin: 0; }
+      body { margin: 0; }
+      .page { margin: 0 auto; padding: 10mm 12mm; box-shadow: none; }
+      @page { size: A4; margin: 8mm; }
     }
-
-    /* ═══ EN-TÊTE ═══ */
     .header {
       display: flex; justify-content: space-between; align-items: flex-start;
-      padding-bottom: 8px; margin-bottom: 8px;
-      border-bottom: 3px solid #1a2332;
+      padding-bottom: 8px; margin-bottom: 8px; border-bottom: 3px solid #1a2332;
     }
-    .header-left { display:flex; align-items:center; gap:12px; }
-    .logo-box img { max-height: 60px; max-width: 150px; object-fit: contain; }
-    .logo-box-text {
-      width:60px; height:60px; background:#1a2332; border-radius:6px;
-      display:flex; align-items:center; justify-content:center;
-      color:white; font-size:18px; font-weight:900;
+    .company-name { font-size: 15px; font-weight: 900; color: #1a2332; text-transform: uppercase; }
+    .company-info { font-size: 8.5px; color: #555; margin-top: 2px; line-height: 1.5; }
+    .bulletin-title { font-size: 13px; font-weight: 900; color: #1a2332; text-transform: uppercase; text-align: right; }
+    .bulletin-sub { font-size: 9px; color: #555; text-align: right; margin-top: 3px; line-height: 1.5; }
+    .parties { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .bloc { border: 1px solid #ddd; border-radius: 4px; padding: 6px 8px; }
+    .bloc-title {
+      font-size: 7.5px; font-weight: 900; color: #1a2332;
+      text-transform: uppercase; letter-spacing: .5px;
+      border-bottom: 1px solid #eee; padding-bottom: 3px; margin-bottom: 4px;
     }
-    .company-info { }
-    .company-name { font-size:14px; font-weight:900; color:#1a2332; text-transform:uppercase; }
-    .company-sub { font-size:8px; color:#555; margin-top:2px; line-height:1.5; }
-    .header-right { text-align:right; }
-    .bulletin-title { font-size:16px; font-weight:900; color:#1a2332; text-transform:uppercase; letter-spacing:1px; }
-    .bulletin-sub { font-size:8.5px; color:#555; margin-top:3px; line-height:1.6; }
-
-    /* ═══ BANDEAU SALARIÉ ═══ */
-    .salarie-band {
-      background:#1a2332; color:white;
-      padding:6px 10px; border-radius:4px;
-      display:flex; justify-content:space-between; align-items:center;
-      margin-bottom:8px;
+    .bloc-line { display: flex; justify-content: space-between; margin-bottom: 2px; font-size: 8.5px; }
+    .bloc-line .lbl { color: #666; }
+    .bloc-line .val { font-weight: 700; }
+    .section-title {
+      background: #1a2332; color: white;
+      padding: 3px 8px; font-size: 8px; font-weight: 900;
+      text-transform: uppercase; letter-spacing: .5px;
     }
-    .salarie-band .nom { font-size:12px; font-weight:900; }
-    .salarie-band .infos { font-size:8px; opacity:.8; margin-top:2px; }
-    .salarie-band .right { text-align:right; font-size:8px; opacity:.8; }
-
-    /* ═══ BLOCS INFO ═══ */
-    .two-cols { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:7px; }
-    .info-bloc { border:1px solid #ddd; border-radius:3px; padding:5px 7px; }
-    .info-bloc-title { font-size:7px; font-weight:900; color:#1a2332; text-transform:uppercase; letter-spacing:.5px; border-bottom:1px solid #eee; padding-bottom:2px; margin-bottom:3px; }
-    .info-line { display:flex; justify-content:space-between; margin-bottom:1.5px; font-size:8px; }
-    .info-line .lbl { color:#666; }
-    .info-line .val { font-weight:700; }
-
-    /* ═══ TABLEAUX ═══ */
-    .section-title { background:#1a2332; color:white; padding:2.5px 7px; font-size:7.5px; font-weight:900; text-transform:uppercase; letter-spacing:.5px; margin-bottom:0; }
-    table { width:100%; border-collapse:collapse; margin-bottom:6px; font-size:8.5px; }
-    thead th { background:#f0f0f0; padding:2.5px 5px; text-align:left; font-size:7.5px; font-weight:900; color:#333; border:1px solid #ddd; text-transform:uppercase; }
-    tbody td { padding:2px 5px; border:1px solid #eee; }
-    tbody tr:nth-child(even) { background:#fafafa; }
-    .tr { text-align:right; }
-    .tc { text-align:center; }
-    .gain { color:#065f46; font-weight:700; }
-    .retenue { color:#991b1b; font-weight:700; }
-    .row-subtotal { background:#e8f4fd !important; }
-    .row-subtotal td { font-weight:900 !important; }
-    .row-total { background:#1a2332 !important; }
-    .row-total td { color:white !important; font-weight:900 !important; border-color:#1a2332 !important; }
-
-    /* ═══ COTISATIONS 2 COLONNES ═══ */
-    .two-cols-cot { display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px; }
-
-    /* ═══ NET À PAYER ═══ */
+    table { width: 100%; border-collapse: collapse; margin-bottom: 6px; }
+    thead th {
+      background: #f0f0f0; padding: 3px 6px;
+      text-align: left; font-size: 8px; font-weight: 900;
+      color: #333; border: 1px solid #ddd; text-transform: uppercase;
+    }
+    tbody td { padding: 2.5px 6px; border: 1px solid #eee; font-size: 9px; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    .tr { text-align: right; }
+    .tc { text-align: center; }
+    .gain { color: #065f46; font-weight: 700; }
+    .retenue { color: #991b1b; font-weight: 700; }
+    .bold { font-weight: 900; }
+    .row-total { background: #1a2332 !important; }
+    .row-total td { color: white !important; font-weight: 900 !important; border-color: #1a2332 !important; font-size: 9.5px; }
+    .row-subtotal { background: #e8f4fd !important; }
+    .row-subtotal td { font-weight: 900; }
     .net-box {
-      border:2.5px solid #1a2332; border-radius:5px;
-      padding:8px 14px; display:flex; justify-content:space-between; align-items:center;
-      margin:7px 0; background:#f8fafc;
+      border: 2px solid #1a2332; border-radius: 6px;
+      padding: 8px 14px; display: flex;
+      justify-content: space-between; align-items: center;
+      margin: 8px 0; background: #f8fafc;
     }
-    .net-label { font-size:13px; font-weight:900; color:#1a2332; text-transform:uppercase; }
-    .net-amount { font-size:20px; font-weight:900; color:#1a2332; font-family:monospace; }
-
-    /* ═══ SIGNATURES ═══ */
-    .signatures { display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-top:10px; }
-    .sig-box { border-top:1px solid #ccc; padding-top:5px; }
-    .sig-title { font-size:8px; font-weight:700; margin-bottom:3px; }
-    .sig-space { height:25px; }
-    .sig-name { font-size:7.5px; color:#555; }
-
-    /* ═══ FOOTER ═══ */
-    .footer { border-top:1px solid #ddd; margin-top:10px; padding-top:4px; text-align:center; font-size:7px; color:#999; }
-
-    /* Filigrane statut */
-    .watermark {
-      position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-30deg);
-      font-size:60px; font-weight:900; opacity:.05; color:#1a2332;
-      pointer-events:none; text-transform:uppercase; white-space:nowrap;
+    .net-label { font-size: 13px; font-weight: 900; color: #1a2332; text-transform: uppercase; }
+    .net-amount { font-size: 18px; font-weight: 900; color: #1a2332; }
+    .two-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+    .signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 10px; }
+    .sig-box { border-top: 1px solid #ccc; padding-top: 6px; }
+    .sig-title { font-size: 8.5px; font-weight: 700; margin-bottom: 4px; }
+    .sig-space { height: 28px; }
+    .sig-name { font-size: 8px; color: #555; }
+    .footer {
+      border-top: 1px solid #ddd; margin-top: 10px; padding-top: 5px;
+      text-align: center; font-size: 7.5px; color: #999;
     }
+    .month-band {
+      background: #f0f4f8; border: 1px solid #d1dce8;
+      border-radius: 4px; padding: 4px 8px;
+      display: flex; justify-content: space-between;
+      margin-bottom: 8px; font-size: 8.5px;
+    }
+    /* Style spécifique colonne base/taux dans éléments rémunération */
+    .base-val { font-size: 8px; color: #555; font-style: italic; }
+    .taux-val { font-size: 8px; color: #374151; font-weight: 600; }
   </style>
 </head>
 <body>
 
-<!-- Boutons impression -->
 <div class="no-print">
   <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer / Enregistrer PDF</button>
   <button class="btn btn-back" onclick="history.back()">← Retour</button>
-  <span style="color:white;font-size:11px;margin-left:8px">
+  <span style="color:white;font-size:12px;margin-left:8px">
     {{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}
   </span>
 </div>
 
 <div class="page">
 
-  <!-- Filigrane si payé -->
-  {% if bulletin.statut == 'PAYÉ' %}
-  <div class="watermark">PAYÉ</div>
-  {% endif %}
-
-  <!-- ═══ EN-TÊTE ═══ -->
+  <!-- EN-TÊTE -->
   <div class="header">
-    <div class="header-left">
-      <!-- Logo ou initiales -->
-      <div class="logo-box">
-        {% if tenant.logo_url %}
-        <img src="{{ tenant.logo_url }}" alt="{{ tenant.denomination }}"/>
-        {% else %}
-        <div class="logo-box-text">{{ tenant.denomination[0] }}{{ tenant.denomination.split()[1][0] if tenant.denomination.split()|length > 1 else '' }}</div>
-        {% endif %}
-      </div>
+    <div>
+      {% if tenant.logo_url %}
+      <img src="{{ tenant.logo_url }}" alt="Logo" style="max-height:50px;max-width:150px;object-fit:contain;margin-bottom:4px;display:block"/>
+      {% endif %}
+      <div class="company-name">{{ tenant.denomination }}</div>
       <div class="company-info">
-        <div class="company-name">{{ tenant.denomination }}</div>
-        <div class="company-sub">
-          {% if tenant.activite %}{{ tenant.activite }}<br/>{% endif %}
-          {% if tenant.adresse %}{{ tenant.adresse }}{% if tenant.boite_postale %} — BP {{ tenant.boite_postale }}{% endif %}<br/>{% endif %}
-          {{ tenant.ville or 'Libreville' }}, {{ tenant.pays or 'Gabon' }}{% if tenant.telephone %} — Tél : {{ tenant.telephone }}{% endif %}<br/>
-          {% if tenant.nif %}NIF : <strong>{{ tenant.nif }}</strong>{% endif %}
-          {% if tenant.numero_cnss %} — N° CNSS : <strong>{{ tenant.numero_cnss }}</strong>{% endif %}
-        </div>
+        {% if tenant.activite %}{{ tenant.activite }}<br/>{% endif %}
+        {% if tenant.adresse %}{{ tenant.adresse }}{% if tenant.boite_postale %} — BP {{ tenant.boite_postale }}{% endif %}<br/>{% endif %}
+        {{ tenant.ville or 'Libreville' }}, {{ tenant.pays or 'Gabon' }}
+        {% if tenant.telephone %} — Tél: {{ tenant.telephone }}{% endif %}<br/>
+        {% if tenant.nif %}NIF : {{ tenant.nif }}{% endif %}
+        {% if tenant.numero_cnss %} — N° CNSS : {{ tenant.numero_cnss }}{% endif %}
       </div>
     </div>
-    <div class="header-right">
+    <div>
       <div class="bulletin-title">Bulletin de Paie</div>
       <div class="bulletin-sub">
         Période : <strong>{{ bulletin.periode.libelle_complet }}</strong><br/>
         Jours travaillés : <strong>{{ bulletin.nb_jours_travailles or 26 }}</strong><br/>
-        Édité le : <strong>{{ bulletin.date_creation|date_fr if bulletin.date_creation else '' }}</strong><br/>
-        Statut : <span style="font-weight:900;color:{% if bulletin.statut=='PAYÉ' %}#059669{% elif bulletin.statut=='VALIDÉ' %}#2563eb{% else %}#d97706{% endif %}">{{ bulletin.statut }}</span>
+        Date d'édition : <strong>{{ bulletin.date_creation|date_fr if bulletin.date_creation else '' }}</strong><br/>
+        Statut : <strong style="color:{% if bulletin.statut=='VALIDÉ' %}#059669{% elif bulletin.statut=='PAYÉ' %}#2563eb{% else %}#f59e0b{% endif %}">{{ bulletin.statut }}</strong>
       </div>
     </div>
   </div>
 
-  <!-- ═══ BANDEAU SALARIÉ ═══ -->
-  <div class="salarie-band">
-    <div>
-      <div class="nom">{{ bulletin.salarie.nom_complet }}</div>
-      <div class="infos">
-        {{ bulletin.salarie.emploi or '—' }} · Catégorie {{ bulletin.salarie.categorie.code if bulletin.salarie.categorie else '—' }}
-        · Matricule : {{ bulletin.salarie.matricule }}
-        · Embauché le : {{ bulletin.salarie.date_embauche|date_fr }}
-      </div>
+  <!-- Bandeau infos clés -->
+  <div class="month-band">
+    <span>Matricule : <strong>{{ bulletin.salarie.matricule }}</strong></span>
+    <span>Catégorie : <strong>{{ bulletin.salarie.categorie.code if bulletin.salarie.categorie else '—' }}</strong></span>
+    <span>Embauche : <strong>{{ bulletin.salarie.date_embauche|date_fr }}</strong></span>
+    <span>N° CNSS : <strong>{{ bulletin.salarie.numero_cnss or '—' }}</strong></span>
+    <span>Parts IRPP : <strong>{{ bulletin.salarie.nombre_parts or 1 }}</strong></span>
+  </div>
+
+  <!-- SALARIÉ / SITUATION FAMILIALE -->
+  <div class="parties">
+    <div class="bloc">
+      <div class="bloc-title">Informations Salarié</div>
+      <div class="bloc-line"><span class="lbl">Nom & Prénom</span><span class="val">{{ bulletin.salarie.nom_complet }}</span></div>
+      <div class="bloc-line"><span class="lbl">Emploi / Poste</span><span class="val">{{ bulletin.salarie.emploi or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">Date d'embauche</span><span class="val">{{ bulletin.salarie.date_embauche|date_fr }}</span></div>
+      <div class="bloc-line"><span class="lbl">Nationalité</span><span class="val">{{ bulletin.salarie.nationalite or '—' }}</span></div>
     </div>
-    <div class="right">
-      N° CNSS : {{ bulletin.salarie.numero_cnss or '—' }}<br/>
-      N° CNAMGS : {{ bulletin.salarie.numero_cnamgs or '—' }}<br/>
-      {{ bulletin.salarie.nombre_parts or 1 }} part(s) IRPP
+    <div class="bloc">
+      <div class="bloc-title">Situation Familiale & Cotisations</div>
+      <div class="bloc-line"><span class="lbl">Situation matrimoniale</span><span class="val">{{ bulletin.salarie.situation_matrimoniale or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">Nombre d'enfants</span><span class="val">{{ bulletin.salarie.nb_enfants or 0 }} (dont {{ bulletin.salarie.nb_enfants_moins_16ans or 0 }} &lt; 16 ans)</span></div>
+      <div class="bloc-line"><span class="lbl">Nombre de parts</span><span class="val">{{ bulletin.salarie.nombre_parts or 1 }}</span></div>
+      <div class="bloc-line"><span class="lbl">N° CNAMGS</span><span class="val">{{ bulletin.salarie.numero_cnamgs or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">Assujetti CNAMGS</span><span class="val">{{ 'OUI' if bulletin.salarie.assujetti_cnamgs else 'NON' }}</span></div>
     </div>
   </div>
 
-  <!-- ═══ INFOS SALARIÉ ═══ -->
-  <div class="two-cols" style="margin-bottom:7px">
-    <div class="info-bloc">
-      <div class="info-bloc-title">Identité</div>
-      <div class="info-line"><span class="lbl">Sexe</span><span class="val">{{ 'Masculin' if bulletin.salarie.sexe=='M' else 'Féminin' }}</span></div>
-      <div class="info-line"><span class="lbl">Date naissance</span><span class="val">{{ bulletin.salarie.date_naissance|date_fr }}</span></div>
-      <div class="info-line"><span class="lbl">Nationalité</span><span class="val">{{ bulletin.salarie.nationalite or '—' }}</span></div>
-    </div>
-    <div class="info-bloc">
-      <div class="info-bloc-title">Situation familiale</div>
-      <div class="info-line"><span class="lbl">Situation matrimoniale</span><span class="val">{{ bulletin.salarie.situation_matrimoniale or '—' }}</span></div>
-      <div class="info-line"><span class="lbl">Enfants</span><span class="val">{{ bulletin.salarie.nb_enfants or 0 }} (dont {{ bulletin.salarie.nb_enfants_moins_16ans or 0 }} &lt; 16 ans)</span></div>
-      <div class="info-line"><span class="lbl">Parts IRPP</span><span class="val">{{ bulletin.salarie.nombre_parts or 1 }}</span></div>
-    </div>
-  </div>
-
-  <!-- ═══ ÉLÉMENTS DE RÉMUNÉRATION ═══ -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- ÉLÉMENTS DE RÉMUNÉRATION — bloc menant au SALAIRE BRUT     -->
+  <!-- Seul ce bloc a Base + Taux renseignés                       -->
+  <!-- ════════════════════════════════════════════════════════════ -->
   <div class="section-title">Éléments de Rémunération</div>
   <table>
-    <thead><tr>
-      <th style="width:55%">Désignation</th>
-      <th class="tc">Base/Taux</th>
-      <th class="tr">Gains (FCFA)</th>
-      <th class="tr">Retenues (FCFA)</th>
-    </tr></thead>
+    <thead>
+      <tr>
+        <th style="width:44%">Désignation</th>
+        <th class="tr" style="width:19%">Base</th>
+        <th class="tc" style="width:10%">Taux</th>
+        <th class="tr" style="width:13%">Gain (FCFA)</th>
+        <th class="tr" style="width:14%">Retenue (FCFA)</th>
+      </tr>
+    </thead>
     <tbody>
-      <tr><td style="font-weight:700">Salaire de base</td><td class="tc">—</td><td class="tr gain">{{ bulletin.salaire_base|fcfa }}</td><td></td></tr>
-      {% if bulletin.heures_sup_10 and bulletin.heures_sup_10|float > 0 %}<tr><td>H. sup. +10% (nuit semaine)</td><td class="tc">+10%</td><td class="tr gain">{{ bulletin.heures_sup_10|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.heures_sup_30 and bulletin.heures_sup_30|float > 0 %}<tr><td>H. sup. +30% (dimanche)</td><td class="tc">+30%</td><td class="tr gain">{{ bulletin.heures_sup_30|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.heures_sup_40 and bulletin.heures_sup_40|float > 0 %}<tr><td>H. sup. +40% (nuit dimanche)</td><td class="tc">+40%</td><td class="tr gain">{{ bulletin.heures_sup_40|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.heures_sup_70 and bulletin.heures_sup_70|float > 0 %}<tr><td>H. sup. +70% (jours fériés)</td><td class="tc">+70%</td><td class="tr gain">{{ bulletin.heures_sup_70|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.absences and bulletin.absences|float > 0 %}<tr><td>Absences</td><td class="tc">—</td><td></td><td class="tr retenue">{{ bulletin.absences|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.sursalaire and bulletin.sursalaire|float > 0 %}<tr><td>Sursalaire</td><td class="tc">—</td><td class="tr gain">{{ bulletin.sursalaire|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_caisse and bulletin.prime_caisse|float > 0 %}<tr><td>Prime de caisse</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_caisse|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.carburant and bulletin.carburant|float > 0 %}<tr><td>Carburant</td><td class="tc">—</td><td class="tr gain">{{ bulletin.carburant|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_anciennete and bulletin.prime_anciennete|float > 0 %}<tr><td>Prime d'ancienneté</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_anciennete|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.indem_logement and bulletin.indem_logement|float > 0 %}<tr><td>Indemnité de logement</td><td class="tc">—</td><td class="tr gain">{{ bulletin.indem_logement|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.indem_domesticite and bulletin.indem_domesticite|float > 0 %}<tr><td>Indemnité de domesticité</td><td class="tc">—</td><td class="tr gain">{{ bulletin.indem_domesticite|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.indem_eau_electricite and bulletin.indem_eau_electricite|float > 0 %}<tr><td>Indemnité eau et électricité</td><td class="tc">—</td><td class="tr gain">{{ bulletin.indem_eau_electricite|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.indem_nourriture and bulletin.indem_nourriture|float > 0 %}<tr><td>Indemnité de nourriture</td><td class="tc">—</td><td class="tr gain">{{ bulletin.indem_nourriture|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_transport and bulletin.prime_transport|float > 0 %}<tr><td>Prime de transport</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_transport|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_responsabilite and bulletin.prime_responsabilite|float > 0 %}<tr><td>Prime de responsabilité</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_responsabilite|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_rendement and bulletin.prime_rendement|float > 0 %}<tr><td>Prime de rendement</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_rendement|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_assiduité and bulletin.prime_assiduité|float > 0 %}<tr><td>Prime d'assiduité</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_assiduité|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_qualite and bulletin.prime_qualite|float > 0 %}<tr><td>Prime de qualité</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_qualite|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.prime_performance and bulletin.prime_performance|float > 0 %}<tr><td>Prime de performance</td><td class="tc">—</td><td class="tr gain">{{ bulletin.prime_performance|fcfa }}</td><td></td></tr>{% endif %}
-      {% if bulletin.allocations_conge and bulletin.allocations_conge|float > 0 %}<tr><td>Allocations de congé</td><td class="tc">—</td><td class="tr gain">{{ bulletin.allocations_conge|fcfa }}</td><td></td></tr>{% endif %}
+
+      {# ── Salaire de base ── #}
+      <tr>
+        <td class="bold">Salaire de base</td>
+        <td class="tr base-val">{{ bulletin.nb_jours_travailles or 26 }} jours</td>
+        <td class="tc taux-val">Mensuel</td>
+        <td class="tr gain">{{ bulletin.salaire_base|fcfa }}</td>
+        <td></td>
+      </tr>
+
+      {# ── Heures supplémentaires ── #}
+      {% if bulletin.heures_sup_10 and bulletin.heures_sup_10|float > 0 %}
+      <tr>
+        <td>Heures supplémentaires (nuit semaine)</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">+10%</td>
+        <td class="tr gain">{{ bulletin.heures_sup_10|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.heures_sup_30 and bulletin.heures_sup_30|float > 0 %}
+      <tr>
+        <td>Heures supplémentaires (dimanche)</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">+30%</td>
+        <td class="tr gain">{{ bulletin.heures_sup_30|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.heures_sup_40 and bulletin.heures_sup_40|float > 0 %}
+      <tr>
+        <td>Heures supplémentaires (nuit dim.)</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">+40%</td>
+        <td class="tr gain">{{ bulletin.heures_sup_40|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.heures_sup_70 and bulletin.heures_sup_70|float > 0 %}
+      <tr>
+        <td>Heures supplémentaires (jours fériés)</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">+70%</td>
+        <td class="tr gain">{{ bulletin.heures_sup_70|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+
+      {# ── Absences ── #}
+      {% if bulletin.absences and bulletin.absences|float > 0 %}
+      <tr>
+        <td>Absences</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Prorata</td>
+        <td></td>
+        <td class="tr retenue">{{ bulletin.absences|fcfa }}</td>
+      </tr>{% endif %}
+
+      {# ── Compléments de salaire ── #}
+      {% if bulletin.sursalaire and bulletin.sursalaire|float > 0 %}
+      <tr>
+        <td>Sursalaire</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.sursalaire|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_caisse and bulletin.prime_caisse|float > 0 %}
+      <tr>
+        <td>Prime de caisse</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_caisse|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.carburant and bulletin.carburant|float > 0 %}
+      <tr>
+        <td>Carburant</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.carburant|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_anciennete and bulletin.prime_anciennete|float > 0 %}
+      <tr>
+        <td>Prime d'ancienneté</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr gain">{{ bulletin.prime_anciennete|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+
+      {# ── Avantages en nature ── #}
+      {% if bulletin.indem_logement and bulletin.indem_logement|float > 0 %}
+      <tr>
+        <td>Indemnité de logement</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.indem_logement|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_domesticite and bulletin.indem_domesticite|float > 0 %}
+      <tr>
+        <td>Indemnité de domesticité</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.indem_domesticite|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_eau_electricite and bulletin.indem_eau_electricite|float > 0 %}
+      <tr>
+        <td>Indemnité eau &amp; électricité</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.indem_eau_electricite|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_nourriture and bulletin.indem_nourriture|float > 0 %}
+      <tr>
+        <td>Indemnité de nourriture</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.indem_nourriture|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+
+      {# ── Primes ── #}
+      {% if bulletin.prime_transport and bulletin.prime_transport|float > 0 %}
+      <tr>
+        <td>Prime de transport</td>
+        <td class="tr base-val">—</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_transport|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_responsabilite and bulletin.prime_responsabilite|float > 0 %}
+      <tr>
+        <td>Prime de responsabilité</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_responsabilite|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_rendement and bulletin.prime_rendement|float > 0 %}
+      <tr>
+        <td>Prime de rendement</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_rendement|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_assiduité and bulletin.prime_assiduité|float > 0 %}
+      <tr>
+        <td>Prime d'assiduité</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_assiduité|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_qualite and bulletin.prime_qualite|float > 0 %}
+      <tr>
+        <td>Prime de qualité</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_qualite|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.prime_performance and bulletin.prime_performance|float > 0 %}
+      <tr>
+        <td>Prime de performance</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.prime_performance|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.allocations_conge and bulletin.allocations_conge|float > 0 %}
+      <tr>
+        <td>Allocations de congé</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Forfait</td>
+        <td class="tr gain">{{ bulletin.allocations_conge|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+
+      {# ── Indemnités de fin de contrat ── #}
+      {% if bulletin.indem_compensatrice_conge and bulletin.indem_compensatrice_conge|float > 0 %}
+      <tr>
+        <td>Indem. compensatrice de congé</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr gain">{{ bulletin.indem_compensatrice_conge|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_services_rendus and bulletin.indem_services_rendus|float > 0 %}
+      <tr>
+        <td>Indemnité de services rendus</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr gain">{{ bulletin.indem_services_rendus|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_compensatrice_preavis and bulletin.indem_compensatrice_preavis|float > 0 %}
+      <tr>
+        <td>Indem. compensatrice de préavis</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Préavis</td>
+        <td class="tr gain">{{ bulletin.indem_compensatrice_preavis|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.indem_licenciement and bulletin.indem_licenciement|float > 0 %}
+      <tr>
+        <td>Indemnité de licenciement</td>
+        <td class="tr base-val">Sal. base</td>
+        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr gain">{{ bulletin.indem_licenciement|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+
+      {# ── TOTAL BRUT ── #}
       <tr class="row-subtotal">
-        <td colspan="2" style="font-weight:900">SALAIRE BRUT</td>
-        <td class="tr" style="font-weight:900">{{ bulletin.salaire_brut|fcfa }}</td>
+        <td class="bold">SALAIRE BRUT</td>
+        <td class="tr bold"></td>
+        <td></td>
+        <td class="tr bold">{{ bulletin.salaire_brut|fcfa }}</td>
         <td></td>
       </tr>
     </tbody>
   </table>
 
-  <!-- ═══ COTISATIONS 2 COLONNES ═══ -->
-  <div class="two-cols-cot">
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- COTISATIONS — blocs non modifiés (Base/Taux/Montant déjà OK) -->
+  <!-- ════════════════════════════════════════════════════════════ -->
+  <div class="two-cols">
+    <!-- Salariales -->
     <div>
       <div class="section-title">Cotisations Salariales</div>
       <table>
-        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th></tr></thead>
+        <thead><tr>
+          <th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th>
+        </tr></thead>
         <tbody>
-          <tr><td>CNSS salarié</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">5%</td><td class="tr retenue">{{ bulletin.cnss_salarie|fcfa }}</td></tr>
-          <tr><td>CNAMGS salarié</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">2%</td><td class="tr retenue">{{ bulletin.cnamgs_salarie|fcfa }}</td></tr>
+          <tr><td>CNSS</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">5%</td><td class="tr retenue">{{ bulletin.cnss_salarie|fcfa }}</td></tr>
+          <tr><td>CNAMGS</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">2%</td><td class="tr retenue">{{ bulletin.cnamgs_salarie|fcfa }}</td></tr>
           <tr><td>TCS</td><td class="tr">{{ bulletin.base_tcs|fcfa }}</td><td class="tc">5%</td><td class="tr retenue">{{ bulletin.tcs|fcfa }}</td></tr>
-          <tr><td>IRPP (abatt. 20%)</td><td class="tr">{{ bulletin.base_irpp|fcfa }}</td><td class="tc">Barème</td><td class="tr retenue">{{ bulletin.irpp|fcfa }}</td></tr>
-          <tr class="row-subtotal"><td colspan="3" style="font-weight:900">Total retenues</td>
-            <td class="tr" style="font-weight:900">{{ (bulletin.cnss_salarie|float + bulletin.cnamgs_salarie|float + bulletin.tcs|float + bulletin.irpp|float)|int|fcfa }}</td>
+          <tr><td>IRPP</td><td class="tr">{{ bulletin.base_irpp|fcfa }}</td><td class="tc">Barème</td><td class="tr retenue">{{ bulletin.irpp|fcfa }}</td></tr>
+          <tr class="row-subtotal">
+            <td colspan="3" class="bold">Total retenues</td>
+            <td class="tr bold">{{ (bulletin.cnss_salarie|float + bulletin.cnamgs_salarie|float + bulletin.tcs|float + bulletin.irpp|float)|int|fcfa }}</td>
           </tr>
         </tbody>
       </table>
     </div>
+    <!-- Patronales -->
     <div>
-      <div class="section-title">Charges Patronales (informatif)</div>
+      <div class="section-title">Cotisations Patronales (informatif)</div>
       <table>
-        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th></tr></thead>
+        <thead><tr>
+          <th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th>
+        </tr></thead>
         <tbody>
-          <tr><td>CNSS patronal</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">18%</td><td class="tr">{{ bulletin.cnss_patronale|fcfa }}</td></tr>
-          <tr><td>CNAMGS patronal</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">4,1%</td><td class="tr">{{ bulletin.cnamgs_patronale|fcfa }}</td></tr>
+          <tr><td>CNSS</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">18%</td><td class="tr">{{ bulletin.cnss_patronale|fcfa }}</td></tr>
+          <tr><td>CNAMGS</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">4,1%</td><td class="tr">{{ bulletin.cnamgs_patronale|fcfa }}</td></tr>
           <tr><td>FNH</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">3%</td><td class="tr">{{ bulletin.fnh|fcfa }}</td></tr>
           <tr><td>CFP</td><td class="tr">{{ bulletin.salaire_brut|fcfa }}</td><td class="tc">0,5%</td><td class="tr">{{ bulletin.cfp|fcfa }}</td></tr>
-          <tr class="row-subtotal"><td colspan="3" style="font-weight:900">Total charges</td>
-            <td class="tr" style="font-weight:900">{{ (bulletin.cnss_patronale|float + bulletin.cnamgs_patronale|float + bulletin.fnh|float + bulletin.cfp|float)|int|fcfa }}</td>
+          <tr class="row-subtotal">
+            <td colspan="3" class="bold">Total charges</td>
+            <td class="tr bold">{{ (bulletin.cnss_patronale|float + bulletin.cnamgs_patronale|float + bulletin.fnh|float + bulletin.cfp|float)|int|fcfa }}</td>
           </tr>
         </tbody>
       </table>
     </div>
   </div>
 
-  <!-- ═══ RÉCAPITULATIF ═══ -->
+  <!-- RÉCAPITULATIF NET -->
   <table style="margin-bottom:6px">
     <tbody>
       <tr class="row-subtotal">
-        <td style="width:60%;font-weight:900">Salaire NET (Brut — Cotisations salariales)</td>
-        <td class="tr" style="font-weight:900">{{ bulletin.salaire_net|fcfa }}</td>
+        <td style="width:60%" class="bold">Salaire Net (Brut — Cotisations salariales)</td>
+        <td class="tr bold">{{ bulletin.salaire_net|fcfa }}</td>
       </tr>
-      {% if bulletin.prime_panier and bulletin.prime_panier|float > 0 %}<tr><td>+ Prime de panier (hors cotisations)</td><td class="tr gain">{{ bulletin.prime_panier|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.indem_transport and bulletin.indem_transport|float > 0 %}<tr><td>+ Indemnité de transport (hors cotisations)</td><td class="tr gain">{{ bulletin.indem_transport|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.indem_representation and bulletin.indem_representation|float > 0 %}<tr><td>+ Indemnité de représentation</td><td class="tr gain">{{ bulletin.indem_representation|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.prime_salisure and bulletin.prime_salisure|float > 0 %}<tr><td>+ Prime de salisure</td><td class="tr gain">{{ bulletin.prime_salisure|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.acompte and bulletin.acompte|float > 0 %}<tr><td>— Acompte versé</td><td class="tr retenue">{{ bulletin.acompte|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.prime_panier and bulletin.prime_panier|float > 0 %}
+      <tr><td>+ Prime de panier</td><td class="tr gain">{{ bulletin.prime_panier|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.indem_transport and bulletin.indem_transport|float > 0 %}
+      <tr><td>+ Indemnité de transport (exonérée)</td><td class="tr gain">{{ bulletin.indem_transport|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.indem_representation and bulletin.indem_representation|float > 0 %}
+      <tr><td>+ Indemnité de représentation</td><td class="tr gain">{{ bulletin.indem_representation|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.prime_salisure and bulletin.prime_salisure|float > 0 %}
+      <tr><td>+ Prime de salisure</td><td class="tr gain">{{ bulletin.prime_salisure|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.acompte and bulletin.acompte|float > 0 %}
+      <tr><td>— Acompte versé</td><td class="tr retenue">{{ bulletin.acompte|fcfa }}</td></tr>{% endif %}
     </tbody>
   </table>
 
-  <!-- ═══ NET À PAYER ═══ -->
+  <!-- NET À PAYER -->
   <div class="net-box">
     <span class="net-label">💰 Net à Payer</span>
     <span class="net-amount">{{ bulletin.net_a_payer|fcfa }}</span>
   </div>
 
-  <!-- ═══ SIGNATURES ═══ -->
+  <!-- SIGNATURES -->
   <div class="signatures">
     <div class="sig-box">
       <div class="sig-title">L'Employeur</div>
@@ -299,16 +481,16 @@
       <div class="sig-name">{{ tenant.denomination }}</div>
     </div>
     <div class="sig-box">
-      <div class="sig-title">Le Salarié <span style="font-weight:400;font-size:7px">(précéder de "Lu et approuvé")</span></div>
+      <div class="sig-title">Le Salarié <span style="font-weight:400;font-size:7.5px">(précéder la signature de "Lu et approuvé")</span></div>
       <div class="sig-space"></div>
       <div class="sig-name">{{ bulletin.salarie.nom_complet }}</div>
     </div>
   </div>
 
-  <!-- ═══ PIED DE PAGE ═══ -->
+  <!-- PIED DE PAGE -->
   <div class="footer">
     <p>{{ tenant.denomination }} — Bulletin de paie {{ bulletin.periode.libelle_complet }} — Document confidentiel</p>
-    <p style="margin-top:2px">Conformément au Code du Travail Gabonais — <strong>Conservez ce document sans limitation de durée</strong></p>
+    <p style="margin-top:2px">Conformément au Code du Travail Gabonais — Conservez ce document sans limitation de durée</p>
   </div>
 
 </div>
