@@ -294,8 +294,54 @@ def admin_plans():
                max_salaries=int(request.form["max_salaries"]) if request.form.get("max_salaries") else None,
                max_utilisateurs=int(request.form["max_utilisateurs"]) if request.form.get("max_utilisateurs") else None,
                description=request.form.get("description",""))
-        db.session.add(p); db.session.commit(); flash("Plan créé.","success")
-    return render_template("admin/plans.html", plans=Plan.query.all())
+        db.session.add(p); db.session.commit(); flash("Plan créé avec succès.","success")
+    plans = Plan.query.order_by(Plan.prix_mensuel.asc()).all()
+    # Nb clients actifs + revenus par plan
+    stats_plans = {}
+    for p in plans:
+        nb_actifs  = Tenant.query.filter_by(plan_id=p.id, statut="ACTIF").count()
+        nb_essai   = Tenant.query.filter_by(plan_id=p.id, statut="ESSAI").count()
+        nb_total   = Tenant.query.filter_by(plan_id=p.id).count()
+        revenus    = nb_actifs * float(p.prix_mensuel)
+        stats_plans[p.id] = {"nb_actifs": nb_actifs, "nb_essai": nb_essai,
+                              "nb_total": nb_total, "revenus": revenus}
+    return render_template("admin/plans.html", plans=plans, stats_plans=stats_plans)
+
+@app.route("/admin/plans/<int:id>/modifier", methods=["POST"])
+@super_admin_required
+def admin_plan_modifier(id):
+    p = Plan.query.get_or_404(id)
+    p.nom          = request.form.get("nom", p.nom).strip()
+    p.prix_mensuel = float(request.form.get("prix_mensuel", p.prix_mensuel))
+    p.max_salaries     = int(request.form["max_salaries"]) if request.form.get("max_salaries") else None
+    p.max_utilisateurs = int(request.form["max_utilisateurs"]) if request.form.get("max_utilisateurs") else None
+    p.description  = request.form.get("description", p.description or "")
+    db.session.commit()
+    flash(f"Plan « {p.nom} » modifié avec succès.", "success")
+    return redirect(url_for("admin_plans"))
+
+@app.route("/admin/plans/<int:id>/toggle", methods=["POST"])
+@super_admin_required
+def admin_plan_toggle(id):
+    p = Plan.query.get_or_404(id)
+    p.actif = not p.actif
+    db.session.commit()
+    etat = "activé" if p.actif else "désactivé"
+    flash(f"Plan « {p.nom} » {etat}.", "success")
+    return redirect(url_for("admin_plans"))
+
+@app.route("/admin/plans/<int:id>/supprimer", methods=["POST"])
+@super_admin_required
+def admin_plan_supprimer(id):
+    p = Plan.query.get_or_404(id)
+    nb_clients = Tenant.query.filter_by(plan_id=id).count()
+    if nb_clients > 0:
+        flash(f"Impossible de supprimer : {nb_clients} entreprise(s) utilisent ce plan.", "error")
+        return redirect(url_for("admin_plans"))
+    nom = p.nom
+    db.session.delete(p); db.session.commit()
+    flash(f"Plan « {nom} » supprimé.", "success")
+    return redirect(url_for("admin_plans"))
 
 @app.route("/admin/import", methods=["GET","POST"])
 @login_required
