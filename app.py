@@ -160,50 +160,6 @@ def inscription():
 def logout():
     logout_user(); return redirect(url_for("login"))
 
-
-@app.route("/mot-de-passe-oublie", methods=["GET","POST"])
-def mot_de_passe_oublie():
-    if current_user.is_authenticated: return redirect(url_for("index"))
-    if request.method == "POST":
-        email = request.form.get("email","").strip().lower()
-        user = Utilisateur.query.filter_by(email=email, actif=True).first()
-        if user:
-            token = sec.token_urlsafe(32)
-            user.reset_token = token
-            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=2)
-            db.session.commit()
-            lien = url_for("reinitialiser_mdp", token=token, _external=True)
-            try:
-                msg = Message(subject="Réinitialisation mot de passe — PaieGabon",
-                    recipients=[email],
-                    body=f"Bonjour {user.prenom or user.nom},\n\nLien valable 2h :\n{lien}\n\nCordialement,\nPaieGabon",
-                    sender=app.config["MAIL_DEFAULT_SENDER"])
-                send_email_async(msg)
-            except Exception as e: print(f"[RESET EMAIL ERROR] {e}")
-        flash("Si cet email existe, vous recevrez un lien de réinitialisation.", "success")
-        return redirect(url_for("login"))
-    return render_template("auth/mot_de_passe_oublie.html")
-
-@app.route("/reinitialiser-mdp/<token>", methods=["GET","POST"])
-def reinitialiser_mdp(token):
-    if current_user.is_authenticated: return redirect(url_for("index"))
-    user = Utilisateur.query.filter_by(reset_token=token, actif=True).first()
-    if not user or not user.reset_token_expiry or user.reset_token_expiry < datetime.utcnow():
-        flash("Lien invalide ou expiré.", "error")
-        return redirect(url_for("mot_de_passe_oublie"))
-    if request.method == "POST":
-        pw1 = request.form.get("password",""); pw2 = request.form.get("password2","")
-        if len(pw1) < 6: flash("Minimum 6 caractères.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
-        if pw1 != pw2: flash("Mots de passe différents.", "error"); return render_template("auth/reinitialiser_mdp.html", token=token)
-        user.set_password(pw1); user.reset_token = None; user.reset_token_expiry = None
-        db.session.commit(); flash("Mot de passe mis à jour !", "success")
-        return redirect(url_for("login"))
-    return render_template("auth/reinitialiser_mdp.html", token=token)
-
-@app.route("/politique-confidentialite")
-def politique_confidentialite():
-    return render_template("politique_confidentialite.html")
-
 # ── Super-Admin ───────────────────────────────────────────────────────────────
 @app.route("/admin")
 @super_admin_required
@@ -692,6 +648,22 @@ def bulletin_saisie():
         for k,v in res.items():
             if not k.startswith("_") and hasattr(b,k): setattr(b,k,v)
         b.nb_jours_travailles=int(request.form.get("nb_jours_travailles") or 0)
+        # ✅ Sauvegarder base et taux saisis manuellement pour chaque rubrique
+        RUBRIQUES_BT = ["salaire_base","heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70",
+            "absences","sursalaire","prime_caisse","carburant","prime_anciennete",
+            "indem_logement","indem_domesticite","indem_eau_electricite","indem_nourriture",
+            "prime_transport","prime_responsabilite","prime_rendement","prime_assiduité",
+            "prime_qualite","prime_performance","allocations_conge",
+            "indem_compensatrice_conge","indem_services_rendus",
+            "indem_compensatrice_preavis","indem_licenciement"]
+        for r in RUBRIQUES_BT:
+            base_val = request.form.get(f"base_{r}", "")
+            taux_val = request.form.get(f"taux_{r}", "")
+            if hasattr(b, f"base_{r}"):
+                try: setattr(b, f"base_{r}", float(base_val) if base_val else None)
+                except: pass
+            if hasattr(b, f"taux_{r}"):
+                setattr(b, f"taux_{r}", taux_val.strip()[:20] if taux_val else "")
         action=request.form.get("action","brouillon")
         if action=="valider":
             b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
@@ -1106,8 +1078,7 @@ def pointage_sauvegarder():
         if key.startswith("sal_present_"):
             sid_str = key.replace("sal_present_","")
             if sid_str not in sel_sal: continue
-            sid = int(sid_str)
-            present = val == "1"; absent = not present
+            sid = int(sid_str); present = val == "1"; absent = not present
             pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, salarie_id=sid).first()
             if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=sid); db.session.add(pt)
             pt.present=present; pt.absent=absent
@@ -1121,8 +1092,7 @@ def pointage_sauvegarder():
         if key.startswith("jour_present_"):
             jid_str = key.replace("jour_present_","")
             if jid_str not in sel_jour: continue
-            jid = int(jid_str)
-            present = val == "1"; absent = not present
+            jid = int(jid_str); present = val == "1"; absent = not present
             pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, journalier_id=jid).first()
             if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=jid); db.session.add(pt)
             pt.present=present; pt.absent=absent
@@ -1152,44 +1122,21 @@ def journaliers_paie_generer():
     if not t: return redirect(url_for("login"))
     date_debut = _parse_date(request.form.get("date_debut"))
     date_fin   = _parse_date(request.form.get("date_fin"))
-    if not date_debut or not date_fin:
-        flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
-    ids_selectionnes = request.form.getlist("journalier_ids")
-    nb = 0; nb_skip = 0
-    if ids_selectionnes:
-        journaliers_list = [Journalier.query.filter_by(id=int(jid), tenant_id=t.id).first()
-                            for jid in ids_selectionnes if jid]
-        journaliers_list = [j for j in journaliers_list if j]
-    else:
-        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
-    for j in journaliers_list:
-        heures_manuelles = request.form.get(f"heures_{j.id}", "").strip()
-        if heures_manuelles:
-            try: total_h = float(heures_manuelles); nb_jours = 0
-            except: continue
-        else:
-            pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
-                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
-                          Pointage.present==True).all()
-            total_h = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
-            nb_jours = len(pts)
-            if total_h == 0: nb_skip += 1; continue
-        taux_str = request.form.get(f"taux_{j.id}", "").strip()
-        taux = float(taux_str) if taux_str else float(j.taux_horaire)
-        if FeuillePaieJournalier.query.filter_by(
-                tenant_id=t.id, journalier_id=j.id,
-                date_debut=date_debut, date_fin=date_fin).first():
-            nb_skip += 1; continue
-        db.session.add(FeuillePaieJournalier(
-            tenant_id=t.id, journalier_id=j.id,
-            date_debut=date_debut, date_fin=date_fin,
-            nb_jours=nb_jours, total_heures=total_h,
-            taux_horaire=taux, montant_brut=round(total_h * taux, 2), statut="EN_ATTENTE"))
+    if not date_debut or not date_fin: flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
+    nb = 0
+    for j in Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all():
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
+              .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin, Pointage.present==True).all()
+        total_h = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
+        nb_jours = len(pts)
+        if nb_jours == 0: continue
+        if FeuillePaieJournalier.query.filter_by(tenant_id=t.id, journalier_id=j.id, date_debut=date_debut, date_fin=date_fin).first(): continue
+        db.session.add(FeuillePaieJournalier(tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin, nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=j.taux_horaire, montant_brut=round(total_h*float(j.taux_horaire),2), statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
-    msg = f"{nb} feuille(s) générée(s)."
-    if nb_skip: msg += f" {nb_skip} ignorée(s)."
-    flash(msg, "success" if nb > 0 else "warning")
+    flash(f"{nb} feuille(s) générée(s).", "success")
     return redirect(url_for("journaliers_paie"))
 
 @app.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
@@ -1208,8 +1155,6 @@ def journalier_feuille_modifier(id):
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    if request.form.get("total_heures"): f.total_heures = float(request.form.get("total_heures"))
-    if request.form.get("taux_horaire_modif"): f.taux_horaire = float(request.form.get("taux_horaire_modif"))
     f.montant_brut = float(request.form.get("montant_brut", f.montant_brut) or f.montant_brut)
     f.observation  = request.form.get("observation", "").strip()
     db.session.commit(); flash("Feuille modifiée.", "success")
@@ -1413,7 +1358,7 @@ def conge_supprimer(id):
 @login_required
 def salaries_imprimer():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t = get_tenant()
+    t = get_tenant(); 
     if not t: return redirect(url_for("login"))
     salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
     for s in salaries_list:
@@ -1426,8 +1371,7 @@ def journaliers_imprimer():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    journaliers_list = Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all()
-    return render_template("tenant/journaliers_print.html", journaliers=journaliers_list, tenant=t, now=datetime.now())
+    return render_template("tenant/journaliers_print.html", journaliers=Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all(), tenant=t, now=datetime.now())
 
 # ── Export & API ──────────────────────────────────────────────────────────────
 @app.route("/bulletins/export/<int:periode_id>")
@@ -1615,6 +1559,57 @@ with app.app_context():
             "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
             "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
             "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
+            # ✅ Nouvelles colonnes base et taux pour chaque rubrique
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_salaire_base NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_salaire_base VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_10 NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_10 VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_30 NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_30 VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_40 NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_40 VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_70 NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_70 VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_absences NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_absences VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_sursalaire NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_sursalaire VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_caisse NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_caisse VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_carburant NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_carburant VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_anciennete NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_anciennete VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_logement NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_logement VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_domesticite NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_domesticite VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_eau_electricite NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_eau_electricite VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_nourriture NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_nourriture VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_transport NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_transport VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_responsabilite NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_responsabilite VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_rendement NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_rendement VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_assiduité NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_assiduité VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_qualite NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_qualite VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_performance NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_performance VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_allocations_conge NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_allocations_conge VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_conge VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_services_rendus NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_services_rendus VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_preavis VARCHAR(20) DEFAULT ''",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_licenciement NUMERIC(15,2) DEFAULT 0",
+            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_licenciement VARCHAR(20) DEFAULT ''",
         ]:
             try: db.session.execute(db.text(sql)); db.session.commit()
             except Exception: db.session.rollback()
