@@ -227,6 +227,13 @@ def admin_dashboard():
         ).count()
         bul_6mois.append(nb_bul)
 
+    # ── Bulletins par tenant (pour le tableau) — calculé en Python ──────────
+    # Évite TypeError: 'int' + 'InstrumentedList' dans Jinja2
+    bulletins_par_tenant = {}
+    for t in tenants:
+        nb = BulletinPaie.query.filter_by(tenant_id=t.id).count()
+        bulletins_par_tenant[t.id] = nb
+
     return render_template("admin/dashboard.html",
         tenants=tenants, nb_tenants=nb_tenants,
         nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
@@ -236,6 +243,7 @@ def admin_dashboard():
         revenus_6mois=revenus_6mois, mois_labels=mois_labels,
         repartition_plans=repartition_plans,
         bul_6mois=bul_6mois, bul_labels=bul_labels,
+        bulletins_par_tenant=bulletins_par_tenant,
         now=now)
 
 @app.route("/admin/tenants")
