@@ -5,109 +5,240 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Super-Admin — Ameriack I.T. Solutions</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     body { font-family:'Segoe UI',system-ui,sans-serif; }
     .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .nav-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:.875rem; transition:color .15s; }
+    .nav-link:hover { color:white; }
+    .nav-link.active { color:white; font-weight:700; }
+    .kpi-card { border-radius:1rem; padding:1.25rem 1.5rem; color:white; }
+    .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
 
-<!-- ── Topbar admin ── -->
-<nav class="bg-purple-900 text-white px-6 py-4 flex items-center justify-between shadow-lg">
-  <div class="flex items-center gap-4">
-    <span class="text-xl font-black">Ameriack I.T. Solutions</span>
-    <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+<!-- ── Topbar ── -->
+<nav class="bg-purple-900 text-white px-6 py-0 flex items-center shadow-lg" style="height:56px">
+  <div class="flex items-center gap-3 mr-8">
+    <span class="text-base font-black tracking-tight">Ameriack I.T.</span>
+    <span class="bg-purple-700 text-purple-200 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
   </div>
-  <div class="flex items-center gap-5 text-sm">
-    <a href="/admin"          class="font-semibold hover:text-purple-200">Dashboard</a>
-    <a href="/admin/tenants"  class="hover:text-purple-200">Entreprises</a>
-    <a href="/admin/plans"    class="hover:text-purple-200">Plans</a>
-    <a href="/admin/rubriques"class="hover:text-purple-200">Rubriques</a>
-    <a href="/admin/import"   class="hover:text-purple-200">Import Excel</a>
-    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">
-      Déconnexion
-    </a>
+  <div class="flex items-center gap-6 h-full">
+    <a href="/admin"           class="nav-link active h-full flex items-center border-b-2 border-white">Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link h-full flex items-center">Entreprises</a>
+    <a href="/admin/plans"     class="nav-link h-full flex items-center">Plans</a>
+    <a href="/admin/rubriques" class="nav-link h-full flex items-center">Rubriques</a>
+    <a href="/admin/import"    class="nav-link h-full flex items-center">Import Excel</a>
+    <a href="/admin/stats"     class="nav-link h-full flex items-center">Statistiques</a>
+  </div>
+  <div class="ml-auto flex items-center gap-3">
+    <span class="text-xs text-purple-300">{{ now.strftime('%d/%m/%Y %H:%M') if now else '' }}</span>
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
   </div>
 </nav>
 
-<main class="max-w-6xl mx-auto p-8">
+<main class="max-w-7xl mx-auto px-6 py-6">
 
-  <!-- Messages flash -->
+  <!-- Flash messages -->
   {% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}
-  <div class="mb-6 space-y-2">
+  <div class="mb-5 space-y-2">
     {% for cat, msg in messages %}
     <div class="px-4 py-3 rounded-xl text-sm font-semibold
       {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
       else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
-      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
-      {{ msg }}
-    </div>
+      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
     {% endfor %}
   </div>
   {% endif %}
   {% endwith %}
 
-  <div class="mb-6">
-    <h1 class="text-2xl font-black text-gray-900">Tableau de bord Super-Admin</h1>
-    <p class="text-gray-500 text-sm mt-1">Vue globale — {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
-  </div>
-
-  <!-- KPIs globaux -->
-  <div class="grid grid-cols-4 gap-5 mb-8">
-    <div class="bg-gradient-to-br from-purple-700 to-purple-900 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">🏢</div>
-      <div class="text-3xl font-black">{{ nb_tenants }}</div>
-      <div class="text-sm opacity-80">Entreprises</div>
-      <div class="text-xs opacity-60 mt-1">{{ nb_suspendus }} suspendue(s)</div>
+  <!-- ── En-tête ── -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-black text-gray-900">Tableau de bord</h1>
+      <p class="text-gray-500 text-sm mt-0.5">Vue globale en temps réel · {{ nb_tenants }} entreprise(s)</p>
     </div>
-    <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">✅</div>
-      <div class="text-3xl font-black">{{ nb_actifs }}</div>
-      <div class="text-sm opacity-80">Actives</div>
-      <div class="text-xs opacity-60 mt-1">{{ nb_essai }} en essai</div>
-    </div>
-    <div class="bg-gradient-to-br from-amber-500 to-amber-700 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">👷</div>
-      <div class="text-3xl font-black">{{ total_sal }}</div>
-      <div class="text-sm opacity-80">Salariés total</div>
-      <div class="text-xs opacity-60 mt-1">{{ total_bul }} bulletins</div>
-    </div>
-    <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-5 text-white">
-      <div class="text-3xl mb-2">💰</div>
-      <div class="text-2xl font-black">{{ revenus|int|fcfa }}</div>
-      <div class="text-sm opacity-80">Revenus/mois</div>
-      <div class="text-xs opacity-60 mt-1">clients ACTIFS uniquement</div>
-    </div>
-  </div>
-
-  <!-- Accès rapides -->
-  <div class="grid grid-cols-4 gap-4 mb-8">
-    {% for icon, label, href, color in [
-      ('🏢', 'Toutes les entreprises', '/admin/tenants', '#7c3aed'),
-      ('📊', 'Import Excel', '/admin/import', '#0369a1'),
-      ('📋', 'Plans & tarifs', '/admin/plans', '#047857'),
-      ('⚙️', 'Rubriques légales', '/admin/rubriques', '#92400e'),
-    ] %}
-    <a href="{{ href }}"
-       style="background:{{ color }};color:white;border-radius:1rem;padding:1rem;display:flex;align-items:center;gap:.75rem;text-decoration:none;font-weight:700;font-size:.875rem;transition:opacity .2s"
-       onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-      <span style="font-size:1.5rem">{{ icon }}</span>
-      <span>{{ label }}</span>
+    <a href="/admin/tenants/nouveau" class="bg-purple-900 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold">
+      + Nouvelle entreprise
     </a>
-    {% endfor %}
   </div>
 
-  <!-- Liste entreprises -->
+  <!-- ── ALERTE essais urgents ── -->
+  {% if essais_urgents %}
+  <div class="mb-5 bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3">
+    <div class="text-amber-500 text-2xl flex-shrink-0">⚠️</div>
+    <div class="flex-1">
+      <div class="font-bold text-amber-800 text-sm mb-2">
+        {{ essais_urgents|length }} essai(s) expire{{ 'nt' if essais_urgents|length > 1 else '' }} dans moins de 7 jours
+      </div>
+      <div class="flex flex-wrap gap-2">
+        {% for t in essais_urgents %}
+        <a href="/admin/tenants/{{ t.id }}"
+           class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-amber-200 flex items-center gap-1.5">
+          🏢 {{ t.denomination }}
+          {% if t.date_expiration %}
+          <span class="text-amber-600 font-normal">
+            — expire le {{ t.date_expiration.strftime('%d/%m') }}
+          </span>
+          {% endif %}
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    <a href="/admin/tenants?statut=ESSAI" class="text-amber-600 font-bold text-xs hover:underline flex-shrink-0">
+      Voir tous les essais →
+    </a>
+  </div>
+  {% endif %}
+
+  <!-- ── KPIs ligne 1 ── -->
+  <div class="grid grid-cols-4 gap-4 mb-4">
+
+    <div class="kpi-card" style="background:linear-gradient(135deg,#6d28d9,#4c1d95)">
+      <div class="text-purple-300 text-xs font-bold uppercase tracking-widest mb-1">Total entreprises</div>
+      <div class="text-4xl font-black mb-0.5">{{ nb_tenants }}</div>
+      <div class="flex items-center gap-3 text-xs text-purple-200 mt-1">
+        <span>✅ {{ nb_actifs }} actives</span>
+        <span>🧪 {{ nb_essai }} essai</span>
+        <span>🔴 {{ nb_suspendus }} suspendues</span>
+      </div>
+    </div>
+
+    <div class="kpi-card" style="background:linear-gradient(135deg,#059669,#065f46)">
+      <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">Revenus / mois</div>
+      <div class="text-3xl font-black mb-0.5">{{ (revenus/1000)|int }} k</div>
+      <div class="text-xs text-emerald-200 mt-1">
+        {{ revenus|int|fcfa }} · clients ACTIFS
+      </div>
+    </div>
+
+    <div class="kpi-card" style="background:linear-gradient(135deg,#d97706,#92400e)">
+      <div class="text-amber-300 text-xs font-bold uppercase tracking-widest mb-1">Taux conversion</div>
+      <div class="text-4xl font-black mb-0.5">{{ taux_conversion }}%</div>
+      <div class="text-xs text-amber-200 mt-1">
+        Essai → Payant · {{ nb_actifs }}/{{ nb_tenants }} clients
+      </div>
+    </div>
+
+    <div class="kpi-card" style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a)">
+      <div class="text-blue-300 text-xs font-bold uppercase tracking-widest mb-1">Activité paie</div>
+      <div class="text-4xl font-black mb-0.5">{{ total_sal }}</div>
+      <div class="text-xs text-blue-200 mt-1">
+        salariés · {{ total_bul }} bulletins émis
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── GRAPHIQUES ── -->
+  <div class="grid grid-cols-3 gap-4 mb-5">
+
+    <!-- Revenus 6 mois -->
+    <div class="card p-5 col-span-2">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 class="font-black text-gray-900 text-sm">Évolution des revenus</h2>
+          <p class="text-xs text-gray-400 mt-0.5">6 derniers mois · clients ACTIFS</p>
+        </div>
+        <span class="badge bg-emerald-100 text-emerald-700">FCFA/mois</span>
+      </div>
+      <div style="height:180px;position:relative">
+        <canvas id="chartRevenus"></canvas>
+      </div>
+    </div>
+
+    <!-- Répartition plans -->
+    <div class="card p-5">
+      <div class="mb-4">
+        <h2 class="font-black text-gray-900 text-sm">Répartition par plan</h2>
+        <p class="text-xs text-gray-400 mt-0.5">Clients actifs uniquement</p>
+      </div>
+      {% if repartition_plans %}
+      <div style="height:130px;position:relative;margin-bottom:.75rem">
+        <canvas id="chartPlans"></canvas>
+      </div>
+      <div class="space-y-1.5">
+        {% for item in repartition_plans %}
+        <div class="flex items-center justify-between text-xs">
+          <div class="flex items-center gap-2">
+            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+              style="background:{{ ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'][loop.index0 % 5] }}"></div>
+            <span class="font-semibold text-gray-700">{{ item.nom }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-gray-900">{{ item.nb }} client{{ 's' if item.nb > 1 else '' }}</span>
+            <span class="text-gray-400">{{ (item.prix * item.nb)|int|fcfa }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div class="flex items-center justify-center h-32 text-gray-400 text-sm">Aucun client actif</div>
+      {% endif %}
+    </div>
+
+  </div>
+
+  <!-- ── Bulletins 6 mois + Accès rapides ── -->
+  <div class="grid grid-cols-3 gap-4 mb-5">
+
+    <!-- Bulletins émis -->
+    <div class="card p-5">
+      <div class="mb-4">
+        <h2 class="font-black text-gray-900 text-sm">Bulletins émis / mois</h2>
+        <p class="text-xs text-gray-400 mt-0.5">6 derniers mois</p>
+      </div>
+      <div style="height:140px;position:relative">
+        <canvas id="chartBulletins"></canvas>
+      </div>
+    </div>
+
+    <!-- Accès rapides -->
+    <div class="card p-5 col-span-2">
+      <h2 class="font-black text-gray-900 text-sm mb-4">Accès rapides</h2>
+      <div class="grid grid-cols-3 gap-3">
+        {% for icon, label, href, bg in [
+          ('🏢', 'Toutes les entreprises', '/admin/tenants',   '#7c3aed'),
+          ('📋', 'Plans & tarifs',          '/admin/plans',    '#047857'),
+          ('⚙️', 'Rubriques légales',       '/admin/rubriques','#92400e'),
+          ('📊', 'Import Excel',             '/admin/import',  '#0369a1'),
+          ('📈', 'Statistiques',             '/admin/stats',   '#1d4ed8'),
+          ('🧪', 'Essais en cours',          '/admin/tenants?statut=ESSAI','#b45309'),
+        ] %}
+        <a href="{{ href }}"
+           style="background:{{ bg }};color:white;border-radius:.875rem;padding:.875rem;display:flex;align-items:center;gap:.625rem;text-decoration:none;font-size:.8rem;font-weight:700;"
+           onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+          <span style="font-size:1.25rem">{{ icon }}</span>
+          <span>{{ label }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Tableau entreprises ── -->
   <div class="card overflow-hidden">
-    <div class="flex items-center justify-between p-5 border-b border-gray-100">
+    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
       <div>
         <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
-        <p class="text-xs text-gray-400 mt-0.5">10 sur {{ nb_tenants }} — <a href="/admin/tenants" class="text-purple-600 font-bold">voir toutes →</a></p>
+        <p class="text-xs text-gray-400 mt-0.5">
+          10 sur {{ nb_tenants }} —
+          <a href="/admin/tenants" class="text-purple-600 font-bold hover:underline">voir toutes →</a>
+        </p>
       </div>
-      <a href="/admin/tenants" class="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        Voir toutes ({{ nb_tenants }}) →
-      </a>
+      <div class="flex items-center gap-2">
+        <a href="/admin/tenants?statut=SUSPENDU"
+           class="text-xs bg-red-50 text-red-600 font-bold px-3 py-1.5 rounded-lg hover:bg-red-100"
+           style="{{ 'display:none' if nb_suspendus == 0 else '' }}">
+          🔴 {{ nb_suspendus }} suspendue(s)
+        </a>
+        <a href="/admin/tenants" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-bold">
+          Voir toutes →
+        </a>
+      </div>
     </div>
 
     <table class="w-full text-sm">
@@ -118,47 +249,68 @@
           <th class="px-4 py-3 text-center">Salariés</th>
           <th class="px-4 py-3 text-center">Bulletins</th>
           <th class="px-4 py-3 text-center">Statut</th>
+          <th class="px-4 py-3 text-center">Expiration essai</th>
           <th class="px-4 py-3 text-center">Inscription</th>
           <th class="px-4 py-3 text-center">Actions</th>
         </tr>
       </thead>
       <tbody>
         {% for t in tenants[:10] %}
-        <tr class="border-b border-gray-50 hover:bg-gray-50">
+        {% set nb_bul_t = t.periodes|sum(attribute='bulletins')|list|length if t.periodes else 0 %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50 {{ 'bg-amber-50' if t.statut=='ESSAI' and t.date_expiration and (t.date_expiration - now).days <= 7 else '' }}">
           <td class="px-4 py-3">
-            <div class="font-bold">{{ t.denomination }}</div>
+            <div class="font-bold text-gray-900">{{ t.denomination }}</div>
             <div class="text-xs text-gray-400">{{ t.activite or '—' }} · {{ t.ville or '' }}</div>
           </td>
           <td class="px-4 py-3">
-            <span class="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
+            <span class="badge bg-purple-100 text-purple-800">
               {{ t.plan.nom if t.plan else '—' }}
             </span>
           </td>
           <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
-          <td class="px-4 py-3 text-center text-gray-500 text-xs">—</td>
+          <td class="px-4 py-3 text-center text-gray-600 font-semibold">
+            {% set nb_b = namespace(val=0) %}
+            {% for p in t.periodes %}{% set nb_b.val = nb_b.val + p.bulletins|length %}{% endfor %}
+            {{ nb_b.val }}
+          </td>
           <td class="px-4 py-3 text-center">
             {% set sc = {
-              'ACTIF':               'bg-emerald-100 text-emerald-700',
-              'ESSAI':               'bg-amber-100 text-amber-700',
-              'SUSPENDU':            'bg-red-100 text-red-600',
-              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-700',
-              'ANNULATION_DEMANDEE': 'bg-orange-100 text-orange-700',
+              'ACTIF':               'bg-emerald-100 text-emerald-800',
+              'ESSAI':               'bg-amber-100 text-amber-800',
+              'SUSPENDU':            'bg-red-100 text-red-700',
+              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-800',
             } %}
-            <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(t.statut, 'bg-gray-100 text-gray-500') }}">
+            <span class="badge {{ sc.get(t.statut,'bg-gray-100 text-gray-600') }}">
               {{ t.statut.replace('_',' ') }}
             </span>
+          </td>
+          <td class="px-4 py-3 text-center text-xs">
+            {% if t.statut == 'ESSAI' and t.date_expiration %}
+              {% set jours = (t.date_expiration - now).days %}
+              <span class="font-bold {{ 'text-red-600' if jours <= 3 else 'text-amber-600' if jours <= 7 else 'text-gray-500' }}">
+                {{ t.date_expiration.strftime('%d/%m/%Y') }}
+                <br><span class="text-xs font-normal">({{ jours }}j restant{{ 's' if jours > 1 else '' }})</span>
+              </span>
+            {% else %}
+              <span class="text-gray-300">—</span>
+            {% endif %}
           </td>
           <td class="px-4 py-3 text-center text-gray-400 text-xs">
             {{ t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—' }}
           </td>
           <td class="px-4 py-3 text-center">
-            <a href="/admin/tenants/{{ t.id }}" class="text-purple-600 font-bold text-xs hover:underline mr-2">Gérer</a>
-            <a href="/admin/tenants/{{ t.id }}/impersonate" class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+            <div class="flex items-center justify-center gap-2">
+              <a href="/admin/tenants/{{ t.id }}"
+                 class="text-purple-600 font-bold text-xs hover:underline">Gérer</a>
+              <span class="text-gray-200">|</span>
+              <a href="/admin/tenants/{{ t.id }}/impersonate"
+                 class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+            </div>
           </td>
         </tr>
         {% else %}
         <tr>
-          <td colspan="7" class="text-center py-10 text-gray-400 text-sm">
+          <td colspan="8" class="text-center py-10 text-gray-400 text-sm">
             Aucune entreprise enregistrée
           </td>
         </tr>
@@ -167,7 +319,7 @@
     </table>
 
     {% if nb_tenants > 10 %}
-    <div class="p-4 border-t border-gray-100 text-center">
+    <div class="px-5 py-3 border-t border-gray-100 text-center">
       <a href="/admin/tenants" class="text-purple-600 font-bold text-sm hover:underline">
         Voir les {{ nb_tenants - 10 }} autres entreprises →
       </a>
@@ -176,5 +328,113 @@
   </div>
 
 </main>
+
+<script>
+const MOIS = {{ mois_labels | tojson }};
+const REV  = {{ revenus_6mois | tojson }};
+const BUL  = {{ bul_6mois | tojson }};
+const PLANS_LABELS = {{ repartition_plans | map(attribute='nom') | list | tojson }};
+const PLANS_NB     = {{ repartition_plans | map(attribute='nb')  | list | tojson }};
+
+const COLORS = ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'];
+
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size   = 11;
+Chart.defaults.color       = '#9ca3af';
+
+// ── Graphique revenus ──────────────────────────────────────────────────────
+new Chart(document.getElementById('chartRevenus'), {
+  type: 'bar',
+  data: {
+    labels: MOIS,
+    datasets: [{
+      label: 'Revenus FCFA',
+      data: REV,
+      backgroundColor: REV.map((v, i) => i === REV.length - 1 ? '#6d28d9' : '#ede9fe'),
+      borderRadius: 6,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ' ' + new Intl.NumberFormat('fr-FR').format(ctx.raw) + ' FCFA'
+        }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, border: { display: false } },
+      y: {
+        grid: { color: '#f3f4f6' },
+        border: { display: false, dash: [4,4] },
+        ticks: {
+          callback: v => v >= 1000000
+            ? (v/1000000).toFixed(1) + 'M'
+            : v >= 1000 ? (v/1000).toFixed(0) + 'k' : v
+        }
+      }
+    }
+  }
+});
+
+// ── Graphique bulletins ────────────────────────────────────────────────────
+new Chart(document.getElementById('chartBulletins'), {
+  type: 'line',
+  data: {
+    labels: MOIS,
+    datasets: [{
+      label: 'Bulletins',
+      data: BUL,
+      borderColor: '#1d4ed8',
+      backgroundColor: 'rgba(29,78,216,.08)',
+      borderWidth: 2,
+      pointBackgroundColor: '#1d4ed8',
+      pointRadius: 4,
+      fill: true,
+      tension: 0.4,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { display: false }, border: { display: false } },
+      y: {
+        grid: { color: '#f3f4f6' },
+        border: { display: false },
+        ticks: { precision: 0 }
+      }
+    }
+  }
+});
+
+// ── Graphique plans ────────────────────────────────────────────────────────
+if (PLANS_LABELS.length > 0) {
+  new Chart(document.getElementById('chartPlans'), {
+    type: 'doughnut',
+    data: {
+      labels: PLANS_LABELS,
+      datasets: [{
+        data: PLANS_NB,
+        backgroundColor: COLORS.slice(0, PLANS_LABELS.length),
+        borderWidth: 0,
+        hoverOffset: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} client${ctx.raw > 1 ? 's' : ''}` } }
+      }
+    }
+  });
+}
+</script>
+
 </body>
 </html>
