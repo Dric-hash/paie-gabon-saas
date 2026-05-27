@@ -396,65 +396,239 @@
 <!-- TAB 5 : ABONNEMENT -->
 <!-- ═══════════════════════════════════════════════════ -->
 <div id="content-abonnement" class="tab-content" style="display:none">
+
+  <!-- Statut alerte si en attente -->
+  {% if tenant.statut == 'PAIEMENT_EN_ATTENTE' %}
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.875rem;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;gap:.75rem;align-items:center">
+    <span style="font-size:1.5rem;flex-shrink:0">⏳</span>
+    <div>
+      <div style="font-weight:700;color:#1e40af;font-size:.875rem">Demande de changement en cours</div>
+      <div style="font-size:.8rem;color:#3b82f6;margin-top:.25rem">L'équipe PaieGabon traite votre demande. Vous serez contacté sous 24h.</div>
+    </div>
+  </div>
+  {% endif %}
+
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
 
-    <!-- Plan actuel -->
+    <!-- ── Plan actuel ── -->
     <div class="card p-6">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Plan actuel</h2>
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Votre abonnement actuel</h2>
       {% if tenant.plan %}
-      <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.5rem;color:white;margin-bottom:1rem">
-        <div style="font-size:1.5rem;font-weight:900">{{ tenant.plan.nom }}</div>
-        <div style="font-size:2rem;font-weight:900;color:#fbbf24;margin:.5rem 0">
-          {% if tenant.plan.prix_mensuel %}{{ tenant.plan.prix_mensuel|int|fcfa }}<span style="font-size:.875rem;font-weight:400;opacity:.7">/mois</span>
-          {% else %}Sur devis{% endif %}
+      <div style="background:#1a2332;border-radius:1rem;padding:1.5rem;color:white;margin-bottom:1.25rem">
+        <div style="font-size:.75rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">Plan actif</div>
+        <div style="font-size:1.75rem;font-weight:900">{{ tenant.plan.nom }}</div>
+        <div style="font-size:2rem;font-weight:900;color:#fbbf24;margin:.25rem 0">
+          {{ tenant.plan.prix_mensuel|int|fcfa }}
+          <span style="font-size:.875rem;font-weight:400;color:rgba(255,255,255,.6)">/mois</span>
         </div>
-        <div style="font-size:.875rem;opacity:.7">{{ tenant.plan.description or '' }}</div>
+        {% if tenant.plan.description %}
+        <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-top:.25rem">{{ tenant.plan.description }}</div>
+        {% endif %}
       </div>
-      <div style="display:flex;flex-direction:column;gap:.5rem;font-size:.875rem">
-        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
-          <span>Salariés</span>
-          <strong>{{ tenant.nb_salaries_actifs }} / {% if tenant.plan.max_salaries %}{{ tenant.plan.max_salaries }}{% else %}∞{% endif %}</strong>
+
+      <!-- Utilisation -->
+      <div style="display:flex;flex-direction:column;gap:.625rem">
+        <!-- Salariés -->
+        {% set pct_sal = ((tenant.nb_salaries_actifs / tenant.plan.max_salaries * 100)|int) if tenant.plan.max_salaries else 0 %}
+        <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem 1rem">
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.375rem">
+            <span style="color:#6b7280;font-weight:600">Salariés actifs</span>
+            <strong>{{ tenant.nb_salaries_actifs }} / {% if tenant.plan.max_salaries %}{{ tenant.plan.max_salaries }}{% else %}∞{% endif %}</strong>
+          </div>
+          {% if tenant.plan.max_salaries %}
+          <div style="background:#e5e7eb;border-radius:9999px;height:6px;overflow:hidden">
+            <div style="background:{% if pct_sal >= 90 %}#dc2626{% elif pct_sal >= 70 %}#f59e0b{% else %}#059669{% endif %};height:100%;width:{{ [pct_sal, 100]|min }}%;border-radius:9999px;transition:width .3s"></div>
+          </div>
+          {% if pct_sal >= 90 %}
+          <div style="font-size:.7rem;color:#dc2626;font-weight:700;margin-top:.25rem">⚠️ Limite presque atteinte</div>
+          {% endif %}
+          {% endif %}
         </div>
-        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
-          <span>Utilisateurs</span>
-          <strong>{{ users|length }} / {% if tenant.plan.max_utilisateurs %}{{ tenant.plan.max_utilisateurs }}{% else %}∞{% endif %}</strong>
+        <!-- Utilisateurs -->
+        {% set pct_util = ((users|length / tenant.plan.max_utilisateurs * 100)|int) if tenant.plan.max_utilisateurs else 0 %}
+        <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem 1rem">
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.375rem">
+            <span style="color:#6b7280;font-weight:600">Utilisateurs</span>
+            <strong>{{ users|length }} / {% if tenant.plan.max_utilisateurs %}{{ tenant.plan.max_utilisateurs }}{% else %}∞{% endif %}</strong>
+          </div>
+          {% if tenant.plan.max_utilisateurs %}
+          <div style="background:#e5e7eb;border-radius:9999px;height:6px;overflow:hidden">
+            <div style="background:{% if pct_util >= 90 %}#dc2626{% elif pct_util >= 70 %}#f59e0b{% else %}#1d4ed8{% endif %};height:100%;width:{{ [pct_util, 100]|min }}%;border-radius:9999px"></div>
+          </div>
+          {% endif %}
         </div>
-        <div style="display:flex;justify-content:space-between;padding:.5rem;background:#f9fafb;border-radius:.5rem">
-          <span>Statut</span>
-          <span class="badge-{{ tenant.statut|lower }}">{{ tenant.statut }}</span>
+        <!-- Statut + Expiration -->
+        <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:.8rem;color:#6b7280;font-weight:600">Statut</span>
+          {% set sc = {'ACTIF':'background:#d1fae5;color:#065f46','ESSAI':'background:#fef3c7;color:#92400e','SUSPENDU':'background:#fee2e2;color:#991b1b','PAIEMENT_EN_ATTENTE':'background:#dbeafe;color:#1e40af'} %}
+          <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;{{ sc.get(tenant.statut,'background:#f3f4f6;color:#6b7280') }}">
+            {{ tenant.statut.replace('_',' ') }}
+          </span>
         </div>
+        {% if tenant.date_expiration %}
+        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.625rem 1rem;font-size:.8rem;color:#92400e;font-weight:600">
+          ⏰ Essai jusqu'au {{ tenant.date_expiration.strftime('%d/%m/%Y') }}
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Fonctionnalités -->
+      <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid #f3f4f6">
+        <div style="font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem">Fonctionnalités incluses</div>
+        {% for feat in ["Calcul CNSS, CNAMGS, TCS, IRPP automatique","Bulletins de paie imprimables + email","Gestion journaliers & pointage","Export journal Excel","Historique illimité","Support technique"] %}
+        <div style="display:flex;gap:.5rem;align-items:center;font-size:.8rem;color:#374151;padding:.2rem 0">
+          <span style="color:#22c55e;font-weight:900;flex-shrink:0">✓</span> {{ feat }}
+        </div>
+        {% endfor %}
       </div>
       {% else %}
-      <p style="color:#9ca3af;font-size:.875rem">Aucun plan associé.</p>
+      <div style="text-align:center;padding:2rem;color:#9ca3af">
+        <div style="font-size:2rem;margin-bottom:.5rem">📋</div>
+        <p style="font-size:.875rem">Aucun plan associé à votre compte.</p>
+        <p style="font-size:.8rem;margin-top:.5rem">Contactez-nous pour activer votre abonnement.</p>
+      </div>
       {% endif %}
     </div>
 
-    <!-- Contact & upgrade -->
+    <!-- ── Changer de plan ── -->
     <div style="display:flex;flex-direction:column;gap:1rem">
+
+      {% if current_user.is_tenant_admin %}
       <div class="card p-6">
-        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Changer de plan</h2>
-        <p style="font-size:.875rem;color:#6b7280;margin-bottom:1rem">Pour mettre à niveau votre abonnement, contactez notre équipe.</p>
-        <div style="display:flex;flex-direction:column;gap:.5rem">
-          <a href="mailto:contact@paiegalon.ga" style="display:block;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-align:center;text-decoration:none">
-            📧 Contacter le support
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Changer de plan</h2>
+        <p style="font-size:.8rem;color:#9ca3af;margin-bottom:1.25rem">Sélectionnez le plan souhaité — l'équipe vous contacte pour valider.</p>
+
+        <form method="POST" action="/parametres/demande-changement-plan" class="space-y-4">
+          <!-- Cartes plans -->
+          <div style="display:flex;flex-direction:column;gap:.625rem">
+            {% for p in plans_dispo %}
+            {% set is_current = tenant.plan and tenant.plan.id == p.id %}
+            <label style="display:block;cursor:{{ 'default' if is_current else 'pointer' }}">
+              <input type="radio" name="plan_id" value="{{ p.id }}"
+                {{ 'disabled checked' if is_current else '' }}
+                style="display:none" class="plan-radio"
+                onchange="highlightPlan(this)">
+              <div id="plan-card-{{ p.id }}"
+                style="border:2px solid {{ '#7c3aed' if is_current else '#e5e7eb' }};border-radius:.875rem;padding:.875rem 1rem;transition:all .2s;
+                  background:{{ '#faf5ff' if is_current else 'white' }}">
+                <div style="display:flex;justify-content:space-between;align-items:center">
+                  <div>
+                    <div style="font-weight:900;font-size:.9rem;color:{{ '#7c3aed' if is_current else '#111827' }}">
+                      {{ p.nom }}
+                      {% if is_current %}
+                      <span style="font-size:.65rem;background:#7c3aed;color:white;padding:.1rem .5rem;border-radius:9999px;margin-left:.375rem">Plan actuel</span>
+                      {% endif %}
+                    </div>
+                    <div style="font-size:.75rem;color:#6b7280;margin-top:.125rem">
+                      {{ p.max_salaries or '∞' }} salariés · {{ p.max_utilisateurs or '∞' }} utilisateurs
+                    </div>
+                    {% if p.description %}<div style="font-size:.7rem;color:#9ca3af;margin-top:.125rem">{{ p.description }}</div>{% endif %}
+                  </div>
+                  <div style="text-align:right;flex-shrink:0;margin-left:1rem">
+                    <div style="font-size:1.1rem;font-weight:900;color:#111827">{{ p.prix_mensuel|int|fcfa }}</div>
+                    <div style="font-size:.7rem;color:#9ca3af">/mois</div>
+                    {% if tenant.plan and not is_current %}
+                      {% if p.prix_mensuel > tenant.plan.prix_mensuel %}
+                      <div style="font-size:.65rem;font-weight:700;color:#059669;margin-top:.125rem">↑ Upgrade</div>
+                      {% else %}
+                      <div style="font-size:.65rem;font-weight:700;color:#6b7280;margin-top:.125rem">↓ Downgrade</div>
+                      {% endif %}
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </label>
+            {% else %}
+            <p style="font-size:.875rem;color:#9ca3af;text-align:center;padding:1rem">Aucun plan disponible</p>
+            {% endfor %}
+          </div>
+
+          <!-- Motif -->
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
+              Motif de la demande <span style="color:#9ca3af;font-weight:400">(optionnel)</span>
+            </label>
+            <textarea name="motif" rows="2" placeholder="Ex: Nous prévoyons d'embaucher 20 salariés supplémentaires..."
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;resize:none;box-sizing:border-box;font-family:inherit"></textarea>
+          </div>
+
+          <button type="submit" id="btn-demande" disabled
+            onclick="return confirm('Envoyer la demande de changement de plan ?')"
+            style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;opacity:.4;transition:opacity .2s">
+            📨 Envoyer la demande
+          </button>
+        </form>
+      </div>
+
+      <!-- Annuler abonnement -->
+      <div class="card p-5" style="border-left:3px solid #f97316">
+        <h2 class="text-xs font-bold text-orange-500 uppercase tracking-widest mb-2">Résilier l'abonnement</h2>
+        <p style="font-size:.8rem;color:#6b7280;margin-bottom:.875rem">
+          Votre accès reste actif jusqu'à la fin de la période en cours.
+          Vos données sont conservées 90 jours après résiliation.
+        </p>
+        <form method="POST" action="/parametres/annuler-abonnement"
+          onsubmit="return confirm('Confirmer la demande de résiliation ? Votre accès reste actif jusqu'à fin de période.')">
+          <div style="margin-bottom:.625rem">
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Motif (obligatoire)</label>
+            <input type="text" name="motif" required placeholder="Ex: Changement de logiciel, fin d'activité..."
+              style="width:100%;border:1px solid #fed7aa;border-radius:.75rem;padding:.5rem .75rem;font-size:.8rem;box-sizing:border-box">
+          </div>
+          <button type="submit"
+            style="width:100%;background:white;color:#f97316;border:1.5px solid #f97316;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;cursor:pointer">
+            Demander la résiliation
+          </button>
+        </form>
+      </div>
+
+      {% else %}
+      <div class="card p-6 text-center" style="color:#9ca3af">
+        <div style="font-size:2rem;margin-bottom:.75rem">🔒</div>
+        <p style="font-size:.875rem;font-weight:600">Réservé à l'administrateur</p>
+        <p style="font-size:.8rem;margin-top:.5rem">Seul l'administrateur du compte peut modifier l'abonnement.</p>
+      </div>
+      {% endif %}
+
+      <!-- Contact direct -->
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:.875rem;padding:1rem">
+        <div style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem">Besoin d'aide ?</div>
+        <div style="display:flex;gap:.5rem">
+          <a href="mailto:contact@paiegalon.ga"
+            style="flex:1;display:flex;align-items:center;justify-content:center;gap:.375rem;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-decoration:none">
+            📧 Email
           </a>
-          <a href="https://wa.me/24100000000" target="_blank" style="display:block;background:#25d366;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-align:center;text-decoration:none">
+          <a href="https://wa.me/24177000000" target="_blank"
+            style="flex:1;display:flex;align-items:center;justify-content:center;gap:.375rem;background:#25d366;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-decoration:none">
             💬 WhatsApp
           </a>
         </div>
       </div>
 
-      <div class="card p-5" style="background:#f0fdf4;border-color:#bbf7d0">
-        <h2 class="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-3">Fonctionnalités incluses</h2>
-        {% for feat in ["Calcul automatique CNSS, CNAMGS, TCS, IRPP","Bulletins de paie imprimables","Export journal Excel","Historique illimité","Données sécurisées PostgreSQL","Support technique"] %}
-        <div style="display:flex;gap:.5rem;align-items:center;font-size:.875rem;color:#166534;padding:.25rem 0">
-          <span style="color:#22c55e;font-weight:700">✓</span> {{ feat }}
-        </div>
-        {% endfor %}
-      </div>
     </div>
   </div>
 </div>
+
+<script>
+function highlightPlan(radio) {
+  // Retirer la sélection de toutes les cartes
+  document.querySelectorAll('.plan-radio').forEach(r => {
+    const card = document.getElementById('plan-card-' + r.value);
+    if (card && !r.disabled) {
+      card.style.border = '2px solid #e5e7eb';
+      card.style.background = 'white';
+    }
+  });
+  // Surligner la carte sélectionnée
+  const card = document.getElementById('plan-card-' + radio.value);
+  if (card) {
+    card.style.border = '2px solid #7c3aed';
+    card.style.background = '#faf5ff';
+  }
+  // Activer le bouton
+  const btn = document.getElementById('btn-demande');
+  if (btn) { btn.disabled = false; btn.style.opacity = '1'; }
+}
+</script>
 
 
 <!-- JavaScript pour les onglets -->
