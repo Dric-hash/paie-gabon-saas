@@ -35,7 +35,7 @@
         </div>
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Période *</label>
-          <select name="periode_id" required
+          <select name="periode_id" required id="sel_periode"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
             <option value="">— Sélectionner —</option>
             {% for p in periodes %}
@@ -45,7 +45,7 @@
         </div>
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Jours travaillés</label>
-          <input type="number" name="nb_jours_travailles" value="26" min="0" max="31"
+          <input type="number" name="nb_jours_travailles" id="nb_jours" value="26" min="0" max="31"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:center"/>
         </div>
         <div id="info_salarie" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:.75rem;padding:.625rem .75rem">
@@ -56,125 +56,106 @@
       </div>
     </div>
 
-    <!-- Alerte acomptes EN ATTENTE -->
     {% if acomptes_attente %}
     <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.875rem 1rem;display:flex;align-items:center;gap:.75rem">
       <span style="font-size:1.25rem">⚠️</span>
       <div>
-        <div style="font-size:.8rem;font-weight:700;color:#92400e">Acompte(s) EN ATTENTE — sera déduit automatiquement</div>
+        <div style="font-size:.8rem;font-weight:700;color:#92400e">Acompte(s) EN ATTENTE — déduit automatiquement</div>
         {% for a in acomptes_attente %}
-        <div style="font-size:.75rem;color:#78350f;margin-top:.125rem">
-          • {{ a.montant|int|fcfa }} — {{ a.motif or 'Sans motif' }} ({{ a.date_acompte|date_fr }})
-        </div>
+        <div style="font-size:.75rem;color:#78350f;margin-top:.125rem">• {{ a.montant|int|fcfa }} — {{ a.motif or 'Sans motif' }} ({{ a.date_acompte|date_fr }})</div>
         {% endfor %}
-        <div style="font-size:.8rem;font-weight:900;color:#92400e;margin-top:.25rem">
-          Total à déduire : {{ total_acomptes|int|fcfa }}
-        </div>
+        <div style="font-size:.8rem;font-weight:900;color:#92400e;margin-top:.25rem">Total : {{ total_acomptes|int|fcfa }}</div>
       </div>
     </div>
     {% endif %}
 
-    <!-- Salaire de base -->
+    <!-- Légende des colonnes Base/Taux -->
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.625rem 1rem;font-size:.75rem;color:#065f46">
+      💡 <strong>Base</strong> = valeur unitaire (taux horaire, taux journalier…) &nbsp;·&nbsp;
+      <strong>Taux</strong> = quantité (nombre de jours, heures…) &nbsp;·&nbsp;
+      Le <strong>Montant</strong> = Base × Taux se calcule automatiquement. Pour un forfait fixe, saisissez le montant directement dans Montant et laissez Base/Taux vides.
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════ -->
+    <!-- TABLEAU DE SAISIE avec colonnes Base / Taux / Montant         -->
+    <!-- ══════════════════════════════════════════════════════════════ -->
+
+    <!-- Salaire de base & compléments -->
     <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Salaire de base</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Salaire de base *</label>
-          <input type="number" name="salaire_base" id="f_salaire_base" value="0" min="0" step="1" required
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Sursalaire</label>
-          <input type="number" name="sursalaire" id="f_sursalaire" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-      </div>
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Salaire de base</h2>
+      {% call rubriques_table() %}
+        {{ rubrique_row("salaire_base", "Salaire de base", required=True) }}
+        {{ rubrique_row("sursalaire", "Sursalaire") }}
+        {{ rubrique_row("absences", "Absences (déduction)", is_retenue=True) }}
+      {% endcall %}
     </div>
 
     <!-- Heures supplémentaires -->
     <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Heures supplémentaires <span style="font-size:.65rem;color:#9ca3af;font-weight:400">(montant en FCFA)</span></h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% for label, name in [("Nuit semaine +10%","heures_sup_10"),("Dimanche +30%","heures_sup_30"),("Nuit dimanche +40%","heures_sup_40"),("Jours fériés +70%","heures_sup_70"),("Absences (déduction)","absences")] %}
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
-          <input type="number" name="{{ name }}" id="f_{{ name }}" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        {% endfor %}
-      </div>
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Heures supplémentaires</h2>
+      {% call rubriques_table() %}
+        {{ rubrique_row("heures_sup_10", "H. sup nuit semaine +10%") }}
+        {{ rubrique_row("heures_sup_30", "H. sup dimanche +30%") }}
+        {{ rubrique_row("heures_sup_40", "H. sup nuit dim. +40%") }}
+        {{ rubrique_row("heures_sup_70", "H. sup jours fériés +70%") }}
+      {% endcall %}
     </div>
 
-    <!-- Primes imposables -->
+    <!-- Primes & Indemnités imposables -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Primes & Indemnités imposables</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% for label, name in [("Prime de caisse","prime_caisse"),("Carburant","carburant"),("Prime d'ancienneté","prime_anciennete"),("Prime de transport","prime_transport"),("Prime de responsabilité","prime_responsabilite"),("Prime de rendement","prime_rendement"),("Prime d'assiduité","prime_assiduité"),("Prime de qualité","prime_qualite"),("Prime de performance","prime_performance"),("Allocations de congé","allocations_conge")] %}
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
-          <input type="number" name="{{ name }}" id="f_{{ name }}" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        {% endfor %}
-      </div>
+      {% call rubriques_table() %}
+        {{ rubrique_row("prime_caisse",        "Prime de caisse") }}
+        {{ rubrique_row("carburant",            "Carburant") }}
+        {{ rubrique_row("prime_anciennete",     "Prime d'ancienneté") }}
+        {{ rubrique_row("prime_transport",      "Prime de transport") }}
+        {{ rubrique_row("prime_responsabilite", "Prime de responsabilité") }}
+        {{ rubrique_row("prime_rendement",      "Prime de rendement") }}
+        {{ rubrique_row("prime_assiduité",      "Prime d'assiduité") }}
+        {{ rubrique_row("prime_qualite",        "Prime de qualité") }}
+        {{ rubrique_row("prime_performance",    "Prime de performance") }}
+        {{ rubrique_row("allocations_conge",    "Allocations de congé") }}
+      {% endcall %}
     </div>
 
     <!-- Avantages en nature -->
     <div class="card p-5">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Avantages en nature</h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% for label, name in [("Logement","indem_logement"),("Domesticité","indem_domesticite"),("Eau & Électricité","indem_eau_electricite"),("Nourriture","indem_nourriture")] %}
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
-          <input type="number" name="{{ name }}" id="f_{{ name }}" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        {% endfor %}
-      </div>
+      {% call rubriques_table() %}
+        {{ rubrique_row("indem_logement",        "Logement") }}
+        {{ rubrique_row("indem_domesticite",      "Domesticité") }}
+        {{ rubrique_row("indem_eau_electricite",  "Eau & Électricité") }}
+        {{ rubrique_row("indem_nourriture",       "Nourriture") }}
+      {% endcall %}
     </div>
 
-    <!-- ✅ NOUVEAUX : Indemnités de fin de contrat -->
+    <!-- Indemnités de fin de contrat -->
     <div class="card p-5" style="border-left:4px solid #dc2626">
       <h2 class="text-xs font-bold uppercase tracking-widest mb-3" style="color:#dc2626">
         Indemnités de fin de contrat
-        <span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:600;margin-left:.5rem">Intégrées dans le brut</span>
+        <span style="font-size:.65rem;background:#fef2f2;color:#dc2626;padding:.125rem .5rem;border-radius:9999px;font-weight:600;margin-left:.5rem">Dans le brut</span>
       </h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. compensatrice de congé</label>
-          <input type="number" name="indem_compensatrice_conge" id="f_indem_compensatrice_conge" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. de services rendus</label>
-          <input type="number" name="indem_services_rendus" id="f_indem_services_rendus" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indem. compensatrice de préavis</label>
-          <input type="number" name="indem_compensatrice_preavis" id="f_indem_compensatrice_preavis" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Indemnité de licenciement</label>
-          <input type="number" name="indem_licenciement" id="f_indem_licenciement" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-      </div>
+      {% call rubriques_table() %}
+        {{ rubrique_row("indem_compensatrice_conge",   "Indem. compensatrice de congé") }}
+        {{ rubrique_row("indem_services_rendus",       "Indem. de services rendus") }}
+        {{ rubrique_row("indem_compensatrice_preavis", "Indem. compensatrice de préavis") }}
+        {{ rubrique_row("indem_licenciement",          "Indemnité de licenciement") }}
+      {% endcall %}
     </div>
 
     <!-- Hors cotisations -->
     <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Hors cotisations <span style="font-size:.65rem;color:#059669;background:#f0fdf4;padding:.125rem .5rem;border-radius:9999px">Non soumis CNSS/IRPP</span></h2>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        {% for label, name in [("Prime de panier","prime_panier"),("Transport net","indem_transport"),("Représentation","indem_representation"),("Salisure","prime_salisure"),("Acompte à déduire","acompte")] %}
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
-          <input type="number" name="{{ name }}" id="f_{{ name }}" value="0" min="0" step="1"
-            class="champ-calcul" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;text-align:right;font-family:monospace;box-sizing:border-box"/>
-        </div>
-        {% endfor %}
-      </div>
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">
+        Hors cotisations
+        <span style="font-size:.65rem;color:#059669;background:#f0fdf4;padding:.125rem .5rem;border-radius:9999px">Non soumis CNSS/IRPP</span>
+      </h2>
+      {% call rubriques_table() %}
+        {{ rubrique_row("prime_panier",       "Prime de panier") }}
+        {{ rubrique_row("indem_transport",    "Transport net") }}
+        {{ rubrique_row("indem_representation","Représentation") }}
+        {{ rubrique_row("prime_salisure",     "Salisure") }}
+        {{ rubrique_row("acompte",            "Acompte à déduire", is_retenue=True) }}
+      {% endcall %}
     </div>
 
   </div>
@@ -193,22 +174,12 @@
       </div>
 
       <div style="font-size:.7rem;font-weight:700;color:#dc2626;text-transform:uppercase;margin-bottom:.375rem">Retenues salariales</div>
+      {% for rid, label, taux in [("r_cnss","CNSS salarié","5%"),("r_cnamgs","CNAMGS salarié","2%"),("r_tcs","TCS","5%"),("r_irpp","IRPP","barème")] %}
       <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
-        <span style="color:#6b7280">CNSS salarié (5%)</span>
-        <span id="r_cnss" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
+        <span style="color:#6b7280">{{ label }} ({{ taux }})</span>
+        <span id="{{ rid }}" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
       </div>
-      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
-        <span style="color:#6b7280">CNAMGS salarié (2%)</span>
-        <span id="r_cnamgs" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #f9fafb">
-        <span style="color:#6b7280">TCS (5%)</span>
-        <span id="r_tcs" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:.3rem 0;font-size:.8rem;border-bottom:1px solid #e5e7eb">
-        <span style="color:#6b7280">IRPP (barème)</span>
-        <span id="r_irpp" style="font-weight:700;color:#dc2626;font-family:monospace">— FCFA</span>
-      </div>
+      {% endfor %}
 
       <div style="display:flex;justify-content:space-between;padding:.5rem 0;font-size:.875rem;font-weight:700;border-bottom:1px solid #e5e7eb">
         <span>Salaire NET</span>
@@ -222,22 +193,12 @@
 
       <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
         <div style="font-size:.7rem;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:.375rem">Charges patronales</div>
+        {% for rid, label in [("r_cnss_pat","CNSS pat. (18%)"),("r_cnamgs_pat","CNAMGS pat. (4,1%)"),("r_fnh","FNH (3%)"),("r_cfp","CFP (0,5%)")] %}
         <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">CNSS patronal (18%)</span>
-          <span id="r_cnss_pat" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
+          <span style="color:#1e40af">{{ label }}</span>
+          <span id="{{ rid }}" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">CNAMGS patronal (4,1%)</span>
-          <span id="r_cnamgs_pat" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">FNH (3%)</span>
-          <span id="r_fnh" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:.75rem;padding:.2rem 0">
-          <span style="color:#1e40af">CFP (0,5%)</span>
-          <span id="r_cfp" style="font-weight:700;color:#1e3a8a;font-family:monospace">—</span>
-        </div>
+        {% endfor %}
       </div>
 
       <div style="display:flex;flex-direction:column;gap:.5rem">
@@ -256,18 +217,85 @@
 </div>
 </form>
 
+{# ── Macros pour les lignes de saisie ── #}
+{% macro rubriques_table() %}
+<table style="width:100%;border-collapse:collapse">
+  <thead>
+    <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+      <th style="padding:.3rem .5rem;text-align:left;width:38%">Rubrique</th>
+      <th style="padding:.3rem .5rem;text-align:right;width:18%">Base</th>
+      <th style="padding:.3rem .5rem;text-align:center;width:10%">×</th>
+      <th style="padding:.3rem .5rem;text-align:center;width:12%">Taux/Qté</th>
+      <th style="padding:.3rem .5rem;text-align:right;width:22%">Montant</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{ caller() }}
+  </tbody>
+</table>
+{% endmacro %}
+
+{% macro rubrique_row(name, label, required=False, is_retenue=False) %}
+<tr style="border-bottom:1px solid #f3f4f6">
+  <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:{% if is_retenue %}#991b1b{% else %}#374151{% endif %}">
+    {{ label }}{% if required %} <span style="color:#dc2626">*</span>{% endif %}
+  </td>
+  <td style="padding:.3rem .25rem">
+    <input type="number" name="base_{{ name }}" id="base_{{ name }}"
+      step="1" min="0" placeholder="0"
+      oninput="calcMontant('{{ name }}')"
+      style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/>
+  </td>
+  <td style="text-align:center;font-size:.8rem;color:#9ca3af;padding:0">×</td>
+  <td style="padding:.3rem .25rem">
+    <input type="text" name="taux_{{ name }}" id="taux_{{ name }}"
+      placeholder="1"
+      oninput="calcMontant('{{ name }}')"
+      style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/>
+  </td>
+  <td style="padding:.3rem .25rem">
+    <input type="number" name="{{ name }}" id="f_{{ name }}"
+      value="0" step="1" min="0"
+      {% if required %}required{% endif %}
+      class="champ-calcul"
+      oninput="recalculer()"
+      style="width:100%;border:1px solid {% if is_retenue %}#fca5a5{% else %}#e5e7eb{% endif %};border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/>
+  </td>
+</tr>
+{% endmacro %}
+
 <script>
 const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " FCFA";
 let timer;
 
-function g(id) { return parseFloat(document.getElementById("f_" + id)?.value || 0) || 0; }
-function set(id, val) { const el = document.getElementById(id); if(el) el.textContent = fmt(val); }
+// Calcul Base × Taux → Montant pour une rubrique
+function calcMontant(name) {
+  const base = parseFloat(document.getElementById("base_" + name)?.value || 0) || 0;
+  const tauxRaw = document.getElementById("taux_" + name)?.value?.trim() || "";
+  const taux = parseFloat(tauxRaw) || (tauxRaw === "" ? 1 : 1);
+  const montant = document.getElementById("f_" + name);
+  if (montant && base > 0) {
+    montant.value = Math.round(base * taux);
+    recalculer();
+  } else if (montant && base === 0 && tauxRaw === "") {
+    // Ne pas écraser si montant saisi directement
+  } else if (montant && base > 0 && taux > 0) {
+    montant.value = Math.round(base * taux);
+    recalculer();
+  }
+}
 
+// Recalcul global via API
 function recalculer() {
   document.getElementById("spinner").style.display = "inline";
   clearTimeout(timer);
   timer = setTimeout(() => {
     const data = { salarie_id: document.getElementById("sel_salarie").value };
+    const p = document.getElementById("sel_periode");
+    if (p && p.selectedOptions[0]) {
+      data.mois_periode  = p.selectedOptions[0].dataset.mois;
+      data.annee_periode = p.selectedOptions[0].dataset.annee;
+    }
     document.querySelectorAll(".champ-calcul").forEach(inp => {
       data[inp.name] = parseFloat(inp.value) || 0;
     });
@@ -278,26 +306,25 @@ function recalculer() {
     })
     .then(r => r.json())
     .then(res => {
-      set("r_brut", res.salaire_brut);
-      set("r_cnss", res.cnss_salarie);
-      set("r_cnamgs", res.cnamgs_salarie);
-      set("r_tcs", res.tcs);
-      set("r_irpp", res.irpp);
-      set("r_net", res.salaire_net);
+      const set = (id, v) => { const el = document.getElementById(id); if(el) el.textContent = fmt(v); };
+      set("r_brut",      res.salaire_brut);
+      set("r_cnss",      res.cnss_salarie);
+      set("r_cnamgs",    res.cnamgs_salarie);
+      set("r_tcs",       res.tcs);
+      set("r_irpp",      res.irpp);
+      set("r_net",       res.salaire_net);
       set("r_net_payer", res.net_a_payer);
-      document.getElementById("r_cnss_pat").textContent = fmt(res.cnss_patronale);
+      document.getElementById("r_cnss_pat").textContent  = fmt(res.cnss_patronale);
       document.getElementById("r_cnamgs_pat").textContent = fmt(res.cnamgs_patronale);
-      document.getElementById("r_fnh").textContent = fmt(res.fnh);
-      document.getElementById("r_cfp").textContent = fmt(res.cfp);
+      document.getElementById("r_fnh").textContent        = fmt(res.fnh);
+      document.getElementById("r_cfp").textContent        = fmt(res.cfp);
       document.getElementById("spinner").style.display = "none";
     })
     .catch(() => document.getElementById("spinner").style.display = "none");
   }, 400);
 }
 
-document.querySelectorAll(".champ-calcul").forEach(inp => {
-  inp.addEventListener("input", recalculer);
-});
+document.querySelectorAll(".champ-calcul").forEach(inp => inp.addEventListener("input", recalculer));
 
 function chargerContrat(id) {
   if(!id) { document.getElementById("info_salarie").style.display="none"; return; }
