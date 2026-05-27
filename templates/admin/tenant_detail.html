@@ -1,62 +1,368 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><script src="https://cdn.tailwindcss.com"></script></head>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ tenant.denomination }} — Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; }
+    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .nav-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:.875rem; transition:color .15s; }
+    .nav-link:hover { color:white; }
+    .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
+    .field-label { display:block; font-size:.7rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.3rem; }
+    .field-val { font-size:.875rem; font-weight:600; color:#111827; }
+    textarea:focus, input:focus, select:focus { outline:none; border-color:#7c3aed; }
+  </style>
+</head>
 <body class="bg-gray-50 min-h-screen">
-<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-4 shadow-lg">
-  <a href="/admin" class="text-xl font-black">Ameriack I.T. Solutions</a>
-  <a href="/admin/tenants" class="text-sm text-white/70">← Entreprises</a>
-  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+
+<!-- ── Topbar ── -->
+<nav class="bg-purple-900 text-white px-6 flex items-center shadow-lg" style="height:56px">
+  <div class="flex items-center gap-3 mr-8">
+    <span class="text-base font-black tracking-tight">Ameriack I.T.</span>
+    <span class="bg-purple-700 text-purple-200 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+  </div>
+  <div class="flex items-center gap-6 h-full text-sm">
+    <a href="/admin"          class="nav-link h-full flex items-center">Dashboard</a>
+    <a href="/admin/tenants"  class="nav-link h-full flex items-center font-semibold text-white">← Entreprises</a>
+    <a href="/admin/plans"    class="nav-link h-full flex items-center">Plans</a>
+    <a href="/admin/rubriques"class="nav-link h-full flex items-center">Rubriques</a>
+    <a href="/admin/stats"    class="nav-link h-full flex items-center">Statistiques</a>
+  </div>
+  <div class="ml-auto">
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  </div>
 </nav>
-<main class="max-w-5xl mx-auto p-8">
-  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
-  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold {{'bg-emerald-50 text-emerald-700' if cat=='success' else 'bg-amber-50 text-amber-700'}}">{{msg}}</div>
-  {% endfor %}{% endif %}{% endwith %}
-  <div class="flex items-center justify-between mb-6">
-    <div>
-      <h1 class="text-2xl font-black">{{tenant.denomination}}</h1>
-      <p class="text-gray-500 text-sm">Slug : {{tenant.slug}} · NIF : {{tenant.nif or '—'}} · {{tenant.ville}}</p>
+
+<main class="max-w-6xl mx-auto px-6 py-6">
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-5 space-y-2">
+    {% for cat, msg in messages %}
+    <div class="px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- ── En-tête entreprise ── -->
+  <div class="flex items-start justify-between mb-6">
+    <div class="flex items-center gap-4">
+      <!-- Avatar initiales -->
+      <div class="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-lg font-black flex-shrink-0"
+        style="background:{% if tenant.statut=='ACTIF' %}#059669{% elif tenant.statut=='ESSAI' %}#d97706{% else %}#dc2626{% endif %}">
+        {{ tenant.denomination[:2]|upper }}
+      </div>
+      <div>
+        <h1 class="text-2xl font-black text-gray-900">{{ tenant.denomination }}</h1>
+        <div class="flex items-center gap-2 mt-1 flex-wrap">
+          {% set sc = {
+            'ACTIF':'bg-emerald-100 text-emerald-800',
+            'ESSAI':'bg-amber-100 text-amber-800',
+            'SUSPENDU':'bg-red-100 text-red-700',
+            'PAIEMENT_EN_ATTENTE':'bg-blue-100 text-blue-800'
+          } %}
+          <span class="badge {{ sc.get(tenant.statut,'bg-gray-100 text-gray-600') }}">{{ tenant.statut }}</span>
+          {% if tenant.plan %}
+          <span class="badge bg-purple-100 text-purple-800">{{ tenant.plan.nom }}</span>
+          {% endif %}
+          <span class="text-xs text-gray-400">Slug : {{ tenant.slug }}</span>
+          {% if tenant.ville %}<span class="text-xs text-gray-400">· {{ tenant.ville }}</span>{% endif %}
+          {% if tenant.date_inscription %}
+          <span class="text-xs text-gray-400">· Inscrit le {{ tenant.date_inscription.strftime('%d/%m/%Y') }}</span>
+          {% endif %}
+        </div>
+      </div>
     </div>
-    <a href="/admin/tenants/{{tenant.id}}/impersonate" class="bg-amber-500 text-white px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-amber-600">👁️ Accéder à l'espace</a>
+    <a href="/admin/tenants/{{ tenant.id }}/impersonate"
+       class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
+      👁️ Accéder à l'espace
+    </a>
   </div>
-  <div class="grid grid-cols-3 gap-4 mb-8">
-    {% for label,val,color in [("Salariés",nb_salaries,"bg-slate-800"),("Bulletins",nb_bulletins,"bg-blue-700"),("Utilisateurs",users|length,"bg-emerald-700")] %}
-    <div class="{{color}} rounded-2xl p-5 text-white text-center">
-      <div class="text-3xl font-black">{{val}}</div><div class="text-sm opacity-70">{{label}}</div>
-    </div>{% endfor %}
+
+  <!-- ── KPIs ── -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    {% for label, val, color, sub in [
+      ('Salariés actifs',  nb_salaries,    '#1e293b', ''),
+      ('Bulletins émis',   nb_bulletins,   '#1d4ed8', ''),
+      ('Journaliers',      nb_journaliers, '#d97706', ''),
+      ('Utilisateurs',     users|length,   '#059669', ''),
+    ] %}
+    <div class="card p-4 text-center">
+      <div class="text-3xl font-black" style="color:{{ color }}">{{ val }}</div>
+      <div class="text-xs text-gray-500 font-semibold mt-1">{{ label }}</div>
+    </div>
+    {% endfor %}
   </div>
-  <div class="grid grid-cols-2 gap-6">
-    <!-- Modifier statut/plan -->
-    <div class="bg-white rounded-2xl border border-gray-200 p-6">
-      <h2 class="font-black mb-4">Statut & Plan</h2>
-      <form method="POST" action="/admin/tenants/{{tenant.id}}/statut" class="space-y-4">
-        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Statut</label>
-        <select name="statut" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
-          {% for s in ['ACTIF','ESSAI','SUSPENDU'] %}<option {{'selected' if tenant.statut==s}}>{{s}}</option>{% endfor %}
-        </select></div>
-        <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Plan</label>
-        <select name="plan_id" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
-          {% for p in plans %}<option value="{{p.id}}" {{'selected' if tenant.plan_id==p.id}}>{{p.nom}} — {{p.prix_mensuel|int}} FCFA/mois</option>{% endfor %}
-        </select></div>
-        <button type="submit" class="w-full bg-purple-900 text-white rounded-xl py-2.5 font-bold text-sm">Enregistrer</button>
+
+  <!-- ── Grille principale ── -->
+  <div class="grid grid-cols-3 gap-5 mb-5">
+
+    <!-- COL 1 + 2 : Infos société -->
+    <div class="col-span-2 flex flex-col gap-5">
+
+      <!-- Informations société -->
+      <div class="card p-5">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Informations société</h2>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <span class="field-label">NIF</span>
+            <span class="field-val">{{ tenant.nif or '—' }}</span>
+          </div>
+          <div>
+            <span class="field-label">N° CNSS</span>
+            <span class="field-val">{{ tenant.numero_cnss or '—' }}</span>
+          </div>
+          <div>
+            <span class="field-label">N° CNAMGS</span>
+            <span class="field-val">{{ tenant.numero_cnamgs or '—' }}</span>
+          </div>
+          <div>
+            <span class="field-label">Activité</span>
+            <span class="field-val">{{ tenant.activite or '—' }}</span>
+          </div>
+          <div>
+            <span class="field-label">Secteur</span>
+            <span class="field-val">{{ tenant.secteur or '—' }}</span>
+          </div>
+          <div>
+            <span class="field-label">Téléphone</span>
+            <span class="field-val">
+              {% if tenant.telephone %}
+              <a href="tel:{{ tenant.telephone }}" class="text-blue-600 hover:underline">{{ tenant.telephone }}</a>
+              {% else %}—{% endif %}
+            </span>
+          </div>
+          <div class="col-span-2">
+            <span class="field-label">Adresse</span>
+            <span class="field-val">{{ tenant.adresse or '—' }}{% if tenant.boite_postale %} · BP {{ tenant.boite_postale }}{% endif %}</span>
+          </div>
+          <div>
+            <span class="field-label">Ville / Région</span>
+            <span class="field-val">{{ tenant.ville or '—' }}{% if tenant.region %} · {{ tenant.region }}{% endif %}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Statut & Plan -->
+      <div class="card p-5">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Statut & Abonnement</h2>
+        <form method="POST" action="/admin/tenants/{{ tenant.id }}/statut" class="space-y-4">
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="field-label">Statut</label>
+              <select name="statut"
+                class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+                {% for s in ['ACTIF','ESSAI','SUSPENDU','PAIEMENT_EN_ATTENTE'] %}
+                <option {{ 'selected' if tenant.statut==s }}>{{ s }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Plan</label>
+              <select name="plan_id"
+                class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+                <option value="">— Aucun plan —</option>
+                {% for p in plans %}
+                <option value="{{ p.id }}" {{ 'selected' if tenant.plan_id==p.id }}>
+                  {{ p.nom }} — {{ p.prix_mensuel|int|fcfa }}/mois
+                </option>
+                {% endfor %}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label class="field-label">
+              Date d'expiration essai
+              <span class="text-gray-400 font-normal normal-case">(laisser vide = pas d'expiration)</span>
+            </label>
+            <div class="flex gap-2 items-center">
+              <input type="date" name="date_expiration"
+                value="{{ tenant.date_expiration.strftime('%Y-%m-%d') if tenant.date_expiration else '' }}"
+                class="border border-gray-200 rounded-xl px-3 py-2.5 text-sm flex-1">
+              {% if tenant.date_expiration %}
+              <label class="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer">
+                <input type="checkbox" name="clear_expiration" value="1" class="rounded">
+                Effacer
+              </label>
+              {% endif %}
+            </div>
+            {% if tenant.date_expiration %}
+            {% set jours = (tenant.date_expiration - now).days %}
+            <p class="text-xs mt-1 {{ 'text-red-600 font-bold' if jours <= 3 else 'text-amber-600' if jours <= 7 else 'text-gray-400' }}">
+              {{ 'Expiré !' if jours < 0 else jours|string + ' jour(s) restant(s)' }}
+            </p>
+            {% endif %}
+          </div>
+          <button type="submit"
+            class="w-full bg-purple-900 hover:bg-purple-700 text-white rounded-xl py-2.5 font-bold text-sm">
+            💾 Enregistrer les modifications
+          </button>
+        </form>
+      </div>
+
+      <!-- Activité : dernières périodes -->
+      {% if periodes_recentes %}
+      <div class="card p-5">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Activité récente — périodes de paie</h2>
+        <div class="space-y-2">
+          {% for per in periodes_recentes %}
+          <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 text-xs font-black flex items-center justify-center flex-shrink-0">
+                {{ per.mois }}
+              </div>
+              <div>
+                <div class="text-sm font-bold text-gray-900">{{ per.libelle_complet }}</div>
+                <div class="text-xs text-gray-400">{{ per.bulletins|length }} bulletin(s)</div>
+              </div>
+            </div>
+            <span class="badge {{ 'bg-emerald-100 text-emerald-700' if per.statut=='CLOTURE' else 'bg-blue-100 text-blue-700' if per.statut=='OUVERT' else 'bg-gray-100 text-gray-500' }}">
+              {{ per.statut }}
+            </span>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    </div>
+
+    <!-- COL 3 : Utilisateurs + Notes admin -->
+    <div class="flex flex-col gap-5">
+
+      <!-- Utilisateurs -->
+      <div class="card p-5">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+          Utilisateurs ({{ users|length }})
+        </h2>
+        {% if users %}
+        <div class="space-y-2">
+          {% for u in users %}
+          <div class="flex items-center gap-3 py-2 border-b border-gray-50 last:border-0">
+            <div class="w-8 h-8 rounded-full bg-slate-200 text-slate-700 text-xs font-black flex items-center justify-center flex-shrink-0">
+              {{ u.nom[0] }}{{ u.prenom[0] if u.prenom else '' }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <div class="text-sm font-bold text-gray-900 truncate">{{ u.nom_complet }}</div>
+              <div class="text-xs text-gray-400 truncate">{{ u.email }}</div>
+            </div>
+            <span class="badge bg-gray-100 text-gray-600 flex-shrink-0">{{ u.role }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-400 text-center py-4">Aucun utilisateur</p>
+        {% endif %}
+      </div>
+
+      <!-- Notes admin -->
+      <div class="card p-5" style="border-left:4px solid #7c3aed">
+        <h2 class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">Notes admin</h2>
+        <p class="text-xs text-gray-400 mb-3">Visibles uniquement par le super-admin</p>
+        <form method="POST" action="/admin/tenants/{{ tenant.id }}/notes">
+          <textarea name="notes" rows="6"
+            placeholder="Informations internes, historique des échanges, raisons de suspension…"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm resize-none"
+            style="font-family:inherit">{{ tenant.notes or '' }}</textarea>
+          <button type="submit"
+            class="w-full mt-2 bg-purple-900 hover:bg-purple-700 text-white rounded-xl py-2 font-bold text-xs">
+            💾 Sauvegarder les notes
+          </button>
+        </form>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════
+       ZONE DANGEREUSE — dans le <main>
+  ══════════════════════════════════════ -->
+  <div style="border:1.5px solid #fca5a5;border-radius:1rem;background:#fff5f5;padding:1.5rem;margin-top:.5rem">
+    <div class="flex items-start gap-3 mb-4">
+      <div style="font-size:1.5rem;flex-shrink:0">⚠️</div>
+      <div>
+        <h2 style="font-size:.875rem;font-weight:900;color:#dc2626;margin:0 0 .25rem">Zone dangereuse</h2>
+        <p style="font-size:.8rem;color:#6b7280;margin:0">
+          Ces actions sont <strong>irréversibles</strong>.
+          La suppression efface toutes les données (salariés, bulletins, périodes, utilisateurs).
+        </p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+
+      <!-- Suspendre -->
+      {% if tenant.statut != 'SUSPENDU' %}
+      <form method="POST" action="/admin/tenants/{{ tenant.id }}/statut">
+        <input type="hidden" name="statut" value="SUSPENDU">
+        <input type="hidden" name="plan_id" value="{{ tenant.plan_id or '' }}">
+        <button type="submit"
+          onclick="return confirm('Suspendre {{ tenant.denomination }} ? L\'entreprise ne pourra plus se connecter.')"
+          style="width:100%;background:#fff;border:1.5px solid #f97316;color:#ea580c;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
+          🔴 Suspendre l'accès
+        </button>
       </form>
+      {% else %}
+      <form method="POST" action="/admin/tenants/{{ tenant.id }}/statut">
+        <input type="hidden" name="statut" value="ACTIF">
+        <input type="hidden" name="plan_id" value="{{ tenant.plan_id or '' }}">
+        <button type="submit"
+          style="width:100%;background:#fff;border:1.5px solid #059669;color:#059669;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
+          ✅ Réactiver l'accès
+        </button>
+      </form>
+      {% endif %}
+
+      <!-- Supprimer définitivement -->
+      <form method="POST" action="/admin/tenants/{{ tenant.id }}/supprimer"
+        onsubmit="return confirmerSuppression()">
+        <button type="submit"
+          style="width:100%;background:#dc2626;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.8rem;cursor:pointer;border:none;display:flex;align-items:center;justify-content:center;gap:.5rem">
+          🗑️ Supprimer définitivement
+        </button>
+      </form>
+
     </div>
-    <!-- Utilisateurs -->
-    <div class="bg-white rounded-2xl border border-gray-200 p-6">
-      <h2 class="font-black mb-4">Utilisateurs ({{users|length}})</h2>
-      {% for u in users %}
-      <div class="flex items-center justify-between py-2 border-b border-gray-50 last:border-0 text-sm">
-        <div><div class="font-bold">{{u.nom_complet}}</div><div class="text-xs text-gray-400">{{u.email}}</div></div>
-        <span class="text-xs font-bold bg-gray-100 text-gray-700 px-2 py-0.5 rounded-full">{{u.role}}</span>
-      </div>{% endfor %}
+
+    <!-- Double confirmation suppression -->
+    <div id="confirm-box" style="display:none;margin-top:1rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:.75rem;padding:1rem">
+      <p style="font-size:.8rem;font-weight:700;color:#dc2626;margin:0 0 .75rem">
+        Tapez le nom de l'entreprise pour confirmer la suppression :
+      </p>
+      <input type="text" id="confirm-input" placeholder="{{ tenant.denomination }}"
+        class="w-full border border-red-300 rounded-xl px-3 py-2 text-sm mb-3"
+        style="focus:outline:none">
+      <p class="text-xs text-gray-500">Nom attendu : <strong>{{ tenant.denomination }}</strong></p>
     </div>
   </div>
-</main><!-- Bouton suppression tenant -->
-<div style="margin-top:2rem;padding:1rem;background:#fef2f2;border:1px solid #fca5a5;border-radius:.75rem">
-  <h3 style="font-size:.875rem;font-weight:700;color:#dc2626;margin-bottom:.5rem">⚠️ Zone dangereuse</h3>
-  <p style="font-size:.8rem;color:#6b7280;margin-bottom:.75rem">La suppression est irréversible. Toutes les données (salariés, bulletins, périodes) seront effacées.</p>
-  <form method="POST" action="/admin/tenants/{{ tenant.id }}/supprimer"
-    onsubmit="return confirm('ATTENTION : Supprimer définitivement {{ tenant.denomination }} et toutes ses données ? Cette action est IRRÉVERSIBLE !')">
-    <button type="submit" style="background:#dc2626;color:white;padding:.625rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
-      🗑️ Supprimer cette entreprise définitivement
-    </button>
-  </form>
-</div>
-</body></html>
+
+</main>
+
+<script>
+function confirmerSuppression() {
+  const box = document.getElementById('confirm-box');
+  if (box.style.display === 'none') {
+    box.style.display = 'block';
+    document.getElementById('confirm-input').focus();
+    return false; // Bloquer le submit au premier clic
+  }
+  const saisi  = document.getElementById('confirm-input').value.trim();
+  const attendu = "{{ tenant.denomination }}";
+  if (saisi !== attendu) {
+    alert(`Le nom saisi ne correspond pas.\nAttendu : "${attendu}"\nSaisi : "${saisi}"`);
+    return false;
+  }
+  return confirm(`DERNIÈRE CONFIRMATION — Supprimer ${attendu} et TOUTES ses données ? Cette action est IRRÉVERSIBLE.`);
+}
+</script>
+
+</body>
+</html>
