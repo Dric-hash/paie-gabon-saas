@@ -1020,10 +1020,13 @@ def paiement_confirmer():
 @tenant_required
 def parametres():
     t=get_tenant()
+    # Passer tous les plans actifs pour l'onglet abonnement
+    plans_dispo = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel.asc()).all()
     return render_template("tenant/parametres.html", tenant=t,
         rubriques=RubriquePaie.query.filter_by(actif=True).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
-        users=Utilisateur.query.filter_by(tenant_id=t.id).all())
+        users=Utilisateur.query.filter_by(tenant_id=t.id).all(),
+        plans_dispo=plans_dispo)
 
 @app.route("/parametres/logo", methods=["POST"])
 @login_required
@@ -1070,6 +1073,34 @@ def parametres_societe():
         try: setattr(t,f,request.form.get(f,"").strip() or None)
         except: pass
     db.session.commit(); flash("Informations mises à jour.","success")
+    return redirect(url_for("parametres"))
+
+
+@app.route("/parametres/demande-changement-plan", methods=["POST"])
+@login_required
+def demande_changement_plan():
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin: abort(403)
+    plan_souhaite_id = request.form.get("plan_id", type=int)
+    motif = request.form.get("motif", "").strip()
+    plan_souhaite = Plan.query.get(plan_souhaite_id) if plan_souhaite_id else None
+    if not plan_souhaite:
+        flash("Plan invalide.", "error")
+        return redirect(url_for("parametres"))
+    # Enregistrer la demande dans les notes + changer statut
+    note_demande = (
+        f"[DEMANDE CHANGEMENT PLAN — {datetime.now().strftime('%d/%m/%Y %H:%M')}] "
+        f"Plan souhaité : {plan_souhaite.nom} ({int(plan_souhaite.prix_mensuel):,} FCFA/mois). "
+        f"Motif : {motif or 'Non précisé'}. "
+        f"Demandé par : {current_user.nom_complet} ({current_user.email})."
+    )
+    # Ajouter à la suite des notes existantes
+    t.notes = (t.notes or "") + ("\n" if t.notes else "") + note_demande
+    t.statut = "PAIEMENT_EN_ATTENTE"
+    db.session.commit()
+    flash(f"Demande de passage au plan « {plan_souhaite.nom} » enregistrée. L'équipe PaieGabon vous contactera sous 24h pour finaliser.", "success")
     return redirect(url_for("parametres"))
 
 @app.route("/parametres/annuler-abonnement", methods=["POST"])
