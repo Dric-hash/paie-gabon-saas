@@ -13,10 +13,10 @@
     .nav-link:hover { color:white; }
     .nav-link.active { color:white; font-weight:700; border-bottom:2px solid white; }
     .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
-    th { padding:.625rem 1rem; font-size:.7rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+    th { padding:.625rem 1rem; font-size:.7rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; border-bottom:1px solid #f3f4f6; }
     td { padding:.625rem 1rem; font-size:.8rem; border-bottom:1px solid #f9fafb; }
     tr:last-child td { border-bottom:none; }
-    tr:hover td { background:#fafafa; }
+    tbody tr:hover td { background:#fafafa; }
   </style>
 </head>
 <body class="bg-gray-50 min-h-screen">
@@ -46,77 +46,68 @@
   <div class="flex items-center justify-between mb-6">
     <div>
       <h1 class="text-2xl font-black text-gray-900">Statistiques globales</h1>
-      <p class="text-gray-500 text-sm mt-0.5">Vue complète de toutes les entreprises · {{ stats|length }} entrée(s)</p>
+      <p class="text-gray-500 text-sm mt-0.5">{{ stats|length }} entreprise(s) enregistrée(s)</p>
     </div>
     <a href="/admin" class="text-sm text-gray-400 hover:text-gray-600 font-semibold">← Dashboard</a>
   </div>
 
-  <!-- ── KPIs synthèse ── -->
+  <!-- ── KPIs ── -->
   <div class="grid grid-cols-4 gap-4 mb-6">
     <div class="card p-4">
       <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entreprises</div>
       <div class="text-3xl font-black text-gray-900">{{ stats|length }}</div>
-      <div class="text-xs text-gray-400 mt-1">{{ nb_actifs }} actives · {{ stats|length - nb_actifs }} autres</div>
+      <div class="text-xs text-gray-400 mt-1">{{ nb_actifs }} actives · {{ nb_essai }} essai · {{ nb_suspendu }} suspendues</div>
     </div>
     <div class="card p-4">
       <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Salariés total</div>
-      <div class="text-3xl font-black text-gray-900">
-        {% set ts = namespace(v=0) %}{% for s in stats %}{% set ts.v = ts.v + s.nb_salaries %}{% endfor %}{{ ts.v }}
-      </div>
-      <div class="text-xs text-gray-400 mt-1">tous tenants confondus</div>
+      <div class="text-3xl font-black text-gray-900">{{ total_salaries }}</div>
+      <div class="text-xs text-gray-400 mt-1">+ {{ total_journaliers }} journaliers</div>
     </div>
     <div class="card p-4">
       <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Bulletins émis</div>
-      <div class="text-3xl font-black text-gray-900">
-        {% set tb = namespace(v=0) %}{% for s in stats %}{% set tb.v = tb.v + s.nb_bulletins %}{% endfor %}{{ tb.v }}
-      </div>
+      <div class="text-3xl font-black text-gray-900">{{ total_bulletins }}</div>
       <div class="text-xs text-gray-400 mt-1">historique complet</div>
     </div>
     <div class="card p-4">
-      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">MRR</div>
-      <div class="text-2xl font-black text-emerald-600">{{ (total_revenus/1000)|int }}k</div>
-      <div class="text-xs text-gray-400 mt-1">{{ total_revenus|int|fcfa }} / mois · conv. {{ taux_conv }}%</div>
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">MRR · Conversion</div>
+      <div class="text-2xl font-black text-emerald-600">{{ (total_revenus/1000)|int }}k FCFA</div>
+      <div class="text-xs text-gray-400 mt-1">{{ total_revenus|int|fcfa }} · taux {{ taux_conv }}%</div>
     </div>
   </div>
 
   <!-- ── Graphiques ── -->
   <div class="grid grid-cols-2 gap-5 mb-6">
-
-    <!-- Répartition statuts -->
     <div class="card p-5">
       <h2 class="font-black text-gray-900 text-sm mb-4">Répartition par statut</h2>
       <div style="height:180px;position:relative">
         <canvas id="chartStatuts"></canvas>
       </div>
     </div>
-
-    <!-- Bulletins par entreprise (top 8) -->
     <div class="card p-5">
       <h2 class="font-black text-gray-900 text-sm mb-4">Top entreprises — bulletins émis</h2>
       <div style="height:180px;position:relative">
         <canvas id="chartTop"></canvas>
       </div>
     </div>
-
   </div>
 
-  <!-- ── Tableau détaillé ── -->
+  <!-- ── Tableau ── -->
   <div class="card overflow-hidden">
     <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
       <h2 class="font-black text-gray-900 text-sm">Détail par entreprise</h2>
       <div class="flex items-center gap-3">
         <input type="text" id="searchInput" placeholder="🔍 Filtrer..."
-          oninput="filtrerTableau(this.value)"
+          oninput="filtrer(this.value)"
           class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-400"
           style="width:200px">
         <span class="text-xs text-gray-400" id="compteur">{{ stats|length }} entreprise(s)</span>
       </div>
     </div>
     <div style="overflow-x:auto">
-      <table class="w-full" id="tableStats">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="text-left">Entreprise</th>
+      <table class="w-full">
+        <thead>
+          <tr class="bg-gray-50 text-left">
+            <th>Entreprise</th>
             <th class="text-center">Plan</th>
             <th class="text-center">Statut</th>
             <th class="text-center">Salariés</th>
@@ -141,15 +132,17 @@
               </span>
             </td>
             <td class="text-center">
-              {% set sc = {
-                'ACTIF':'bg-emerald-100 text-emerald-800',
-                'ESSAI':'bg-amber-100 text-amber-800',
-                'SUSPENDU':'bg-red-100 text-red-700',
-                'PAIEMENT_EN_ATTENTE':'bg-blue-100 text-blue-800'
-              } %}
-              <span class="badge {{ sc.get(s.tenant.statut,'bg-gray-100 text-gray-500') }}">
-                {{ s.tenant.statut.replace('_',' ') }}
-              </span>
+              {% if s.tenant.statut == 'ACTIF' %}
+                <span class="badge bg-emerald-100 text-emerald-800">ACTIF</span>
+              {% elif s.tenant.statut == 'ESSAI' %}
+                <span class="badge bg-amber-100 text-amber-800">ESSAI</span>
+              {% elif s.tenant.statut == 'SUSPENDU' %}
+                <span class="badge bg-red-100 text-red-700">SUSPENDU</span>
+              {% elif s.tenant.statut == 'PAIEMENT_EN_ATTENTE' %}
+                <span class="badge bg-blue-100 text-blue-800">EN ATTENTE</span>
+              {% else %}
+                <span class="badge bg-gray-100 text-gray-500">{{ s.tenant.statut }}</span>
+              {% endif %}
             </td>
             <td class="text-center font-black text-gray-900">{{ s.nb_salaries }}</td>
             <td class="text-center font-bold text-amber-600">{{ s.nb_journaliers }}</td>
@@ -182,23 +175,14 @@
       </table>
     </div>
 
-    <!-- Totaux -->
+    <!-- Ligne totaux -->
     {% if stats %}
-    <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center gap-6 text-xs font-bold text-gray-600">
-      <span>TOTAUX :</span>
-      <span>
-        {% set ts2 = namespace(v=0) %}{% for s in stats %}{% set ts2.v = ts2.v + s.nb_salaries %}{% endfor %}
-        👷 {{ ts2.v }} salariés
-      </span>
-      <span>
-        {% set tb2 = namespace(v=0) %}{% for s in stats %}{% set tb2.v = tb2.v + s.nb_bulletins %}{% endfor %}
-        📄 {{ tb2.v }} bulletins
-      </span>
-      <span>
-        {% set tj = namespace(v=0) %}{% for s in stats %}{% set tj.v = tj.v + s.nb_journaliers %}{% endfor %}
-        🧑‍🔧 {{ tj.v }} journaliers
-      </span>
-      <span class="text-emerald-600">💰 {{ total_revenus|int|fcfa }} / mois</span>
+    <div class="px-5 py-3 bg-gray-50 border-t border-gray-100 flex items-center gap-6 text-xs font-bold text-gray-600">
+      <span class="text-gray-400 uppercase tracking-widest">Totaux</span>
+      <span>👷 {{ total_salaries }} salariés</span>
+      <span>🧑‍🔧 {{ total_journaliers }} journaliers</span>
+      <span>📄 {{ total_bulletins }} bulletins</span>
+      <span class="text-emerald-600 ml-auto">💰 {{ total_revenus|int|fcfa }} / mois</span>
     </div>
     {% endif %}
   </div>
@@ -206,50 +190,38 @@
 </main>
 
 <script>
-// ── Données pour les graphiques ───────────────────────────────────────────────
-const STATUTS_DATA = {
-  labels: ['ACTIF', 'ESSAI', 'SUSPENDU', 'EN ATTENTE'],
-  data:   [
-    {{ stats|selectattr('tenant.statut','equalto','ACTIF')|list|length }},
-    {{ stats|selectattr('tenant.statut','equalto','ESSAI')|list|length }},
-    {{ stats|selectattr('tenant.statut','equalto','SUSPENDU')|list|length }},
-    {{ stats|selectattr('tenant.statut','equalto','PAIEMENT_EN_ATTENTE')|list|length }}
-  ],
-  colors: ['#059669','#d97706','#dc2626','#1d4ed8']
-};
-
-const TOP_DATA = {
-  labels: [{% for s in stats|sort(attribute='nb_bulletins',reverse=True)[:8] %}"{{ s.tenant.denomination[:18] }}"{% if not loop.last %},{% endif %}{% endfor %}],
-  data:   [{% for s in stats|sort(attribute='nb_bulletins',reverse=True)[:8] %}{{ s.nb_bulletins }}{% if not loop.last %},{% endif %}{% endfor %}]
-};
-
 Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
-Chart.defaults.font.size = 11;
-Chart.defaults.color = '#9ca3af';
+Chart.defaults.font.size   = 11;
+Chart.defaults.color       = '#9ca3af';
 
-// Donut statuts
+// ── Donut statuts — données passées depuis Python ─────────────────────────
 new Chart(document.getElementById('chartStatuts'), {
   type: 'doughnut',
   data: {
-    labels: STATUTS_DATA.labels,
-    datasets: [{ data: STATUTS_DATA.data, backgroundColor: STATUTS_DATA.colors, borderWidth: 0, hoverOffset: 4 }]
+    labels: ['ACTIF', 'ESSAI', 'SUSPENDU', 'EN ATTENTE'],
+    datasets: [{
+      data: [{{ nb_actifs }}, {{ nb_essai }}, {{ nb_suspendu }}, {{ nb_attente }}],
+      backgroundColor: ['#059669','#d97706','#dc2626','#1d4ed8'],
+      borderWidth: 0,
+      hoverOffset: 4
+    }]
   },
   options: {
     responsive: true, maintainAspectRatio: false, cutout: '60%',
     plugins: {
-      legend: { position: 'right', labels: { font: { size: 11 }, padding: 12 } },
+      legend: { position: 'right', labels: { font:{ size:11 }, padding:12, boxWidth:12 } },
       tooltip: { callbacks: { label: ctx => ` ${ctx.raw} entreprise${ctx.raw > 1 ? 's' : ''}` } }
     }
   }
 });
 
-// Barres top entreprises
+// ── Barres top 8 — données passées depuis Python ──────────────────────────
 new Chart(document.getElementById('chartTop'), {
   type: 'bar',
   data: {
-    labels: TOP_DATA.labels,
+    labels: {{ top8_labels|tojson }},
     datasets: [{
-      data: TOP_DATA.data,
+      data: {{ top8_data|tojson }},
       backgroundColor: '#ede9fe',
       borderRadius: 4,
       borderSkipped: false,
@@ -260,20 +232,19 @@ new Chart(document.getElementById('chartTop'), {
     responsive: true, maintainAspectRatio: false, indexAxis: 'y',
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { color: '#f3f4f6' }, border: { display: false }, ticks: { precision: 0 } },
-      y: { grid: { display: false }, border: { display: false } }
+      x: { grid:{ color:'#f3f4f6' }, border:{ display:false }, ticks:{ precision:0 } },
+      y: { grid:{ display:false }, border:{ display:false } }
     }
   }
 });
 
-// ── Filtre tableau ────────────────────────────────────────────────────────────
-function filtrerTableau(q) {
+// ── Filtre tableau ────────────────────────────────────────────────────────
+function filtrer(q) {
   const lignes = document.querySelectorAll('.ligne-stat');
   const terme  = q.toLowerCase().trim();
   let nb = 0;
   lignes.forEach(tr => {
-    const txt = tr.textContent.toLowerCase();
-    const ok  = !terme || txt.includes(terme);
+    const ok = !terme || tr.textContent.toLowerCase().includes(terme);
     tr.style.display = ok ? '' : 'none';
     if (ok) nb++;
   });
