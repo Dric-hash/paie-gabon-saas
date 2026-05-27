@@ -372,26 +372,51 @@ def admin_plan_supprimer(id):
 def admin_stats():
     tenants = Tenant.query.order_by(Tenant.denomination).all()
     stats = []
-    total_revenus = 0
+    total_revenus  = 0
+    total_salaries = 0
+    total_bulletins= 0
+    total_journaliers = 0
+    nb_actif = nb_essai = nb_suspendu = nb_attente = 0
+
     for t in tenants:
         nb_sal = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
         nb_bul = BulletinPaie.query.filter_by(tenant_id=t.id).count()
         nb_per = PeriodePaie.query.filter_by(tenant_id=t.id).count()
         nb_jou = Journalier.query.filter_by(tenant_id=t.id).count()
         rev    = float(t.plan.prix_mensuel) if t.plan and t.statut == "ACTIF" else 0
-        total_revenus += rev
+        total_revenus   += rev
+        total_salaries  += nb_sal
+        total_bulletins += nb_bul
+        total_journaliers += nb_jou
+        if   t.statut == "ACTIF":                nb_actif   += 1
+        elif t.statut == "ESSAI":                nb_essai   += 1
+        elif t.statut == "SUSPENDU":             nb_suspendu+= 1
+        elif t.statut == "PAIEMENT_EN_ATTENTE":  nb_attente += 1
         stats.append({
             "tenant": t, "nb_salaries": nb_sal, "nb_bulletins": nb_bul,
             "nb_periodes": nb_per, "nb_journaliers": nb_jou, "revenus": rev
         })
-    # Taux conversion global
-    nb_actifs = sum(1 for t in tenants if t.statut == "ACTIF")
-    taux_conv = round(nb_actifs / len(tenants) * 100) if tenants else 0
+
+    # Top 8 pour graphique — trié en Python
+    top8 = sorted(stats, key=lambda x: x["nb_bulletins"], reverse=True)[:8]
+    top8_labels = [s["tenant"].denomination[:18] for s in top8]
+    top8_data   = [s["nb_bulletins"] for s in top8]
+
+    taux_conv = round(nb_actif / len(tenants) * 100) if tenants else 0
+
     return render_template("admin/stats.html",
-        stats=stats, tenants=tenants,
+        stats=stats,
         total_revenus=total_revenus,
-        nb_actifs=nb_actifs,
+        total_salaries=total_salaries,
+        total_bulletins=total_bulletins,
+        total_journaliers=total_journaliers,
+        nb_actifs=nb_actif,
+        nb_essai=nb_essai,
+        nb_suspendu=nb_suspendu,
+        nb_attente=nb_attente,
         taux_conv=taux_conv,
+        top8_labels=top8_labels,
+        top8_data=top8_data,
         now=datetime.utcnow())
 
 @app.route("/admin/import", methods=["GET","POST"])
