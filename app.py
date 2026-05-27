@@ -260,11 +260,17 @@ def admin_tenants():
 @super_admin_required
 def admin_tenant_detail(id):
     t = Tenant.query.get_or_404(id)
+    # Dernières périodes pour l'historique activité
+    periodes_recentes = PeriodePaie.query.filter_by(tenant_id=id)        .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).limit(6).all()
+    nb_journaliers = Journalier.query.filter_by(tenant_id=id).count()
     return render_template("admin/tenant_detail.html", tenant=t,
         nb_salaries=Salarie.query.filter_by(tenant_id=id).count(),
         nb_bulletins=BulletinPaie.query.filter_by(tenant_id=id).count(),
         users=Utilisateur.query.filter_by(tenant_id=id).all(),
-        plans=Plan.query.all())
+        plans=Plan.query.all(),
+        periodes_recentes=periodes_recentes,
+        nb_journaliers=nb_journaliers,
+        now=datetime.utcnow())
 
 @app.route("/admin/tenants/<int:id>/statut", methods=["POST"])
 @super_admin_required
@@ -272,8 +278,26 @@ def admin_tenant_statut(id):
     t=Tenant.query.get_or_404(id)
     t.statut=request.form.get("statut",t.statut)
     if request.form.get("plan_id"): t.plan_id=int(request.form["plan_id"])
+    # Date d'expiration essai
+    date_exp = request.form.get("date_expiration","").strip()
+    if date_exp:
+        try:
+            from datetime import datetime as _dt
+            t.date_expiration = _dt.strptime(date_exp, "%Y-%m-%d")
+        except: pass
+    elif request.form.get("clear_expiration"):
+        t.date_expiration = None
     db.session.commit(); flash(f"{t.denomination} mis à jour.","success")
     return redirect(url_for("admin_tenant_detail",id=id))
+
+@app.route("/admin/tenants/<int:id>/notes", methods=["POST"])
+@super_admin_required
+def admin_tenant_notes(id):
+    t = Tenant.query.get_or_404(id)
+    t.notes = request.form.get("notes", "").strip()
+    db.session.commit()
+    flash("Notes mises à jour.", "success")
+    return redirect(url_for("admin_tenant_detail", id=id))
 
 @app.route("/admin/tenants/<int:id>/impersonate")
 @super_admin_required
