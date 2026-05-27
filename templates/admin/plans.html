@@ -1,38 +1,436 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><script src="https://cdn.tailwindcss.com"></script></head>
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Plans d'abonnement — Ameriack I.T. Solutions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; }
+    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .nav-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:.875rem; transition:color .15s; }
+    .nav-link:hover { color:white; }
+    .nav-link.active { color:white; font-weight:700; border-bottom:2px solid white; }
+    .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
+    /* Toggle switch */
+    .toggle { position:relative; display:inline-block; width:40px; height:22px; }
+    .toggle input { opacity:0; width:0; height:0; }
+    .slider { position:absolute; cursor:pointer; inset:0; background:#d1d5db; border-radius:22px; transition:.25s; }
+    .slider:before { position:absolute; content:""; height:16px; width:16px; left:3px; bottom:3px; background:white; border-radius:50%; transition:.25s; }
+    input:checked + .slider { background:#059669; }
+    input:checked + .slider:before { transform:translateX(18px); }
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:50; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    input[type=number] { -moz-appearance:textfield; }
+    input[type=number]::-webkit-inner-spin-button { display:none; }
+  </style>
+</head>
 <body class="bg-gray-50 min-h-screen">
-<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-4 shadow-lg">
-  <a href="/admin" class="text-xl font-black">Ameriack I.T. Solutions</a>
-  <a href="/admin/plans" class="text-sm font-bold">Plans</a>
-  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
-</nav>
-<main class="max-w-5xl mx-auto p-8">
-  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
-  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold bg-emerald-50 text-emerald-700">{{msg}}</div>
-  {% endfor %}{% endif %}{% endwith %}
-  <h1 class="text-2xl font-black mb-6">Plans d'abonnement</h1>
-  <div class="grid grid-cols-3 gap-5 mb-8">
-    {% for p in plans %}
-    <div class="bg-white rounded-2xl border border-gray-200 p-6 text-center">
-      <div class="text-2xl font-black text-purple-900">{{p.nom}}</div>
-      <div class="text-3xl font-black my-3">{{p.prix_mensuel|int}} <span class="text-sm font-normal text-gray-500">FCFA/mois</span></div>
-      <div class="text-sm text-gray-500 mb-2">Max salariés : <strong>{{p.max_salaries or '∞'}}</strong></div>
-      <div class="text-sm text-gray-500 mb-4">Max utilisateurs : <strong>{{p.max_utilisateurs or '∞'}}</strong></div>
-      <div class="text-xs text-gray-400">{{p.description}}</div>
-      <div class="mt-4"><span class="text-xs font-bold px-2 py-0.5 rounded-full {{'bg-emerald-100 text-emerald-700' if p.actif else 'bg-gray-100 text-gray-500'}}">
-        {{'Actif' if p.actif else 'Inactif'}}</span></div>
-    </div>{% endfor %}
+
+<!-- ── Topbar ── -->
+<nav class="bg-purple-900 text-white px-6 flex items-center shadow-lg" style="height:56px">
+  <div class="flex items-center gap-3 mr-8">
+    <span class="text-base font-black tracking-tight">Ameriack I.T.</span>
+    <span class="bg-purple-700 text-purple-200 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
   </div>
-  <div class="bg-white rounded-2xl border border-gray-200 p-6">
-    <h2 class="font-black mb-4">Créer un nouveau plan</h2>
-    <form method="POST" class="grid grid-cols-3 gap-4">
-      {% macro f(label,name,ph="",type="text") %}<div>
-      <label class="block text-xs font-bold text-gray-500 mb-1.5">{{label}}</label>
-      <input type="{{type}}" name="{{name}}" placeholder="{{ph}}" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none"/></div>{% endmacro %}
-      {{f("Code","code","ENTERPRISE")}}{{f("Nom","nom","Enterprise")}}{{f("Prix mensuel FCFA","prix_mensuel","200000","number")}}
-      {{f("Max salariés (vide=illimité)","max_salaries","200","number")}}{{f("Max utilisateurs","max_utilisateurs","20","number")}}
-      <div><label class="block text-xs font-bold text-gray-500 mb-1.5">Description</label>
-      <input type="text" name="description" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"/></div>
-      <div class="col-span-3"><button type="submit" class="bg-purple-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm">+ Créer le plan</button></div>
+  <div class="flex items-center gap-6 h-full">
+    <a href="/admin"           class="nav-link h-full flex items-center">Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link h-full flex items-center">Entreprises</a>
+    <a href="/admin/plans"     class="nav-link active h-full flex items-center pb-px">Plans</a>
+    <a href="/admin/rubriques" class="nav-link h-full flex items-center">Rubriques</a>
+    <a href="/admin/import"    class="nav-link h-full flex items-center">Import Excel</a>
+    <a href="/admin/stats"     class="nav-link h-full flex items-center">Statistiques</a>
+  </div>
+  <div class="ml-auto">
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-6 py-6">
+
+  <!-- Flash messages -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-5 space-y-2">
+    {% for cat, msg in messages %}
+    <div class="px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
+      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <!-- ── En-tête ── -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-black text-gray-900">Plans d'abonnement</h1>
+      <p class="text-gray-500 text-sm mt-0.5">
+        {{ plans|length }} plan(s) ·
+        Revenus totaux :
+        <strong class="text-emerald-600">
+          {% set rev_total = namespace(v=0) %}
+          {% for p in plans %}{% if p.actif %}{% set rev_total.v = rev_total.v + stats_plans[p.id].revenus %}{% endif %}{% endfor %}
+          {{ rev_total.v|int|fcfa }}
+        </strong>
+        / mois
+      </p>
+    </div>
+    <button onclick="ouvrirModalCreer()"
+      class="bg-purple-900 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2">
+      <span>+</span> Nouveau plan
+    </button>
+  </div>
+
+  <!-- ── KPIs synthèse ── -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    {% set nb_plans_actifs = plans|selectattr('actif')|list|length %}
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Plans actifs</div>
+      <div class="text-3xl font-black text-gray-900">{{ nb_plans_actifs }}</div>
+      <div class="text-xs text-gray-400 mt-1">sur {{ plans|length }} au total</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Clients actifs</div>
+      <div class="text-3xl font-black text-gray-900">
+        {% set total_clients = namespace(v=0) %}
+        {% for p in plans %}{% set total_clients.v = total_clients.v + stats_plans[p.id].nb_actifs %}{% endfor %}
+        {{ total_clients.v }}
+      </div>
+      <div class="text-xs text-gray-400 mt-1">abonnés payants</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">En essai</div>
+      <div class="text-3xl font-black text-amber-600">
+        {% set total_essai = namespace(v=0) %}
+        {% for p in plans %}{% set total_essai.v = total_essai.v + stats_plans[p.id].nb_essai %}{% endfor %}
+        {{ total_essai.v }}
+      </div>
+      <div class="text-xs text-gray-400 mt-1">conversions potentielles</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">MRR total</div>
+      <div class="text-2xl font-black text-emerald-600">
+        {% set mrr = namespace(v=0) %}
+        {% for p in plans %}{% if p.actif %}{% set mrr.v = mrr.v + stats_plans[p.id].revenus %}{% endif %}{% endfor %}
+        {{ (mrr.v / 1000)|int }}k
+      </div>
+      <div class="text-xs text-gray-400 mt-1">FCFA / mois</div>
+    </div>
+  </div>
+
+  <!-- ── Tableau des plans ── -->
+  <div class="card overflow-hidden mb-6">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="font-black text-gray-900 text-sm">Tous les plans</h2>
+      <span class="text-xs text-gray-400">Cliquer sur ✏️ pour modifier — toggle pour activer/désactiver</span>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <th class="px-5 py-3 text-left">Plan</th>
+          <th class="px-5 py-3 text-right">Prix / mois</th>
+          <th class="px-5 py-3 text-center">Max salariés</th>
+          <th class="px-5 py-3 text-center">Max utilisateurs</th>
+          <th class="px-5 py-3 text-center">Clients actifs</th>
+          <th class="px-5 py-3 text-center">En essai</th>
+          <th class="px-5 py-3 text-right">Revenus / mois</th>
+          <th class="px-5 py-3 text-center">Actif</th>
+          <th class="px-5 py-3 text-center">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in plans %}
+        {% set st = stats_plans[p.id] %}
+        <tr class="border-b border-gray-50 hover:bg-gray-50 {{ '' if p.actif else 'opacity-60' }}" id="row-plan-{{ p.id }}">
+          <td class="px-5 py-4">
+            <div class="flex items-center gap-3">
+              <div class="w-9 h-9 rounded-xl flex items-center justify-center text-white text-xs font-black flex-shrink-0"
+                style="background:{{ ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'][loop.index0 % 5] }}">
+                {{ p.code[:2] }}
+              </div>
+              <div>
+                <div class="font-black text-gray-900">{{ p.nom }}</div>
+                <div class="text-xs text-gray-400">{{ p.code }} · {{ p.description or '—' }}</div>
+              </div>
+            </div>
+          </td>
+          <td class="px-5 py-4 text-right">
+            <span class="font-black text-gray-900">{{ p.prix_mensuel|int|fcfa }}</span>
+          </td>
+          <td class="px-5 py-4 text-center">
+            <span class="badge bg-slate-100 text-slate-700">{{ p.max_salaries or '∞' }}</span>
+          </td>
+          <td class="px-5 py-4 text-center">
+            <span class="badge bg-slate-100 text-slate-700">{{ p.max_utilisateurs or '∞' }}</span>
+          </td>
+          <td class="px-5 py-4 text-center">
+            {% if st.nb_actifs > 0 %}
+            <a href="/admin/tenants?plan_id={{ p.id }}&statut=ACTIF"
+               class="font-black text-purple-700 hover:underline">{{ st.nb_actifs }}</a>
+            {% else %}
+            <span class="text-gray-300 font-bold">0</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-4 text-center">
+            {% if st.nb_essai > 0 %}
+            <span class="badge bg-amber-100 text-amber-700">{{ st.nb_essai }}</span>
+            {% else %}
+            <span class="text-gray-300 font-bold">0</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-4 text-right">
+            {% if st.revenus > 0 %}
+            <span class="font-bold text-emerald-600">{{ st.revenus|int|fcfa }}</span>
+            {% else %}
+            <span class="text-gray-300">—</span>
+            {% endif %}
+          </td>
+          <td class="px-5 py-4 text-center">
+            <form method="POST" action="/admin/plans/{{ p.id }}/toggle" style="display:inline">
+              <label class="toggle" title="{{ 'Désactiver' if p.actif else 'Activer' }} ce plan">
+                <input type="checkbox" {{ 'checked' if p.actif else '' }}
+                  onchange="this.closest('form').submit()">
+                <span class="slider"></span>
+              </label>
+            </form>
+          </td>
+          <td class="px-5 py-4 text-center">
+            <div class="flex items-center justify-center gap-2">
+              <button onclick="ouvrirModalModifier({{ p.id }}, '{{ p.nom }}', '{{ p.code }}', {{ p.prix_mensuel }}, {{ p.max_salaries or 'null' }}, {{ p.max_utilisateurs or 'null' }}, '{{ p.description or '' }}')"
+                class="text-xs bg-purple-50 text-purple-700 font-bold px-2.5 py-1.5 rounded-lg hover:bg-purple-100">
+                ✏️ Modifier
+              </button>
+              {% if st.nb_total == 0 %}
+              <form method="POST" action="/admin/plans/{{ p.id }}/supprimer" style="display:inline"
+                onsubmit="return confirm('Supprimer le plan {{ p.nom }} ? Cette action est irréversible.')">
+                <button type="submit"
+                  class="text-xs bg-red-50 text-red-600 font-bold px-2.5 py-1.5 rounded-lg hover:bg-red-100">
+                  🗑️
+                </button>
+              </form>
+              {% else %}
+              <span class="text-xs text-gray-300 px-2" title="{{ st.nb_total }} client(s) — suppression impossible">🗑️</span>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center py-12 text-gray-400 text-sm">
+            Aucun plan créé — cliquez sur "Nouveau plan" pour commencer
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Cartes visuelles des plans actifs ── -->
+  {% set plans_actifs = plans|selectattr('actif')|list %}
+  {% if plans_actifs %}
+  <div class="mb-2">
+    <h2 class="font-black text-gray-900 text-sm mb-4">Aperçu commercial — plans actifs</h2>
+    <div class="grid gap-4" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
+      {% for p in plans_actifs %}
+      {% set st = stats_plans[p.id] %}
+      {% set colors = ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'] %}
+      {% set color = colors[loop.index0 % 5] %}
+      <div class="card overflow-hidden">
+        <div style="background:{{ color }};padding:1.25rem 1.5rem;color:white">
+          <div class="text-xs font-bold opacity-70 uppercase tracking-widest mb-1">{{ p.code }}</div>
+          <div class="text-xl font-black">{{ p.nom }}</div>
+          <div class="text-2xl font-black mt-2">
+            {{ p.prix_mensuel|int|fcfa }}
+            <span class="text-sm font-normal opacity-70">/mois</span>
+          </div>
+        </div>
+        <div class="p-4 space-y-2">
+          <div class="flex justify-between text-xs">
+            <span class="text-gray-500">Salariés max</span>
+            <span class="font-bold">{{ p.max_salaries or '∞' }}</span>
+          </div>
+          <div class="flex justify-between text-xs">
+            <span class="text-gray-500">Utilisateurs max</span>
+            <span class="font-bold">{{ p.max_utilisateurs or '∞' }}</span>
+          </div>
+          <div class="border-t border-gray-100 pt-2 mt-2">
+            <div class="flex justify-between text-xs">
+              <span class="text-gray-500">Clients actifs</span>
+              <span class="font-black text-purple-700">{{ st.nb_actifs }}</span>
+            </div>
+            <div class="flex justify-between text-xs mt-1">
+              <span class="text-gray-500">En essai</span>
+              <span class="font-bold text-amber-600">{{ st.nb_essai }}</span>
+            </div>
+            <div class="flex justify-between text-xs mt-1">
+              <span class="text-gray-500">Revenus</span>
+              <span class="font-black text-emerald-600">{{ st.revenus|int|fcfa }}</span>
+            </div>
+          </div>
+          {% if p.description %}
+          <div class="text-xs text-gray-400 pt-1 border-t border-gray-100">{{ p.description }}</div>
+          {% endif %}
+          <div class="pt-1">
+            <button onclick="ouvrirModalModifier({{ p.id }}, '{{ p.nom }}', '{{ p.code }}', {{ p.prix_mensuel }}, {{ p.max_salaries or 'null' }}, {{ p.max_utilisateurs or 'null' }}, '{{ p.description or '' }}')"
+              class="w-full text-xs font-bold py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+              ✏️ Modifier ce plan
+            </button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</main>
+
+<!-- ══════════════════════════════════════════
+     MODAL — Créer un plan
+════════════════════════════════════════════ -->
+<div id="modal-creer" class="modal-overlay" onclick="fermerSiOverlay(event,'modal-creer')">
+  <div style="background:white;border-radius:1.25rem;padding:2rem;width:520px;max-width:94vw;max-height:90vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-5">
+      <h2 class="text-lg font-black text-gray-900">Nouveau plan</h2>
+      <button onclick="fermerModal('modal-creer')" class="text-gray-400 hover:text-gray-600 text-xl font-black">×</button>
+    </div>
+    <form method="POST" action="/admin/plans" class="space-y-4">
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Code *</label>
+          <input type="text" name="code" required placeholder="EX: STARTER"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400"
+            style="text-transform:uppercase">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nom *</label>
+          <input type="text" name="nom" required placeholder="Ex: Starter"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Prix mensuel (FCFA) *</label>
+        <input type="number" name="prix_mensuel" required step="any" min="0" placeholder="Ex: 50000"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Max salariés</label>
+          <input type="number" name="max_salaries" step="1" min="1" placeholder="Vide = illimité"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+          <p class="text-xs text-gray-400 mt-1">Laisser vide pour illimité</p>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Max utilisateurs</label>
+          <input type="number" name="max_utilisateurs" step="1" min="1" placeholder="Vide = illimité"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Description</label>
+        <input type="text" name="description" placeholder="Ex: Pour les PME jusqu'à 50 employés"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="fermerModal('modal-creer')"
+          class="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-xl text-sm hover:bg-gray-50">
+          Annuler
+        </button>
+        <button type="submit"
+          class="flex-1 bg-purple-900 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl text-sm">
+          ✅ Créer le plan
+        </button>
+      </div>
     </form>
   </div>
-</main></body></html>
+</div>
+
+<!-- ══════════════════════════════════════════
+     MODAL — Modifier un plan
+════════════════════════════════════════════ -->
+<div id="modal-modifier" class="modal-overlay" onclick="fermerSiOverlay(event,'modal-modifier')">
+  <div style="background:white;border-radius:1.25rem;padding:2rem;width:520px;max-width:94vw;max-height:90vh;overflow-y:auto">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="text-lg font-black text-gray-900">Modifier le plan</h2>
+      <button onclick="fermerModal('modal-modifier')" class="text-gray-400 hover:text-gray-600 text-xl font-black">×</button>
+    </div>
+    <p id="mod-code-label" class="text-xs text-gray-400 mb-5">CODE</p>
+    <form method="POST" id="form-modifier" action="" class="space-y-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nom *</label>
+        <input type="text" name="nom" id="mod-nom" required
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Prix mensuel (FCFA) *</label>
+        <input type="number" name="prix_mensuel" id="mod-prix" required step="any" min="0"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+      </div>
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Max salariés</label>
+          <input type="number" name="max_salaries" id="mod-sal" step="1" min="1" placeholder="Vide = illimité"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Max utilisateurs</label>
+          <input type="number" name="max_utilisateurs" id="mod-util" step="1" min="1" placeholder="Vide = illimité"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Description</label>
+        <input type="text" name="description" id="mod-desc"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-purple-400">
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-700">
+        ⚠️ La modification du prix s'applique aux <strong>nouveaux renouvellements</strong> uniquement.
+        Les abonnés en cours conservent leur tarif jusqu'au prochain cycle.
+      </div>
+      <div class="flex gap-3 pt-2">
+        <button type="button" onclick="fermerModal('modal-modifier')"
+          class="flex-1 border border-gray-200 text-gray-600 font-bold py-2.5 rounded-xl text-sm hover:bg-gray-50">
+          Annuler
+        </button>
+        <button type="submit"
+          class="flex-1 bg-purple-900 hover:bg-purple-700 text-white font-bold py-2.5 rounded-xl text-sm">
+          💾 Enregistrer
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function ouvrirModalCreer() {
+  document.getElementById('modal-creer').classList.add('open');
+}
+function ouvrirModalModifier(id, nom, code, prix, maxSal, maxUtil, desc) {
+  document.getElementById('form-modifier').action = `/admin/plans/${id}/modifier`;
+  document.getElementById('mod-code-label').textContent = `Code : ${code}`;
+  document.getElementById('mod-nom').value   = nom;
+  document.getElementById('mod-prix').value  = prix;
+  document.getElementById('mod-sal').value   = maxSal !== null ? maxSal : '';
+  document.getElementById('mod-util').value  = maxUtil !== null ? maxUtil : '';
+  document.getElementById('mod-desc').value  = desc;
+  document.getElementById('modal-modifier').classList.add('open');
+}
+function fermerModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+function fermerSiOverlay(e, id) {
+  if (e.target.id === id) fermerModal(id);
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    fermerModal('modal-creer');
+    fermerModal('modal-modifier');
+  }
+});
+</script>
+
+</body>
+</html>
