@@ -14,7 +14,6 @@
     .btn { padding: 6px 18px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: bold; }
     .btn-print { background: #10b981; color: white; }
     .btn-back  { background: #6b7280; color: white; }
-    .btn-print:hover { background: #059669; }
     @media print { .no-print { display: none !important; } }
     .page {
       width: 210mm; min-height: 297mm;
@@ -62,8 +61,6 @@
     .gain { color: #065f46; font-weight: 700; }
     .retenue { color: #991b1b; font-weight: 700; }
     .bold { font-weight: 900; }
-    .row-total { background: #1a2332 !important; }
-    .row-total td { color: white !important; font-weight: 900 !important; border-color: #1a2332 !important; font-size: 9.5px; }
     .row-subtotal { background: #e8f4fd !important; }
     .row-subtotal td { font-weight: 900; }
     .net-box {
@@ -90,9 +87,12 @@
       display: flex; justify-content: space-between;
       margin-bottom: 8px; font-size: 8.5px;
     }
-    /* Style spécifique colonne base/taux dans éléments rémunération */
-    .base-val { font-size: 8px; color: #555; font-style: italic; }
-    .taux-val { font-size: 8px; color: #374151; font-weight: 600; }
+    /* Colonnes du tableau rémunération */
+    .col-desig  { width: 46%; }
+    .col-base   { width: 13%; text-align: right; }
+    .col-taux   { width:  8%; text-align: center; }
+    .col-gain   { width: 17%; text-align: right; }
+    .col-ret    { width: 16%; text-align: right; }
   </style>
 </head>
 <body>
@@ -111,7 +111,7 @@
   <div class="header">
     <div>
       {% if tenant.logo_url %}
-      <img src="{{ tenant.logo_url }}" alt="Logo" style="max-height:50px;max-width:150px;object-fit:contain;margin-bottom:4px;display:block"/>
+      <img src="{{ tenant.logo_url }}" alt="Logo" style="max-height:48px;max-width:140px;object-fit:contain;margin-bottom:4px;display:block"/>
       {% endif %}
       <div class="company-name">{{ tenant.denomination }}</div>
       <div class="company-info">
@@ -162,252 +162,264 @@
     </div>
   </div>
 
-  <!-- ════════════════════════════════════════════════════════════ -->
-  <!-- ÉLÉMENTS DE RÉMUNÉRATION — bloc menant au SALAIRE BRUT     -->
-  <!-- Seul ce bloc a Base + Taux renseignés                       -->
-  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- ÉLÉMENTS DE RÉMUNÉRATION -->
   <div class="section-title">Éléments de Rémunération</div>
   <table>
+    <colgroup>
+      <col class="col-desig"/>
+      <col class="col-base"/>
+      <col class="col-taux"/>
+      <col class="col-gain"/>
+      <col class="col-ret"/>
+    </colgroup>
     <thead>
       <tr>
-        <th style="width:44%">Désignation</th>
-        <th class="tr" style="width:19%">Base</th>
-        <th class="tc" style="width:10%">Taux</th>
-        <th class="tr" style="width:13%">Gain (FCFA)</th>
-        <th class="tr" style="width:14%">Retenue (FCFA)</th>
+        <th>Désignation</th>
+        <th class="tr">Base</th>
+        <th class="tc">Taux</th>
+        <th class="tr">Gains (FCFA)</th>
+        <th class="tr">Retenues (FCFA)</th>
       </tr>
     </thead>
     <tbody>
 
-      {# ── Salaire de base ── #}
+      {# Salaire de base : Base = valeur taux journalier, Taux = nb jours #}
+      {% set taux_j = (bulletin.salaire_base / (bulletin.nb_jours_travailles or 26))|round(0)|int %}
       <tr>
-        <td class="bold">Salaire de base</td>
-        <td class="tr base-val">{{ bulletin.nb_jours_travailles or 26 }} jours</td>
-        <td class="tc taux-val">Mensuel</td>
+        <td>Salaire de base</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">{{ bulletin.nb_jours_travailles or 26 }}</td>
         <td class="tr gain">{{ bulletin.salaire_base|fcfa }}</td>
         <td></td>
       </tr>
 
-      {# ── Heures supplémentaires ── #}
       {% if bulletin.heures_sup_10 and bulletin.heures_sup_10|float > 0 %}
       <tr>
-        <td>Heures supplémentaires (nuit semaine)</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">+10%</td>
+        <td>Heures supplémentaires +10%</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">+10%</td>
         <td class="tr gain">{{ bulletin.heures_sup_10|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.heures_sup_30 and bulletin.heures_sup_30|float > 0 %}
       <tr>
-        <td>Heures supplémentaires (dimanche)</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">+30%</td>
+        <td>Heures supplémentaires +30%</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">+30%</td>
         <td class="tr gain">{{ bulletin.heures_sup_30|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.heures_sup_40 and bulletin.heures_sup_40|float > 0 %}
       <tr>
-        <td>Heures supplémentaires (nuit dim.)</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">+40%</td>
+        <td>Heures supplémentaires +40%</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">+40%</td>
         <td class="tr gain">{{ bulletin.heures_sup_40|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.heures_sup_70 and bulletin.heures_sup_70|float > 0 %}
       <tr>
-        <td>Heures supplémentaires (jours fériés)</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">+70%</td>
+        <td>Heures supplémentaires +70%</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">+70%</td>
         <td class="tr gain">{{ bulletin.heures_sup_70|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
 
-      {# ── Absences ── #}
       {% if bulletin.absences and bulletin.absences|float > 0 %}
       <tr>
-        <td>Absences</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Prorata</td>
+        <td>Absence</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc"></td>
         <td></td>
         <td class="tr retenue">{{ bulletin.absences|fcfa }}</td>
       </tr>{% endif %}
 
-      {# ── Compléments de salaire ── #}
       {% if bulletin.sursalaire and bulletin.sursalaire|float > 0 %}
       <tr>
         <td>Sursalaire</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.sursalaire|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_caisse and bulletin.prime_caisse|float > 0 %}
       <tr>
         <td>Prime de caisse</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.prime_caisse|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.carburant and bulletin.carburant|float > 0 %}
       <tr>
         <td>Carburant</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.carburant|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_anciennete and bulletin.prime_anciennete|float > 0 %}
       <tr>
         <td>Prime d'ancienneté</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">{{ bulletin.nb_jours_travailles or 26 }}</td>
         <td class="tr gain">{{ bulletin.prime_anciennete|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
 
-      {# ── Avantages en nature ── #}
       {% if bulletin.indem_logement and bulletin.indem_logement|float > 0 %}
       <tr>
         <td>Indemnité de logement</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_logement|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_domesticite and bulletin.indem_domesticite|float > 0 %}
       <tr>
         <td>Indemnité de domesticité</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_domesticite|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_eau_electricite and bulletin.indem_eau_electricite|float > 0 %}
       <tr>
         <td>Indemnité eau &amp; électricité</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_eau_electricite|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_nourriture and bulletin.indem_nourriture|float > 0 %}
       <tr>
         <td>Indemnité de nourriture</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_nourriture|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
 
-      {# ── Primes ── #}
       {% if bulletin.prime_transport and bulletin.prime_transport|float > 0 %}
       <tr>
         <td>Prime de transport</td>
-        <td class="tr base-val">—</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">{{ bulletin.nb_jours_travailles or 26 }}</td>
         <td class="tr gain">{{ bulletin.prime_transport|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_responsabilite and bulletin.prime_responsabilite|float > 0 %}
       <tr>
         <td>Prime de responsabilité</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr">{{ taux_j|fcfa }}</td>
+        <td class="tc">{{ bulletin.nb_jours_travailles or 26 }}</td>
         <td class="tr gain">{{ bulletin.prime_responsabilite|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_rendement and bulletin.prime_rendement|float > 0 %}
       <tr>
         <td>Prime de rendement</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.prime_rendement|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_assiduité and bulletin.prime_assiduité|float > 0 %}
       <tr>
         <td>Prime d'assiduité</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.prime_assiduité|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_qualite and bulletin.prime_qualite|float > 0 %}
       <tr>
         <td>Prime de qualité</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.prime_qualite|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.prime_performance and bulletin.prime_performance|float > 0 %}
       <tr>
         <td>Prime de performance</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.prime_performance|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.allocations_conge and bulletin.allocations_conge|float > 0 %}
       <tr>
         <td>Allocations de congé</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Forfait</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.allocations_conge|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
 
-      {# ── Indemnités de fin de contrat ── #}
       {% if bulletin.indem_compensatrice_conge and bulletin.indem_compensatrice_conge|float > 0 %}
       <tr>
         <td>Indem. compensatrice de congé</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_compensatrice_conge|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_services_rendus and bulletin.indem_services_rendus|float > 0 %}
       <tr>
         <td>Indemnité de services rendus</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_services_rendus|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_compensatrice_preavis and bulletin.indem_compensatrice_preavis|float > 0 %}
       <tr>
         <td>Indem. compensatrice de préavis</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Préavis</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_compensatrice_preavis|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+
       {% if bulletin.indem_licenciement and bulletin.indem_licenciement|float > 0 %}
       <tr>
         <td>Indemnité de licenciement</td>
-        <td class="tr base-val">Sal. base</td>
-        <td class="tc taux-val">Ancienneté</td>
+        <td class="tr"></td>
+        <td class="tc"></td>
         <td class="tr gain">{{ bulletin.indem_licenciement|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
 
-      {# ── TOTAL BRUT ── #}
       <tr class="row-subtotal">
         <td class="bold">SALAIRE BRUT</td>
-        <td class="tr bold"></td>
-        <td></td>
+        <td></td><td></td>
         <td class="tr bold">{{ bulletin.salaire_brut|fcfa }}</td>
         <td></td>
       </tr>
     </tbody>
   </table>
 
-  <!-- ════════════════════════════════════════════════════════════ -->
-  <!-- COTISATIONS — blocs non modifiés (Base/Taux/Montant déjà OK) -->
-  <!-- ════════════════════════════════════════════════════════════ -->
+  <!-- COTISATIONS — inchangées -->
   <div class="two-cols">
-    <!-- Salariales -->
     <div>
       <div class="section-title">Cotisations Salariales</div>
       <table>
@@ -426,7 +438,6 @@
         </tbody>
       </table>
     </div>
-    <!-- Patronales -->
     <div>
       <div class="section-title">Cotisations Patronales (informatif)</div>
       <table>
@@ -467,13 +478,11 @@
     </tbody>
   </table>
 
-  <!-- NET À PAYER -->
   <div class="net-box">
     <span class="net-label">💰 Net à Payer</span>
     <span class="net-amount">{{ bulletin.net_a_payer|fcfa }}</span>
   </div>
 
-  <!-- SIGNATURES -->
   <div class="signatures">
     <div class="sig-box">
       <div class="sig-title">L'Employeur</div>
@@ -487,7 +496,6 @@
     </div>
   </div>
 
-  <!-- PIED DE PAGE -->
   <div class="footer">
     <p>{{ tenant.denomination }} — Bulletin de paie {{ bulletin.periode.libelle_complet }} — Document confidentiel</p>
     <p style="margin-top:2px">Conformément au Code du Travail Gabonais — Conservez ce document sans limitation de durée</p>
