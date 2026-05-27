@@ -75,7 +75,7 @@
     {% if action == 'nouveau' %}
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">Salaire de base (FCFA) *</label>
-      <input type="number" name="salaire_base" required min="0"
+      <input type="number" step="any" name="salaire_base" required min="0"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
     </div>
     <div>
@@ -135,7 +135,7 @@
 
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">Nombre de parts (IRPP)</label>
-      <input type="number" name="nombre_parts" min="1" step="0.5"
+      <input type="number" name="nombre_parts" min="1" step="any"
         value="{{ salarie.nombre_parts if salarie else 1 }}"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center font-mono"/>
     </div>
