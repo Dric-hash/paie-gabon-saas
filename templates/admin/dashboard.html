@@ -256,7 +256,6 @@
       </thead>
       <tbody>
         {% for t in tenants[:10] %}
-        {% set nb_bul_t = t.periodes|sum(attribute='bulletins')|list|length if t.periodes else 0 %}
         <tr class="border-b border-gray-50 hover:bg-gray-50 {{ 'bg-amber-50' if t.statut=='ESSAI' and t.date_expiration and (t.date_expiration - now).days <= 7 else '' }}">
           <td class="px-4 py-3">
             <div class="font-bold text-gray-900">{{ t.denomination }}</div>
@@ -269,9 +268,7 @@
           </td>
           <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
           <td class="px-4 py-3 text-center text-gray-600 font-semibold">
-            {% set nb_b = namespace(val=0) %}
-            {% for p in t.periodes %}{% set nb_b.val = nb_b.val + p.bulletins|length %}{% endfor %}
-            {{ nb_b.val }}
+            {{ bulletins_par_tenant.get(t.id, 0) }}
           </td>
           <td class="px-4 py-3 text-center">
             {% set sc = {
