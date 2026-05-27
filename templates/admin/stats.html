@@ -1,22 +1,285 @@
-{% extends "base.html" %}{% block title %}Statistiques{% endblock %}{% block content %}
-<h1 class="text-2xl font-black mb-6">Statistiques globales</h1>
-<div class="card overflow-hidden">
-  <table class="w-full text-sm">
-    <thead><tr class="bg-primary text-white text-xs uppercase">
-      <th class="px-5 py-3 text-left">Entreprise</th>
-      <th class="px-5 py-3 text-center">Plan</th>
-      <th class="px-5 py-3 text-center">Salariés actifs</th>
-      <th class="px-5 py-3 text-center">Total bulletins</th>
-      <th class="px-5 py-3 text-center">Statut</th>
-    </tr></thead>
-    <tbody>{% for s in stats %}
-    <tr class="border-b border-gray-100 hover:bg-gray-50">
-      <td class="px-5 py-3 font-bold">{{ s.tenant.denomination }}<div class="text-xs text-gray-400">{{ s.tenant.ville }}</div></td>
-      <td class="px-5 py-3 text-center"><span class="text-xs bg-gray-100 font-bold px-2 py-0.5 rounded-lg">{{ s.tenant.plan.nom if s.tenant.plan else '—' }}</span></td>
-      <td class="px-5 py-3 text-center font-bold text-primary">{{ s.nb_salaries }}</td>
-      <td class="px-5 py-3 text-center font-bold">{{ s.nb_bulletins }}</td>
-      <td class="px-5 py-3 text-center"><span class="badge-{{ s.tenant.statut|lower }}">{{ s.tenant.statut }}</span></td>
-    </tr>{% endfor %}</tbody>
-  </table>
-</div>
-{% endblock %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Statistiques — Ameriack I.T. Solutions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; }
+    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+    .nav-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:.875rem; transition:color .15s; }
+    .nav-link:hover { color:white; }
+    .nav-link.active { color:white; font-weight:700; border-bottom:2px solid white; }
+    .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
+    th { padding:.625rem 1rem; font-size:.7rem; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+    td { padding:.625rem 1rem; font-size:.8rem; border-bottom:1px solid #f9fafb; }
+    tr:last-child td { border-bottom:none; }
+    tr:hover td { background:#fafafa; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+
+<!-- ── Topbar ── -->
+<nav class="bg-purple-900 text-white px-6 flex items-center shadow-lg" style="height:56px">
+  <div class="flex items-center gap-3 mr-8">
+    <span class="text-base font-black tracking-tight">Ameriack I.T.</span>
+    <span class="bg-purple-700 text-purple-200 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+  </div>
+  <div class="flex items-center gap-6 h-full">
+    <a href="/admin"           class="nav-link h-full flex items-center">Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link h-full flex items-center">Entreprises</a>
+    <a href="/admin/plans"     class="nav-link h-full flex items-center">Plans</a>
+    <a href="/admin/rubriques" class="nav-link h-full flex items-center">Rubriques</a>
+    <a href="/admin/import"    class="nav-link h-full flex items-center">Import Excel</a>
+    <a href="/admin/stats"     class="nav-link active h-full flex items-center pb-px">Statistiques</a>
+  </div>
+  <div class="ml-auto flex items-center gap-3">
+    <span class="text-xs text-purple-300">{{ now.strftime('%d/%m/%Y %H:%M') }}</span>
+    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  </div>
+</nav>
+
+<main class="max-w-7xl mx-auto px-6 py-6">
+
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-black text-gray-900">Statistiques globales</h1>
+      <p class="text-gray-500 text-sm mt-0.5">Vue complète de toutes les entreprises · {{ stats|length }} entrée(s)</p>
+    </div>
+    <a href="/admin" class="text-sm text-gray-400 hover:text-gray-600 font-semibold">← Dashboard</a>
+  </div>
+
+  <!-- ── KPIs synthèse ── -->
+  <div class="grid grid-cols-4 gap-4 mb-6">
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Entreprises</div>
+      <div class="text-3xl font-black text-gray-900">{{ stats|length }}</div>
+      <div class="text-xs text-gray-400 mt-1">{{ nb_actifs }} actives · {{ stats|length - nb_actifs }} autres</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Salariés total</div>
+      <div class="text-3xl font-black text-gray-900">
+        {% set ts = namespace(v=0) %}{% for s in stats %}{% set ts.v = ts.v + s.nb_salaries %}{% endfor %}{{ ts.v }}
+      </div>
+      <div class="text-xs text-gray-400 mt-1">tous tenants confondus</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Bulletins émis</div>
+      <div class="text-3xl font-black text-gray-900">
+        {% set tb = namespace(v=0) %}{% for s in stats %}{% set tb.v = tb.v + s.nb_bulletins %}{% endfor %}{{ tb.v }}
+      </div>
+      <div class="text-xs text-gray-400 mt-1">historique complet</div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">MRR</div>
+      <div class="text-2xl font-black text-emerald-600">{{ (total_revenus/1000)|int }}k</div>
+      <div class="text-xs text-gray-400 mt-1">{{ total_revenus|int|fcfa }} / mois · conv. {{ taux_conv }}%</div>
+    </div>
+  </div>
+
+  <!-- ── Graphiques ── -->
+  <div class="grid grid-cols-2 gap-5 mb-6">
+
+    <!-- Répartition statuts -->
+    <div class="card p-5">
+      <h2 class="font-black text-gray-900 text-sm mb-4">Répartition par statut</h2>
+      <div style="height:180px;position:relative">
+        <canvas id="chartStatuts"></canvas>
+      </div>
+    </div>
+
+    <!-- Bulletins par entreprise (top 8) -->
+    <div class="card p-5">
+      <h2 class="font-black text-gray-900 text-sm mb-4">Top entreprises — bulletins émis</h2>
+      <div style="height:180px;position:relative">
+        <canvas id="chartTop"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Tableau détaillé ── -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+      <h2 class="font-black text-gray-900 text-sm">Détail par entreprise</h2>
+      <div class="flex items-center gap-3">
+        <input type="text" id="searchInput" placeholder="🔍 Filtrer..."
+          oninput="filtrerTableau(this.value)"
+          class="border border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-purple-400"
+          style="width:200px">
+        <span class="text-xs text-gray-400" id="compteur">{{ stats|length }} entreprise(s)</span>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="w-full" id="tableStats">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="text-left">Entreprise</th>
+            <th class="text-center">Plan</th>
+            <th class="text-center">Statut</th>
+            <th class="text-center">Salariés</th>
+            <th class="text-center">Journaliers</th>
+            <th class="text-center">Bulletins</th>
+            <th class="text-center">Périodes</th>
+            <th class="text-right">Revenus/mois</th>
+            <th class="text-center">Inscription</th>
+            <th class="text-center">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in stats %}
+          <tr class="ligne-stat">
+            <td>
+              <div class="font-bold text-gray-900">{{ s.tenant.denomination }}</div>
+              <div class="text-xs text-gray-400">{{ s.tenant.ville or '—' }}{% if s.tenant.activite %} · {{ s.tenant.activite }}{% endif %}</div>
+            </td>
+            <td class="text-center">
+              <span class="badge bg-purple-100 text-purple-800">
+                {{ s.tenant.plan.nom if s.tenant.plan else '—' }}
+              </span>
+            </td>
+            <td class="text-center">
+              {% set sc = {
+                'ACTIF':'bg-emerald-100 text-emerald-800',
+                'ESSAI':'bg-amber-100 text-amber-800',
+                'SUSPENDU':'bg-red-100 text-red-700',
+                'PAIEMENT_EN_ATTENTE':'bg-blue-100 text-blue-800'
+              } %}
+              <span class="badge {{ sc.get(s.tenant.statut,'bg-gray-100 text-gray-500') }}">
+                {{ s.tenant.statut.replace('_',' ') }}
+              </span>
+            </td>
+            <td class="text-center font-black text-gray-900">{{ s.nb_salaries }}</td>
+            <td class="text-center font-bold text-amber-600">{{ s.nb_journaliers }}</td>
+            <td class="text-center font-bold text-blue-700">{{ s.nb_bulletins }}</td>
+            <td class="text-center text-gray-500">{{ s.nb_periodes }}</td>
+            <td class="text-right">
+              {% if s.revenus > 0 %}
+              <span class="font-black text-emerald-600">{{ s.revenus|int|fcfa }}</span>
+              {% else %}
+              <span class="text-gray-300">—</span>
+              {% endif %}
+            </td>
+            <td class="text-center text-gray-400 text-xs">
+              {{ s.tenant.date_inscription.strftime('%d/%m/%Y') if s.tenant.date_inscription else '—' }}
+            </td>
+            <td class="text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <a href="/admin/tenants/{{ s.tenant.id }}"
+                   class="text-purple-600 font-bold text-xs hover:underline">Gérer</a>
+                <span class="text-gray-200">|</span>
+                <a href="/admin/tenants/{{ s.tenant.id }}/impersonate"
+                   class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="10" class="text-center py-12 text-gray-400">Aucune entreprise</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Totaux -->
+    {% if stats %}
+    <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 flex items-center gap-6 text-xs font-bold text-gray-600">
+      <span>TOTAUX :</span>
+      <span>
+        {% set ts2 = namespace(v=0) %}{% for s in stats %}{% set ts2.v = ts2.v + s.nb_salaries %}{% endfor %}
+        👷 {{ ts2.v }} salariés
+      </span>
+      <span>
+        {% set tb2 = namespace(v=0) %}{% for s in stats %}{% set tb2.v = tb2.v + s.nb_bulletins %}{% endfor %}
+        📄 {{ tb2.v }} bulletins
+      </span>
+      <span>
+        {% set tj = namespace(v=0) %}{% for s in stats %}{% set tj.v = tj.v + s.nb_journaliers %}{% endfor %}
+        🧑‍🔧 {{ tj.v }} journaliers
+      </span>
+      <span class="text-emerald-600">💰 {{ total_revenus|int|fcfa }} / mois</span>
+    </div>
+    {% endif %}
+  </div>
+
+</main>
+
+<script>
+// ── Données pour les graphiques ───────────────────────────────────────────────
+const STATUTS_DATA = {
+  labels: ['ACTIF', 'ESSAI', 'SUSPENDU', 'EN ATTENTE'],
+  data:   [
+    {{ stats|selectattr('tenant.statut','equalto','ACTIF')|list|length }},
+    {{ stats|selectattr('tenant.statut','equalto','ESSAI')|list|length }},
+    {{ stats|selectattr('tenant.statut','equalto','SUSPENDU')|list|length }},
+    {{ stats|selectattr('tenant.statut','equalto','PAIEMENT_EN_ATTENTE')|list|length }}
+  ],
+  colors: ['#059669','#d97706','#dc2626','#1d4ed8']
+};
+
+const TOP_DATA = {
+  labels: [{% for s in stats|sort(attribute='nb_bulletins',reverse=True)[:8] %}"{{ s.tenant.denomination[:18] }}"{% if not loop.last %},{% endif %}{% endfor %}],
+  data:   [{% for s in stats|sort(attribute='nb_bulletins',reverse=True)[:8] %}{{ s.nb_bulletins }}{% if not loop.last %},{% endif %}{% endfor %}]
+};
+
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.color = '#9ca3af';
+
+// Donut statuts
+new Chart(document.getElementById('chartStatuts'), {
+  type: 'doughnut',
+  data: {
+    labels: STATUTS_DATA.labels,
+    datasets: [{ data: STATUTS_DATA.data, backgroundColor: STATUTS_DATA.colors, borderWidth: 0, hoverOffset: 4 }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, cutout: '60%',
+    plugins: {
+      legend: { position: 'right', labels: { font: { size: 11 }, padding: 12 } },
+      tooltip: { callbacks: { label: ctx => ` ${ctx.raw} entreprise${ctx.raw > 1 ? 's' : ''}` } }
+    }
+  }
+});
+
+// Barres top entreprises
+new Chart(document.getElementById('chartTop'), {
+  type: 'bar',
+  data: {
+    labels: TOP_DATA.labels,
+    datasets: [{
+      data: TOP_DATA.data,
+      backgroundColor: '#ede9fe',
+      borderRadius: 4,
+      borderSkipped: false,
+      hoverBackgroundColor: '#7c3aed'
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { grid: { color: '#f3f4f6' }, border: { display: false }, ticks: { precision: 0 } },
+      y: { grid: { display: false }, border: { display: false } }
+    }
+  }
+});
+
+// ── Filtre tableau ────────────────────────────────────────────────────────────
+function filtrerTableau(q) {
+  const lignes = document.querySelectorAll('.ligne-stat');
+  const terme  = q.toLowerCase().trim();
+  let nb = 0;
+  lignes.forEach(tr => {
+    const txt = tr.textContent.toLowerCase();
+    const ok  = !terme || txt.includes(terme);
+    tr.style.display = ok ? '' : 'none';
+    if (ok) nb++;
+  });
+  document.getElementById('compteur').textContent = nb + ' entreprise(s)';
+}
+</script>
+
+</body>
+</html>
