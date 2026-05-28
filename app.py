@@ -1218,7 +1218,14 @@ def bulletin_imprimer(id):
         t = get_tenant()
         if not t: return redirect(url_for("login"))
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    return render_template("tenant/bulletin_print.html", bulletin=b, tenant=t)
+    modele = getattr(t, "modele_bulletin", "classique") or "classique"
+    template_map = {
+        "classique":    "tenant/bulletin_print.html",
+        "moderne":      "tenant/bulletin_print_moderne.html",
+        "minimaliste":  "tenant/bulletin_print_minimaliste.html",
+    }
+    template = template_map.get(modele, "tenant/bulletin_print.html")
+    return render_template(template, bulletin=b, tenant=t)
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
 @app.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
@@ -1389,6 +1396,21 @@ def parametres_logo_supprimer():
     if not t: return redirect(url_for("login"))
     t.logo_url = None; db.session.commit()
     flash("Logo supprime.", "success")
+    return redirect(url_for("parametres"))
+
+@app.route("/parametres/modele-bulletin", methods=["POST"])
+@login_required
+def parametres_modele_bulletin():
+    """Changer le modèle d'impression des bulletins."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    modele = request.form.get("modele_bulletin", "classique")
+    if modele not in ("classique", "moderne", "minimaliste"):
+        modele = "classique"
+    t.modele_bulletin = modele
+    db.session.commit()
+    flash(f"Modèle d'impression « {modele.capitalize()} » appliqué.", "success")
     return redirect(url_for("parametres"))
 
 @app.route("/parametres/societe", methods=["POST"])
@@ -2365,6 +2387,15 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"Migration init error: {e}")
+
+    # ── Modèle bulletin ──────────────────────────────────────────────────────
+    try:
+        db.session.execute(db.text(
+            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS modele_bulletin VARCHAR(30) DEFAULT 'classique'"
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     # ── Champs sécurité Utilisateur ──────────────────────────────────────────
     for _col_sql in [
