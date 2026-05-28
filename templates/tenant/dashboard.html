@@ -32,7 +32,23 @@
 
 <main class="max-w-7xl mx-auto p-5">
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
+  <!-- ── Bannière email non confirmé ── -->
+{% if not current_user.email_verifie %}
+<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.875rem;padding:.75rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+  <div style="display:flex;align-items:center;gap:.625rem">
+    <span style="font-size:1.25rem">📧</span>
+    <span style="font-size:.875rem;font-weight:700;color:#92400e">
+      Confirmez votre email pour sécuriser votre compte.
+    </span>
+  </div>
+  <a href="/renvoyer-confirmation"
+     style="font-size:.8rem;font-weight:700;background:#d97706;color:white;padding:.375rem .875rem;border-radius:.625rem;text-decoration:none">
+    Renvoyer l'email de confirmation
+  </a>
+</div>
+{% endif %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
   {% if messages %}<div class="mb-4 space-y-2">{% for cat, msg in messages %}
   <div class="px-4 py-3 rounded-xl text-sm font-semibold
     {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
