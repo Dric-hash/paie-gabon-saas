@@ -1253,9 +1253,35 @@ def journalier_modifier(id):
         j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
         j.date_embauche=_parse_date(request.form.get("date_embauche"))
         j.statut=request.form.get("statut","ACTIF")
-        db.session.commit(); flash("Journalier mis à jour.", "success")
+        # ── Affectation site ──────────────────────────────────────────────
+        site_id = request.form.get("site_id", type=int)
+        if site_id:
+            aff_prev = AffectationSite.query.filter_by(
+                journalier_id=j.id, tenant_id=t.id, actif=True).first()
+            if aff_prev and aff_prev.site_id != site_id:
+                aff_prev.actif    = False
+                aff_prev.date_fin = date.today()
+                aff_prev.motif    = "Réaffecté via formulaire journalier"
+            if not aff_prev or aff_prev.site_id != site_id:
+                db.session.add(AffectationSite(
+                    tenant_id=t.id, site_id=site_id, journalier_id=j.id,
+                    date_debut=date.today(), actif=True,
+                    cree_par=current_user.email))
+        elif request.form.get("retirer_site"):
+            aff = AffectationSite.query.filter_by(
+                journalier_id=j.id, tenant_id=t.id, actif=True).first()
+            if aff:
+                aff.actif    = False
+                aff.date_fin = date.today()
+                aff.motif    = "Retiré via formulaire journalier"
+        db.session.commit()
+        flash("Journalier mis à jour.", "success")
         return redirect(url_for("journaliers"))
-    return render_template("tenant/journalier_form.html", tenant=t, journalier=j)
+    aff_actuelle = AffectationSite.query.filter_by(
+        journalier_id=id, tenant_id=t.id, actif=True).first()
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/journalier_form.html", tenant=t, journalier=j,
+        sites=sites, aff_actuelle=aff_actuelle)
 
 # ── Pointage ──────────────────────────────────────────────────────────────────
 @app.route("/pointage")
