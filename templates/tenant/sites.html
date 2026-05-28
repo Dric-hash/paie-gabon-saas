@@ -1,0 +1,116 @@
+{% extends "tenant/base.html" %}
+{% block title %}Sites — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+  <div>
+    <h1 class="text-2xl font-black text-gray-900">Sites & Chantiers</h1>
+    <p class="text-gray-500 text-sm mt-1">Gérez vos sites et affectez vos travailleurs</p>
+  </div>
+  <a href="/sites/nouveau"
+     class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold">
+    + Nouveau site
+  </a>
+</div>
+
+{% if not sites %}
+<div class="card p-12 text-center">
+  <div style="font-size:3rem;margin-bottom:1rem">🏗️</div>
+  <h2 class="text-lg font-black text-gray-700 mb-2">Aucun site créé</h2>
+  <p class="text-gray-400 text-sm mb-4">Créez votre premier site pour commencer à affecter des travailleurs.</p>
+  <a href="/sites/nouveau" class="bg-slate-900 text-white px-6 py-2.5 rounded-xl font-bold text-sm">
+    + Créer un site
+  </a>
+</div>
+{% else %}
+
+<!-- KPIs -->
+<div class="grid grid-cols-3 gap-4 mb-5">
+  <div class="card p-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Sites</div>
+    <div class="text-3xl font-black text-gray-900">{{ sites|length }}</div>
+    <div class="text-xs text-gray-400 mt-1">{{ sites|selectattr('actif')|list|length }} actifs</div>
+  </div>
+  <div class="card p-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Travailleurs affectés</div>
+    <div class="text-3xl font-black text-gray-900">
+      {{ sites|sum(attribute='nb_actifs') }}
+    </div>
+    <div class="text-xs text-gray-400 mt-1">sur tous les sites actifs</div>
+  </div>
+  <div class="card p-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Sans site</div>
+    <div class="text-3xl font-black text-amber-500" id="nb-sans-site">—</div>
+    <div class="text-xs text-gray-400 mt-1">travailleurs non affectés</div>
+  </div>
+</div>
+
+<!-- Grille des sites -->
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem">
+  {% for s in sites %}
+  <div class="card overflow-hidden {{ '' if s.actif else 'opacity-60' }}">
+    <!-- En-tête coloré -->
+    <div style="background:{% if s.actif %}#1a2332{% else %}#9ca3af{% endif %};padding:1rem 1.25rem;color:white">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+        <span style="font-size:.7rem;font-weight:700;opacity:.6;text-transform:uppercase;letter-spacing:.05em">
+          {{ s.code or '—' }}
+        </span>
+        <span style="font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;
+          background:{% if s.actif %}rgba(16,185,129,.3){% else %}rgba(255,255,255,.2){% endif %};
+          color:{% if s.actif %}#6ee7b7{% else %}rgba(255,255,255,.7){% endif %}">
+          {{ 'ACTIF' if s.actif else 'INACTIF' }}
+        </span>
+      </div>
+      <div style="font-size:1.1rem;font-weight:900">{{ s.nom }}</div>
+      {% if s.ville %}<div style="font-size:.75rem;opacity:.7;margin-top:.25rem">📍 {{ s.ville }}</div>{% endif %}
+    </div>
+
+    <!-- Infos -->
+    <div style="padding:1rem 1.25rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.875rem">
+        <div style="background:#f9fafb;border-radius:.625rem;padding:.5rem .75rem;text-align:center">
+          <div style="font-size:1.5rem;font-weight:900;color:#1a2332">{{ s.nb_actifs }}</div>
+          <div style="font-size:.65rem;color:#9ca3af;font-weight:600;text-transform:uppercase">Affectés</div>
+        </div>
+        <div style="background:#f9fafb;border-radius:.625rem;padding:.5rem .75rem;text-align:center">
+          <div style="font-size:.8rem;font-weight:700;color:#374151">{{ s.responsable or '—' }}</div>
+          <div style="font-size:.65rem;color:#9ca3af;font-weight:600;text-transform:uppercase">Responsable</div>
+        </div>
+      </div>
+      {% if s.adresse %}
+      <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem">📍 {{ s.adresse }}</div>
+      {% endif %}
+      {% if s.description %}
+      <div style="font-size:.75rem;color:#9ca3af;margin-bottom:.75rem;font-style:italic">{{ s.description[:80] }}{% if s.description|length > 80 %}…{% endif %}</div>
+      {% endif %}
+
+      <div style="display:flex;gap:.5rem">
+        <a href="/sites/{{ s.id }}"
+           style="flex:1;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-align:center;text-decoration:none">
+          👥 Gérer les affectations
+        </a>
+        <a href="/sites/{{ s.id }}/modifier"
+           style="background:#f3f4f6;color:#374151;padding:.625rem .75rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-decoration:none">
+          ✏️
+        </a>
+        <form method="POST" action="/sites/{{ s.id }}/toggle" style="display:inline">
+          <button title="{{ 'Désactiver' if s.actif else 'Activer' }}"
+            style="background:#f3f4f6;color:#374151;padding:.625rem .75rem;border-radius:.75rem;font-weight:700;font-size:.75rem;border:none;cursor:pointer">
+            {{ '🔴' if s.actif else '✅' }}
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script>
+// Compter les travailleurs sans site
+fetch('/api/travailleur/stats-sans-site')
+  .then(r => r.json())
+  .then(d => { document.getElementById('nb-sans-site').textContent = d.total || 0; })
+  .catch(() => { document.getElementById('nb-sans-site').textContent = '—'; });
+</script>
+{% endblock %}

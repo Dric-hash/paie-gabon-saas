@@ -1,0 +1,103 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ 'Modifier' if site else 'Nouveau' }} site{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/sites" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Sites</a>
+  <span style="color:#e5e7eb">›</span>
+  <span style="font-size:.875rem;color:#6b7280">{{ 'Modifier le site' if site else 'Nouveau site' }}</span>
+</div>
+
+<div style="max-width:580px;margin:0 auto">
+  <div class="card p-6">
+    <h1 class="text-xl font-black text-gray-900 mb-5">
+      {{ '✏️ Modifier « ' + site.nom + ' »' if site else '🏗️ Créer un nouveau site' }}
+    </h1>
+
+    <form method="POST" class="space-y-4">
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div style="grid-column:span 1">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+            Nom du site *
+          </label>
+          <input type="text" name="nom" required
+            value="{{ site.nom if site else '' }}"
+            placeholder="Ex: Chantier Port-Gentil, Siège Libreville..."
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+            Code
+          </label>
+          <input type="text" name="code"
+            value="{{ site.code if site else '' }}"
+            placeholder="Ex: PG01, LBV-SIEGE"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;text-transform:uppercase">
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+            Ville
+          </label>
+          <input type="text" name="ville"
+            value="{{ site.ville if site else '' }}"
+            placeholder="Libreville, Port-Gentil..."
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+            Téléphone site
+          </label>
+          <input type="text" name="telephone"
+            value="{{ site.telephone if site else '' }}"
+            placeholder="07 XX XX XX XX"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box">
+        </div>
+      </div>
+
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+          Adresse
+        </label>
+        <input type="text" name="adresse"
+          value="{{ site.adresse if site else '' }}"
+          placeholder="Adresse complète du site"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box">
+      </div>
+
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+          Responsable / Chef de site
+        </label>
+        <input type="text" name="responsable"
+          value="{{ site.responsable if site else '' }}"
+          placeholder="Nom du responsable"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box">
+      </div>
+
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">
+          Description / Notes
+        </label>
+        <textarea name="description" rows="3"
+          placeholder="Type de travaux, durée prévue, informations utiles..."
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;resize:none;font-family:inherit">{{ site.description if site else '' }}</textarea>
+      </div>
+
+      <div style="display:flex;gap:.75rem;padding-top:.5rem">
+        <a href="/sites"
+          style="flex:1;text-align:center;border:1px solid #e5e7eb;color:#6b7280;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
+          Annuler
+        </a>
+        <button type="submit"
+          style="flex:2;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          {{ '💾 Enregistrer les modifications' if site else '✅ Créer le site' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
