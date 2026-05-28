@@ -712,7 +712,9 @@ def salarie_nouveau():
         if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
         db.session.commit(); flash(f"Salarié {s.nom_complet} créé.","success")
         return redirect(url_for("salarie_detail",id=s.id))
-    return render_template("tenant/salarie_form.html", salarie=None, categories=cats, action="nouveau", tenant=t)
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/salarie_form.html", salarie=None, categories=cats,
+        action="nouveau", tenant=t, sites=sites, aff_actuelle=None)
 
 @app.route("/salaries/<int:id>")
 @login_required
