@@ -246,6 +246,62 @@
 </div>
 
 
+
+
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <!-- Modèle d'impression des bulletins                          -->
+  <!-- ══════════════════════════════════════════════════════════ -->
+  <div style="margin-top:1.5rem">
+    <div class="card p-6" style="border-left:4px solid #2563eb">
+      <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">🖨️ Modèle d'impression des bulletins</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-bottom:1.25rem">Choisissez la mise en page des bulletins. S'applique immédiatement à tous les bulletins.</p>
+      <form method="POST" action="/parametres/modele-bulletin">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+          {% for nom, titre, desc, gradient in [
+            ('classique',   'Classique',   'Mise en page traditionnelle, compatible tous supports', 'background:#1a2332'),
+            ('moderne',     'Moderne',     'Design contemporain avec bandes colorées', 'background:linear-gradient(135deg,#1a2332,#2563eb)'),
+            ('minimaliste', 'Minimaliste', 'Épuré et sobre, idéal pour impression économique', 'background:white;border:1px solid #e5e7eb'),
+          ] %}
+          <label style="cursor:pointer">
+            <input type="radio" name="modele_bulletin" value="{{ nom }}"
+              {{ 'checked' if (tenant.modele_bulletin or 'classique') == nom }}
+              style="display:none" class="radio-modele-{{ nom }}"
+              onchange="selectModele('{{ nom }}')">
+            <div id="card-modele-{{ nom }}"
+              style="border:2px solid {{ '#2563eb' if (tenant.modele_bulletin or 'classique') == nom else '#e5e7eb' }};border-radius:.875rem;overflow:hidden;transition:border .2s">
+              <div style="{{ gradient }};height:36px;display:flex;align-items:center;justify-content:center">
+                <span style="font-size:8px;font-weight:900;color:{{ 'white' if nom != 'minimaliste' else '#111' }};letter-spacing:2px">BULLETIN</span>
+              </div>
+              <div style="padding:.75rem;text-align:center">
+                <div style="font-size:.8rem;font-weight:900;color:#111827">{{ titre }}</div>
+                <div style="font-size:.7rem;color:#6b7280;margin-top:.25rem">{{ desc }}</div>
+              </div>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+        <div style="display:flex;align-items:center;gap:1rem">
+          <button type="submit" style="background:#1a2332;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+            💾 Appliquer
+          </button>
+          <span style="font-size:.8rem;color:#6b7280">
+            Actuel : <strong>{{ (tenant.modele_bulletin or 'classique')|capitalize }}</strong>
+          </span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+  function selectModele(nom) {
+    ['classique','moderne','minimaliste'].forEach(function(m) {
+      var c = document.getElementById('card-modele-' + m);
+      if (c) c.style.border = m === nom ? '2px solid #2563eb' : '2px solid #e5e7eb';
+    });
+  }
+  </script>
+
+
 <!-- ═══════════════════════════════════════════════════ -->
 <!-- TAB 3 : UTILISATEURS -->
 <!-- ═══════════════════════════════════════════════════ -->
