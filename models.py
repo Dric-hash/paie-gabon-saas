@@ -63,9 +63,37 @@ class Tenant(db.Model):
         return Salarie.query.filter_by(tenant_id=self.id, statut="ACTIF").count()
 
     @property
+    def nb_journaliers_actifs(self):
+        return Journalier.query.filter_by(tenant_id=self.id, statut="ACTIF").count()
+
+    @property
+    def nb_total_employes(self):
+        return self.nb_salaries_actifs + self.nb_journaliers_actifs
+
+    @property
     def est_dans_limite(self):
         if not self.plan or not self.plan.max_salaries: return True
         return self.nb_salaries_actifs < self.plan.max_salaries
+
+    @property
+    def peut_ajouter_employe(self):
+        if not self.plan or not self.plan.max_salaries: return True
+        return self.nb_total_employes < self.plan.max_salaries
+
+    @property
+    def quota_employes_info(self):
+        if not self.plan or not self.plan.max_salaries:
+            return {"max": None, "actuel": self.nb_total_employes, "plein": False}
+        actuel = self.nb_total_employes
+        return {
+            "max":         self.plan.max_salaries,
+            "actuel":      actuel,
+            "salaries":    self.nb_salaries_actifs,
+            "journaliers": self.nb_journaliers_actifs,
+            "restant":     max(0, self.plan.max_salaries - actuel),
+            "plein":       actuel >= self.plan.max_salaries,
+            "pct":         min(100, int(actuel / self.plan.max_salaries * 100)),
+        }
 
     def to_dict(self):
         return {c.name: str(getattr(self,c.name)) if isinstance(getattr(self,c.name),(date,datetime))
