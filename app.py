@@ -114,7 +114,7 @@ def tenant_required(f):
     @wraps(f)
     def d(*a,**k):
         if not current_user.is_authenticated: return redirect(url_for("login"))
-        if not current_user.is_super_admin and (not current_user.tenant_id or not current_user.tenant or current_user.tenant.statut not in ("ACTIF","ESSAI")):
+        if not current_user.is_super_admin and (not current_user.tenant_id or not current_user.tenant or current_user.tenant.statut not in ("ACTIF","ESSAI","PAIEMENT_EN_ATTENTE")):
             flash("Compte suspendu ou non associé à une entreprise.","error")
             return redirect(url_for("login"))
         return f(*a,**k)
