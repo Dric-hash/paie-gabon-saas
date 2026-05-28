@@ -1973,7 +1973,13 @@ with app.app_context():
         for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
             try:
                 db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
-            
+            except Exception:
+                db.session.rollback()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        print(f"Migration init error: {e}")
+
     # ── Sites & Affectations ──────────────────────────────────────────────
     for _sql in [
         """CREATE TABLE IF NOT EXISTS sites (
@@ -2001,90 +2007,84 @@ with app.app_context():
         except Exception:
             db.session.rollback()
     db.session.commit()
-    db.session.commit()
-            except Exception: db.session.rollback()
-        for sql in [
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
-            "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
-            "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
-            "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
-            "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
-            "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
-            "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
-            "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
-            "ALTER TABLE salaries ALTER COLUMN prenom TYPE VARCHAR(100)",
-            "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
-            "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
-            "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
-            "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
-            "ALTER TABLE journaliers ALTER COLUMN taux_horaire TYPE NUMERIC(12,2)",
-            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
-            "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
+    for sql in [
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
+        "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
+        "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
+        "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
+        "ALTER TABLE salaries ALTER COLUMN matricule TYPE VARCHAR(50)",
+        "ALTER TABLE salaries ALTER COLUMN nom TYPE VARCHAR(100)",
+        "ALTER TABLE salaries ALTER COLUMN prenom TYPE VARCHAR(100)",
+        "ALTER TABLE salaries ALTER COLUMN emploi TYPE VARCHAR(150)",
+        "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
+        "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
+        "ALTER TABLE journaliers ALTER COLUMN taux_horaire TYPE NUMERIC(12,2)",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
             # ✅ Nouvelles colonnes base et taux pour chaque rubrique
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_salaire_base NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_salaire_base VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_10 NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_10 VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_30 NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_30 VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_40 NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_40 VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_70 NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_70 VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_absences NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_absences VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_sursalaire NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_sursalaire VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_caisse NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_caisse VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_carburant NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_carburant VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_anciennete NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_anciennete VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_logement NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_logement VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_domesticite NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_domesticite VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_eau_electricite NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_eau_electricite VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_nourriture NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_nourriture VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_transport NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_transport VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_responsabilite NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_responsabilite VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_rendement NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_rendement VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_assiduité NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_assiduité VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_qualite NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_qualite VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_performance NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_performance VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_allocations_conge NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_allocations_conge VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_conge VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_services_rendus NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_services_rendus VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_preavis VARCHAR(20) DEFAULT ''",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_licenciement NUMERIC(15,2) DEFAULT 0",
-            "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_licenciement VARCHAR(20) DEFAULT ''",
-        ]:
-            try: db.session.execute(db.text(sql)); db.session.commit()
-            except Exception: db.session.rollback()
-        init_db()
-        print("✅ Tables créées et base initialisée.")
-    except Exception as e:
-        print(f"Erreur init: {e}")
-        try: db.session.rollback(); db.create_all()
-        except Exception as e2: print(f"Erreur create_all: {e2}")
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_salaire_base NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_salaire_base VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_10 NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_10 VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_30 NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_30 VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_40 NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_40 VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_70 NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_70 VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_absences NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_absences VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_sursalaire NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_sursalaire VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_caisse NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_caisse VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_carburant NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_carburant VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_anciennete NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_anciennete VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_logement NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_logement VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_domesticite NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_domesticite VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_eau_electricite NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_eau_electricite VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_nourriture NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_nourriture VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_transport NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_transport VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_responsabilite NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_responsabilite VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_rendement NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_rendement VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_assiduité NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_assiduité VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_qualite NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_qualite VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_prime_performance NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_prime_performance VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_allocations_conge NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_allocations_conge VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_conge VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_services_rendus NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_services_rendus VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_compensatrice_preavis VARCHAR(20) DEFAULT ''",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_indem_licenciement NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_indem_licenciement VARCHAR(20) DEFAULT ''",
+    ]:
+        try: db.session.execute(db.text(sql)); db.session.commit()
+        except Exception: db.session.rollback()
+    init_db()
+    print("✅ Migrations terminées.")
 
 if __name__=="__main__":
     with app.app_context(): init_db()
