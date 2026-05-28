@@ -8,12 +8,68 @@
     <p class="text-gray-500 text-sm mt-1">Gestion des accès à votre espace entreprise</p>
   </div>
   {% if current_user.is_tenant_admin %}
-  <a href="/utilisateurs/nouveau" class="btn-primary">+ Nouvel utilisateur</a>
+    {% set nb_util = utilisateurs|length %}
+    {% set max_util = tenant.plan.max_utilisateurs if tenant.plan and tenant.plan.max_utilisateurs else None %}
+    {% if max_util and nb_util >= max_util %}
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:.8rem;font-weight:700;color:#dc2626;background:#fee2e2;padding:.5rem 1rem;border-radius:.875rem">
+        ⛔ Limite atteinte ({{ nb_util }}/{{ max_util }})
+      </span>
+      <a href="/parametres" style="font-size:.8rem;font-weight:700;color:#d97706;background:#fef3c7;padding:.5rem 1rem;border-radius:.875rem;text-decoration:none">
+        ↑ Upgrader le plan
+      </a>
+    </div>
+    {% else %}
+    <a href="/utilisateurs/nouveau" class="btn-primary">
+      + Nouvel utilisateur{% if max_util %} ({{ nb_util }}/{{ max_util }}){% endif %}
+    </a>
+    {% endif %}
   {% endif %}
 </div>
 
+<!-- ── Mon compte ── -->
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:1rem 1.5rem;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <div style="font-size:.7rem;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">Mon compte</div>
+    <div style="font-weight:900;color:#1e3a8a;font-size:.95rem">{{ current_user.nom_complet }}</div>
+    <div style="font-size:.8rem;color:#3b82f6;margin-top:.125rem">{{ current_user.email }}</div>
+    <div style="display:flex;align-items:center;gap:.75rem;margin-top:.375rem">
+      {% if current_user.email_verifie %}
+      <span style="font-size:.7rem;color:#059669;font-weight:700">✅ Email confirmé</span>
+      {% else %}
+      <span style="font-size:.7rem;color:#dc2626;font-weight:700">⚠️ Email non confirmé</span>
+      <a href="/renvoyer-confirmation" style="font-size:.7rem;color:#d97706;text-decoration:underline">Renvoyer le lien</a>
+      {% endif %}
+      {% if current_user.derniere_activite %}
+      <span style="font-size:.7rem;color:#6b7280">Dernière activité : {{ current_user.derniere_activite|datetime_fr }}</span>
+      {% endif %}
+    </div>
+  </div>
+  <a href="/profil/changer-email"
+     style="background:#1a2332;color:white;padding:.625rem 1.25rem;border-radius:.875rem;font-weight:700;font-size:.8rem;text-decoration:none;white-space:nowrap">
+    📧 Changer mon email
+  </a>
+</div>
+
 <div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem">
+
+  <!-- Table utilisateurs -->
   <div class="card overflow-hidden">
+    <!-- En-tête avec indicateur limite -->
+    <div style="padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:.75rem;font-weight:700;color:#9ca3af;text-transform:uppercase;tracking-widest">
+        Membres ({{ utilisateurs|length }})
+      </span>
+      {% if tenant.plan and tenant.plan.max_utilisateurs %}
+      {% set pct = (utilisateurs|length / tenant.plan.max_utilisateurs * 100)|int %}
+      <span style="font-size:.75rem;font-weight:700;
+        color:{% if pct >= 100 %}#dc2626{% elif pct >= 80 %}#d97706{% else %}#6b7280{% endif %}">
+        {{ utilisateurs|length }}/{{ tenant.plan.max_utilisateurs }} utilisateurs
+        {% if pct >= 100 %} — ⛔ Limite atteinte{% elif pct >= 80 %} — ⚠️ Presque plein{% endif %}
+      </span>
+      {% endif %}
+    </div>
+
     <table>
       <thead>
         <tr>
@@ -21,66 +77,124 @@
           <th style="text-align:center">Rôle</th>
           <th style="text-align:center">Statut</th>
           <th>Dernière connexion</th>
+          {% if current_user.is_tenant_admin %}<th style="text-align:center">Actions</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for u in utilisateurs %}
-        <tr>
+        <tr {{ 'style="background:#fafafa"' if u.id == current_user.id }}>
           <td>
             <div style="display:flex;align-items:center;gap:.75rem">
-              <div style="width:2rem;height:2rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:900">
-                {{ u.prenom[0] }}{{ u.nom[0] }}
+              <div style="width:2.25rem;height:2.25rem;border-radius:50%;
+                background:{% if u.id == current_user.id %}#2563eb{% else %}#1a2332{% endif %};
+                color:white;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:900;flex-shrink:0">
+                {{ u.prenom[0] if u.prenom else '?' }}{{ u.nom[0] if u.nom else '?' }}
               </div>
               <div>
-                <div style="font-weight:700;font-size:.875rem">{{ u.nom_complet }}
-                  {% if u.id == current_user.id %}<span style="font-size:.7rem;color:#9ca3af">(vous)</span>{% endif %}
+                <div style="font-weight:700;font-size:.875rem">
+                  {{ u.nom_complet }}
+                  {% if u.id == current_user.id %}
+                  <span style="font-size:.65rem;background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:9999px;margin-left:.25rem">vous</span>
+                  {% endif %}
                 </div>
                 <div style="font-size:.75rem;color:#9ca3af">{{ u.email }}</div>
+                {% if not u.email_verifie %}
+                <div style="font-size:.65rem;color:#dc2626;font-weight:700">⚠️ Email non confirmé</div>
+                {% endif %}
               </div>
             </div>
           </td>
           <td style="text-align:center">
-            <span style="font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
+            <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;
               {% if u.role=='TENANT_ADMIN' %}background:#dbeafe;color:#1e40af
               {% elif u.role=='GESTIONNAIRE' %}background:#fef3c7;color:#92400e
               {% else %}background:#f3f4f6;color:#6b7280{% endif %}">
-              {{ u.role }}
+              {{ u.role.replace('TENANT_ADMIN','Admin').replace('GESTIONNAIRE','Gestionnaire').replace('LECTURE','Lecture') }}
             </span>
           </td>
           <td style="text-align:center">
-            <span style="font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
+            <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;
               {% if u.actif %}background:#d1fae5;color:#065f46{% else %}background:#fee2e2;color:#991b1b{% endif %}">
               {{ 'ACTIF' if u.actif else 'INACTIF' }}
             </span>
           </td>
-          <td style="font-size:.8rem;color:#6b7280">
-            {{ u.derniere_connexion|date_fr if u.derniere_connexion else 'Jamais' }}
+          <td style="font-size:.8rem;color:#374151">
+            {% if u.derniere_connexion %}
+            <div style="font-weight:600">{{ u.derniere_connexion|datetime_fr }}</div>
+            {% else %}
+            <span style="color:#9ca3af">Jamais connecté</span>
+            {% endif %}
           </td>
+          {% if current_user.is_tenant_admin %}
+          <td style="text-align:center">
+            {% if u.id != current_user.id %}
+            <div style="display:flex;gap:.375rem;justify-content:center">
+              <form method="POST" action="/utilisateurs/{{ u.id }}/toggle" style="display:inline">
+                <button title="{{ 'Désactiver' if u.actif else 'Activer' }}"
+                  style="font-size:.7rem;padding:.25rem .5rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700;
+                  {{ 'background:#fee2e2;color:#dc2626' if u.actif else 'background:#d1fae5;color:#059669' }}">
+                  {{ '🔴' if u.actif else '✅' }}
+                </button>
+              </form>
+            </div>
+            {% else %}
+            <span style="font-size:.7rem;color:#9ca3af">—</span>
+            {% endif %}
+          </td>
+          {% endif %}
         </tr>
         {% else %}
-        <tr><td colspan="4" style="text-align:center;padding:2rem;color:#9ca3af">Aucun utilisateur</td></tr>
+        <tr><td colspan="5" style="text-align:center;padding:2rem;color:#9ca3af">Aucun utilisateur</td></tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
 
-  <div class="card p-5">
-    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Rôles et permissions</h2>
-    <div style="display:flex;flex-direction:column;gap:.75rem;font-size:.875rem">
-      <div style="background:#dbeafe;border-radius:.75rem;padding:.75rem">
-        <div style="font-weight:700;color:#1e40af">Administrateur</div>
-        <div style="color:#1e3a8a;font-size:.8rem">Accès total — paramètres, utilisateurs, suppression</div>
-      </div>
-      <div style="background:#fef3c7;border-radius:.75rem;padding:.75rem">
-        <div style="font-weight:700;color:#92400e">Gestionnaire</div>
-        <div style="color:#78350f;font-size:.8rem">Saisie bulletins, gestion salariés, pointage</div>
-      </div>
-      <div style="background:#f3f4f6;border-radius:.75rem;padding:.75rem">
-        <div style="font-weight:700;color:#374151">Lecture</div>
-        <div style="color:#6b7280;font-size:.8rem">Consultation uniquement, sans modification</div>
+  <!-- Sidebar droite -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+    <!-- Rôles -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Rôles et permissions</h2>
+      <div style="display:flex;flex-direction:column;gap:.75rem;font-size:.875rem">
+        <div style="background:#dbeafe;border-radius:.75rem;padding:.75rem">
+          <div style="font-weight:700;color:#1e40af">Administrateur</div>
+          <div style="color:#1e3a8a;font-size:.8rem">Accès total — paramètres, utilisateurs, suppression</div>
+        </div>
+        <div style="background:#fef3c7;border-radius:.75rem;padding:.75rem">
+          <div style="font-weight:700;color:#92400e">Gestionnaire</div>
+          <div style="color:#78350f;font-size:.8rem">Saisie bulletins, gestion salariés, pointage</div>
+        </div>
+        <div style="background:#f3f4f6;border-radius:.75rem;padding:.75rem">
+          <div style="font-weight:700;color:#374151">Lecture</div>
+          <div style="color:#6b7280;font-size:.8rem">Consultation uniquement, sans modification</div>
+        </div>
       </div>
     </div>
-  </div>
-</div>
 
+    <!-- Quota plan -->
+    {% if tenant.plan and tenant.plan.max_utilisateurs %}
+    {% set pct = (utilisateurs|length / tenant.plan.max_utilisateurs * 100)|int %}
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Quota utilisateurs</h2>
+      <div style="display:flex;justify-content:space-between;font-size:.875rem;margin-bottom:.5rem">
+        <span style="color:#6b7280">Utilisés</span>
+        <strong style="color:{% if pct >= 100 %}#dc2626{% elif pct >= 80 %}#d97706{% else %}#111827{% endif %}">
+          {{ utilisateurs|length }} / {{ tenant.plan.max_utilisateurs }}
+        </strong>
+      </div>
+      <div style="background:#e5e7eb;border-radius:9999px;height:8px;overflow:hidden">
+        <div style="height:100%;width:{{ [pct,100]|min }}%;border-radius:9999px;
+          background:{% if pct >= 100 %}#dc2626{% elif pct >= 80 %}#f59e0b{% else %}#059669{% endif %};
+          transition:width .3s"></div>
+      </div>
+      {% if pct >= 100 %}
+      <p style="font-size:.75rem;color:#dc2626;font-weight:700;margin-top:.5rem">
+        Limite atteinte — <a href="/parametres#abonnement" style="color:#dc2626;text-decoration:underline">Passer au plan supérieur</a>
+      </p>
+      {% endif %}
+    </div>
+    {% endif %}
+  </div>
+
+</div>
 {% endblock %}
