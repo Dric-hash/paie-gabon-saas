@@ -55,8 +55,8 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Taux horaire (FCFA) *</label>
-            <input type="number" name="taux_horaire" required min="0" step="1"
-              value="{{ journalier.taux_horaire|int if journalier else '' }}"
+            <input type="number" name="taux_horaire" required min="0" step="any"
+              value="{{ journalier.taux_horaire if journalier else '' }}"
               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
           </div>
         </div>
