@@ -127,6 +127,73 @@ class CategorieEmploi(db.Model):
                 else getattr(self,c.name) for c in self.__table__.columns}
 
 
+class Site(db.Model):
+    """Site / chantier / agence d'une entreprise (tenant)."""
+    __tablename__ = "sites"
+
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    nom         = db.Column(db.String(200), nullable=False)
+    code        = db.Column(db.String(30))
+    adresse     = db.Column(db.String(300))
+    ville       = db.Column(db.String(100))
+    responsable = db.Column(db.String(200))
+    telephone   = db.Column(db.String(30))
+    description = db.Column(db.Text)
+    actif       = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+
+    tenant       = db.relationship("Tenant", backref="sites")
+    affectations = db.relationship("AffectationSite", backref="site", lazy=True,
+                                   cascade="all, delete-orphan")
+
+    @property
+    def nb_actifs(self):
+        return AffectationSite.query.filter_by(site_id=self.id, actif=True).count()
+
+    def __repr__(self): return f"<Site {self.nom}>"
+
+
+class AffectationSite(db.Model):
+    """Affectation d'un salarié ou journalier à un site, avec historique complet."""
+    __tablename__ = "affectations_sites"
+
+    id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    site_id         = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=False)
+
+    # Un seul des deux est renseigné
+    salarie_id      = db.Column(db.Integer, db.ForeignKey("salaries.id"),  nullable=True)
+    journalier_id   = db.Column(db.Integer, db.ForeignKey("journaliers.id"), nullable=True)
+
+    date_debut      = db.Column(db.Date, nullable=False, default=date.today)
+    date_fin        = db.Column(db.Date, nullable=True)   # None = affectation en cours
+    actif           = db.Column(db.Boolean, default=True) # False = transféré ou sorti
+    motif           = db.Column(db.String(300))           # Motif de la permutation
+    date_creation   = db.Column(db.DateTime, default=datetime.utcnow)
+    cree_par        = db.Column(db.String(200))           # Email de l'utilisateur qui a fait l'action
+
+    # Relations
+    salarie    = db.relationship("Salarie",    backref="affectations", foreign_keys=[salarie_id])
+    journalier = db.relationship("Journalier", backref="affectations", foreign_keys=[journalier_id])
+
+    @property
+    def travailleur(self):
+        return self.salarie or self.journalier
+
+    @property
+    def type_travailleur(self):
+        return "MENSUEL" if self.salarie_id else "JOURNALIER"
+
+    @property
+    def nom_travailleur(self):
+        t = self.travailleur
+        return t.nom_complet if t else "—"
+
+    def __repr__(self):
+        return f"<Affectation site={self.site_id} sal={self.salarie_id} jour={self.journalier_id}>"
+
+
 class Salarie(db.Model):
     __tablename__ = "salaries"
     id                     = db.Column(db.Integer, primary_key=True)
