@@ -1,7 +1,7 @@
 """
 app.py — SaaS Paie Gabon — Multi-tenant
 """
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, session
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, date, timedelta
 from functools import wraps
