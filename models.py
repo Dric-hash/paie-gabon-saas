@@ -48,6 +48,8 @@ class Tenant(db.Model):
     date_expiration  = db.Column(db.DateTime)
     token_api        = db.Column(db.String(64), unique=True)
     notes            = db.Column(db.Text)
+    modele_bulletin  = db.Column(db.String(30), default="classique")
+    # Valeurs : "classique" | "moderne" | "minimaliste"
     # ✅ LOGO — colonne Text pour stocker base64 sans limite
     logo_url         = db.Column(db.Text)
 
