@@ -762,9 +762,38 @@ def salarie_modifier(id):
             ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",datetime.utcnow())]:
             setattr(s,f,v)
-        db.session.commit(); flash("Fiche mise à jour.","success")
-        return redirect(url_for("salarie_detail",id=s.id))
-    return render_template("tenant/salarie_form.html", salarie=s, categories=cats, action="modifier", tenant=t)
+        db.session.commit()
+        # ── Affectation site ──────────────────────────────────────────────
+        site_id = request.form.get("site_id", type=int)
+        if site_id:
+            aff_prev = AffectationSite.query.filter_by(
+                salarie_id=s.id, tenant_id=t.id, actif=True).first()
+            if aff_prev and aff_prev.site_id != site_id:
+                aff_prev.actif    = False
+                aff_prev.date_fin = date.today()
+                aff_prev.motif    = "Réaffecté via formulaire salarié"
+            if not aff_prev or aff_prev.site_id != site_id:
+                db.session.add(AffectationSite(
+                    tenant_id=t.id, site_id=site_id, salarie_id=s.id,
+                    date_debut=date.today(), actif=True,
+                    cree_par=current_user.email))
+            db.session.commit()
+        elif request.form.get("retirer_site"):
+            aff = AffectationSite.query.filter_by(
+                salarie_id=s.id, tenant_id=t.id, actif=True).first()
+            if aff:
+                aff.actif    = False
+                aff.date_fin = date.today()
+                aff.motif    = "Retiré via formulaire salarié"
+                db.session.commit()
+        flash("Fiche mise à jour.", "success")
+        return redirect(url_for("salarie_detail", id=s.id))
+    # Récupérer site actuel + liste des sites
+    aff_actuelle = AffectationSite.query.filter_by(
+        salarie_id=id, tenant_id=t.id, actif=True).first()
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/salarie_form.html", salarie=s, categories=cats,
+        action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle)
 
 
 @app.route("/salaries/<int:id>/supprimer", methods=["POST"])
