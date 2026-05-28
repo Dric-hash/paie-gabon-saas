@@ -315,8 +315,29 @@
 
     <!-- Ajouter utilisateur -->
     {% if current_user.is_tenant_admin %}
+    {% set nb_u = users|length %}
+    {% set max_u = tenant.plan.max_utilisateurs if tenant.plan and tenant.plan.max_utilisateurs else None %}
     <div class="card p-6">
+      {% if max_u and nb_u >= max_u %}
+      <!-- ── Limite atteinte : bloquer visuellement ── -->
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ajouter un utilisateur</h2>
+      <div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:.875rem;padding:1.25rem;text-align:center">
+        <div style="font-size:1.5rem;margin-bottom:.5rem">⛔</div>
+        <div style="font-weight:900;color:#dc2626;font-size:.9rem;margin-bottom:.375rem">
+          Limite atteinte — {{ nb_u }}/{{ max_u }} utilisateurs
+        </div>
+        <div style="font-size:.8rem;color:#6b7280;margin-bottom:.875rem">
+          Votre plan <strong>{{ tenant.plan.nom }}</strong> autorise {{ max_u }} utilisateur(s) maximum.
+        </div>
+        <a href="#abonnement" onclick="showTab('abonnement')"
+           style="background:#dc2626;color:white;padding:.625rem 1.25rem;border-radius:.875rem;font-weight:700;font-size:.8rem;text-decoration:none">
+          ↑ Changer de plan
+        </a>
+      </div>
+      {% else %}
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+        Ajouter un utilisateur{% if max_u %} ({{ nb_u }}/{{ max_u }}){% endif %}
+      </h2>
       <form method="POST" action="/utilisateurs/nouveau" class="space-y-3">
         {% macro fu(label, name, type='text', required=True, placeholder='') %}
         <div>
@@ -343,6 +364,7 @@
           + Créer l'utilisateur
         </button>
       </form>
+      {% endif %}
 
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.75rem;margin-top:1rem;font-size:.75rem;color:#166534">
         <strong>Rôles :</strong><br/>
