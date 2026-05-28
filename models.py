@@ -501,7 +501,9 @@ class Pointage(db.Model):
     absent          = db.Column(db.Boolean, default=False)
     motif_absence   = db.Column(db.String(100))
     observation     = db.Column(db.String(200))
+    site_id         = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=True)
     salarie = db.relationship("Salarie", backref="pointages", foreign_keys=[salarie_id])
+    site    = db.relationship("Site", backref="pointages", foreign_keys=[site_id])
     __table_args__ = (
         db.UniqueConstraint("tenant_id","date_pointage","salarie_id"),
         db.UniqueConstraint("tenant_id","date_pointage","journalier_id"),
