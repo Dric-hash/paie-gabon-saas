@@ -167,13 +167,9 @@
     </div>
   </div>
 
-  <!-- Boutons -->
-  <div class="col-span-2 flex gap-3 justify-end">
-    <a href="{{ url_for("salaries") }}" class="btn-secondary">Annuler</a>
-  
-  <!-- ── Affectation site ──────────────────────────────────────────────────── -->
+  <!-- ── Affectation site — col-span-2 pour prendre toute la largeur ── -->
   {% if sites %}
-  <div class="card p-6">
+  <div class="card p-6 col-span-2">
     <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">🏗️ Affectation au site</h2>
 
     {% if aff_actuelle %}
@@ -193,7 +189,7 @@
     </div>
     {% endif %}
 
-    <div>
+    <div style="max-width:480px">
       <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">
         {{ 'Changer de site' if aff_actuelle else 'Affecter à un site' }}
       </label>
@@ -208,16 +204,20 @@
         {% endfor %}
       </select>
       <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
-        Changer le site clôture automatiquement l'affectation précédente et crée une nouvelle.
+        Changer de site clôture l'affectation précédente et en crée une nouvelle.
       </p>
     </div>
   </div>
   {% endif %}
 
-  <button type="submit" class="btn-primary text-base px-8">
+  <!-- Boutons -->
+  <div class="col-span-2 flex gap-3 justify-end">
+    <a href="{{ url_for("salaries") }}" class="btn-secondary">Annuler</a>
+    <button type="submit" class="btn-primary text-base px-8">
       💾 {{ 'Enregistrer les modifications' if action == 'modifier' else 'Créer le salarié' }}
     </button>
   </div>
+
 </form>
 
 {% endblock %}
