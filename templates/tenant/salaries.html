@@ -46,9 +46,19 @@
          class="flex items-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-xl text-sm font-bold border border-gray-200">
         🖨️ Imprimer la liste
       </a>
+      {% set q_s = tenant.quota_employes_info %}
+      {% if q_s.max and q_s.plein %}
+      <div style="display:flex;align-items:center;gap:.625rem">
+        <span style="font-size:.8rem;font-weight:700;color:#dc2626;background:#fee2e2;padding:.5rem 1rem;border-radius:.875rem">
+          ⛔ Limite atteinte ({{ q_s.actuel }}/{{ q_s.max }})
+        </span>
+        <a href="/parametres" style="font-size:.8rem;font-weight:700;color:#d97706;background:#fef3c7;padding:.5rem 1rem;border-radius:.875rem;text-decoration:none">↑ Upgrader</a>
+      </div>
+      {% else %}
       <a href="/salaries/nouveau" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        + Nouveau salarié
+        + Nouveau salarié{% if q_s.max %} ({{ q_s.actuel }}/{{ q_s.max }}){% endif %}
       </a>
+      {% endif %}
     </div>
   </div>
 
