@@ -9,7 +9,8 @@ import io, os, secrets as sec, threading
 
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
-                    Acompte, Journalier, Pointage, FeuillePaieJournalier)
+                    Acompte, Journalier, Pointage, FeuillePaieJournalier,
+                    Site, AffectationSite)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
 
@@ -1587,6 +1588,221 @@ def salaries_imprimer():
         s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
     return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
 
+
+
+@app.route("/api/travailleur/stats-sans-site")
+@tenant_required
+def api_stats_sans_site():
+    t = get_tenant()
+    # Salariés actifs sans affectation active
+    sal_ids_affectes = {a.salarie_id for a in 
+        AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all() if a.salarie_id}
+    jour_ids_affectes = {a.journalier_id for a in 
+        AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all() if a.journalier_id}
+    nb_sal  = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_jour = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    sans_site = (nb_sal - len(sal_ids_affectes)) + (nb_jour - len(jour_ids_affectes))
+    return jsonify({"total": max(0, sans_site)})
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── SITES & AFFECTATIONS ──────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/sites")
+@tenant_required
+def sites():
+    t = get_tenant()
+    sites_list = Site.query.filter_by(tenant_id=t.id).order_by(Site.nom).all()
+    return render_template("tenant/sites.html", tenant=t, sites=sites_list)
+
+@app.route("/sites/nouveau", methods=["GET","POST"])
+@tenant_required
+def site_nouveau():
+    t = get_tenant()
+    if request.method == "POST":
+        s = Site(
+            tenant_id   = t.id,
+            nom         = request.form["nom"].strip(),
+            code        = request.form.get("code","").strip().upper() or None,
+            adresse     = request.form.get("adresse","").strip() or None,
+            ville       = request.form.get("ville","").strip() or None,
+            responsable = request.form.get("responsable","").strip() or None,
+            telephone   = request.form.get("telephone","").strip() or None,
+            description = request.form.get("description","").strip() or None,
+        )
+        db.session.add(s)
+        db.session.commit()
+        flash(f"Site « {s.nom} » créé avec succès.", "success")
+        return redirect(url_for("sites"))
+    return render_template("tenant/site_form.html", tenant=t, site=None)
+
+@app.route("/sites/<int:id>/modifier", methods=["GET","POST"])
+@tenant_required
+def site_modifier(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.method == "POST":
+        s.nom         = request.form["nom"].strip()
+        s.code        = request.form.get("code","").strip().upper() or None
+        s.adresse     = request.form.get("adresse","").strip() or None
+        s.ville       = request.form.get("ville","").strip() or None
+        s.responsable = request.form.get("responsable","").strip() or None
+        s.telephone   = request.form.get("telephone","").strip() or None
+        s.description = request.form.get("description","").strip() or None
+        db.session.commit()
+        flash(f"Site « {s.nom} » modifié.", "success")
+        return redirect(url_for("sites"))
+    return render_template("tenant/site_form.html", tenant=t, site=s)
+
+@app.route("/sites/<int:id>/toggle", methods=["POST"])
+@tenant_required
+def site_toggle(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s.actif = not s.actif
+    db.session.commit()
+    flash(f"Site « {s.nom} » {'activé' if s.actif else 'désactivé'}.", "success")
+    return redirect(url_for("sites"))
+
+@app.route("/sites/<int:id>")
+@tenant_required
+def site_detail(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # Affectations actives
+    affectations = AffectationSite.query.filter_by(site_id=id, actif=True)        .order_by(AffectationSite.date_debut.desc()).all()
+    # Historique complet (toutes les affectations, actives et terminées)
+    historique = AffectationSite.query.filter_by(site_id=id)        .order_by(AffectationSite.date_creation.desc()).limit(50).all()
+    # Travailleurs disponibles (pas encore affectés à ce site)
+    salaries_dispo = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .order_by(Salarie.nom).all()
+    journaliers_dispo = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF")        .order_by(Journalier.nom).all()
+    # Retirer ceux déjà affectés à ce site
+    ids_sal_affectes  = {a.salarie_id   for a in affectations if a.salarie_id}
+    ids_jour_affectes = {a.journalier_id for a in affectations if a.journalier_id}
+    salaries_dispo    = [s for s in salaries_dispo    if s.id not in ids_sal_affectes]
+    journaliers_dispo = [j for j in journaliers_dispo if j.id not in ids_jour_affectes]
+    return render_template("tenant/site_detail.html",
+        tenant=t, site=s,
+        affectations=affectations, historique=historique,
+        salaries_dispo=salaries_dispo, journaliers_dispo=journaliers_dispo,
+        today=str(date.today()))
+
+@app.route("/sites/<int:site_id>/affecter", methods=["POST"])
+@tenant_required
+def site_affecter(site_id):
+    """Affecter un ou plusieurs travailleurs à un site."""
+    t  = get_tenant()
+    s  = Site.query.filter_by(id=site_id, tenant_id=t.id).first_or_404()
+    date_debut = request.form.get("date_debut") or str(date.today())
+    motif      = request.form.get("motif","").strip() or None
+    nb         = 0
+
+    for key in request.form:
+        if key.startswith("sal_"):
+            sal_id = int(key[4:])
+            sal = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first()
+            if not sal: continue
+            # Désactiver toute affectation active précédente sur un AUTRE site
+            prev = AffectationSite.query.filter_by(
+                salarie_id=sal_id, actif=True, tenant_id=t.id).first()
+            if prev and prev.site_id != site_id:
+                prev.actif    = False
+                prev.date_fin = date.today()
+                prev.motif    = f"Transféré vers {s.nom}"
+            elif prev and prev.site_id == site_id:
+                continue  # Déjà sur ce site
+            a = AffectationSite(
+                tenant_id=t.id, site_id=site_id, salarie_id=sal_id,
+                date_debut=date_debut, actif=True, motif=motif,
+                cree_par=current_user.email)
+            db.session.add(a); nb += 1
+
+        elif key.startswith("jour_"):
+            jour_id = int(key[5:])
+            jour = Journalier.query.filter_by(id=jour_id, tenant_id=t.id).first()
+            if not jour: continue
+            prev = AffectationSite.query.filter_by(
+                journalier_id=jour_id, actif=True, tenant_id=t.id).first()
+            if prev and prev.site_id != site_id:
+                prev.actif    = False
+                prev.date_fin = date.today()
+                prev.motif    = f"Transféré vers {s.nom}"
+            elif prev and prev.site_id == site_id:
+                continue
+            a = AffectationSite(
+                tenant_id=t.id, site_id=site_id, journalier_id=jour_id,
+                date_debut=date_debut, actif=True, motif=motif,
+                cree_par=current_user.email)
+            db.session.add(a); nb += 1
+
+    db.session.commit()
+    flash(f"{nb} travailleur(s) affecté(s) à « {s.nom} ».", "success")
+    return redirect(url_for("site_detail", id=site_id))
+
+@app.route("/sites/affecter-travailleur/<int:affectation_id>/retirer", methods=["POST"])
+@tenant_required
+def site_retirer(affectation_id):
+    """Retirer un travailleur de son site (fin d'affectation)."""
+    t = get_tenant()
+    a = AffectationSite.query.filter_by(id=affectation_id, tenant_id=t.id).first_or_404()
+    motif = request.form.get("motif","").strip() or "Retrait manuel"
+    a.actif    = False
+    a.date_fin = date.today()
+    a.motif    = motif
+    db.session.commit()
+    flash(f"Affectation terminée pour {a.nom_travailleur}.", "success")
+    return redirect(url_for("site_detail", id=a.site_id))
+
+@app.route("/sites/permuter", methods=["POST"])
+@tenant_required
+def site_permuter():
+    """Permuter un travailleur d'un site vers un autre."""
+    t         = get_tenant()
+    aff_id    = request.form.get("affectation_id", type=int)
+    nouveau_site_id = request.form.get("site_destination_id", type=int)
+    motif     = request.form.get("motif","Permutation").strip()
+
+    aff_old = AffectationSite.query.filter_by(id=aff_id, tenant_id=t.id, actif=True).first_or_404()
+    site_dest = Site.query.filter_by(id=nouveau_site_id, tenant_id=t.id).first_or_404()
+
+    # Fermer l'affectation actuelle
+    aff_old.actif    = False
+    aff_old.date_fin = date.today()
+    aff_old.motif    = f"Permuté vers {site_dest.nom} — {motif}"
+
+    # Créer la nouvelle affectation
+    aff_new = AffectationSite(
+        tenant_id     = t.id,
+        site_id       = nouveau_site_id,
+        salarie_id    = aff_old.salarie_id,
+        journalier_id = aff_old.journalier_id,
+        date_debut    = date.today(),
+        actif         = True,
+        motif         = f"Permuté depuis {aff_old.site.nom} — {motif}",
+        cree_par      = current_user.email,
+    )
+    db.session.add(aff_new)
+    db.session.commit()
+    flash(f"{aff_old.nom_travailleur} permuté vers « {site_dest.nom} ».", "success")
+    return redirect(url_for("site_detail", id=nouveau_site_id))
+
+@app.route("/api/travailleur/<string:type>/<int:id>/site")
+@tenant_required
+def api_travailleur_site(type, id):
+    """API : retourne le site actuel d'un travailleur."""
+    t = get_tenant()
+    if type == "salarie":
+        a = AffectationSite.query.filter_by(
+            salarie_id=id, tenant_id=t.id, actif=True).first()
+    else:
+        a = AffectationSite.query.filter_by(
+            journalier_id=id, tenant_id=t.id, actif=True).first()
+    if a:
+        return jsonify({"site_id": a.site_id, "site_nom": a.site.nom,
+                        "date_debut": str(a.date_debut)})
+    return jsonify({"site_id": None, "site_nom": None})
+
+
 @app.route("/journaliers/imprimer")
 @login_required
 def journaliers_imprimer():
@@ -1757,7 +1973,35 @@ with app.app_context():
         for col in ["heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70"]:
             try:
                 db.session.execute(db.text(f"ALTER TABLE pointages ADD COLUMN IF NOT EXISTS {col} NUMERIC(5,2) DEFAULT 0"))
-                db.session.commit()
+            
+    # ── Sites & Affectations ──────────────────────────────────────────────
+    for _sql in [
+        """CREATE TABLE IF NOT EXISTS sites (
+            id SERIAL PRIMARY KEY, tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            nom VARCHAR(200) NOT NULL, code VARCHAR(30), adresse VARCHAR(300),
+            ville VARCHAR(100), responsable VARCHAR(200), telephone VARCHAR(30),
+            description TEXT, actif BOOLEAN DEFAULT TRUE, date_creation TIMESTAMP DEFAULT NOW()
+        )""",
+        """CREATE TABLE IF NOT EXISTS affectations_sites (
+            id SERIAL PRIMARY KEY,
+            tenant_id INTEGER REFERENCES tenants(id) ON DELETE CASCADE,
+            site_id INTEGER REFERENCES sites(id) ON DELETE CASCADE,
+            salarie_id INTEGER REFERENCES salaries(id) ON DELETE SET NULL,
+            journalier_id INTEGER REFERENCES journaliers(id) ON DELETE SET NULL,
+            date_debut DATE NOT NULL DEFAULT CURRENT_DATE,
+            date_fin DATE, actif BOOLEAN DEFAULT TRUE,
+            motif VARCHAR(300), date_creation TIMESTAMP DEFAULT NOW(), cree_par VARCHAR(200)
+        )""",
+        "CREATE INDEX IF NOT EXISTS idx_affect_site ON affectations_sites(site_id, actif)",
+        "CREATE INDEX IF NOT EXISTS idx_affect_sal  ON affectations_sites(salarie_id)",
+        "CREATE INDEX IF NOT EXISTS idx_affect_jour ON affectations_sites(journalier_id)",
+    ]:
+        try:
+            db.session.execute(db.text(_sql))
+        except Exception:
+            db.session.rollback()
+    db.session.commit()
+    db.session.commit()
             except Exception: db.session.rollback()
         for sql in [
             "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
