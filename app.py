@@ -808,21 +808,36 @@ def admin_tenant_supprimer(id):
     t = Tenant.query.get_or_404(id)
     nom = t.denomination
     try:
+        # ── 1. Pointages journaliers (FK bloquante) ───────────────────────
+        for j in Journalier.query.filter_by(tenant_id=id).all():
+            Pointage.query.filter_by(journalier_id=j.id).delete()
+            FeuillePaieJournalier.query.filter_by(journalier_id=j.id).delete()
+            AffectationSite.query.filter_by(journalier_id=j.id).delete()
+        Journalier.query.filter_by(tenant_id=id).delete()
+
+        # ── 2. Données salariés ────────────────────────────────────────────
         for s in Salarie.query.filter_by(tenant_id=id).all():
             BulletinPaie.query.filter_by(salarie_id=s.id).delete()
             Contrat.query.filter_by(salarie_id=s.id).delete()
             Pointage.query.filter_by(salarie_id=s.id).delete()
             Acompte.query.filter_by(salarie_id=s.id).delete()
             Conge.query.filter_by(salarie_id=s.id).delete()
+            AffectationSite.query.filter_by(salarie_id=s.id).delete()
         Salarie.query.filter_by(tenant_id=id).delete()
+
+        # ── 3. Reste du tenant ─────────────────────────────────────────────
+        AffectationSite.query.filter_by(tenant_id=id).delete()
+        from models import Site
+        Site.query.filter_by(tenant_id=id).delete()
         PeriodePaie.query.filter_by(tenant_id=id).delete()
         CategorieEmploi.query.filter_by(tenant_id=id).delete()
-        Utilisateur.query.filter_by(tenant_id=id).delete()
-        Journalier.query.filter_by(tenant_id=id).delete()
         Acompte.query.filter_by(tenant_id=id).delete()
         Conge.query.filter_by(tenant_id=id).delete()
-        db.session.delete(t); db.session.commit()
-        flash(f"Entreprise {nom} supprimée.", "success")
+        Utilisateur.query.filter_by(tenant_id=id).delete()
+
+        db.session.delete(t)
+        db.session.commit()
+        flash(f"Entreprise « {nom} » supprimée définitivement.", "success")
     except Exception as e:
         db.session.rollback()
         flash(f"Erreur: {str(e)}", "error")
