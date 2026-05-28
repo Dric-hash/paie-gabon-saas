@@ -1442,6 +1442,17 @@ def utilisateur_nouveau():
     if Utilisateur.query.filter_by(email=email).first():
         flash("Email déjà utilisé.", "error")
         return render_template("tenant/utilisateur_form.html", tenant=t)
+    # ── Vérification limite utilisateurs du plan ──────────────────────────
+    if t.plan and t.plan.max_utilisateurs:
+        nb_actuel = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        if nb_actuel >= t.plan.max_utilisateurs:
+            flash(
+                f"Limite atteinte : votre plan « {t.plan.nom} » autorise "
+                f"{t.plan.max_utilisateurs} utilisateur(s) maximum. "
+                f"Vous en avez déjà {nb_actuel}. Passez au plan supérieur.",
+                "error"
+            )
+            return redirect(url_for("parametres") + "#utilisateurs")
     u = Utilisateur(nom=nom, prenom=prenom, email=email, role=role, tenant_id=t.id, actif=True)
     u.set_password(password)
     db.session.add(u); db.session.commit()
