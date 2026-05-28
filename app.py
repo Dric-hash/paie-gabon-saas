@@ -1429,8 +1429,23 @@ def utilisateur_nouveau():
     if not current_user.is_tenant_admin:
         flash("Réservé à l administrateur.", "error")
         return redirect(url_for("utilisateurs"))
+    # ── Vérifier la limite dès le GET (bloquer l'accès au formulaire) ───────
+    if t.plan and t.plan.max_utilisateurs:
+        nb_actuel = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        if nb_actuel >= t.plan.max_utilisateurs:
+            flash(
+                f"Limite atteinte — Plan « {t.plan.nom} » : "
+                f"{t.plan.max_utilisateurs} utilisateur(s) maximum "
+                f"(vous en avez {nb_actuel}). "
+                f"Passez au plan supérieur pour en ajouter d'autres.",
+                "error"
+            )
+            return redirect(url_for("utilisateurs"))
+
     if request.method == "GET":
-        return render_template("tenant/utilisateur_form.html", tenant=t)
+        nb_utilisateurs = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        return render_template("tenant/utilisateur_form.html", tenant=t,
+            nb_utilisateurs=nb_utilisateurs)
     email = request.form.get("email", "").strip().lower()
     nom = request.form.get("nom", "").strip().upper()
     prenom = request.form.get("prenom", "").strip()
@@ -1442,21 +1457,30 @@ def utilisateur_nouveau():
     if Utilisateur.query.filter_by(email=email).first():
         flash("Email déjà utilisé.", "error")
         return render_template("tenant/utilisateur_form.html", tenant=t)
-    # ── Vérification limite utilisateurs du plan ──────────────────────────
-    if t.plan and t.plan.max_utilisateurs:
-        nb_actuel = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
-        if nb_actuel >= t.plan.max_utilisateurs:
-            flash(
-                f"Limite atteinte : votre plan « {t.plan.nom} » autorise "
-                f"{t.plan.max_utilisateurs} utilisateur(s) maximum. "
-                f"Vous en avez déjà {nb_actuel}. Passez au plan supérieur.",
-                "error"
-            )
-            return redirect(url_for("parametres") + "#utilisateurs")
     u = Utilisateur(nom=nom, prenom=prenom, email=email, role=role, tenant_id=t.id, actif=True)
     u.set_password(password)
     db.session.add(u); db.session.commit()
     flash(f"Utilisateur {u.nom_complet} créé.", "success")
+    return redirect(url_for("utilisateurs"))
+
+@app.route("/utilisateurs/<int:id>/toggle", methods=["POST"])
+@login_required
+def utilisateur_toggle(id):
+    """Activer / désactiver un utilisateur."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("utilisateurs"))
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if u.id == current_user.id:
+        flash("Vous ne pouvez pas vous désactiver vous-même.", "error")
+        return redirect(url_for("utilisateurs"))
+    u.actif = not u.actif
+    db.session.commit()
+    etat = "activé" if u.actif else "désactivé"
+    flash(f"Utilisateur {u.nom_complet} {etat}.", "success")
     return redirect(url_for("utilisateurs"))
 
 # ── Journaliers ───────────────────────────────────────────────────────────────
@@ -2228,10 +2252,19 @@ def fcfa_filter(v):
 @app.template_filter("date_fr")
 def date_fr_filter(v):
     if not v: return "—"
-    if isinstance(v,str):
-        try: v=datetime.strptime(v[:10],"%Y-%m-%d").date()
+    if isinstance(v, str):
+        try: v = datetime.strptime(v[:10], "%Y-%m-%d").date()
         except: return v
     return v.strftime("%d/%m/%Y")
+
+@app.template_filter("datetime_fr")
+def datetime_fr_filter(v):
+    """Affiche date ET heure : 28/05/2026 à 17h34"""
+    if not v: return "Jamais"
+    if isinstance(v, str):
+        try: v = datetime.fromisoformat(v)
+        except: return v
+    return v.strftime("%d/%m/%Y à %Hh%M")
 
 @app.context_processor
 def inject_globals(): return {"now":datetime.now(),"enumerate":enumerate}
