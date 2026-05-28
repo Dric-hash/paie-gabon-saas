@@ -75,7 +75,7 @@
     {% if action == 'nouveau' %}
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">Salaire de base (FCFA) *</label>
-      <input type="number" step="any" name="salaire_base" required min="0"
+      <input type="number" name="salaire_base" required min="0"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
     </div>
     <div>
@@ -135,7 +135,7 @@
 
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">Nombre de parts (IRPP)</label>
-      <input type="number" name="nombre_parts" min="1" step="any"
+      <input type="number" name="nombre_parts" min="1" step="0.5"
         value="{{ salarie.nombre_parts if salarie else 1 }}"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center font-mono"/>
     </div>
@@ -170,7 +170,51 @@
   <!-- Boutons -->
   <div class="col-span-2 flex gap-3 justify-end">
     <a href="{{ url_for("salaries") }}" class="btn-secondary">Annuler</a>
-    <button type="submit" class="btn-primary text-base px-8">
+  
+  <!-- ── Affectation site ──────────────────────────────────────────────────── -->
+  {% if sites %}
+  <div class="card p-6">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">🏗️ Affectation au site</h2>
+
+    {% if aff_actuelle %}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.875rem;padding:.875rem 1rem;margin-bottom:1rem;display:flex;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-size:.75rem;font-weight:700;color:#065f46;margin-bottom:.125rem">Site actuel</div>
+        <div style="font-size:1rem;font-weight:900;color:#111827">🏗️ {{ aff_actuelle.site.nom }}</div>
+        <div style="font-size:.7rem;color:#6b7280;margin-top:.125rem">
+          Depuis le {{ aff_actuelle.date_debut.strftime('%d/%m/%Y') }}
+          {% if aff_actuelle.site.ville %} · {{ aff_actuelle.site.ville }}{% endif %}
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.75rem;color:#dc2626;cursor:pointer">
+        <input type="checkbox" name="retirer_site" value="1">
+        Retirer du site
+      </label>
+    </div>
+    {% endif %}
+
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">
+        {{ 'Changer de site' if aff_actuelle else 'Affecter à un site' }}
+      </label>
+      <select name="site_id"
+        style="width:100%;border:1px solid #e5e7eb;border-radius:.875rem;padding:.625rem .875rem;font-size:.875rem">
+        <option value="">— {{ 'Garder le site actuel' if aff_actuelle else 'Aucun site (non affecté)' }} —</option>
+        {% for s in sites %}
+        <option value="{{ s.id }}" {{ 'selected' if aff_actuelle and aff_actuelle.site_id == s.id }}>
+          {{ s.nom }}{% if s.ville %} — {{ s.ville }}{% endif %}
+          ({{ s.nb_actifs }} affecté{{ 's' if s.nb_actifs > 1 else '' }})
+        </option>
+        {% endfor %}
+      </select>
+      <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+        Changer le site clôture automatiquement l'affectation précédente et crée une nouvelle.
+      </p>
+    </div>
+  </div>
+  {% endif %}
+
+  <button type="submit" class="btn-primary text-base px-8">
       💾 {{ 'Enregistrer les modifications' if action == 'modifier' else 'Créer le salarié' }}
     </button>
   </div>
