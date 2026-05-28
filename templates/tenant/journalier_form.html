@@ -55,7 +55,7 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Taux horaire (FCFA) *</label>
-            <input type="number" name="taux_horaire" required min="0" step="any"
+            <input type="number" name="taux_horaire" required min="0" step="1"
               value="{{ journalier.taux_horaire|int if journalier else '' }}"
               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
           </div>
@@ -79,6 +79,38 @@
           {% endif %}
         </div>
       </div>
+
+
+      <!-- ── Affectation site ────────────────────────────────────────────── -->
+      {% if sites %}
+      <div class="space-y-3">
+        <div class="text-xs font-bold text-gray-500 uppercase mb-1">🏗️ Site d'affectation</div>
+
+        {% if aff_actuelle %}
+        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.875rem;padding:.75rem 1rem;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:.7rem;font-weight:700;color:#065f46">Site actuel</div>
+            <div style="font-size:.9rem;font-weight:900;color:#111827">🏗️ {{ aff_actuelle.site.nom }}</div>
+            <div style="font-size:.7rem;color:#6b7280">Depuis le {{ aff_actuelle.date_debut.strftime('%d/%m/%Y') }}</div>
+          </div>
+          <label style="display:flex;align-items:center;gap:.375rem;font-size:.75rem;color:#dc2626;cursor:pointer">
+            <input type="checkbox" name="retirer_site" value="1">
+            Retirer
+          </label>
+        </div>
+        {% endif %}
+
+        <select name="site_id"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+          <option value="">— {{ 'Changer de site' if aff_actuelle else 'Affecter à un site' }} —</option>
+          {% for s in sites %}
+          <option value="{{ s.id }}" {{ 'selected' if aff_actuelle and aff_actuelle.site_id == s.id }}>
+            {{ s.nom }}{% if s.ville %} · {{ s.ville }}{% endif %}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
 
       <div class="flex gap-3 mt-6">
         <button type="submit" class="flex-1 bg-slate-900 hover:bg-slate-700 text-white font-bold py-3 rounded-xl text-sm">
