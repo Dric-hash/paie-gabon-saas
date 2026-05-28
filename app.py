@@ -1294,23 +1294,53 @@ def pointage():
     date_str = request.args.get("date", now.strftime("%Y-%m-%d"))
     try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
     except: date_sel = now.date()
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
-    journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
-    pts_salaries = {p.salarie_id: p for p in Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.salarie_id.isnot(None)).all()}
+    # ── Filtre par site ───────────────────────────────────────────────────────
+    site_filtre_id = request.args.get("site_id", type=int)
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_filtre = Site.query.get(site_filtre_id) if site_filtre_id else None
+
+    if site_filtre_id:
+        # Salariés affectés à ce site
+        ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id, actif=True
+        ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+        ids_jour = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id, actif=True
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        salaries_list   = Salarie.query.filter(
+            Salarie.tenant_id==t.id, Salarie.statut=="ACTIF",
+            Salarie.id.in_(ids_sal)
+        ).order_by(Salarie.nom).all()
+        journaliers_list = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+            Journalier.id.in_(ids_jour)
+        ).order_by(Journalier.nom).all()
+    else:
+        salaries_list    = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    pts_salaries    = {p.salarie_id:    p for p in Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.salarie_id.isnot(None)).all()}
     pts_journaliers = {p.journalier_id: p for p in Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.journalier_id.isnot(None)).all()}
-    nb_presents_sal  = sum(1 for p in pts_salaries.values() if p.present)
+    nb_presents_sal  = sum(1 for p in pts_salaries.values()    if p.present)
     nb_presents_jour = sum(1 for p in pts_journaliers.values() if p.present)
     nb_absents       = sum(1 for p in list(pts_salaries.values())+list(pts_journaliers.values()) if p.absent)
     lundi   = date_sel - timedelta(days=date_sel.weekday())
     semaine = [lundi + timedelta(days=i) for i in range(6)]
+
+    # Affectation site de chaque travailleur pour affichage dans le pointage
+    aff_sal  = {a.salarie_id:    a.site for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(AffectationSite.salarie_id.isnot(None)).all()}
+    aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(AffectationSite.journalier_id.isnot(None)).all()}
+
     return render_template("tenant/pointage.html",
         tenant=t, date_sel=date_sel, semaine=semaine,
-        date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_hier=(date_sel  - timedelta(days=1)).strftime("%Y-%m-%d"),
         date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
         salaries=salaries_list, journaliers=journaliers_list,
         pts_salaries=pts_salaries, pts_journaliers=pts_journaliers,
         nb_presents_sal=nb_presents_sal, nb_presents_jour=nb_presents_jour,
-        nb_absents=nb_absents, now=now)
+        nb_absents=nb_absents, now=now,
+        sites=sites_list, site_filtre=site_filtre,
+        aff_sal=aff_sal, aff_jour=aff_jour)
 
 @app.route("/pointage/sauvegarder", methods=["POST"])
 @login_required
@@ -2005,6 +2035,15 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"Migration init error: {e}")
+
+    # ── site_id dans pointages ───────────────────────────────────────────────
+    try:
+        db.session.execute(db.text(
+            "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL"
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     # ── Sites & Affectations ──────────────────────────────────────────────
     for _sql in [
