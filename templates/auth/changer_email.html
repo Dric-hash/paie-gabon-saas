@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Changer mon email — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex items-center justify-center p-4">
+<div style="width:100%;max-width:460px">
+
+  <div style="text-align:center;margin-bottom:1.5rem">
+    <div style="font-size:1.5rem;font-weight:900;color:#1a2332">PaieGabon</div>
+    <div style="font-size:.875rem;color:#6b7280;margin-top:.25rem">Modifier mon adresse email</div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-4 space-y-2">
+    {% for cat, msg in messages %}
+    <div class="px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
+      else 'bg-red-50 text-red-800 border border-red-200' }}">{{ msg }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1.25rem;padding:2rem;box-shadow:0 1px 3px rgba(0,0,0,.06)">
+    <h1 style="font-size:1.125rem;font-weight:900;color:#111827;margin-bottom:1.5rem">📧 Changer mon email de connexion</h1>
+
+    <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.875rem;padding:.875rem 1rem;margin-bottom:1.5rem;font-size:.8rem;color:#92400e">
+      ⚠️ Email actuel : <strong>{{ current_user.email }}</strong><br/>
+      Un lien de confirmation sera envoyé au <strong>nouvel email</strong> avant tout changement.
+    </div>
+
+    <form method="POST" class="space-y-4">
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">
+          Nouvel email *
+        </label>
+        <input type="email" name="nouvel_email" required autofocus
+          placeholder="nouveau@exemple.com"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.875rem;padding:.75rem 1rem;font-size:.875rem;box-sizing:border-box">
+      </div>
+
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">
+          Mot de passe actuel * <span style="font-weight:400;color:#9ca3af">(pour confirmer votre identité)</span>
+        </label>
+        <input type="password" name="mot_de_passe" required
+          placeholder="••••••••"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.875rem;padding:.75rem 1rem;font-size:.875rem;box-sizing:border-box">
+      </div>
+
+      <div style="display:flex;gap:.75rem;padding-top:.5rem">
+        <a href="/parametres"
+          style="flex:1;text-align:center;border:1px solid #e5e7eb;color:#6b7280;padding:.75rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none">
+          Annuler
+        </a>
+        <button type="submit"
+          style="flex:2;background:#1a2332;color:white;padding:.75rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          📨 Envoyer le lien de confirmation
+        </button>
+      </div>
+    </form>
+  </div>
+
+  <p style="text-align:center;font-size:.75rem;color:#9ca3af;margin-top:1rem">
+    <a href="/parametres" style="color:#6b7280;font-weight:600">← Retour aux paramètres</a>
+  </p>
+</div>
+</body>
+</html>
