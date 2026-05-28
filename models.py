@@ -85,8 +85,20 @@ class Utilisateur(db.Model, UserMixin):
     derniere_connexion = db.Column(db.DateTime)
     date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
     # ✅ Reset mot de passe
-    reset_token        = db.Column(db.String(200))
-    reset_token_expiry = db.Column(db.DateTime)
+    reset_token              = db.Column(db.String(200))
+    reset_token_expiry       = db.Column(db.DateTime)
+    # ── Confirmation email inscription ────────────────────────────────────
+    email_verifie            = db.Column(db.Boolean, default=False)
+    token_confirmation       = db.Column(db.String(200))
+    token_confirmation_expiry= db.Column(db.DateTime)
+    # ── Changement email ─────────────────────────────────────────────────
+    nouvel_email_en_attente  = db.Column(db.String(200))
+    token_changement_email   = db.Column(db.String(200))
+    token_changement_expiry  = db.Column(db.DateTime)
+    # ── Suivi connexion ───────────────────────────────────────────────────
+    derniere_activite        = db.Column(db.DateTime)
+    nb_echecs_connexion      = db.Column(db.Integer, default=0)
+    compte_bloque_jusqu      = db.Column(db.DateTime)
 
     def set_password(self, pw): self.mot_de_passe_hash = generate_password_hash(pw)
     def check_password(self, pw): return check_password_hash(self.mot_de_passe_hash, pw)
