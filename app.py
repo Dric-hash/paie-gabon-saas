@@ -16,8 +16,18 @@ from flask_mail import Mail, Message
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL","sqlite:///saas_paie.db")
+_db_url = os.environ.get("DATABASE_URL", "sqlite:///saas_paie.db")
+if _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("postgres://", "postgresql://", 1)
+app.config["SQLALCHEMY_DATABASE_URI"]        = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_size":     5,
+    "max_overflow":  10,
+    "pool_timeout":  30,
+    "pool_recycle":  1800,
+    "pool_pre_ping": True,
+}
 db.init_app(app)
 
 # Configuration email Gmail
@@ -897,9 +907,18 @@ def salarie_nouveau():
     if not t: return redirect(url_for("login"))
     if not current_user.can_edit: abort(403)
     cats=CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+    # Vérifier quota dès le GET (bloquer accès au formulaire)
+    q = t.quota_employes_info
+    if q["max"] and q["plein"]:
+        flash(
+            f"Limite atteinte — Plan « {t.plan.nom} » : {q['max']} employé(s) maximum "
+            f"({q['salaries']} salarié(s) + {q['journaliers']} journalier(s)). "
+            f"Passez au plan supérieur.", "error"
+        )
+        return redirect(url_for("salaries"))
     if request.method=="POST":
-        if not t.est_dans_limite:
-            flash(f"Limite atteinte ({t.plan.max_salaries} salariés). Passez au plan supérieur.","error")
+        if not t.peut_ajouter_employe:
+            flash(f"Limite atteinte ({t.plan.max_salaries} employés). Passez au plan supérieur.","error")
             return redirect(url_for("salaries"))
         s=Salarie(tenant_id=t.id,
             matricule=request.form["matricule"].strip().upper(),
@@ -1501,7 +1520,19 @@ def journalier_nouveau():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
+    # Vérifier quota dès le GET
+    q = t.quota_employes_info
+    if q["max"] and q["plein"]:
+        flash(
+            f"Limite atteinte — Plan « {t.plan.nom} » : {q['max']} employé(s) maximum "
+            f"({q['salaries']} salarié(s) + {q['journaliers']} journalier(s)). "
+            f"Passez au plan supérieur.", "error"
+        )
+        return redirect(url_for("journaliers"))
     if request.method == "POST":
+        if not t.peut_ajouter_employe:
+            flash(f"Limite atteinte ({t.plan.max_salaries} employés). Passez au plan supérieur.","error")
+            return redirect(url_for("journaliers"))
         j = Journalier(tenant_id=t.id,
             nom=request.form["nom"].strip().upper(),
             prenom=request.form["prenom"].strip(),
