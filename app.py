@@ -28,6 +28,41 @@ app.config["MAIL_USERNAME"] = os.environ.get("MAIL_USERNAME", "")
 app.config["MAIL_PASSWORD"] = os.environ.get("MAIL_PASSWORD", "")
 app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
 app.config["MAIL_SUPPRESS_SEND"] = not bool(os.environ.get("MAIL_USERNAME", ""))
+
+# ── Sécurité sessions ─────────────────────────────────────────────────────────
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(minutes=int(os.environ.get("SESSION_TIMEOUT_MINUTES", "60")))
+app.config["SESSION_COOKIE_HTTPONLY"]    = True   # Protège contre XSS
+app.config["SESSION_COOKIE_SAMESITE"]   = "Lax"  # Protège contre CSRF
+# En prod Railway, HTTPS est garanti
+app.config["SESSION_COOKIE_SECURE"]     = os.environ.get("RAILWAY_ENVIRONMENT") == "production"
+
+# ── Middleware inactivité session ──────────────────────────────────────────────
+@app.before_request
+def gerer_session_inactivite():
+    """Déconnecter l'utilisateur après X minutes d'inactivité."""
+    # Ne pas vérifier sur les routes publiques
+    excluded = ["/login", "/inscription", "/confirmer-email", "/mot-de-passe-oublie",
+                "/reinitialiser-mdp", "/politique-confidentialite", "/static"]
+    if any(request.path.startswith(p) for p in excluded):
+        return
+    if current_user.is_authenticated:
+        now      = datetime.utcnow()
+        derniere = session.get("derniere_activite")
+        timeout  = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "60"))
+        if derniere:
+            try:
+                elapsed = (now - datetime.fromisoformat(derniere)).total_seconds() / 60
+                if elapsed > timeout:
+                    logout_user()
+                    session.clear()
+                    flash(f"Session expirée après {timeout} min d'inactivité. Reconnectez-vous.", "error")
+                    return redirect(url_for("login"))
+            except Exception:
+                pass
+        session["derniere_activite"] = now.isoformat()
+        session.permanent = True
+
+
 mail = Mail(app)
 
 login_manager = LoginManager(app)
@@ -150,8 +185,50 @@ def inscription():
                             prenom=request.form.get("prenom","").strip(),
                             email=email, role="TENANT_ADMIN", tenant_id=t.id, actif=True)
         admin.set_password(request.form.get("password",""))
+        # Générer token de confirmation email
+        token_conf = sec.token_urlsafe(32)
+        admin.token_confirmation        = token_conf
+        admin.token_confirmation_expiry = datetime.utcnow() + timedelta(hours=48)
+        admin.email_verifie             = False
         db.session.add(admin); db.session.commit()
-        flash("Bienvenue ! Essai gratuit de 30 jours activé.","success")
+
+        # Envoyer email de confirmation
+        lien = url_for("confirmer_email", token=token_conf, _external=True)
+        if os.environ.get("MAIL_USERNAME"):
+            msg = Message(
+                subject="✅ Confirmez votre inscription — PaieGabon",
+                recipients=[email],
+                html=f"""
+                <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
+                  <div style="background:#1a2332;padding:1.5rem;border-radius:.75rem .75rem 0 0;text-align:center">
+                    <h1 style="color:white;margin:0;font-size:1.25rem">PaieGabon</h1>
+                    <p style="color:rgba(255,255,255,.7);margin:.25rem 0 0;font-size:.875rem">Ameriack I.T. Solutions</p>
+                  </div>
+                  <div style="background:white;padding:2rem;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 .75rem .75rem">
+                    <h2 style="color:#111827;margin:0 0 1rem">Bienvenue, {admin.prenom} !</h2>
+                    <p style="color:#6b7280;line-height:1.6">
+                      Votre compte <strong>{denom.upper()}</strong> a été créé avec succès.<br/>
+                      Cliquez sur le bouton ci-dessous pour confirmer votre adresse email.
+                    </p>
+                    <div style="text-align:center;margin:1.5rem 0">
+                      <a href="{lien}" style="background:#1a2332;color:white;padding:.875rem 2rem;border-radius:.75rem;font-weight:700;text-decoration:none;font-size:1rem">
+                        ✅ Confirmer mon email
+                      </a>
+                    </div>
+                    <p style="color:#9ca3af;font-size:.75rem;text-align:center">
+                      Ce lien expire dans 48h.<br/>
+                      Si vous n'avez pas créé ce compte, ignorez cet email.
+                    </p>
+                  </div>
+                </div>""",
+                sender=app.config["MAIL_DEFAULT_SENDER"]
+            )
+            send_email_async(msg)
+            flash(f"Compte créé ! Un email de confirmation a été envoyé à {email}. Vérifiez votre boîte mail.", "success")
+        else:
+            admin.email_verifie = True  # En dev sans mail, activer directement
+            db.session.commit()
+            flash("Bienvenue ! Essai gratuit de 30 jours activé.", "success")
         login_user(admin)
         return redirect(url_for("dashboard"))
     return render_template("auth/inscription.html", plans=plans)
@@ -159,7 +236,139 @@ def inscription():
 @app.route("/logout")
 @login_required
 def logout():
-    logout_user(); return redirect(url_for("login"))
+    logout_user()
+    session.clear()
+    return redirect(url_for("login"))
+
+# ── Confirmation email après inscription ──────────────────────────────────────
+@app.route("/confirmer-email/<token>")
+def confirmer_email(token):
+    u = Utilisateur.query.filter_by(token_confirmation=token).first()
+    if not u:
+        flash("Lien de confirmation invalide ou déjà utilisé.", "error")
+        return redirect(url_for("login"))
+    if u.token_confirmation_expiry and datetime.utcnow() > u.token_confirmation_expiry:
+        flash("Ce lien a expiré (48h). Reconnectez-vous pour en demander un nouveau.", "error")
+        return redirect(url_for("login"))
+    u.email_verifie             = True
+    u.token_confirmation        = None
+    u.token_confirmation_expiry = None
+    db.session.commit()
+    flash("✅ Email confirmé ! Votre compte est pleinement activé.", "success")
+    if current_user.is_authenticated:
+        return redirect(url_for("dashboard"))
+    return redirect(url_for("login"))
+
+@app.route("/renvoyer-confirmation")
+@login_required
+def renvoyer_confirmation():
+    """Renvoyer l'email de confirmation si non vérifié."""
+    u = current_user
+    if u.email_verifie:
+        flash("Votre email est déjà confirmé.", "info")
+        return redirect(url_for("dashboard"))
+    if not os.environ.get("MAIL_USERNAME"):
+        u.email_verifie = True
+        db.session.commit()
+        flash("Mode développement : email validé automatiquement.", "success")
+        return redirect(url_for("dashboard"))
+    token = sec.token_urlsafe(32)
+    u.token_confirmation        = token
+    u.token_confirmation_expiry = datetime.utcnow() + timedelta(hours=48)
+    db.session.commit()
+    lien = url_for("confirmer_email", token=token, _external=True)
+    msg  = Message(
+        subject="✅ Confirmez votre email — PaieGabon",
+        recipients=[u.email],
+        html=f'<p>Cliquez ici pour confirmer : <a href="{lien}">{lien}</a></p>',
+        sender=app.config["MAIL_DEFAULT_SENDER"]
+    )
+    send_email_async(msg)
+    flash(f"Email de confirmation renvoyé à {u.email}.", "success")
+    return redirect(url_for("dashboard"))
+
+# ── Modifier email de connexion ───────────────────────────────────────────────
+@app.route("/profil/changer-email", methods=["GET","POST"])
+@login_required
+def changer_email():
+    if current_user.is_super_admin:
+        return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if request.method == "POST":
+        nouvel_email = request.form.get("nouvel_email","").strip().lower()
+        mot_de_passe = request.form.get("mot_de_passe","")
+        if not nouvel_email or "@" not in nouvel_email:
+            flash("Adresse email invalide.", "error")
+            return render_template("auth/changer_email.html", tenant=t)
+        if not current_user.check_password(mot_de_passe):
+            flash("Mot de passe incorrect.", "error")
+            return render_template("auth/changer_email.html", tenant=t)
+        if Utilisateur.query.filter_by(email=nouvel_email).first():
+            flash("Cette adresse email est déjà utilisée par un autre compte.", "error")
+            return render_template("auth/changer_email.html", tenant=t)
+        token = sec.token_urlsafe(32)
+        current_user.nouvel_email_en_attente = nouvel_email
+        current_user.token_changement_email  = token
+        current_user.token_changement_expiry = datetime.utcnow() + timedelta(hours=24)
+        db.session.commit()
+        lien = url_for("confirmer_changement_email", token=token, _external=True)
+        if os.environ.get("MAIL_USERNAME"):
+            msg = Message(
+                subject="📧 Confirmation changement d'email — PaieGabon",
+                recipients=[nouvel_email],
+                html=f"""
+                <div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto">
+                  <div style="background:#1a2332;padding:1.5rem;text-align:center;border-radius:.75rem .75rem 0 0">
+                    <h1 style="color:white;margin:0">PaieGabon</h1>
+                  </div>
+                  <div style="background:white;padding:2rem;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 .75rem .75rem">
+                    <h2 style="color:#111827">Confirmation de changement d'email</h2>
+                    <p style="color:#6b7280">Vous avez demandé à changer votre email de connexion vers :<br/>
+                    <strong>{nouvel_email}</strong></p>
+                    <p style="color:#6b7280">Cliquez sur le lien ci-dessous pour confirmer ce changement :</p>
+                    <div style="text-align:center;margin:1.5rem 0">
+                      <a href="{lien}" style="background:#1a2332;color:white;padding:.875rem 2rem;border-radius:.75rem;font-weight:700;text-decoration:none">
+                        ✅ Confirmer le nouvel email
+                      </a>
+                    </div>
+                    <p style="color:#9ca3af;font-size:.75rem;text-align:center">
+                      Lien valable 24h. Si ce n'est pas vous, ignorez cet email.
+                    </p>
+                  </div>
+                </div>""",
+                sender=app.config["MAIL_DEFAULT_SENDER"]
+            )
+            send_email_async(msg)
+            flash(f"Un lien de confirmation a été envoyé à {nouvel_email}. Cliquez dessus pour valider le changement.", "success")
+        else:
+            current_user.email = nouvel_email
+            current_user.nouvel_email_en_attente = None
+            current_user.token_changement_email  = None
+            db.session.commit()
+            flash(f"Email mis à jour : {nouvel_email}", "success")
+        return redirect(url_for("parametres"))
+    return render_template("auth/changer_email.html", tenant=t)
+
+@app.route("/profil/confirmer-email/<token>")
+@login_required
+def confirmer_changement_email(token):
+    u = Utilisateur.query.filter_by(token_changement_email=token).first()
+    if not u:
+        flash("Lien invalide ou déjà utilisé.", "error")
+        return redirect(url_for("parametres"))
+    if u.token_changement_expiry and datetime.utcnow() > u.token_changement_expiry:
+        flash("Ce lien a expiré (24h). Refaites la demande.", "error")
+        return redirect(url_for("changer_email"))
+    ancien_email = u.email
+    u.email                     = u.nouvel_email_en_attente
+    u.nouvel_email_en_attente   = None
+    u.token_changement_email    = None
+    u.token_changement_expiry   = None
+    db.session.commit()
+    flash(f"✅ Email mis à jour ({ancien_email} → {u.email}). Reconnectez-vous.", "success")
+    logout_user()
+    session.clear()
+    return redirect(url_for("login"))
 
 # ── Super-Admin ───────────────────────────────────────────────────────────────
 @app.route("/admin")
@@ -2066,6 +2275,26 @@ with app.app_context():
     except Exception as e:
         db.session.rollback()
         print(f"Migration init error: {e}")
+
+    # ── Champs sécurité Utilisateur ──────────────────────────────────────────
+    for _col_sql in [
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS email_verifie BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS token_confirmation VARCHAR(200)",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS token_confirmation_expiry TIMESTAMP",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS nouvel_email_en_attente VARCHAR(200)",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS token_changement_email VARCHAR(200)",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS token_changement_expiry TIMESTAMP",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS derniere_activite TIMESTAMP",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS nb_echecs_connexion INTEGER DEFAULT 0",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS compte_bloque_jusqu TIMESTAMP",
+        # Marquer tous les users existants comme vérifiés (migration rétroactive)
+        "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
+    ]:
+        try:
+            db.session.execute(db.text(_col_sql))
+        except Exception:
+            db.session.rollback()
+    db.session.commit()
 
     # ── site_id dans pointages ───────────────────────────────────────────────
     try:
