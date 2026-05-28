@@ -48,9 +48,19 @@
       <a href="/journaliers/paie" class="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-xl text-sm font-bold">
         💰 Feuilles de paie
       </a>
+      {% set q_j = tenant.quota_employes_info %}
+      {% if q_j.max and q_j.plein %}
+      <div style="display:flex;align-items:center;gap:.625rem">
+        <span style="font-size:.8rem;font-weight:700;color:#dc2626;background:#fee2e2;padding:.5rem 1rem;border-radius:.875rem">
+          ⛔ Limite atteinte ({{ q_j.actuel }}/{{ q_j.max }})
+        </span>
+        <a href="/parametres" style="font-size:.8rem;font-weight:700;color:#d97706;background:#fef3c7;padding:.5rem 1rem;border-radius:.875rem;text-decoration:none">↑ Upgrader</a>
+      </div>
+      {% else %}
       <a href="/journaliers/nouveau" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
-        + Nouveau journalier
+        + Nouveau journalier{% if q_j.max %} ({{ q_j.actuel }}/{{ q_j.max }}){% endif %}
       </a>
+      {% endif %}
     </div>
   </div>
 
