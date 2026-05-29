@@ -133,7 +133,7 @@
         ("Prime de transport",      bulletin.prime_transport,           none, none),
         ("Prime de responsabilité", bulletin.prime_responsabilite,      none, none),
         ("Prime de rendement",      bulletin.prime_rendement,           none, none),
-        ("Prime d'assiduité",       bulletin.prime_assiduite,           none, none),
+        ("Prime d'assiduité",       bulletin.prime_assiduité,           none, none),
         ("Prime de qualité",        bulletin.prime_qualite,             none, none),
         ("Prime de performance",    bulletin.prime_performance,         none, none),
         ("Allocations de congé",    bulletin.allocations_conge,         none, none),
@@ -226,7 +226,7 @@
     </tbody>
     <tr class="totaux-row">
       <td colspan="3">TOTAL RETENUES SALARIALES</td>
-      <td>{{ bulletin.total_retenues|int|fcfa }}</td>
+      <td>{{ (bulletin.cnss_salarie|float + bulletin.cnamgs_salarie|float + bulletin.tcs|float + bulletin.irpp|float)|int|fcfa }}</td>
       <td>TOTAL CHARGES PATRONALES</td>
       <td>{{ (bulletin.cnss_patronale + bulletin.cnamgs_patronale + (bulletin.fnh or 0) + (bulletin.cfp or 0))|int|fcfa }}</td>
     </tr>
