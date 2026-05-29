@@ -1104,7 +1104,17 @@ def bulletin_saisie():
             tenant_id=t.id, salarie_id=sid,
             mois=periode.mois, annee=periode.annee, statut="EN_ATTENTE").all()
         total_acomptes = sum(float(a.montant) for a in acomptes_en_attente)
-        donnees={k:float(v) if v else 0 for k,v in request.form.items() if k not in("salarie_id","periode_id","csrf_token","action","nb_jours_travailles")}
+        donnees={}
+        for k,v in request.form.items():
+            # Exclure les champs non-numériques et les champs base_/taux_ (traités séparément)
+            if k in ("salarie_id","periode_id","csrf_token","action","nb_jours_travailles"):
+                continue
+            if k.startswith("base_") or k.startswith("taux_"):
+                continue
+            try:
+                donnees[k] = float(v) if v else 0
+            except (ValueError, TypeError):
+                donnees[k] = 0
         if total_acomptes > 0:
             donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
         res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
@@ -1218,13 +1228,24 @@ def bulletin_imprimer(id):
         t = get_tenant()
         if not t: return redirect(url_for("login"))
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    modele = getattr(t, "modele_bulletin", "classique") or "classique"
+    # Récupérer le modèle avec fallback sécurisé
+    try:
+        modele = t.modele_bulletin or "classique"
+    except Exception:
+        modele = "classique"
+    if modele not in ("classique", "moderne", "minimaliste"):
+        modele = "classique"
     template_map = {
-        "classique":    "tenant/bulletin_print.html",
-        "moderne":      "tenant/bulletin_print_moderne.html",
-        "minimaliste":  "tenant/bulletin_print_minimaliste.html",
+        "classique":   "tenant/bulletin_print.html",
+        "moderne":     "tenant/bulletin_print_moderne.html",
+        "minimaliste": "tenant/bulletin_print_minimaliste.html",
     }
-    template = template_map.get(modele, "tenant/bulletin_print.html")
+    import os
+    template = template_map[modele]
+    # Vérifier que le fichier template existe sur le serveur
+    tpl_path = os.path.join(os.path.dirname(__file__), "templates", template)
+    if not os.path.exists(tpl_path):
+        template = "tenant/bulletin_print.html"
     return render_template(template, bulletin=b, tenant=t)
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
