@@ -1754,51 +1754,9 @@ def journaliers_paie():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-
-    # ── Filtre par site ──────────────────────────────────────────────────────
-    site_filtre_id = request.args.get("site_id", type=int)
-    sites_list     = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_filtre    = Site.query.get(site_filtre_id) if site_filtre_id else None
-    statut_filtre  = request.args.get("statut", "")
-
-    if site_filtre_id:
-        ids_jour = [a.journalier_id for a in AffectationSite.query.filter_by(
-            tenant_id=t.id, site_id=site_filtre_id, actif=True
-        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
-        journaliers_list = Journalier.query.filter(
-            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
-            Journalier.id.in_(ids_jour)
-        ).order_by(Journalier.nom).all()
-    else:
-        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
-
-    # ── Feuilles filtrées ────────────────────────────────────────────────────
-    q_feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
-    if site_filtre_id:
-        ids_jour_all = [a.journalier_id for a in AffectationSite.query.filter_by(
-            tenant_id=t.id, site_id=site_filtre_id
-        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
-        q_feuilles = q_feuilles.filter(FeuillePaieJournalier.journalier_id.in_(ids_jour_all))
-    if statut_filtre:
-        q_feuilles = q_feuilles.filter_by(statut=statut_filtre)
-    feuilles = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).limit(100).all()
-
-    # ── KPIs ─────────────────────────────────────────────────────────────────
-    total_en_attente = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "EN_ATTENTE")
-    total_paye       = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "PAYÉ")
-    nb_en_attente    = sum(1 for f in feuilles if f.statut == "EN_ATTENTE")
-
-    # Affectation site de chaque journalier (pour affichage dans la liste)
-    aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(
-        tenant_id=t.id, actif=True
-    ).filter(AffectationSite.journalier_id.isnot(None)).all()}
-
-    return render_template("tenant/journaliers_paie.html",
-        tenant=t, feuilles=feuilles, journaliers=journaliers_list,
-        sites=sites_list, site_filtre=site_filtre, statut_filtre=statut_filtre,
-        total_en_attente=total_en_attente, total_paye=total_paye,
-        nb_en_attente=nb_en_attente, aff_jour=aff_jour,
-        now=datetime.now())
+    feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id).order_by(FeuillePaieJournalier.date_fin.desc()).limit(50).all()
+    journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+    return render_template("tenant/journaliers_paie.html", tenant=t, feuilles=feuilles, journaliers=journaliers_list, now=datetime.now())
 
 @app.route("/journaliers/paie/generer", methods=["POST"])
 @login_required
@@ -1808,65 +1766,21 @@ def journaliers_paie_generer():
     date_debut = _parse_date(request.form.get("date_debut"))
     date_fin   = _parse_date(request.form.get("date_fin"))
     if not date_debut or not date_fin: flash("Dates invalides.", "error"); return redirect(url_for("journaliers_paie"))
-    site_id      = request.form.get("site_id", type=int)
-    taux_custom  = {}  # taux personnalisés par journalier
-    heures_custom = {} # heures manuelles par journalier
-    ids_coches   = request.form.getlist("journalier_ids")
-
-    for key, val in request.form.items():
-        if key.startswith("taux_") and val:
-            try: taux_custom[int(key[5:])] = float(val)
-            except: pass
-        if key.startswith("heures_") and val:
-            try: heures_custom[int(key[7:])] = float(val)
-            except: pass
-
-    if ids_coches:
-        journaliers_a_payer = Journalier.query.filter(
-            Journalier.tenant_id==t.id,
-            Journalier.id.in_([int(i) for i in ids_coches])
-        ).all()
-    elif site_id:
-        ids_site = [a.journalier_id for a in AffectationSite.query.filter_by(
-            tenant_id=t.id, site_id=site_id, actif=True
-        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
-        journaliers_a_payer = Journalier.query.filter(
-            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
-            Journalier.id.in_(ids_site)
-        ).all()
-    else:
-        journaliers_a_payer = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
-
     nb = 0
-    for j in journaliers_a_payer:
-        if str(j.id) not in ids_coches and ids_coches:
-            continue
-        taux = taux_custom.get(j.id, float(j.taux_horaire or 0))
-        if j.id in heures_custom:
-            total_h  = heures_custom[j.id]
-            nb_jours = 1  # heures manuelles = considéré comme 1 entrée
-        else:
-            pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
-                          Pointage.present==True).all()
-            total_h  = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
-            nb_jours = len(pts)
-        if total_h <= 0 and nb_jours == 0: continue
-        if FeuillePaieJournalier.query.filter_by(
-            tenant_id=t.id, journalier_id=j.id,
-            date_debut=date_debut, date_fin=date_fin).first(): continue
-        db.session.add(FeuillePaieJournalier(
-            tenant_id=t.id, journalier_id=j.id,
-            date_debut=date_debut, date_fin=date_fin,
-            nb_jours=nb_jours, total_heures=total_h,
-            taux_horaire=taux, montant_brut=round(total_h*taux, 2),
-            statut="EN_ATTENTE"))
+    for j in Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all():
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)\
+              .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin, Pointage.present==True).all()
+        total_h = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
+        nb_jours = len(pts)
+        if nb_jours == 0: continue
+        if FeuillePaieJournalier.query.filter_by(tenant_id=t.id, journalier_id=j.id, date_debut=date_debut, date_fin=date_fin).first(): continue
+        db.session.add(FeuillePaieJournalier(tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin, nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=j.taux_horaire, montant_brut=round(total_h*float(j.taux_horaire),2), statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
     flash(f"{nb} feuille(s) générée(s).", "success")
-    redirect_url = url_for("journaliers_paie")
-    if site_id:
-        redirect_url += f"?site_id={site_id}"
-    return redirect(redirect_url)
+    return redirect(url_for("journaliers_paie"))
 
 @app.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
 @login_required
@@ -1898,87 +1812,6 @@ def journalier_feuille_supprimer(id):
     db.session.delete(f); db.session.commit()
     flash("Feuille supprimée.", "success")
     return redirect(url_for("journaliers_paie"))
-
-@app.route("/journaliers/paie/export")
-@login_required
-def journaliers_paie_export():
-    """Export Excel des feuilles de paie journalier."""
-    from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
-    t = get_tenant()
-    if not t: return redirect(url_for("login"))
-    site_id     = request.args.get("site_id", type=int)
-    statut_f    = request.args.get("statut", "")
-    site        = Site.query.get(site_id) if site_id else None
-
-    q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
-    if site_id:
-        ids = [a.journalier_id for a in AffectationSite.query.filter_by(
-            tenant_id=t.id, site_id=site_id
-        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
-        q = q.filter(FeuillePaieJournalier.journalier_id.in_(ids))
-    if statut_f:
-        q = q.filter_by(statut=statut_f)
-    feuilles = q.order_by(FeuillePaieJournalier.date_fin.desc()).all()
-
-    wb = Workbook(); ws = wb.active
-    titre = f"Paie Journaliers{' — ' + site.nom if site else ''} — {t.denomination}"
-    ws.title = "Paie Journaliers"
-    ws.merge_cells("A1:I1"); ws["A1"] = titre
-    ws["A1"].font = Font(bold=True, size=13)
-    ws["A1"].alignment = Alignment(horizontal="center")
-    ws.append([])
-    hdrs = ["Journalier","Profession","Site","Période du","au","Nb jours","Total heures","Taux/h (FCFA)","Montant brut (FCFA)","Statut","Date paiement"]
-    ws.append(hdrs)
-    for c_idx, h in enumerate(hdrs, 1):
-        cell = ws.cell(row=3, column=c_idx, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="1a2332")
-        cell.alignment = Alignment(horizontal="center")
-
-    # Affectation site pour chaque journalier
-    aff_map = {a.journalier_id: a.site.nom for a in AffectationSite.query.filter_by(
-        tenant_id=t.id, actif=True
-    ).filter(AffectationSite.journalier_id.isnot(None)).all()}
-
-    total_montant = 0
-    for row_idx, f in enumerate(feuilles, 4):
-        site_nom = aff_map.get(f.journalier_id, "—")
-        row = [
-            f.journalier.nom_complet,
-            f.journalier.profession or "—",
-            site_nom,
-            f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
-            f.date_fin.strftime("%d/%m/%Y") if f.date_fin else "",
-            f.nb_jours,
-            float(f.total_heures or 0),
-            float(f.taux_horaire or 0),
-            float(f.montant_brut or 0),
-            f.statut,
-            f.date_paiement.strftime("%d/%m/%Y") if f.date_paiement else "",
-        ]
-        ws.append(row)
-        total_montant += float(f.montant_brut or 0)
-        if row_idx % 2 == 0:
-            for c in ws[row_idx]: c.fill = PatternFill("solid", fgColor="F5F5F5")
-
-    # Ligne total
-    ws.append([])
-    total_row = ws.max_row + 1
-    ws.cell(total_row, 1, "TOTAL").font = Font(bold=True)
-    ws.cell(total_row, 9, total_montant).font = Font(bold=True)
-    ws.cell(total_row, 9).number_format = "#,##0"
-
-    for col in ws.columns:
-        max_len = max((len(str(c.value or "")) for c in col), default=10)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
-
-    import io
-    out = io.BytesIO(); wb.save(out); out.seek(0)
-    fname = f"Paie_Journaliers{'_' + site.nom.replace(' ','_') if site else ''}_{datetime.now().strftime('%Y%m%d')}.xlsx"
-    return send_file(out,
-        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        as_attachment=True, download_name=fname)
 
 @app.route("/journaliers/paie/payer-selection", methods=["POST"])
 @login_required
