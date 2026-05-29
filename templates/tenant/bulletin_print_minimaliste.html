@@ -98,7 +98,7 @@
         ("Transport", bulletin.prime_transport, none, none),
         ("Responsabilité", bulletin.prime_responsabilite, none, none),
         ("Rendement", bulletin.prime_rendement, none, none),
-        ("Assiduité", bulletin.prime_assiduite, none, none),
+        ("Assiduité", bulletin.prime_assiduité, none, none),
         ("Qualité", bulletin.prime_qualite, none, none),
         ("Performance", bulletin.prime_performance, none, none),
         ("Alloc. congé", bulletin.allocations_conge, none, none),
@@ -147,8 +147,8 @@
       <tr><td>IRPP</td><td>—</td><td style="text-align:center">Barème</td><td>{{ bulletin.irpp|int|fcfa }}</td><td>—</td></tr>
       <tr class="subtotal">
         <td colspan="3"><strong>TOTAL RETENUES</strong></td>
-        <td><strong>{{ bulletin.total_retenues|int|fcfa }}</strong></td>
-        <td><strong>{{ (bulletin.cnss_patronale + bulletin.cnamgs_patronale + (bulletin.fnh or 0) + (bulletin.cfp or 0))|int|fcfa }}</strong></td>
+        <td><strong>{{ (bulletin.cnss_salarie|float + bulletin.cnamgs_salarie|float + bulletin.tcs|float + bulletin.irpp|float)|int|fcfa }}</strong></td>
+        <td><strong>{{ (bulletin.cnss_patronale|float + bulletin.cnamgs_patronale|float + (bulletin.fnh or 0)|float + (bulletin.cfp or 0)|float)|int|fcfa }}</strong></td>
       </tr>
     </tbody>
   </table>
