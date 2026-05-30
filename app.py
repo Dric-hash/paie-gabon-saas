@@ -3897,7 +3897,7 @@ def recherche_globale():
         db.or_(
             Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
             Salarie.matricule.ilike(like), Salarie.emploi.ilike(like),
-            Salarie.numero_cnss.ilike(like), Salarie.telephone.ilike(like),
+            Salarie.telephone.ilike(like),
         )
     ).order_by(Salarie.nom).limit(10).all()
     if sals:
@@ -3935,11 +3935,11 @@ def recherche_globale():
     acomps = Acompte.query.filter_by(tenant_id=t.id)        .join(Salarie, Acompte.salarie_id == Salarie.id)        .filter(db.or_(
             Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
             Salarie.matricule.ilike(like),
-        ))        .order_by(Acompte.date_demande.desc()).limit(10).all()
+        ))        .order_by(Acompte.date_acompte.desc()).limit(10).all()
     if acomps:
         resultats["acomptes"] = [{"id": a.id,
             "titre": a.salarie.nom_complet,
-            "sous_titre": f"{int(a.montant or 0):,} FCFA · {a.date_demande.strftime('%d/%m/%Y') if a.date_demande else ''}",
+            "sous_titre": f"{int(a.montant or 0):,} FCFA · {a.date_acompte.strftime('%d/%m/%Y') if a.date_acompte else ''}",
             "badge": a.statut, "lien": "/acomptes",
             "icone": "💸"} for a in acomps]
 
