@@ -306,7 +306,7 @@
   </div>
 
   <div style="margin-top:1.5rem;text-align:center">
-    <button type="submit"
+    <button type="submit" id="btn-sauver-pointage"
       style="background:#1a2332;color:white;padding:1rem 3rem;border-radius:.75rem;font-weight:900;font-size:1rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.3)">
       💾 Sauvegarder le pointage du {{ date_sel.strftime('%d/%m/%Y') }}
     </button>
@@ -372,16 +372,40 @@ function toggleSelJour(checked) {
   });
 }
 
-// ── Au submit : désactiver les blocs non sélectionnés ────────────────────────
-document.getElementById('form_pointage').addEventListener('submit', function() {
+// ── Protection double-soumission + désactivation blocs non sélectionnés ────────
+let _pointageSoumis = false;
+
+document.getElementById('form_pointage').addEventListener('submit', function(e) {
+  if (_pointageSoumis) { e.preventDefault(); return false; }
+  _pointageSoumis = true;
+
+  // Désactiver les lignes non cochées (évite d'envoyer leurs données)
   document.querySelectorAll('.cb-sel-sal:not(:checked)').forEach(cb => {
     const row = document.getElementById('row_sal_' + cb.value);
-    if(row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
+    if (row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
   });
   document.querySelectorAll('.cb-sel-jour:not(:checked)').forEach(cb => {
     const row = document.getElementById('row_jour_' + cb.value);
-    if(row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
+    if (row) row.querySelectorAll('input, select').forEach(el => el.disabled = true);
   });
+
+  // Feedback visuel sur le bouton
+  const btn = document.getElementById('btn-sauver-pointage');
+  if (btn) {
+    btn.disabled      = true;
+    btn.textContent   = '⏳ Enregistrement…';
+    btn.style.opacity = '.7';
+    btn.style.cursor  = 'wait';
+  }
+});
+
+// Ré-activer si retour navigateur
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) {
+    _pointageSoumis = false;
+    const btn = document.getElementById('btn-sauver-pointage');
+    if (btn) { btn.disabled=false; btn.textContent='💾 Enregistrer le pointage'; btn.style.opacity=''; btn.style.cursor=''; }
+  }
 });
 </script>
 {% endblock %}
