@@ -27,25 +27,210 @@
   </a>
 </div>
 
-<!-- KPIs -->
-<div class="grid grid-cols-3 gap-4 mb-5">
-  <div class="card p-4">
-    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Affectés actuellement</div>
-    <div class="text-3xl font-black text-gray-900">{{ affectations|length }}</div>
-  </div>
-  <div class="card p-4">
-    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Mensuels</div>
-    <div class="text-3xl font-black text-blue-700">
-      {{ affectations|selectattr('salarie_id')|list|length }}
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- TABLEAU DE BORD SITE                                         -->
+<!-- ════════════════════════════════════════════════════════════ -->
+
+<!-- Ligne 1 : KPIs principaux -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem">
+
+  <!-- Effectif -->
+  <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.25rem;color:white;position:relative;overflow:hidden">
+    <div style="font-size:.65rem;font-weight:700;opacity:.6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.375rem">👥 Effectif</div>
+    <div style="font-size:2rem;font-weight:900;line-height:1">{{ (nb_sal_site + nb_jour_site) }}</div>
+    <div style="font-size:.7rem;opacity:.7;margin-top:.375rem">
+      <span style="background:rgba(255,255,255,.15);padding:.1rem .4rem;border-radius:9999px;margin-right:.25rem">{{ nb_sal_site }} mensuel(s)</span>
+      <span style="background:rgba(255,255,255,.15);padding:.1rem .4rem;border-radius:9999px">{{ nb_jour_site }} journalier(s)</span>
     </div>
+    <div style="position:absolute;right:-8px;bottom:-8px;font-size:3.5rem;opacity:.08">👷</div>
   </div>
-  <div class="card p-4">
-    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Journaliers</div>
-    <div class="text-3xl font-black text-amber-600">
-      {{ affectations|selectattr('journalier_id')|list|length }}
+
+  <!-- Taux de présence semaine -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;position:relative">
+    <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.375rem">📊 Taux présence (semaine)</div>
+    <div style="font-size:2rem;font-weight:900;line-height:1;
+      color:{% if taux_presence_semaine >= 90 %}#065f46{% elif taux_presence_semaine >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+      {{ taux_presence_semaine }}%
     </div>
+    <div style="background:#e5e7eb;border-radius:9999px;height:6px;margin-top:.625rem;overflow:hidden">
+      <div style="height:100%;width:{{ taux_presence_semaine }}%;border-radius:9999px;transition:width .5s;
+        background:{% if taux_presence_semaine >= 90 %}#059669{% elif taux_presence_semaine >= 70 %}#f59e0b{% else %}#dc2626{% endif %}">
+      </div>
+    </div>
+    <div style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">{{ heures_semaine }}h travaillées cette semaine</div>
+  </div>
+
+  <!-- Présences mois -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem">
+    <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.375rem">📅 Présences {{ mois_nom }}</div>
+    <div style="display:flex;align-items:flex-end;gap:.75rem">
+      <div>
+        <div style="font-size:2rem;font-weight:900;color:#059669;line-height:1">{{ nb_jours_pointes_mois }}</div>
+        <div style="font-size:.7rem;color:#059669;font-weight:600">présences</div>
+      </div>
+      <div style="padding-bottom:.25rem">
+        <div style="font-size:1rem;font-weight:700;color:#dc2626">{{ nb_absences_mois }}</div>
+        <div style="font-size:.7rem;color:#9ca3af">absences</div>
+      </div>
+    </div>
+    <div style="font-size:.7rem;color:#9ca3af;margin-top:.25rem">Tous travailleurs confondus</div>
+  </div>
+
+  <!-- Masse salariale site -->
+  <div style="background:linear-gradient(135deg,#065f46,#059669);border-radius:1rem;padding:1.25rem;color:white;position:relative;overflow:hidden">
+    <div style="font-size:.65rem;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.375rem">💰 Masse salariale {{ mois_nom }}</div>
+    {% if masse_mensuelle > 0 or masse_journaliere_mois > 0 %}
+    <div style="font-size:1.1rem;font-weight:900;line-height:1.3">
+      {{ (masse_mensuelle + masse_journaliere_mois)|int|fcfa }}
+    </div>
+    <div style="font-size:.7rem;opacity:.8;margin-top:.375rem">
+      {% if masse_mensuelle > 0 %}
+      <div>Mensuels : {{ masse_mensuelle|int|fcfa }}</div>
+      {% endif %}
+      {% if masse_journaliere_mois > 0 %}
+      <div>Journaliers : {{ masse_journaliere_mois|int|fcfa }}</div>
+      {% endif %}
+    </div>
+    {% else %}
+    <div style="font-size:.875rem;opacity:.7;margin-top:.5rem">Aucun bulletin/feuille ce mois</div>
+    {% endif %}
+    <div style="position:absolute;right:-8px;bottom:-8px;font-size:3.5rem;opacity:.08">💵</div>
   </div>
 </div>
+
+<!-- Ligne 2 : Paie journaliers + Bulletins mensuels + Graphique 7 jours -->
+<div style="display:grid;grid-template-columns:1fr 1fr 2fr;gap:1rem;margin-bottom:1.5rem">
+
+  <!-- Paie journaliers -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem">
+    <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.875rem">🦺 Paie journaliers {{ mois_nom }}</div>
+    {% if nb_jour_site > 0 %}
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;background:#fef3c7;border-radius:.75rem">
+        <span style="font-size:.8rem;font-weight:700;color:#92400e">⏳ En attente</span>
+        <span style="font-size:1rem;font-weight:900;color:#d97706">{{ feuilles_attente }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:.5rem .75rem;background:#f0fdf4;border-radius:.75rem">
+        <span style="font-size:.8rem;font-weight:700;color:#065f46">✅ Payées</span>
+        <span style="font-size:1rem;font-weight:900;color:#059669">{{ feuilles_payees }}</span>
+      </div>
+      {% if masse_journaliere_mois > 0 %}
+      <div style="font-size:.75rem;font-weight:700;color:#374151;text-align:right;margin-top:.25rem">
+        Total : {{ masse_journaliere_mois|int|fcfa }}
+      </div>
+      {% endif %}
+    </div>
+    <a href="/journaliers/paie?site_id={{ site.id }}"
+       style="display:block;margin-top:.75rem;text-align:center;font-size:.75rem;font-weight:700;color:#d97706;text-decoration:none;background:#fef3c7;padding:.375rem .75rem;border-radius:.625rem">
+      Gérer la paie →
+    </a>
+    {% else %}
+    <div style="text-align:center;padding:1rem 0;color:#9ca3af;font-size:.8rem">
+      <div style="font-size:1.5rem;margin-bottom:.25rem">🦺</div>
+      Aucun journalier affecté
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Bulletins mensuels -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem">
+    <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.875rem">📄 Bulletins {{ mois_nom }}</div>
+    {% if nb_sal_site > 0 %}
+    <div style="display:flex;flex-direction:column;gap:.5rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.8rem;color:#6b7280">Salariés affectés</span>
+        <span style="font-size:.9rem;font-weight:700">{{ nb_sal_site }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:.8rem;color:#6b7280">Bulletins émis</span>
+        <span style="font-size:.9rem;font-weight:700;color:{% if nb_bulletins_site == nb_sal_site %}#059669{% else %}#d97706{% endif %}">
+          {{ nb_bulletins_site }}/{{ nb_sal_site }}
+        </span>
+      </div>
+      {% if nb_bulletins_site < nb_sal_site %}
+      <div style="font-size:.75rem;color:#d97706;background:#fffbeb;padding:.375rem .625rem;border-radius:.5rem">
+        ⚠️ {{ nb_sal_site - nb_bulletins_site }} bulletin(s) manquant(s)
+      </div>
+      {% else %}
+      <div style="font-size:.75rem;color:#059669;background:#f0fdf4;padding:.375rem .625rem;border-radius:.5rem">
+        ✅ Tous les bulletins émis
+      </div>
+      {% endif %}
+    </div>
+    <a href="/bulletins?site_id={{ site.id }}"
+       style="display:block;margin-top:.75rem;text-align:center;font-size:.75rem;font-weight:700;color:#1e40af;text-decoration:none;background:#eff6ff;padding:.375rem .75rem;border-radius:.625rem">
+      Voir les bulletins →
+    </a>
+    {% else %}
+    <div style="text-align:center;padding:1rem 0;color:#9ca3af;font-size:.8rem">
+      <div style="font-size:1.5rem;margin-bottom:.25rem">📄</div>
+      Aucun salarié mensuel
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Graphique 7 derniers jours -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.875rem">
+      <div style="font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.06em">📈 Présences — 7 derniers jours</div>
+      <a href="/pointage/recap-semaine?date={{ today }}"
+         style="font-size:.7rem;font-weight:700;color:#6b7280;text-decoration:none;background:#f3f4f6;padding:.2rem .5rem;border-radius:.375rem">
+        Récap semaine →
+      </a>
+    </div>
+
+    {% if evolution_7j %}
+    <!-- Mini histogramme -->
+    {% set max_val = evolution_7j|map(attribute='presents')|max %}
+    {% set max_h   = max_val if max_val > 0 else 1 %}
+    <div style="display:flex;align-items:flex-end;gap:.375rem;height:80px;margin-bottom:.5rem">
+      {% for jour in evolution_7j %}
+      {% set pct = (jour.presents / max_h * 100)|int %}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+        <div style="font-size:.6rem;color:#6b7280;font-weight:700;margin-bottom:.15rem">
+          {% if jour.presents > 0 %}{{ jour.presents }}{% endif %}
+        </div>
+        <!-- Barre présents -->
+        <div style="width:100%;border-radius:.25rem .25rem 0 0;transition:height .3s;
+          height:{{ [pct, 4]|max }}%;
+          background:{% if jour.presents > 0 %}#059669{% else %}#e5e7eb{% endif %}">
+        </div>
+        {% if jour.absents > 0 %}
+        <!-- Barre absents (empilée) -->
+        <div style="width:100%;height:{{ [((jour.absents / max_h * 100)|int), 3]|max }}%;
+          background:#fca5a5;margin-top:1px">
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <!-- Labels jours -->
+    <div style="display:flex;gap:.375rem">
+      {% for jour in evolution_7j %}
+      <div style="flex:1;text-align:center">
+        <div style="font-size:.65rem;color:#6b7280;font-weight:700">{{ jour.jour }}</div>
+        <div style="font-size:.6rem;color:#9ca3af">{{ jour.date }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    <!-- Légende -->
+    <div style="display:flex;gap:.75rem;margin-top:.5rem;justify-content:center">
+      <div style="display:flex;align-items:center;gap:.25rem;font-size:.65rem;color:#6b7280">
+        <div style="width:10px;height:10px;background:#059669;border-radius:2px"></div> Présents
+      </div>
+      <div style="display:flex;align-items:center;gap:.25rem;font-size:.65rem;color:#6b7280">
+        <div style="width:10px;height:10px;background:#fca5a5;border-radius:2px"></div> Absents
+      </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:1.5rem 0;color:#9ca3af;font-size:.8rem">
+      Aucun pointage cette semaine
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+<!-- ════ FIN TABLEAU DE BORD ════ -->
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <!-- POINTAGE RAPIDE                                                        -->
