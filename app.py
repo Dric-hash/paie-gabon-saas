@@ -2632,6 +2632,84 @@ def site_detail(id):
         tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
         if x.id not in ids_jour_aff]
 
+    # ── KPIs tableau de bord ─────────────────────────────────────────────────
+    from datetime import date as _date
+    import calendar
+
+    now_d       = _date.today()
+    mois_debut  = _date(now_d.year, now_d.month, 1)
+    mois_fin    = _date(now_d.year, now_d.month,
+                        calendar.monthrange(now_d.year, now_d.month)[1])
+    lundi_sem   = now_d - timedelta(days=now_d.weekday())
+    samedi_sem  = lundi_sem + timedelta(days=5)
+
+    # Tous les pointages du mois pour ce site (salariés + journaliers)
+    ids_all = ids_sal + ids_jour
+    pts_mois_sal = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.salarie_id.in_(ids_sal),
+                Pointage.date_pointage >= mois_debut,
+                Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+    pts_mois_jour = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.journalier_id.in_(ids_jour),
+                Pointage.date_pointage >= mois_debut,
+                Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+    pts_mois_tous = pts_mois_sal + pts_mois_jour
+
+    # Pointages de la semaine
+    pts_sem_sal  = [p for p in pts_mois_sal  if lundi_sem <= p.date_pointage <= samedi_sem]
+    pts_sem_jour = [p for p in pts_mois_jour if lundi_sem <= p.date_pointage <= samedi_sem]
+
+    # KPI — Jours pointés (présences) ce mois
+    nb_jours_pointes_mois = sum(1 for p in pts_mois_tous if p.present)
+    nb_absences_mois      = sum(1 for p in pts_mois_tous if p.absent)
+
+    # KPI — Taux de présence semaine
+    nb_pres_sem = sum(1 for p in pts_sem_sal + pts_sem_jour if p.present)
+    nb_abs_sem  = sum(1 for p in pts_sem_sal + pts_sem_jour if p.absent)
+    total_ptg_sem = nb_pres_sem + nb_abs_sem
+    taux_presence_semaine = round(nb_pres_sem / total_ptg_sem * 100) if total_ptg_sem > 0 else 0
+
+    # KPI — Heures totales semaine
+    def total_heures_pt(p):
+        return (float(p.heures_normales or 8) +
+                float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+                float(p.heures_sup or 0))
+
+    heures_semaine = sum(total_heures_pt(p) for p in pts_sem_sal + pts_sem_jour if p.present)
+
+    # KPI — Masse journalière (feuilles de paie journaliers ce mois)
+    feuilles_mois = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)        .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                FeuillePaieJournalier.date_debut >= mois_debut,
+                FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+    masse_journaliere_mois    = sum(float(f.montant_brut or 0) for f in feuilles_mois)
+    feuilles_attente = sum(1 for f in feuilles_mois if f.statut == "EN_ATTENTE")
+    feuilles_payees  = sum(1 for f in feuilles_mois if f.statut == "PAYÉ")
+
+    # KPI — Bulletins salariés du mois (dernière période active)
+    periode_courante = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=now_d.year, mois=now_d.month).first()
+    bulletins_site = []
+    masse_mensuelle = 0
+    if periode_courante and ids_sal:
+        bulletins_site = BulletinPaie.query.filter_by(
+            tenant_id=t.id, periode_id=periode_courante.id
+        ).filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+        masse_mensuelle = sum(float(b.net_a_payer or 0) for b in bulletins_site)
+
+    # Évolution présence 7 derniers jours (pour mini-graphique)
+    evolution_7j = []
+    for i in range(6, -1, -1):
+        d = now_d - timedelta(days=i)
+        p_d = [p for p in pts_mois_tous if p.date_pointage == d]
+        nb_p = sum(1 for p in p_d if p.present)
+        nb_a = sum(1 for p in p_d if p.absent)
+        evolution_7j.append({
+            "date":    d.strftime("%d/%m"),
+            "jour":    ["L","Ma","Me","J","V","Sa","Di"][d.weekday()],
+            "presents": nb_p,
+            "absents":  nb_a,
+            "heures":   round(sum(total_heures_pt(p) for p in p_d if p.present), 1),
+        })
+
     return render_template("tenant/site_detail.html",
         tenant=t, site=s,
         affectations=affectations, historique=historique,
@@ -2643,6 +2721,18 @@ def site_detail(id):
         date_demain=(date_ptg + timedelta(days=1)).strftime("%Y-%m-%d"),
         nb_presents=nb_presents, nb_absents=nb_absents,
         nb_non_pointes=nb_non_pointes,
+        # KPIs tableau de bord
+        nb_sal_site=len(salaries_site), nb_jour_site=len(journaliers_site),
+        nb_jours_pointes_mois=nb_jours_pointes_mois,
+        nb_absences_mois=nb_absences_mois,
+        taux_presence_semaine=taux_presence_semaine,
+        heures_semaine=round(heures_semaine, 1),
+        masse_journaliere_mois=masse_journaliere_mois,
+        feuilles_attente=feuilles_attente, feuilles_payees=feuilles_payees,
+        masse_mensuelle=masse_mensuelle,
+        nb_bulletins_site=len(bulletins_site),
+        evolution_7j=evolution_7j,
+        mois_nom=["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"][now_d.month],
         today=str(date.today()))
 
 @app.route("/sites/<int:id>/pointage-rapide", methods=["POST"])
