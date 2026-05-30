@@ -29,6 +29,27 @@
     <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
   </div>
 </nav>
+<!-- Barre de recherche sous le nav du dashboard -->
+<div style="background:white;border-bottom:1px solid #e5e7eb;padding:.5rem 1.25rem;display:flex;align-items:center;gap:1rem">
+  <form action="/recherche" method="GET" style="flex:1;max-width:500px;position:relative">
+    <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);color:#9ca3af;pointer-events:none">🔍</span>
+    <input type="text" name="q" id="dash-search"
+      placeholder="Rechercher un salarié, journalier, bulletin... (Ctrl+K)"
+      style="width:100%;border:1px solid #e5e7eb;border-radius:.875rem;
+      padding:.5rem .75rem .5rem 2.375rem;font-size:.8rem;background:#f9fafb;outline:none;color:#111827"
+      onfocus="this.style.borderColor='#1a2332';this.style.background='white'"
+      onblur="this.style.borderColor='#e5e7eb';this.style.background='#f9fafb'"
+      autocomplete="off"
+      oninput="dashSearch(this.value)"/>
+    <div id="dash-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+      background:white;border-radius:.75rem;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:1000;
+      overflow:hidden;max-height:360px;overflow-y:auto;border:1px solid #e5e7eb">
+    </div>
+  </form>
+  <span style="font-size:.75rem;color:#9ca3af">
+    <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.15rem .4rem;font-size:.7rem">Ctrl+K</kbd>
+  </span>
+</div>
 
 <main class="max-w-7xl mx-auto p-5">
 
@@ -302,6 +323,47 @@ function toggleAlertes() {
     btn.textContent    = '▶ Voir les alertes (' + document.querySelectorAll('#bloc-alertes > div').length + ')';
   }
 }
+</script>
+<script>
+let _dTimeout = null;
+function dashSearch(q) {
+  clearTimeout(_dTimeout);
+  const dd = document.getElementById('dash-dropdown');
+  if (!dd) return;
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  _dTimeout = setTimeout(() => {
+    fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        if (!data.length) { dd.style.display = 'none'; return; }
+        const byCat = {};
+        data.forEach(i => { if(!byCat[i.categorie]) byCat[i.categorie]=[]; byCat[i.categorie].push(i); });
+        let html = '';
+        for (const [cat, items] of Object.entries(byCat)) {
+          html += `<div style="padding:.375rem .75rem;font-size:.65rem;font-weight:700;color:#9ca3af;text-transform:uppercase;background:#f9fafb;border-bottom:1px solid #f3f4f6">${cat}</div>`;
+          items.forEach(i => {
+            html += `<a href="${i.lien}" style="display:flex;align-items:center;gap:.75rem;padding:.6rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+              onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+              <span style="font-size:1rem">${i.icone}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:.825rem;color:#111827">${i.titre}</div>
+                <div style="font-size:.75rem;color:#9ca3af">${i.sous_titre}</div>
+              </div></a>`;
+          });
+        }
+        html += `<a href="/recherche?q=${encodeURIComponent(q)}" style="display:block;padding:.625rem 1rem;text-align:center;font-size:.8rem;font-weight:700;color:#1a2332;text-decoration:none;background:#f9fafb;border-top:1px solid #e5e7eb">🔍 Voir tous les résultats →</a>`;
+        dd.innerHTML = html; dd.style.display = 'block';
+      }).catch(() => { dd.style.display = 'none'; });
+  }, 220);
+}
+document.addEventListener('click', e => {
+  const dd = document.getElementById('dash-dropdown');
+  if (dd && !dd.contains(e.target) && e.target.id !== 'dash-search') dd.style.display = 'none';
+});
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); const i=document.getElementById('dash-search'); if(i){i.focus();i.select();} }
+  if (e.key==='Escape') { const d=document.getElementById('dash-dropdown'); if(d) d.style.display='none'; }
+});
 </script>
 </body>
 </html>
