@@ -2550,23 +2550,117 @@ def site_toggle(id):
 def site_detail(id):
     t = get_tenant()
     s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Date sélectionnée pour le pointage rapide
+    date_str = request.args.get("date_ptg", date.today().strftime("%Y-%m-%d"))
+    try:    date_ptg = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_ptg = date.today()
+
     # Affectations actives
     affectations = AffectationSite.query.filter_by(site_id=id, actif=True)        .order_by(AffectationSite.date_debut.desc()).all()
-    # Historique complet (toutes les affectations, actives et terminées)
+
+    # Séparer salariés et journaliers affectés
+    ids_sal  = [a.salarie_id    for a in affectations if a.salarie_id]
+    ids_jour = [a.journalier_id for a in affectations if a.journalier_id]
+
+    salaries_site    = Salarie.query.filter(
+        Salarie.tenant_id==t.id, Salarie.statut=="ACTIF",
+        Salarie.id.in_(ids_sal)
+    ).order_by(Salarie.nom).all() if ids_sal else []
+
+    journaliers_site = Journalier.query.filter(
+        Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+        Journalier.id.in_(ids_jour)
+    ).order_by(Journalier.nom).all() if ids_jour else []
+
+    # Pointages du jour pour ce site
+    pts_sal  = {p.salarie_id:    p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_ptg)
+        .filter(Pointage.salarie_id.in_(ids_sal)).all()} if ids_sal else {}
+    pts_jour = {p.journalier_id: p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_ptg)
+        .filter(Pointage.journalier_id.in_(ids_jour)).all()} if ids_jour else {}
+
+    # Stats pointage du jour
+    nb_presents  = sum(1 for p in list(pts_sal.values())+list(pts_jour.values()) if p.present)
+    nb_absents   = sum(1 for p in list(pts_sal.values())+list(pts_jour.values()) if p.absent)
+    nb_non_pointes = (len(salaries_site)+len(journaliers_site)) - len(pts_sal) - len(pts_jour)
+
+    # Historique complet
     historique = AffectationSite.query.filter_by(site_id=id)        .order_by(AffectationSite.date_creation.desc()).limit(50).all()
-    # Travailleurs disponibles (pas encore affectés à ce site)
-    salaries_dispo = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .order_by(Salarie.nom).all()
-    journaliers_dispo = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF")        .order_by(Journalier.nom).all()
-    # Retirer ceux déjà affectés à ce site
-    ids_sal_affectes  = {a.salarie_id   for a in affectations if a.salarie_id}
-    ids_jour_affectes = {a.journalier_id for a in affectations if a.journalier_id}
-    salaries_dispo    = [s for s in salaries_dispo    if s.id not in ids_sal_affectes]
-    journaliers_dispo = [j for j in journaliers_dispo if j.id not in ids_jour_affectes]
+
+    # Travailleurs disponibles (non affectés à ce site)
+    ids_sal_aff  = {a.salarie_id    for a in affectations if a.salarie_id}
+    ids_jour_aff = {a.journalier_id for a in affectations if a.journalier_id}
+    salaries_dispo    = [x for x in Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+        if x.id not in ids_sal_aff]
+    journaliers_dispo = [x for x in Journalier.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+        if x.id not in ids_jour_aff]
+
     return render_template("tenant/site_detail.html",
         tenant=t, site=s,
         affectations=affectations, historique=historique,
         salaries_dispo=salaries_dispo, journaliers_dispo=journaliers_dispo,
+        salaries_site=salaries_site, journaliers_site=journaliers_site,
+        pts_sal=pts_sal, pts_jour=pts_jour,
+        date_ptg=date_ptg,
+        date_hier=(date_ptg - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_ptg + timedelta(days=1)).strftime("%Y-%m-%d"),
+        nb_presents=nb_presents, nb_absents=nb_absents,
+        nb_non_pointes=nb_non_pointes,
         today=str(date.today()))
+
+@app.route("/sites/<int:id>/pointage-rapide", methods=["POST"])
+@tenant_required
+def site_pointage_rapide(id):
+    """Sauvegarder le pointage rapide depuis la page d'un site."""
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    date_str = request.form.get("date_pointage")
+    try:    date_p = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_p = date.today()
+
+    nb = 0
+    for key, val in request.form.items():
+        # Salariés
+        if key.startswith("sal_present_"):
+            sid = int(key.replace("sal_present_", ""))
+            present = (val == "1"); absent = not present
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, salarie_id=sid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p,
+                              salarie_id=sid, site_id=id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = float(request.form.get(f"sal_h_{sid}", 8) or 8)
+            pt.heures_sup_10   = float(request.form.get(f"sal_s10_{sid}", 0) or 0)
+            pt.heures_sup_30   = float(request.form.get(f"sal_s30_{sid}", 0) or 0)
+            pt.heures_sup_40   = float(request.form.get(f"sal_s40_{sid}", 0) or 0)
+            pt.heures_sup_70   = float(request.form.get(f"sal_s70_{sid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
+            nb += 1
+        # Journaliers
+        elif key.startswith("jour_present_"):
+            jid = int(key.replace("jour_present_", ""))
+            present = (val == "1"); absent = not present
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, journalier_id=jid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p,
+                              journalier_id=jid, site_id=id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = float(request.form.get(f"jour_h_{jid}", 8) or 8)
+            pt.heures_sup      = float(request.form.get(f"jour_s_{jid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"jour_motif_{jid}", "") if absent else None
+            nb += 1
+
+    db.session.commit()
+    flash(f"✅ Pointage du {date_p.strftime('%d/%m/%Y')} sauvegardé — {nb} travailleur(s).", "success")
+    return redirect(url_for("site_detail", id=id) + f"?date_ptg={date_str}")
 
 @app.route("/sites/<int:site_id>/affecter", methods=["POST"])
 @tenant_required
