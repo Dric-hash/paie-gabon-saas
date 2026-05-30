@@ -45,6 +45,27 @@
       {% endif %}
     </div>
 
+    <!-- Recherche rapide -->
+    <div style="padding:.625rem .75rem;border-bottom:1px solid rgba(255,255,255,.1)">
+      <form action="/recherche" method="GET" style="position:relative">
+        <span style="position:absolute;left:.625rem;top:50%;transform:translateY(-50%);font-size:.8rem;opacity:.5;pointer-events:none">🔍</span>
+        <input type="text" name="q" id="sidebar-search"
+          placeholder="Rechercher... (Ctrl+K)"
+          style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
+          border-radius:.625rem;padding:.4rem .5rem .4rem 1.875rem;font-size:.8rem;color:white;
+          outline:none"
+          onfocus="this.style.background='rgba(255,255,255,.15)';this.style.borderColor='rgba(255,255,255,.4)'"
+          onblur="this.style.background='rgba(255,255,255,.1)';this.style.borderColor='rgba(255,255,255,.15)'"
+          autocomplete="off"
+          oninput="rechercheRapide(this.value)"/>
+        <!-- Dropdown autocomplétion -->
+        <div id="autocomplete-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+          background:white;border-radius:.75rem;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:1000;
+          overflow:hidden;max-height:320px;overflow-y:auto">
+        </div>
+      </form>
+    </div>
+
     <!-- Navigation -->
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
       {% set ep = request.endpoint %}
@@ -129,7 +150,32 @@
   </aside>
 
   <!-- Contenu principal -->
-  <main class="ml-64 flex-1 p-8 min-h-screen">
+  <main class="ml-64 flex-1 min-h-screen">
+    <!-- Topbar avec recherche -->
+    <div style="background:white;border-bottom:1px solid #e5e7eb;padding:.625rem 2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;position:sticky;top:0;z-index:10">
+      <form action="/recherche" method="GET" style="flex:1;max-width:480px;position:relative">
+        <span style="position:absolute;left:.75rem;top:50%;transform:translateY(-50%);font-size:.9rem;pointer-events:none;color:#9ca3af">🔍</span>
+        <input type="text" name="q" id="topbar-search"
+          placeholder="Rechercher un salarié, journalier, bulletin... (Ctrl+K)"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.875rem;
+          padding:.5rem .75rem .5rem 2.375rem;font-size:.8rem;background:#f9fafb;
+          outline:none;color:#111827"
+          onfocus="this.style.borderColor='#1a2332';this.style.background='white'"
+          onblur="this.style.borderColor='#e5e7eb';this.style.background='#f9fafb'"
+          autocomplete="off"
+          oninput="rechercheRapide(this.value, 'topbar-dropdown')"/>
+        <div id="topbar-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+          background:white;border-radius:.75rem;box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:1000;
+          overflow:hidden;max-height:360px;overflow-y:auto;border:1px solid #e5e7eb">
+        </div>
+      </form>
+      <div style="font-size:.75rem;color:#9ca3af;white-space:nowrap">
+        <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.15rem .375rem;font-size:.7rem">Ctrl</kbd>
+        +
+        <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.15rem .375rem;font-size:.7rem">K</kbd>
+      </div>
+    </div>
+    <div class="p-8">
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
       <div class="mb-6 space-y-2">
@@ -145,8 +191,85 @@
       {% endif %}
     {% endwith %}
     {% block content %}{% endblock %}
+    </div>
   </main>
 </div>
 {% block scripts %}{% endblock %}
+<script>
+// ── Recherche rapide autocomplete ─────────────────────────────────────────────
+let _rTimeout = null;
+
+function rechercheRapide(q, ddId) {
+  clearTimeout(_rTimeout);
+  // Fermer l'autre dropdown
+  ['autocomplete-dropdown','topbar-dropdown'].forEach(id => {
+    if (id !== ddId) { const el = document.getElementById(id); if(el) el.style.display='none'; }
+  });
+  const dd = document.getElementById(ddId || 'topbar-dropdown');
+  if (!dd) return;
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  _rTimeout = setTimeout(() => {
+    fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        if (!data.length) { dd.style.display = 'none'; return; }
+        const byCat = {};
+        data.forEach(item => {
+          if (!byCat[item.categorie]) byCat[item.categorie] = [];
+          byCat[item.categorie].push(item);
+        });
+        let html = '';
+        for (const [cat, items] of Object.entries(byCat)) {
+          html += `<div style="padding:.375rem .75rem;font-size:.65rem;font-weight:700;
+            color:#9ca3af;text-transform:uppercase;background:#f9fafb;border-bottom:1px solid #f3f4f6">
+            ${cat}</div>`;
+          items.forEach(item => {
+            html += `<a href="${item.lien}" style="display:flex;align-items:center;gap:.625rem;
+              padding:.6rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+              onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+              <span style="font-size:1rem">${item.icone}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:.825rem;color:#111827">${item.titre}</div>
+                <div style="font-size:.75rem;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sous_titre}</div>
+              </div>
+            </a>`;
+          });
+        }
+        html += `<a href="/recherche?q=${encodeURIComponent(q)}"
+          style="display:block;padding:.625rem 1rem;text-align:center;font-size:.8rem;
+          font-weight:700;color:#1a2332;text-decoration:none;background:#f9fafb;border-top:1px solid #e5e7eb">
+          🔍 Voir tous les résultats pour « ${q} » →
+        </a>`;
+        dd.innerHTML = html;
+        dd.style.display = 'block';
+      })
+      .catch(() => { dd.style.display = 'none'; });
+  }, 220);
+}
+
+// Fermer au clic en dehors
+document.addEventListener('click', e => {
+  ['autocomplete-dropdown','topbar-dropdown'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el && !el.contains(e.target) && e.target.id !== 'sidebar-search' && e.target.id !== 'topbar-search') {
+      el.style.display = 'none';
+    }
+  });
+});
+
+// Raccourci Ctrl+K → focus sur la topbar
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const inp = document.getElementById('topbar-search') || document.getElementById('sidebar-search');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+  if (e.key === 'Escape') {
+    ['autocomplete-dropdown','topbar-dropdown'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.style.display='none';
+    });
+  }
+});
+</script>
 </body>
 </html>
