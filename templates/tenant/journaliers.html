@@ -118,7 +118,9 @@
             <a href="/pointage" class="text-purple-600 font-bold text-xs hover:underline">📋 Pointer</a>
           </td>
           <td class="px-4 py-3 text-center">
-            <a href="/journaliers/{{ j.id }}/modifier" class="text-amber-600 font-bold text-xs hover:underline">✏️ Modifier</a>
+            <a href="/journaliers/{{ j.id }}" style="font-size:.75rem;color:#2563eb;font-weight:700;text-decoration:none">Voir</a>
+              <span style="color:#e5e7eb">|</span>
+              <a href="/journaliers/{{ j.id }}/modifier" class="text-amber-600 font-bold text-xs hover:underline">✏️ Modifier</a>
           </td>
         </tr>
         {% else %}
