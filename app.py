@@ -889,16 +889,136 @@ def dashboard():
         .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
         .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
     derniers = BulletinPaie.query.filter_by(tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(6).all()
+    # ══════════════════════════════════════════════════════════════════════════
+    # ALERTES INTELLIGENTES
+    # ══════════════════════════════════════════════════════════════════════════
+    import calendar
     alertes = []
-    if nb_b > 0: alertes.append({"type":"warning","msg":f"{nb_b} bulletin(s) en brouillon à valider"})
-    if not periode: alertes.append({"type":"info","msg":f"Aucune période ouverte pour {PeriodePaie.MOIS_NOMS[now.month]} {now.year}"})
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+    mois_courant = MOIS_NOMS_LONG[now.month]
+    debut_mois_d = date(now.year, now.month, 1)
+    fin_mois_d   = date(now.year, now.month, calendar.monthrange(now.year, now.month)[1])
+
+    # ── 1. Quota employés dépassé ou proche ──────────────────────────────────
+    q_info = t.quota_employes_info
+    if q_info.get("max"):
+        pct = round(q_info["total"] / q_info["max"] * 100)
+        if q_info["plein"]:
+            alertes.append({"type":"danger","icone":"🚫","titre":"Limite d'employés atteinte",
+                "msg":f"Vous avez atteint la limite de {q_info['max']} employés de votre plan {t.plan.nom}. "
+                      f"Impossible d'ajouter de nouveaux travailleurs.",
+                "lien":"/parametres","lien_texte":"Changer de plan"})
+        elif pct >= 80:
+            alertes.append({"type":"warning","icone":"⚠️","titre":"Quota employés bientôt atteint",
+                "msg":f"{q_info['total']}/{q_info['max']} employés utilisés ({pct}%). "
+                      f"Il reste {q_info['max'] - q_info['total']} place(s).",
+                "lien":"/parametres","lien_texte":"Voir le plan"})
+
+    # ── 2. Période non créée pour le mois courant ─────────────────────────────
+    if not periode:
+        alertes.append({"type":"warning","icone":"📅","titre":f"Période {mois_courant} {now.year} manquante",
+            "msg":f"Aucune période de paie n'est ouverte pour {mois_courant} {now.year}. "
+                  f"Les bulletins ne peuvent pas être saisis.",
+            "lien":"/periodes","lien_texte":"Créer la période"})
+
+    # ── 3. Période précédente non clôturée ────────────────────────────────────
+    mois_prec = now.month - 1 or 12
+    annee_prec = now.year if now.month > 1 else now.year - 1
+    periode_prec = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=annee_prec, mois=mois_prec).first()
+    if periode_prec and periode_prec.statut not in ("CLÔTURÉE", "CLOTUREE", "PAYÉE"):
+        buls_prec = BulletinPaie.query.filter_by(
+            tenant_id=t.id, periode_id=periode_prec.id).all()
+        nb_non_clos = sum(1 for b in buls_prec if b.statut in ("BROUILLON", "VALIDÉ"))
+        if nb_non_clos > 0:
+            alertes.append({"type":"warning","icone":"🔓","titre":f"Période {MOIS_NOMS_LONG[mois_prec]} non clôturée",
+                "msg":f"{nb_non_clos} bulletin(s) de {MOIS_NOMS_LONG[mois_prec]} {annee_prec} "
+                      f"ne sont pas encore payés.",
+                "lien":f"/bulletins?periode_id={periode_prec.id}","lien_texte":"Voir les bulletins"})
+
+    # ── 4. Bulletins en brouillon ce mois ─────────────────────────────────────
+    if nb_b > 0:
+        alertes.append({"type":"warning","icone":"📝","titre":f"{nb_b} brouillon(s) à valider",
+            "msg":f"{nb_b} bulletin(s) de {mois_courant} sont en brouillon et doivent être validés.",
+            "lien":f"/bulletins?periode_id={periode.id}&statut=BROUILLON" if periode else "/bulletins",
+            "lien_texte":"Valider maintenant"})
+
+    # ── 5. Salariés actifs sans bulletin ce mois ──────────────────────────────
+    if periode:
+        ids_avec_bulletin = {b.salarie_id for b in
+            BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).all()}
+        salaries_sans_bulletin = Salarie.query.filter_by(
+            tenant_id=t.id, statut="ACTIF"
+        ).filter(~Salarie.id.in_(ids_avec_bulletin)).all() if ids_avec_bulletin else             Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+        nb_sans = len(salaries_sans_bulletin)
+        if nb_sans > 0:
+            exemples = ", ".join(s.nom_complet for s in salaries_sans_bulletin[:3])
+            if nb_sans > 3: exemples += f" et {nb_sans-3} autre(s)"
+            alertes.append({"type":"info","icone":"👤","titre":f"{nb_sans} salarié(s) sans bulletin ce mois",
+                "msg":f"{exemples}.",
+                "lien":f"/bulletins/saisie","lien_texte":"Saisir un bulletin"})
+
+    # ── 6. Journaliers avec feuilles en attente de paiement ───────────────────
+    feuilles_att = FeuillePaieJournalier.query.filter_by(
+        tenant_id=t.id, statut="EN_ATTENTE").all()
+    nb_feuilles_att = len(feuilles_att)
+    if nb_feuilles_att > 0:
+        montant_att = sum(float(f.montant_brut or 0) for f in feuilles_att)
+        alertes.append({"type":"warning","icone":"🦺","titre":f"{nb_feuilles_att} feuille(s) journaliers non payée(s)",
+            "msg":f"Total en attente : {int(montant_att):,} FCFA.",
+            "lien":"/journaliers/paie","lien_texte":"Payer maintenant"})
+
+    # ── 7. Journaliers actifs sans pointage cette semaine ─────────────────────
+    lundi = (now.date() - timedelta(days=now.weekday()))
+    samedi = lundi + timedelta(days=5)
+    nb_jour_actifs = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    if nb_jour_actifs > 0:
+        ids_pointes_sem = {p.journalier_id for p in
+            Pointage.query.filter_by(tenant_id=t.id)
+            .filter(Pointage.journalier_id.isnot(None),
+                    Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi).all()}
+        nb_non_pointes_jour = nb_jour_actifs - len(ids_pointes_sem)
+        if nb_non_pointes_jour > 0 and now.weekday() >= 1:   # après lundi
+            alertes.append({"type":"info","icone":"📋","titre":f"{nb_non_pointes_jour} journalier(s) non pointé(s) cette semaine",
+                "msg":f"Semaine du {lundi.strftime('%d/%m')} : {nb_non_pointes_jour} journalier(s) "
+                      f"sans pointage enregistré.",
+                "lien":f"/pointage/recap-semaine","lien_texte":"Voir le récap"})
+
+    # ── 8. Acomptes en attente de déduction ───────────────────────────────────
+    acomptes_att = Acompte.query.filter_by(tenant_id=t.id, statut="EN_ATTENTE").count()
+    if acomptes_att > 0:
+        alertes.append({"type":"info","icone":"💸","titre":f"{acomptes_att} acompte(s) en attente",
+            "msg":f"{acomptes_att} acompte(s) n'ont pas encore été déduits des bulletins.",
+            "lien":"/acomptes","lien_texte":"Voir les acomptes"})
+
+    # ── 9. Plan essai expirant bientôt ────────────────────────────────────────
+    if t.statut == "ESSAI" and t.date_fin_essai:
+        jours_restants = (t.date_fin_essai - now.date()).days
+        if jours_restants <= 7:
+            alertes.append({"type":"danger","icone":"⏰","titre":"Période d'essai bientôt terminée",
+                "msg":f"Votre essai gratuit expire dans {jours_restants} jour(s). "
+                      f"Souscrivez pour continuer à utiliser PaieGabon.",
+                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+
+    # Trier par priorité : danger > warning > info
+    _prio = {"danger": 0, "warning": 1, "info": 2}
+    alertes.sort(key=lambda a: _prio.get(a["type"], 3))
+
+    # Compteurs pour l'en-tête
+    nb_alertes_critiques = sum(1 for a in alertes if a["type"] == "danger")
+    nb_alertes_warning   = sum(1 for a in alertes if a["type"] == "warning")
+
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
         nb_journaliers=nb_journaliers, nb_total_employes=nb_total_employes,
         nb_new_mois=nb_new_mois, periode=periode, masse=masse,
         nb_valides=nb_v, nb_payes=nb_p, nb_brouillon=nb_b,
         evolution=evolution, top_salaries=top_salaries,
-        cats_stats=cats_stats, derniers=derniers, alertes=alertes, now=now)
+        cats_stats=cats_stats, derniers=derniers, alertes=alertes,
+        nb_alertes_critiques=nb_alertes_critiques,
+        nb_alertes_warning=nb_alertes_warning, now=now)
 
 # ── Salariés ──────────────────────────────────────────────────────────────────
 @app.route("/salaries")
