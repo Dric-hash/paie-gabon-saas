@@ -5,9 +5,7 @@
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
     <h1 class="text-2xl font-black text-gray-900">Bulletins de paie</h1>
-    {% if site_filtre %}
-    <p class="text-gray-500 text-sm mt-1">📍 Filtrés sur : <strong>{{ site_filtre.nom }}</strong></p>
-    {% endif %}
+    {% if site_filtre %}<p class="text-gray-500 text-sm mt-1">📍 <strong>{{ site_filtre.nom }}</strong></p>{% endif %}
   </div>
   <a href="/bulletins/saisie" class="btn-primary">+ Nouveau bulletin</a>
 </div>
@@ -15,8 +13,6 @@
 <!-- ── Filtres ─────────────────────────────────────────────────────────────── -->
 <div class="card p-4 mb-5">
   <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
-
-    <!-- Période -->
     <div style="flex:2;min-width:180px">
       <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Période</label>
       <select name="periode_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
@@ -28,8 +24,6 @@
         {% endfor %}
       </select>
     </div>
-
-    <!-- Site -->
     {% if sites %}
     <div style="flex:2;min-width:160px">
       <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Site</label>
@@ -43,8 +37,6 @@
       </select>
     </div>
     {% endif %}
-
-    <!-- Statut -->
     <div style="min-width:140px">
       <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Statut</label>
       <select name="statut" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
@@ -54,7 +46,6 @@
         {% endfor %}
       </select>
     </div>
-
     <button type="submit" class="btn-primary" style="align-self:flex-end">Filtrer</button>
     {% if periode_sel %}
     <a href="/bulletins" style="align-self:flex-end;font-size:.8rem;color:#9ca3af;font-weight:600;text-decoration:none;padding:.625rem .5rem">✕ Reset</a>
@@ -64,14 +55,14 @@
 
 {% if periode_sel %}
 
-<!-- ── Filtre site rapide (boutons) ──────────────────────────────────────────── -->
+<!-- ── Boutons sites rapides ───────────────────────────────────────────────── -->
 {% if sites %}
 <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:1.25rem">
   <span style="font-size:.75rem;font-weight:700;color:#6b7280">🏗️ Site :</span>
   <a href="/bulletins?periode_id={{ periode_sel.id }}{% if statut_filtre %}&statut={{ statut_filtre }}{% endif %}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
      {{ 'background:#1a2332;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
-    Tous ({{ bulletins|length if not site_filtre else '' }})
+    Tous
   </a>
   {% for s in sites %}
   <a href="/bulletins?periode_id={{ periode_sel.id }}&site_id={{ s.id }}{% if statut_filtre %}&statut={{ statut_filtre }}{% endif %}"
@@ -83,54 +74,85 @@
 </div>
 {% endif %}
 
-<!-- ── KPIs ───────────────────────────────────────────────────────────────────── -->
+<!-- ── KPIs ── -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
   {% for label, val, color in [
     ("Bulletins" ~ (" — " ~ site_filtre.nom if site_filtre else ""), bulletins|length, "#1a2332"),
-    ("Masse brute",   masse.get('total_brut',0)|int|fcfa,                 "#d97706"),
-    ("Net total",     masse.get('total_net',0)|int|fcfa,                  "#059669"),
-    ("Charges pat.",  masse.get('total_charges_patronales',0)|int|fcfa,   "#2563eb"),
+    ("Masse brute",  masse.get('total_brut',0)|int|fcfa,               "#d97706"),
+    ("Net total",    masse.get('total_net',0)|int|fcfa,                "#059669"),
+    ("Charges pat.", masse.get('total_charges_patronales',0)|int|fcfa, "#2563eb"),
   ] %}
   <div style="background:{{ color }};border-radius:1rem;padding:1.25rem;color:white;text-align:center">
-    <div style="font-size:{% if bulletins|length > 999 %}1rem{% else %}1.25rem{% endif %};font-weight:900">{{ val }}</div>
+    <div style="font-size:1.125rem;font-weight:900">{{ val }}</div>
     <div style="font-size:.7rem;opacity:.75;margin-top:.25rem">{{ label }}</div>
   </div>
   {% endfor %}
 </div>
 
-<!-- ── Table bulletins ────────────────────────────────────────────────────────── -->
+<!-- ── Formulaire avec cases à cocher ─────────────────────────────────────── -->
+{% if bulletins %}
+<form id="form-lot" method="POST" action="/bulletins/valider-lot">
+  <input type="hidden" name="periode_id" value="{{ periode_sel.id }}">
+  {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
+  <input type="hidden" name="bulletin_ids" id="inp-ids" value="">
+  <input type="hidden" name="action_lot"   id="inp-action" value="valider">
+
 <div class="card overflow-hidden">
-  <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;flex-wrap:wrap;gap:.5rem">
-    <span style="font-size:.75rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em">
-      {{ bulletins|length }} bulletin(s) — {{ periode_sel.libelle_complet }}
-      {% if site_filtre %} — <span style="color:#1a2332">🏗️ {{ site_filtre.nom }}</span>{% endif %}
-    </span>
-    <div style="display:flex;gap:.625rem;flex-wrap:wrap">
-      <!-- Valider tout (si brouillons) -->
-      {% set nb_brouillons = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
-      {% if nb_brouillons > 0 %}
-      <form method="POST" action="/bulletins/valider-lot" style="display:inline"
-        onsubmit="return confirm('Valider {{ nb_brouillons }} bulletin(s) en brouillon ?')">
-        <input type="hidden" name="periode_id" value="{{ periode_sel.id }}">
-        {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
-        <button type="submit"
-          style="background:#059669;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
-          ✅ Valider les {{ nb_brouillons }} brouillon(s)
-        </button>
-      </form>
-      {% endif %}
-      <!-- Export Excel -->
+
+  <!-- En-tête table -->
+  <div style="padding:.75rem 1rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;background:#f9fafb">
+
+    <!-- Sélection globale -->
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.8rem;font-weight:700;color:#374151">
+        <input type="checkbox" id="cb-all" onchange="toggleAll(this.checked)"
+          style="width:16px;height:16px;cursor:pointer;accent-color:#1a2332">
+        <span id="lbl-all">Tout sélectionner</span>
+      </label>
+      <span style="font-size:.75rem;color:#9ca3af" id="cpt-sel">0 sélectionné(s)</span>
+    </div>
+
+    <!-- Actions groupées (masquées si rien sélectionné) -->
+    <div id="barre-actions" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <button type="button" onclick="soumettreLot('valider')" id="btn-valider-sel"
+        style="background:#059669;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
+        ✅ Valider la sélection (<span id="cpt-brouillons">0</span>)
+      </button>
+      <button type="button" onclick="soumettreLot('payer')" id="btn-payer-sel"
+        style="background:#2563eb;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
+        💰 Marquer payé (<span id="cpt-valides">0</span>)
+      </button>
+      <button type="button" onclick="soumettreLot('supprimer_brouillons')" id="btn-suppr-sel"
+        style="background:#fee2e2;color:#dc2626;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
+        🗑️ Supprimer brouillons
+      </button>
+      <!-- Séparateur -->
+      <span style="color:#e5e7eb;font-size:.875rem">|</span>
+      <!-- Export & Valider tout -->
       <a href="/bulletins/export/{{ periode_sel.id }}{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}"
          style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
         📥 Export Excel
       </a>
+      {% set nb_brouillons_total = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
+      {% if nb_brouillons_total > 0 %}
+      <button type="button"
+        onclick="if(confirm('Valider TOUS les {{ nb_brouillons_total }} brouillon(s) ?')) { document.getElementById('inp-ids').value=''; document.getElementById('inp-action').value='valider'; document.getElementById('form-lot').submit(); }"
+        style="background:#d1fae5;color:#065f46;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+        ✅ Tout valider ({{ nb_brouillons_total }})
+      </button>
+      {% endif %}
     </div>
   </div>
 
-  {% if bulletins %}
+  <!-- Tableau -->
+  <div style="overflow-x:auto">
   <table>
     <thead>
       <tr>
+        <th style="width:36px;text-align:center;padding:.5rem">
+          <input type="checkbox" onchange="toggleAll(this.checked)"
+            style="width:15px;height:15px;cursor:pointer;accent-color:#1a2332">
+        </th>
         <th>Salarié</th>
         {% if sites %}<th>Site</th>{% endif %}
         <th style="text-align:right">Brut</th>
@@ -142,14 +164,24 @@
         <th style="text-align:center">Actions</th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="tbody-bulletins">
       {% for b in bulletins %}
-      <tr>
+      <tr id="row-{{ b.id }}"
+        style="cursor:pointer"
+        onclick="toggleRow({{ b.id }}, '{{ b.statut }}')"
+        onmouseover="this.style.background='#f8fafc'"
+        onmouseout="if(!document.getElementById('cb-{{ b.id }}').checked) this.style.background=''">
+        <td style="text-align:center;padding:.5rem" onclick="event.stopPropagation()">
+          <input type="checkbox" id="cb-{{ b.id }}"
+            data-id="{{ b.id }}" data-statut="{{ b.statut }}"
+            class="cb-bulletin"
+            onchange="onCbChange()"
+            style="width:15px;height:15px;cursor:pointer;accent-color:#1a2332">
+        </td>
         <td>
-          <div style="font-weight:700">{{ b.salarie.nom_complet }}</div>
+          <div style="font-weight:700;font-size:.875rem">{{ b.salarie.nom_complet }}</div>
           <div style="font-size:.7rem;color:#9ca3af">
-            {{ b.salarie.emploi or '' }}
-            {% if b.salarie.categorie %} · {{ b.salarie.categorie.code }}{% endif %}
+            {{ b.salarie.emploi or '' }}{% if b.salarie.categorie %} · {{ b.salarie.categorie.code }}{% endif %}
           </div>
         </td>
         {% if sites %}
@@ -159,9 +191,7 @@
           <span style="background:#f0fdf4;color:#065f46;padding:.15rem .5rem;border-radius:9999px;font-weight:700;font-size:.7rem">
             🏗️ {{ site_s.nom }}
           </span>
-          {% else %}
-          <span style="color:#d1d5db;font-size:.7rem">—</span>
-          {% endif %}
+          {% else %}<span style="color:#d1d5db;font-size:.7rem">—</span>{% endif %}
         </td>
         {% endif %}
         <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ b.salaire_brut|fcfa }}</td>
@@ -169,11 +199,11 @@
         <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.tcs|fcfa }}</td>
         <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.irpp|fcfa }}</td>
         <td style="text-align:right;font-family:monospace;font-weight:900;color:#1a2332">{{ b.net_a_payer|fcfa }}</td>
-        <td style="text-align:center">
+        <td style="text-align:center" onclick="event.stopPropagation()">
           <span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span>
         </td>
-        <td style="text-align:center">
-          <div style="display:flex;gap:.375rem;justify-content:center">
+        <td style="text-align:center" onclick="event.stopPropagation()">
+          <div style="display:flex;gap:.375rem;justify-content:center;align-items:center">
             <a href="/bulletins/{{ b.id }}"
                style="font-size:.75rem;color:#2563eb;font-weight:700;text-decoration:none">Voir</a>
             <span style="color:#e5e7eb">|</span>
@@ -182,7 +212,8 @@
             {% if b.statut == 'BROUILLON' %}
             <span style="color:#e5e7eb">|</span>
             <form method="POST" action="/bulletins/{{ b.id }}/valider" style="display:inline">
-              <button type="submit" style="font-size:.75rem;color:#d97706;font-weight:700;background:none;border:none;cursor:pointer">✅</button>
+              <button type="submit" title="Valider ce bulletin"
+                style="font-size:.75rem;color:#d97706;font-weight:700;background:none;border:none;cursor:pointer">✅</button>
             </form>
             {% endif %}
           </div>
@@ -192,53 +223,166 @@
     </tbody>
     <tfoot>
       <tr style="background:#f9fafb;font-weight:900">
-        <td style="padding:.625rem .75rem;font-size:.8rem" {% if sites %}colspan="2"{% endif %}>
+        <td {% if sites %}colspan="3"{% else %}colspan="2"{% endif %} style="padding:.625rem .75rem;font-size:.8rem">
           TOTAL ({{ bulletins|length }})
         </td>
-        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#6b7280">
-          {{ masse.get('total_brut',0)|int|fcfa }}
-        </td>
-        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">
-          {{ masse.get('total_cnss_salarie',0)|int|fcfa }}
-        </td>
-        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">
-          {{ masse.get('total_tcs',0)|int|fcfa }}
-        </td>
-        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">
-          {{ masse.get('total_irpp',0)|int|fcfa }}
-        </td>
-        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.875rem;color:#059669">
-          {{ masse.get('total_net',0)|int|fcfa }}
-        </td>
+        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#6b7280">{{ masse.get('total_brut',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">{{ masse.get('total_cnss_salarie',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">{{ masse.get('total_tcs',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.8rem;color:#dc2626">{{ masse.get('total_irpp',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.625rem .75rem;font-family:monospace;font-size:.875rem;color:#059669">{{ masse.get('total_net',0)|int|fcfa }}</td>
         <td colspan="{% if sites %}2{% else %}1{% endif %}"></td>
       </tr>
     </tfoot>
   </table>
-
-  {% else %}
-  <div style="text-align:center;padding:3rem;color:#9ca3af">
-    <div style="font-size:2.5rem;margin-bottom:.5rem">📭</div>
-    <p style="font-size:.875rem">
-      {% if site_filtre %}
-        Aucun bulletin pour {{ site_filtre.nom }} sur cette période.
-        <a href="/bulletins?periode_id={{ periode_sel.id }}" style="color:#2563eb">Voir tous les sites</a>
-      {% else %}
-        Aucun bulletin pour cette période.
-        <a href="/bulletins/saisie" style="color:#2563eb">Créer le premier bulletin</a>
-      {% endif %}
-    </p>
   </div>
-  {% endif %}
+
+  <!-- Barre flottante de sélection -->
+  <div id="barre-flottante" style="display:none;position:sticky;bottom:0;left:0;right:0;
+    background:#1a2332;color:white;padding:.75rem 1.25rem;
+    display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem;
+    border-top:2px solid #374151;z-index:10">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:.875rem;font-weight:900" id="barre-cpt">0 bulletin(s) sélectionné(s)</span>
+      <button type="button" onclick="deselectAll()"
+        style="font-size:.75rem;color:rgba(255,255,255,.6);background:none;border:none;cursor:pointer;text-decoration:underline">
+        Tout désélectionner
+      </button>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <button type="button" onclick="soumettreLot('valider')" id="barre-btn-valider"
+        style="background:#059669;color:white;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.825rem;font-weight:700;border:none;cursor:pointer;display:none">
+        ✅ Valider la sélection
+      </button>
+      <button type="button" onclick="soumettreLot('payer')" id="barre-btn-payer"
+        style="background:#2563eb;color:white;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.825rem;font-weight:700;border:none;cursor:pointer;display:none">
+        💰 Marquer payé
+      </button>
+      <button type="button" onclick="soumettreLot('supprimer_brouillons')"
+        style="background:#dc2626;color:white;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.825rem;font-weight:700;border:none;cursor:pointer">
+        🗑️ Supprimer
+      </button>
+    </div>
+  </div>
+
+</div><!-- fin .card -->
+</form>
+
+{% else %}
+<div class="card" style="text-align:center;padding:3rem;color:#9ca3af">
+  <div style="font-size:2.5rem;margin-bottom:.5rem">📭</div>
+  <p style="font-size:.875rem">
+    {% if site_filtre %}
+      Aucun bulletin pour {{ site_filtre.nom }} sur cette période.
+      <a href="/bulletins?periode_id={{ periode_sel.id }}" style="color:#2563eb">Voir tous les sites</a>
+    {% else %}
+      Aucun bulletin pour cette période.
+      <a href="/bulletins/saisie" style="color:#2563eb">Créer le premier bulletin</a>
+    {% endif %}
+  </p>
 </div>
+{% endif %}
 
 {% else %}
 <div class="card" style="text-align:center;padding:4rem;color:#9ca3af">
   <div style="font-size:3rem;margin-bottom:.75rem">📊</div>
   <p style="font-size:.875rem">Sélectionnez une période pour afficher les bulletins</p>
-  {% if sites %}
-  <p style="font-size:.8rem;color:#d1d5db;margin-top:.5rem">Vous pourrez ensuite filtrer par site</p>
-  {% endif %}
 </div>
 {% endif %}
 
+{% endblock %}
+{% block scripts %}
+<script>
+// ── Gestion des cases à cocher ────────────────────────────────────────────────
+function getChecked() {
+  return [...document.querySelectorAll('.cb-bulletin:checked')];
+}
+
+function onCbChange() {
+  const checked = getChecked();
+  const n       = checked.length;
+  const total   = document.querySelectorAll('.cb-bulletin').length;
+
+  // Compteur en-tête
+  document.getElementById('cpt-sel').textContent = n + ' sélectionné(s)';
+  document.getElementById('barre-cpt').textContent = n + ' bulletin(s) sélectionné(s)';
+
+  // Case "tout sélectionner"
+  const cbAll = document.getElementById('cb-all');
+  cbAll.checked       = n > 0 && n === total;
+  cbAll.indeterminate = n > 0 && n < total;
+  document.getElementById('lbl-all').textContent = n === total ? 'Tout désélectionner' : 'Tout sélectionner';
+
+  // Compter brouillons et validés cochés
+  const nBrouillons = checked.filter(c => c.dataset.statut === 'BROUILLON').length;
+  const nValides    = checked.filter(c => c.dataset.statut === 'VALIDÉ').length;
+
+  // Boutons actions dans l'en-tête
+  const btnVal = document.getElementById('btn-valider-sel');
+  const btnPay = document.getElementById('btn-payer-sel');
+  const btnSup = document.getElementById('btn-suppr-sel');
+  if (btnVal) { btnVal.style.display = nBrouillons > 0 ? '' : 'none'; document.getElementById('cpt-brouillons').textContent = nBrouillons; }
+  if (btnPay) { btnPay.style.display = nValides > 0    ? '' : 'none'; document.getElementById('cpt-valides').textContent   = nValides; }
+  if (btnSup) { btnSup.style.display = nBrouillons > 0 ? '' : 'none'; }
+
+  // Barre flottante
+  const barre = document.getElementById('barre-flottante');
+  if (barre) {
+    barre.style.display = n > 0 ? 'flex' : 'none';
+    const bVal = document.getElementById('barre-btn-valider');
+    const bPay = document.getElementById('barre-btn-payer');
+    if (bVal) bVal.style.display = nBrouillons > 0 ? '' : 'none';
+    if (bPay) bPay.style.display = nValides > 0    ? '' : 'none';
+  }
+
+  // Surbrillance des lignes cochées
+  checked.forEach(c => {
+    const row = document.getElementById('row-' + c.dataset.id);
+    if (row) row.style.background = '#f0f9ff';
+  });
+  document.querySelectorAll('.cb-bulletin:not(:checked)').forEach(c => {
+    const row = document.getElementById('row-' + c.dataset.id);
+    if (row) row.style.background = '';
+  });
+}
+
+function toggleAll(etat) {
+  document.querySelectorAll('.cb-bulletin').forEach(c => c.checked = etat);
+  onCbChange();
+}
+
+function deselectAll() {
+  toggleAll(false);
+}
+
+function toggleRow(id, statut) {
+  const cb = document.getElementById('cb-' + id);
+  if (cb) { cb.checked = !cb.checked; onCbChange(); }
+}
+
+function soumettreLot(action) {
+  const checked = getChecked();
+  if (checked.length === 0) { alert('Cochez au moins un bulletin.'); return; }
+
+  const labels = { valider: 'valider', payer: 'marquer payé', supprimer_brouillons: 'supprimer' };
+  const n = checked.length;
+  if (!confirm(`Confirmer : ${labels[action]} ${n} bulletin(s) ?`)) return;
+
+  document.getElementById('inp-ids').value    = checked.map(c => c.dataset.id).join(',');
+  document.getElementById('inp-action').value = action;
+
+  // Anti double-soumission
+  document.querySelectorAll('#form-lot button[type="button"]').forEach(b => b.disabled = true);
+  document.getElementById('form-lot').submit();
+}
+
+// Raccourci clavier : Ctrl+A pour tout sélectionner
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey && e.key === 'a' && document.getElementById('tbody-bulletins')) {
+    e.preventDefault();
+    const allChecked = getChecked().length === document.querySelectorAll('.cb-bulletin').length;
+    toggleAll(!allChecked);
+  }
+});
+</script>
 {% endblock %}
