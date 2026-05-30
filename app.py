@@ -1075,17 +1075,78 @@ def bulletins():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t=get_tenant()
     if not t: return redirect(url_for("login"))
-    pid=request.args.get("periode_id",type=int); sf=request.args.get("statut","")
-    periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all()
-    ps=None; buls=[]; masse={}
+    pid          = request.args.get("periode_id", type=int)
+    sf           = request.args.get("statut", "")
+    site_filtre_id = request.args.get("site_id", type=int)
+    periodes     = PeriodePaie.query.filter_by(tenant_id=t.id)                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
+    sites_list   = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_filtre  = Site.query.get(site_filtre_id) if site_filtre_id else None
+    ps = None; buls = []; masse = {}
+
     if pid:
-        ps=PeriodePaie.query.filter_by(id=pid,tenant_id=t.id).first_or_404()
-        q=BulletinPaie.query.filter_by(periode_id=pid,tenant_id=t.id)
-        if sf: q=q.filter_by(statut=sf)
-        buls=q.join(Salarie).order_by(Salarie.nom).all()
-        masse=calculer_masse_salariale(buls)
-    return render_template("tenant/bulletins.html", periodes=periodes, periode_sel=ps,
-        bulletins=buls, masse=masse, statut_filtre=sf, tenant=t)
+        ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+        q  = BulletinPaie.query.filter_by(periode_id=pid, tenant_id=t.id)
+        if sf:
+            q = q.filter_by(statut=sf)
+
+        # ── Filtre par site ──────────────────────────────────────────────────
+        if site_filtre_id:
+            # Récupérer les IDs des salariés affectés à ce site
+            ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+                tenant_id=t.id, site_id=site_filtre_id, actif=True
+            ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+            q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
+
+        buls  = q.join(Salarie).order_by(Salarie.nom).all()
+        masse = calculer_masse_salariale(buls)
+
+    # Affectation site de chaque salarié pour affichage dans le tableau
+    aff_sal = {a.salarie_id: a.site for a in AffectationSite.query.filter_by(
+        tenant_id=t.id, actif=True
+    ).filter(AffectationSite.salarie_id.isnot(None)).all()}
+
+    return render_template("tenant/bulletins.html",
+        periodes=periodes, periode_sel=ps,
+        bulletins=buls, masse=masse, statut_filtre=sf,
+        sites=sites_list, site_filtre=site_filtre, aff_sal=aff_sal,
+        tenant=t)
+
+@app.route("/bulletins/valider-lot", methods=["POST"])
+@login_required
+def bulletins_valider_lot():
+    """Valider tous les bulletins BROUILLON d'une période (filtrés par site si besoin)."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.can_edit: abort(403)
+    pid     = request.form.get("periode_id", type=int)
+    site_id = request.form.get("site_id", type=int)
+    if not pid:
+        flash("Période manquante.", "error")
+        return redirect(url_for("bulletins"))
+    q = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=pid, statut="BROUILLON")
+    if site_id:
+        ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_id, actif=True
+        ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+        q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
+    buls = q.all()
+    nb = 0
+    for b in buls:
+        b.statut = "VALIDÉ"
+        b.date_validation = datetime.utcnow()
+        # Déduire les acomptes en attente
+        acomptes = Acompte.query.filter_by(
+            tenant_id=t.id, salarie_id=b.salarie_id,
+            mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
+        for a in acomptes:
+            a.statut = "DEDUIT"
+        nb += 1
+    db.session.commit()
+    flash(f"✅ {nb} bulletin(s) validé(s).", "success")
+    redir = f"/bulletins?periode_id={pid}"
+    if site_id: redir += f"&site_id={site_id}"
+    return redirect(redir)
 
 @app.route("/bulletins/saisie", methods=["GET","POST"])
 @login_required
