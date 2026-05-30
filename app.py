@@ -3181,6 +3181,494 @@ def api_pointage_semaine():
         else: stats[key]["absents"]+=1
     return jsonify(stats)
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RAPPORT MENSUEL PAR SITE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/rapports/mensuel-site")
+@login_required
+def rapport_mensuel_site():
+    """Page rapport mensuel par site : pointage + paie journalier + masse salariale."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    # Paramètres
+    now_d  = datetime.now()
+    mois   = request.args.get("mois",  type=int, default=now_d.month)
+    annee  = request.args.get("annee", type=int, default=now_d.year)
+    site_id= request.args.get("site_id", type=int)
+
+    import calendar
+    _, nb_jours_mois = calendar.monthrange(annee, mois)
+    mois_debut = date(annee, mois, 1)
+    mois_fin   = date(annee, mois, nb_jours_mois)
+
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_sel   = Site.query.get(site_id) if site_id else None
+
+    # Affectations actives pour ce mois
+    aff_sal  = {}   # salarie_id  → site_id
+    aff_jour = {}   # journalier_id → site_id
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).all():
+        if a.actif or (a.date_fin and a.date_fin >= mois_debut):
+            if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+            if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    def _build_rapport_site(s):
+        """Construit le rapport complet pour un site donné."""
+        sid = s.id
+        # Travailleurs affectés à ce site
+        ids_sal  = [k for k,v in aff_sal.items()  if v == sid]
+        ids_jour = [k for k,v in aff_jour.items() if v == sid]
+
+        salaries_aff    = Salarie.query.filter(
+            Salarie.tenant_id==t.id, Salarie.id.in_(ids_sal)
+        ).order_by(Salarie.nom).all() if ids_sal else []
+        journaliers_aff = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.id.in_(ids_jour)
+        ).order_by(Journalier.nom).all() if ids_jour else []
+
+        # ── Pointage mensuel ─────────────────────────────────────────────────
+        pts_sal  = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.salarie_id.in_(ids_sal),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+        pts_jour = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.journalier_id.in_(ids_jour),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+        pts_tous = pts_sal + pts_jour
+
+        nb_presences  = sum(1 for p in pts_tous if p.present)
+        nb_absences   = sum(1 for p in pts_tous if p.absent)
+        taux_pres = round(nb_presences / (nb_presences + nb_absences) * 100
+                         ) if (nb_presences + nb_absences) > 0 else 0
+
+        # Heures totales
+        heures_normales = sum(float(p.heures_normales or 8) for p in pts_tous if p.present)
+        heures_sup = sum(
+            float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+            float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+            float(p.heures_sup or 0)
+            for p in pts_tous if p.present)
+
+        # Détail par travailleur (pointage)
+        detail_sal = []
+        for sal in salaries_aff:
+            pts_s = [p for p in pts_sal if p.salarie_id == sal.id]
+            nb_p  = sum(1 for p in pts_s if p.present)
+            nb_a  = sum(1 for p in pts_s if p.absent)
+            h_n   = sum(float(p.heures_normales or 8) for p in pts_s if p.present)
+            h_s   = sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                        float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)
+                        for p in pts_s if p.present)
+            detail_sal.append({
+                "nom": sal.nom_complet, "matricule": sal.matricule,
+                "emploi": sal.emploi or "—", "type": "MENSUEL",
+                "nb_presences": nb_p, "nb_absences": nb_a,
+                "heures_normales": round(h_n, 1), "heures_sup": round(h_s, 1),
+                "taux": round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0,
+            })
+
+        detail_jour = []
+        for jour in journaliers_aff:
+            pts_j = [p for p in pts_jour if p.journalier_id == jour.id]
+            nb_p  = sum(1 for p in pts_j if p.present)
+            nb_a  = sum(1 for p in pts_j if p.absent)
+            h_n   = sum(float(p.heures_normales or 8) for p in pts_j if p.present)
+            h_s   = sum(float(p.heures_sup or 0) for p in pts_j if p.present)
+            detail_jour.append({
+                "nom": jour.nom_complet, "profession": jour.profession or "—",
+                "taux_horaire": float(jour.taux_horaire or 0), "type": "JOURNALIER",
+                "nb_presences": nb_p, "nb_absences": nb_a,
+                "heures_normales": round(h_n, 1), "heures_sup": round(h_s, 1),
+                "taux": round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0,
+            })
+
+        # ── Paie journaliers ─────────────────────────────────────────────────
+        feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)            .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                    FeuillePaieJournalier.date_debut >= mois_debut,
+                    FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+        masse_jour_brut   = sum(float(f.montant_brut or 0) for f in feuilles)
+        feuilles_payees   = sum(1 for f in feuilles if f.statut == "PAYÉ")
+        feuilles_attente  = sum(1 for f in feuilles if f.statut == "EN_ATTENTE")
+
+        detail_feuilles = [{
+            "nom":         f.journalier.nom_complet,
+            "profession":  f.journalier.profession or "—",
+            "date_debut":  f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
+            "date_fin":    f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+            "nb_jours":    f.nb_jours,
+            "heures":      round(float(f.total_heures or 0), 1),
+            "taux":        round(float(f.taux_horaire or 0)),
+            "montant":     round(float(f.montant_brut or 0)),
+            "statut":      f.statut,
+        } for f in feuilles]
+
+        # ── Bulletins salariés ────────────────────────────────────────────────
+        periode = PeriodePaie.query.filter_by(
+            tenant_id=t.id, annee=annee, mois=mois).first()
+        bulletins_site = []
+        masse_mensuelle = {}
+        detail_bulletins = []
+        if periode and ids_sal:
+            bulletins_site = BulletinPaie.query.filter_by(
+                tenant_id=t.id, periode_id=periode.id
+            ).filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+            masse_mensuelle = calculer_masse_salariale(bulletins_site)
+            detail_bulletins = [{
+                "nom":        b.salarie.nom_complet,
+                "matricule":  b.salarie.matricule,
+                "emploi":     b.salarie.emploi or "—",
+                "brut":       round(float(b.salaire_brut  or 0)),
+                "net":        round(float(b.net_a_payer   or 0)),
+                "cnss":       round(float(b.cnss_salarie  or 0)),
+                "irpp":       round(float(b.irpp          or 0)),
+                "statut":     b.statut,
+            } for b in sorted(bulletins_site, key=lambda x: x.salarie.nom)]
+
+        return {
+            "site": s,
+            "effectif_sal":   len(salaries_aff),
+            "effectif_jour":  len(journaliers_aff),
+            "effectif_total": len(salaries_aff) + len(journaliers_aff),
+            # Pointage
+            "nb_presences": nb_presences, "nb_absences": nb_absences,
+            "taux_presence": taux_pres,
+            "heures_normales": round(heures_normales, 1),
+            "heures_sup": round(heures_sup, 1),
+            "detail_sal": detail_sal,
+            "detail_jour": detail_jour,
+            # Paie journaliers
+            "feuilles": detail_feuilles,
+            "masse_jour_brut": round(masse_jour_brut),
+            "feuilles_payees": feuilles_payees,
+            "feuilles_attente": feuilles_attente,
+            # Bulletins mensuels
+            "bulletins": detail_bulletins,
+            "masse_mensuelle": masse_mensuelle,
+        }
+
+    # Construire rapport(s)
+    if site_sel:
+        rapports = [_build_rapport_site(site_sel)]
+    else:
+        rapports = [_build_rapport_site(s) for s in sites_list]
+
+    # Totaux globaux
+    totaux = {
+        "effectif": sum(r["effectif_total"] for r in rapports),
+        "presences": sum(r["nb_presences"]   for r in rapports),
+        "absences":  sum(r["nb_absences"]    for r in rapports),
+        "h_normales": round(sum(r["heures_normales"] for r in rapports), 1),
+        "h_sup":      round(sum(r["heures_sup"]     for r in rapports), 1),
+        "masse_jour": sum(r["masse_jour_brut"]  for r in rapports),
+        "masse_men":  sum(r["masse_mensuelle"].get("total_net", 0) for r in rapports),
+    }
+
+    return render_template("tenant/rapport_mensuel_site.html",
+        tenant=t, rapports=rapports, totaux=totaux,
+        sites=sites_list, site_sel=site_sel,
+        mois=mois, annee=annee,
+        mois_nom=MOIS_NOMS_LONG[mois],
+        MOIS_NOMS=MOIS_NOMS_LONG,
+        now=datetime.now())
+
+
+@app.route("/rapports/mensuel-site/export")
+@login_required
+def rapport_mensuel_site_export():
+    """Export Excel du rapport mensuel par site."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    import io, calendar
+
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    mois   = request.args.get("mois",  type=int, default=datetime.now().month)
+    annee  = request.args.get("annee", type=int, default=datetime.now().year)
+    site_id= request.args.get("site_id", type=int)
+    mois_nom = MOIS_NOMS_LONG[mois]
+    _, nb_jours_mois = calendar.monthrange(annee, mois)
+    mois_debut = date(annee, mois, 1)
+    mois_fin   = date(annee, mois, nb_jours_mois)
+
+    # Reconstruire le rapport (même logique que la route GET)
+    # On rappelle simplement la route interne via redirect vers export dédié
+    # Pour éviter la duplication, on re-calcule ici directement
+
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_sel   = Site.query.get(site_id) if site_id else None
+    sites_a_traiter = [site_sel] if site_sel else sites_list
+
+    aff_sal  = {}
+    aff_jour = {}
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).all():
+        if a.actif or (a.date_fin and a.date_fin >= mois_debut):
+            if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+            if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    # Styles
+    def hdr(ws, row, cols, texts, fill_color="1a2332"):
+        for i, txt in enumerate(texts, 1):
+            c = ws.cell(row, i, txt)
+            c.font      = Font(bold=True, color="FFFFFF", size=9)
+            c.fill      = PatternFill("solid", fgColor=fill_color)
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border    = Border(**{s: Side(style="thin", color="D1D5DB")
+                                    for s in ["left","right","top","bottom"]})
+        ws.row_dimensions[row].height = 20
+
+    def titre_section(ws, row, txt, color="374151", ncols=10):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+        c = ws.cell(row, 1, txt)
+        c.font = Font(bold=True, color="FFFFFF", size=10)
+        c.fill = PatternFill("solid", fgColor=color)
+        c.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[row].height = 18
+
+    MONEY = "#,##0"
+    thin  = {s: Side(style="thin", color="E5E7EB") for s in ["left","right","top","bottom"]}
+    EVEN  = PatternFill("solid", fgColor="F8FAFC")
+
+    wb = Workbook()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 1 — SYNTHÈSE GLOBALE
+    # ══════════════════════════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = "Synthèse"
+    ws.freeze_panes = "A4"
+
+    # Titre principal
+    titre_doc = f"RAPPORT MENSUEL — {mois_nom.upper()} {annee} — {t.denomination}"
+    if site_sel: titre_doc += f" — {site_sel.nom}"
+    ws.merge_cells("A1:K1")
+    ws["A1"] = titre_doc
+    ws["A1"].font = Font(bold=True, size=13, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="1a2332")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+    ws.append([f"Édité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}"])
+    ws.append([])
+
+    hdr(ws, 3, 11,
+        ["Site","Effectif","Mensuels","Journaliers","Présences","Absences",
+         "Taux prés.","H.normales","H.sup","Masse journaliers (FCFA)","Net mensuels (FCFA)"])
+
+    grand_tot = {"eff":0,"pres":0,"abs":0,"hn":0,"hs":0,"mj":0,"mn":0}
+    for row_i, s in enumerate(sites_a_traiter, 4):
+        ids_sal  = [k for k,v in aff_sal.items()  if v == s.id]
+        ids_jour = [k for k,v in aff_jour.items() if v == s.id]
+        pts = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin)            .filter(db.or_(
+                Pointage.salarie_id.in_(ids_sal)    if ids_sal  else db.false(),
+                Pointage.journalier_id.in_(ids_jour) if ids_jour else db.false()
+            )).all()
+        nb_p  = sum(1 for p in pts if p.present)
+        nb_a  = sum(1 for p in pts if p.absent)
+        taux  = round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0
+        hn    = round(sum(float(p.heures_normales or 8) for p in pts if p.present), 1)
+        hs    = round(sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                          float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)+
+                          float(p.heures_sup or 0) for p in pts if p.present), 1)
+        feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)            .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                    FeuillePaieJournalier.date_debut >= mois_debut,
+                    FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+        mj = round(sum(float(f.montant_brut or 0) for f in feuilles))
+        per= PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee, mois=mois).first()
+        mn = 0
+        if per and ids_sal:
+            buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=per.id)                .filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+            mn = round(sum(float(b.net_a_payer or 0) for b in buls))
+        eff = len(ids_sal) + len(ids_jour)
+        row_data = [s.nom, eff, len(ids_sal), len(ids_jour),
+                    nb_p, nb_a, f"{taux}%", hn, hs, mj, mn]
+        ws.append(row_data)
+        for ci, v in enumerate(row_data, 1):
+            c = ws.cell(row_i, ci)
+            c.border = Border(**thin)
+            if row_i % 2 == 0: c.fill = EVEN
+            if ci in (10, 11): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+            if ci in (5,6,7,8,9): c.alignment = Alignment(horizontal="center")
+        grand_tot["eff"]+=eff; grand_tot["pres"]+=nb_p; grand_tot["abs"]+=nb_a
+        grand_tot["hn"]+=hn; grand_tot["hs"]+=hs; grand_tot["mj"]+=mj; grand_tot["mn"]+=mn
+
+    # Total
+    tr = ws.max_row + 1
+    ws.append(["TOTAL", grand_tot["eff"], "", "", grand_tot["pres"], grand_tot["abs"],
+                "", round(grand_tot["hn"],1), round(grand_tot["hs"],1),
+                grand_tot["mj"], grand_tot["mn"]])
+    for ci in range(1, 12):
+        c = ws.cell(tr, ci)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1a2332")
+        if ci in (10, 11): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+
+    for i, w in enumerate([24,10,10,12,10,10,10,12,10,22,22], 1):
+        ws.column_dimensions[ws.cell(1,i).column_letter].width = w
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLETS PAR SITE
+    # ══════════════════════════════════════════════════════════════════════════
+    for s in sites_a_traiter:
+        ws_s = wb.create_sheet(s.nom[:28])
+        ws_s.freeze_panes = "A4"
+        ids_sal  = [k for k,v in aff_sal.items()  if v == s.id]
+        ids_jour = [k for k,v in aff_jour.items() if v == s.id]
+
+        # Titre
+        ws_s.merge_cells("A1:I1")
+        ws_s["A1"] = f"{s.nom} — {mois_nom} {annee} — {t.denomination}"
+        ws_s["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+        ws_s["A1"].fill = PatternFill("solid", fgColor="1a2332")
+        ws_s["A1"].alignment = Alignment(horizontal="center", vertical="center")
+        ws_s.row_dimensions[1].height = 20
+        ws_s.append([])
+        row_cur = 2
+
+        # ── Section pointage ──────────────────────────────────────────────────
+        row_cur += 1
+        titre_section(ws_s, row_cur, f"📅 POINTAGE — {mois_nom} {annee}", "065f46", 9)
+        row_cur += 1
+        hdr(ws_s, row_cur, 9,
+            ["Nom","Type","Emploi/Profession","Présences","Absences","Taux %","H.norm.","H.sup","Total h."],
+            "065f46")
+        row_cur += 1
+
+        pts_sal  = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.salarie_id.in_(ids_sal),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+        pts_jour = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.journalier_id.in_(ids_jour),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+
+        salaries_aff    = Salarie.query.filter(Salarie.id.in_(ids_sal)).order_by(Salarie.nom).all() if ids_sal else []
+        journaliers_aff = Journalier.query.filter(Journalier.id.in_(ids_jour)).order_by(Journalier.nom).all() if ids_jour else []
+
+        for trv_list, pts_list, typ in [
+            (salaries_aff, pts_sal, "Mensuel"),
+            (journaliers_aff, pts_jour, "Journalier")
+        ]:
+            for trv in trv_list:
+                if typ == "Mensuel":
+                    pts_t = [p for p in pts_list if p.salarie_id == trv.id]
+                    emploi = trv.emploi or "—"
+                else:
+                    pts_t = [p for p in pts_list if p.journalier_id == trv.id]
+                    emploi = trv.profession or "—"
+                nb_p = sum(1 for p in pts_t if p.present)
+                nb_a = sum(1 for p in pts_t if p.absent)
+                hn   = round(sum(float(p.heures_normales or 8) for p in pts_t if p.present), 1)
+                hs   = round(sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                                 float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)+
+                                 float(p.heures_sup or 0) for p in pts_t if p.present), 1)
+                taux = round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0
+                row_d = [trv.nom_complet, typ, emploi, nb_p, nb_a, f"{taux}%", hn, hs, round(hn+hs,1)]
+                ws_s.append(row_d)
+                for ci, v in enumerate(row_d, 1):
+                    c = ws_s.cell(row_cur, ci)
+                    c.border = Border(**thin)
+                    if row_cur % 2 == 0: c.fill = EVEN
+                    if ci in (4,5,6,7,8,9): c.alignment = Alignment(horizontal="center")
+                row_cur += 1
+
+        ws_s.append([])
+        row_cur += 1
+
+        # ── Section paie journaliers ──────────────────────────────────────────
+        if ids_jour:
+            titre_section(ws_s, row_cur, f"🦺 PAIE JOURNALIERS — {mois_nom} {annee}", "92400e", 9)
+            row_cur += 1
+            hdr(ws_s, row_cur, 9,
+                ["Journalier","Profession","Période du","au","Nb jours","Heures","Taux/h","Montant (FCFA)","Statut"],
+                "92400e")
+            row_cur += 1
+            feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)                .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                        FeuillePaieJournalier.date_debut >= mois_debut,
+                        FeuillePaieJournalier.date_fin   <= mois_fin).all()
+            total_feuilles = 0
+            for f in feuilles:
+                m = round(float(f.montant_brut or 0)); total_feuilles += m
+                row_d = [f.journalier.nom_complet, f.journalier.profession or "—",
+                         f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
+                         f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+                         f.nb_jours, round(float(f.total_heures or 0),1),
+                         round(float(f.taux_horaire or 0)), m, f.statut]
+                ws_s.append(row_d)
+                for ci, v in enumerate(row_d, 1):
+                    c = ws_s.cell(row_cur, ci)
+                    c.border = Border(**thin)
+                    if row_cur % 2 == 0: c.fill = EVEN
+                    if ci == 8: c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+                    if ci in (5,6,7): c.alignment = Alignment(horizontal="center")
+                row_cur += 1
+            # Total
+            ws_s.append(["TOTAL JOURNALIERS", "", "", "", "", "", "", total_feuilles, ""])
+            for ci in range(1, 10):
+                c = ws_s.cell(row_cur, ci)
+                c.font = Font(bold=True, color="FFFFFF")
+                c.fill = PatternFill("solid", fgColor="92400e")
+                if ci == 8: c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+            row_cur += 2; ws_s.append([])
+
+        # ── Section bulletins mensuels ────────────────────────────────────────
+        if ids_sal:
+            per = PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee, mois=mois).first()
+            if per:
+                buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=per.id)                    .filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+                if buls:
+                    titre_section(ws_s, row_cur,
+                        f"📄 BULLETINS DE PAIE — {mois_nom} {annee}", "1e40af", 9)
+                    row_cur += 1
+                    hdr(ws_s, row_cur, 9,
+                        ["Salarié","Matricule","Emploi","Brut (FCFA)","CNSS sal.",
+                         "TCS","IRPP","Net à payer (FCFA)","Statut"], "1e40af")
+                    row_cur += 1
+                    total_brut = total_net = 0
+                    for b in sorted(buls, key=lambda x: x.salarie.nom):
+                        brut = round(float(b.salaire_brut or 0))
+                        net  = round(float(b.net_a_payer  or 0))
+                        total_brut += brut; total_net += net
+                        row_d = [b.salarie.nom_complet, b.salarie.matricule,
+                                 b.salarie.emploi or "—", brut,
+                                 round(float(b.cnss_salarie or 0)),
+                                 round(float(b.tcs  or 0)),
+                                 round(float(b.irpp or 0)), net, b.statut]
+                        ws_s.append(row_d)
+                        for ci, v in enumerate(row_d, 1):
+                            c = ws_s.cell(row_cur, ci)
+                            c.border = Border(**thin)
+                            if row_cur % 2 == 0: c.fill = EVEN
+                            if ci in (4,5,6,7,8): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+                        row_cur += 1
+                    ws_s.append(["TOTAL SALARIÉS","","",total_brut,"","","",total_net,""])
+                    for ci in range(1, 10):
+                        c = ws_s.cell(row_cur, ci)
+                        c.font = Font(bold=True, color="FFFFFF")
+                        c.fill = PatternFill("solid", fgColor="1e40af")
+                        if ci in (4,8): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+
+        for i, w in enumerate([28,12,20,10,10,10,10,20,12], 1):
+            ws_s.column_dimensions[ws_s.cell(1,i).column_letter].width = w
+
+    # Export
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+    fname_parts = [f"Rapport_{mois_nom}_{annee}"]
+    if site_sel: fname_parts.append(site_sel.nom.replace(" ","_"))
+    fname_parts.append(datetime.now().strftime("%Y%m%d"))
+    return send_file(out,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True, download_name="_".join(fname_parts)+".xlsx")
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _pd(v):
     if not v: return None
