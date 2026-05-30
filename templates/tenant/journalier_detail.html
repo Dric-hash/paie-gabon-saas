@@ -133,16 +133,25 @@
           <span style="font-weight:600">{{ journalier.nationalite }}</span>
         </div>
         {% endif %}
-        {% if journalier.numero_cnss %}
-        <div style="display:flex;justify-content:space-between">
-          <span style="color:#6b7280">N° CNSS</span>
-          <span style="font-weight:600;font-family:monospace">{{ journalier.numero_cnss }}</span>
-        </div>
-        {% endif %}
+
         {% if journalier.date_debut %}
         <div style="display:flex;justify-content:space-between">
-          <span style="color:#6b7280">Depuis le</span>
+          <span style="color:#6b7280">Début mission</span>
           <span style="font-weight:600">{{ journalier.date_debut.strftime('%d/%m/%Y') }}</span>
+        </div>
+        {% endif %}
+        {% if journalier.date_embauche %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">Date embauche</span>
+          <span style="font-weight:600">{{ journalier.date_embauche.strftime('%d/%m/%Y') }}</span>
+        </div>
+        {% endif %}
+
+
+        {% if journalier.date_embauche %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">Date embauche</span>
+          <span style="font-weight:600">{{ journalier.date_embauche.strftime('%d/%m/%Y') }}</span>
         </div>
         {% endif %}
         {% if aff %}
