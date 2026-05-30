@@ -7,19 +7,17 @@
   {% if q %}<span style="font-size:.875rem;color:#6b7280">Résultats pour « <strong>{{ q }}</strong> »</span>{% endif %}
 </div>
 
-<!-- Barre de recherche principale -->
+<!-- Barre de recherche -->
 <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem">
   <form method="GET" action="/recherche" style="display:flex;gap:.75rem;align-items:center">
     <div style="flex:1;position:relative">
-      <span style="position:absolute;left:.875rem;top:50%;transform:translateY(-50%);font-size:1rem;pointer-events:none">🔍</span>
+      <span style="position:absolute;left:.875rem;top:50%;transform:translateY(-50%);font-size:.9rem;pointer-events:none;color:#9ca3af">🔍</span>
       <input type="text" name="q" value="{{ q }}" placeholder="Nom, prénom, matricule, profession..."
         autofocus
-        style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem .75rem .75rem 2.75rem;font-size:1rem;transition:border-color .2s"
+        style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem .75rem .75rem 2.75rem;font-size:1rem"
         onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"/>
     </div>
-    <button type="submit" class="btn-primary" style="padding:.75rem 1.5rem;font-size:.9rem">
-      Rechercher
-    </button>
+    <button type="submit" class="btn-primary" style="padding:.75rem 1.5rem">Rechercher</button>
     {% if q %}
     <a href="/recherche" style="font-size:.8rem;color:#9ca3af;text-decoration:none;font-weight:600">✕ Effacer</a>
     {% endif %}
@@ -28,7 +26,6 @@
 
 {% if q %}
   {% if nb_total == 0 %}
-  <!-- Aucun résultat -->
   <div class="card" style="text-align:center;padding:3rem;color:#9ca3af">
     <div style="font-size:3rem;margin-bottom:.75rem">🔍</div>
     <p style="font-size:1rem;font-weight:700;color:#374151;margin-bottom:.5rem">Aucun résultat pour « {{ q }} »</p>
@@ -40,78 +37,138 @@
   </div>
 
   {% else %}
-  <!-- Résumé -->
+  <!-- Résumé compteurs -->
   <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem;flex-wrap:wrap">
     <span style="font-size:.875rem;font-weight:700;color:#374151">{{ nb_total }} résultat(s)</span>
-    {% for cle, items in resultats.items() %}
-    <a href="#section-{{ cle }}"
-       style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;text-decoration:none;
-       {% if cle == 'salaries' %}background:#dbeafe;color:#1e40af
-       {% elif cle == 'journaliers' %}background:#fef3c7;color:#92400e
-       {% elif cle == 'bulletins' %}background:#f0fdf4;color:#065f46
-       {% else %}background:#f3f4f6;color:#374151{% endif %}">
-      {{ {'salaries':'👤 Salariés','journaliers':'🦺 Journaliers','bulletins':'📄 Bulletins','acomptes':'💸 Acomptes'}[cle] }}
-      <span style="opacity:.7">({{ items|length }})</span>
+    {% if resultats.salaries %}
+    <span style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;background:#dbeafe;color:#1e40af">
+      👤 Salariés ({{ resultats.salaries|length }})
+    </span>
+    {% endif %}
+    {% if resultats.journaliers %}
+    <span style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;background:#fef3c7;color:#92400e">
+      🦺 Journaliers ({{ resultats.journaliers|length }})
+    </span>
+    {% endif %}
+    {% if resultats.bulletins %}
+    <span style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;background:#f0fdf4;color:#065f46">
+      📄 Bulletins ({{ resultats.bulletins|length }})
+    </span>
+    {% endif %}
+    {% if resultats.acomptes %}
+    <span style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;background:#f3f4f6;color:#374151">
+      💸 Acomptes ({{ resultats.acomptes|length }})
+    </span>
+    {% endif %}
+  </div>
+
+  <!-- Section Salariés -->
+  {% if resultats.salaries %}
+  <div class="card overflow-hidden mb-4">
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:#eff6ff;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:.8rem;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em">
+        👤 Salariés — {{ resultats.salaries|length }} résultat(s)
+      </span>
+      <a href="/salaries?q={{ q }}" style="font-size:.75rem;color:#1e40af;text-decoration:none;font-weight:600">Voir tout →</a>
+    </div>
+    {% for item in resultats.salaries %}
+    <a href="{{ item.lien }}" style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+       onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:#dbeafe;border:1px solid #bfdbfe;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">👤</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:#111827">{{ item.titre }}</div>
+        <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem">{{ item.sous_titre }}</div>
+      </div>
+      <span style="font-size:.7rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;flex-shrink:0;
+        {{ 'background:#d1fae5;color:#065f46' if item.badge == 'ACTIF' else 'background:#fee2e2;color:#991b1b' }}">
+        {{ item.badge }}
+      </span>
+      <span style="color:#d1d5db;flex-shrink:0">→</span>
     </a>
     {% endfor %}
   </div>
+  {% endif %}
 
-  <!-- Sections résultats -->
-  {% set labels = {'salaries': ('Salariés','👤','#1e40af','#eff6ff','#bfdbfe'),
-                   'journaliers': ('Journaliers','🦺','#92400e','#fffbeb','#fde68a'),
-                   'bulletins': ('Bulletins de paie','📄','#065f46','#f0fdf4','#a7f3d0'),
-                   'acomptes': ('Acomptes','💸','#374151','#f9fafb','#e5e7eb')} %}
-
-  {% for cle, items in resultats.items() %}
-  {% set info = labels[cle] %}
-  <div class="card overflow-hidden mb-4" id="section-{{ cle }}">
-    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:{{ info[3] }};display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:.8rem;font-weight:700;color:{{ info[2] }};text-transform:uppercase;letter-spacing:.05em">
-        {{ info[1] }} {{ info[0] }} — {{ items|length }} résultat(s)
+  <!-- Section Journaliers -->
+  {% if resultats.journaliers %}
+  <div class="card overflow-hidden mb-4">
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:#fffbeb;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:.8rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">
+        🦺 Journaliers — {{ resultats.journaliers|length }} résultat(s)
       </span>
-      {% if cle == 'salaries' %}
-      <a href="/salaries?q={{ q }}" style="font-size:.75rem;color:{{ info[2] }};text-decoration:none;font-weight:600">Voir tout →</a>
-      {% elif cle == 'journaliers' %}
-      <a href="/journaliers?q={{ q }}" style="font-size:.75rem;color:{{ info[2] }};text-decoration:none;font-weight:600">Voir tout →</a>
-      {% endif %}
+      <a href="/journaliers?q={{ q }}" style="font-size:.75rem;color:#92400e;text-decoration:none;font-weight:600">Voir tout →</a>
     </div>
-
-    <div>
-      {% for item in items %}
-      <a href="{{ item.lien }}"
-         style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb;transition:background .15s"
-         onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-        <!-- Icône -->
-        <div style="width:36px;height:36px;border-radius:50%;background:{{ info[3] }};border:1px solid {{ info[4] }};display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">
-          {{ item.icone }}
-        </div>
-        <!-- Contenu -->
-        <div style="flex:1;min-width:0">
-          <div style="font-weight:700;font-size:.9rem;color:#111827">
-            <!-- Surligner le terme recherché -->
-            {{ item.titre }}
-          </div>
-          <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-            {{ item.sous_titre }}
-          </div>
-        </div>
-        <!-- Badge statut -->
-        <span style="font-size:.7rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;flex-shrink:0;
-          {% if item.badge == 'ACTIF' %}background:#d1fae5;color:#065f46
-          {% elif item.badge == 'VALIDÉ' %}background:#dbeafe;color:#1e40af
-          {% elif item.badge == 'PAYÉ' %}background:#d1fae5;color:#065f46
-          {% elif item.badge == 'BROUILLON' %}background:#fef3c7;color:#92400e
-          {% elif item.badge == 'EN_ATTENTE' %}background:#fef3c7;color:#92400e
-          {% else %}background:#f3f4f6;color:#6b7280{% endif %}">
-          {{ item.badge }}
-        </span>
-        <!-- Flèche -->
-        <span style="color:#d1d5db;font-size:.875rem;flex-shrink:0">→</span>
-      </a>
-      {% endfor %}
-    </div>
+    {% for item in resultats.journaliers %}
+    <a href="{{ item.lien }}" style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+       onmouseover="this.style.background='#fefce8'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:#fef3c7;border:1px solid #fde68a;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🦺</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:#111827">{{ item.titre }}</div>
+        <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem">{{ item.sous_titre }}</div>
+      </div>
+      <span style="font-size:.7rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;flex-shrink:0;
+        {{ 'background:#d1fae5;color:#065f46' if item.badge == 'ACTIF' else 'background:#fee2e2;color:#991b1b' }}">
+        {{ item.badge }}
+      </span>
+      <span style="color:#d1d5db;flex-shrink:0">→</span>
+    </a>
+    {% endfor %}
   </div>
-  {% endfor %}
+  {% endif %}
+
+  <!-- Section Bulletins -->
+  {% if resultats.bulletins %}
+  <div class="card overflow-hidden mb-4">
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:#f0fdf4">
+      <span style="font-size:.8rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em">
+        📄 Bulletins de paie — {{ resultats.bulletins|length }} résultat(s)
+      </span>
+    </div>
+    {% for item in resultats.bulletins %}
+    <a href="{{ item.lien }}" style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+       onmouseover="this.style.background='#f0fdf4'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:#d1fae5;border:1px solid #a7f3d0;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">📄</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:#111827">{{ item.titre }}</div>
+        <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem">{{ item.sous_titre }}</div>
+      </div>
+      <span style="font-size:.7rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;flex-shrink:0;
+        {% if item.badge == 'VALIDÉ' %}background:#dbeafe;color:#1e40af
+        {% elif item.badge == 'PAYÉ' %}background:#d1fae5;color:#065f46
+        {% else %}background:#fef3c7;color:#92400e{% endif %}">
+        {{ item.badge }}
+      </span>
+      <span style="color:#d1d5db;flex-shrink:0">→</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <!-- Section Acomptes -->
+  {% if resultats.acomptes %}
+  <div class="card overflow-hidden mb-4">
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:#f9fafb">
+      <span style="font-size:.8rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.05em">
+        💸 Acomptes — {{ resultats.acomptes|length }} résultat(s)
+      </span>
+    </div>
+    {% for item in resultats.acomptes %}
+    <a href="{{ item.lien }}" style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+       onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:#f3f4f6;border:1px solid #e5e7eb;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">💸</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:#111827">{{ item.titre }}</div>
+        <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem">{{ item.sous_titre }}</div>
+      </div>
+      <span style="font-size:.7rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;flex-shrink:0;
+        {{ 'background:#fef3c7;color:#92400e' if item.badge == 'EN_ATTENTE' else 'background:#d1fae5;color:#065f46' }}">
+        {{ item.badge }}
+      </span>
+      <span style="color:#d1d5db;flex-shrink:0">→</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
 
   {% endif %}
 {% endif %}
