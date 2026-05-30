@@ -4,7 +4,13 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
   <div>
-    <h1 class="text-2xl font-black text-gray-900">Feuille de Pointage</h1>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <h1 class="text-2xl font-black text-gray-900">Feuille de Pointage</h1>
+      <a href="/pointage/recap-semaine?date={{ date_sel.strftime('%Y-%m-%d') }}"
+         style="font-size:.75rem;font-weight:700;background:#f0fdf4;color:#065f46;padding:.375rem .75rem;border-radius:.625rem;text-decoration:none;white-space:nowrap">
+        📊 Récap semaine
+      </a>
+    </div>
     <p class="text-gray-500 text-sm mt-1">{{ date_sel.strftime('%A %d %B %Y') }}</p>
   </div>
   <div style="display:flex;align-items:center;gap:.5rem">
