@@ -191,3 +191,73 @@
 
 </div>
 {% endmacro %}
+
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{# MACRO : Pagination                                                           #}
+{# Utilisation : {{ pagination_widget(pagination, request.args) }}              #}
+{# ──────────────────────────────────────────────────────────────────────────── #}
+{% macro pagination_widget(p, args={}) %}
+{% if p and p.pages > 1 %}
+{% set base = '?' + args.to_dict(flat=True)|reject('equalto','page')|list|join('&') %}
+{# Reconstruire les params sans page #}
+{% set params_list = [] %}
+{% for k, v in args.items(multi=True) %}
+  {% if k != 'page' %}{% set _ = params_list.append(k ~ '=' ~ v) %}{% endif %}
+{% endfor %}
+{% set qs = params_list|join('&') %}
+{% set sep = '&' if qs else '' %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;
+  border-top:1px solid #f3f4f6;background:#fafafa;flex-wrap:wrap;gap:.5rem">
+  <!-- Info -->
+  <span style="font-size:.75rem;color:#6b7280;font-weight:600">
+    Page {{ p.page }}/{{ p.pages }} —
+    {{ p.total }} résultat{% if p.total > 1 %}s{% endif %}
+    ({{ (p.page - 1) * p.per_page + 1 }}–{{ [p.page * p.per_page, p.total]|min }})
+  </span>
+  <!-- Boutons -->
+  <div style="display:flex;gap:.25rem;align-items:center">
+    <!-- Première page -->
+    {% if p.has_prev %}
+    <a href="?{{ qs }}{{ sep }}page=1"
+       style="padding:.3rem .6rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">
+      «
+    </a>
+    <a href="?{{ qs }}{{ sep }}page={{ p.prev_num }}"
+       style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">
+      ‹ Préc.
+    </a>
+    {% endif %}
+
+    <!-- Pages numérotées -->
+    {% for num in p.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if num %}
+        {% if num == p.page %}
+        <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">
+          {{ num }}
+        </span>
+        {% else %}
+        <a href="?{{ qs }}{{ sep }}page={{ num }}"
+           style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">
+          {{ num }}
+        </a>
+        {% endif %}
+      {% else %}
+        <span style="padding:.3rem .375rem;font-size:.75rem;color:#9ca3af">…</span>
+      {% endif %}
+    {% endfor %}
+
+    {% if p.has_next %}
+    <a href="?{{ qs }}{{ sep }}page={{ p.next_num }}"
+       style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">
+      Suiv. ›
+    </a>
+    <a href="?{{ qs }}{{ sep }}page={{ p.pages }}"
+       style="padding:.3rem .6rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">
+      »
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
