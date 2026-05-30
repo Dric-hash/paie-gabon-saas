@@ -1,3 +1,4 @@
+{% from "_macros.html" import historique_pointage %}
 {% extends "tenant/base.html" %}
 {% block title %}{{ salarie.nom_complet }} — {{ tenant.denomination }}{% endblock %}
 {% block content %}
@@ -265,6 +266,13 @@
     </div>
   </div>
 </div>
+
+  {{ historique_pointage(
+      pts_hist, nb_jours, nb_presences, nb_absences,
+      nb_non_pointes, h_normales_tot, h_sup_tot, taux_presence,
+      date_debut_hist, date_fin_hist,
+      url_base="/salaries/" ~ salarie.id,
+      type_worker="sal") }}
 
 {% endblock %}
 {% block scripts %}
