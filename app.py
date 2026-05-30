@@ -1963,80 +1963,313 @@ def journalier_feuille_supprimer(id):
 @app.route("/journaliers/paie/export")
 @login_required
 def journaliers_paie_export():
-    """Export Excel des feuilles de paie journalier."""
+    """Export Excel des feuilles de paie journalier — filtré par site et/ou période."""
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
+    import io, calendar
+
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    site_id     = request.args.get("site_id", type=int)
-    statut_f    = request.args.get("statut", "")
-    site        = Site.query.get(site_id) if site_id else None
 
+    # ── Paramètres de filtre ──────────────────────────────────────────────────
+    site_id    = request.args.get("site_id",    type=int)
+    statut_f   = request.args.get("statut",     "")
+    date_debut = _parse_date(request.args.get("date_debut", ""))
+    date_fin   = _parse_date(request.args.get("date_fin",   ""))
+    site       = Site.query.get(site_id) if site_id else None
+
+    # ── Requête ───────────────────────────────────────────────────────────────
     q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
     if site_id:
-        ids = [a.journalier_id for a in AffectationSite.query.filter_by(
+        ids_j = [a.journalier_id for a in AffectationSite.query.filter_by(
             tenant_id=t.id, site_id=site_id
         ).filter(AffectationSite.journalier_id.isnot(None)).all()]
-        q = q.filter(FeuillePaieJournalier.journalier_id.in_(ids))
+        q = q.filter(FeuillePaieJournalier.journalier_id.in_(ids_j))
+    if date_debut:
+        q = q.filter(FeuillePaieJournalier.date_debut >= date_debut)
+    if date_fin:
+        q = q.filter(FeuillePaieJournalier.date_fin   <= date_fin)
     if statut_f:
         q = q.filter_by(statut=statut_f)
-    feuilles = q.order_by(FeuillePaieJournalier.date_fin.desc()).all()
+    feuilles = q.order_by(
+        FeuillePaieJournalier.date_fin.desc(),
+        FeuillePaieJournalier.journalier_id
+    ).all()
 
-    wb = Workbook(); ws = wb.active
-    titre = f"Paie Journaliers{' — ' + site.nom if site else ''} — {t.denomination}"
-    ws.title = "Paie Journaliers"
-    ws.merge_cells("A1:I1"); ws["A1"] = titre
-    ws["A1"].font = Font(bold=True, size=13)
-    ws["A1"].alignment = Alignment(horizontal="center")
-    ws.append([])
-    hdrs = ["Journalier","Profession","Site","Période du","au","Nb jours","Total heures","Taux/h (FCFA)","Montant brut (FCFA)","Statut","Date paiement"]
+    # ── Affectation site de chaque journalier ─────────────────────────────────
+    aff_map = {}
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).filter(
+            AffectationSite.journalier_id.isnot(None)).all():
+        if a.journalier_id not in aff_map:
+            aff_map[a.journalier_id] = a.site.nom if a.site else "—"
+
+    # ── Styles communs ────────────────────────────────────────────────────────
+    HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+    HDR_FILL   = PatternFill("solid", fgColor="1a2332")
+    HDR_ALIGN  = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    BODY_FONT  = Font(size=9)
+    EVEN_FILL  = PatternFill("solid", fgColor="F7F8FA")
+    TOTAL_FONT = Font(bold=True, size=10, color="FFFFFF")
+    TOTAL_FILL = PatternFill("solid", fgColor="1a2332")
+    MONEY_FMT  = '#,##0'
+    thin       = Side(style="thin", color="D1D5DB")
+    BORDER     = Border(left=thin, right=thin, top=thin, bottom=thin)
+    CENTER     = Alignment(horizontal="center")
+    RIGHT      = Alignment(horizontal="right")
+
+    wb = Workbook()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 1 — Détail complet
+    # ══════════════════════════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = "Détail"
+    ws.freeze_panes = "A4"
+
+    # Titre
+    titre = (f"PAIE JOURNALIERS — {t.denomination}"
+             + (f" — {site.nom}" if site else "")
+             + (f" — {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}" if date_debut and date_fin else "")
+             + f" — Édité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+    ws.merge_cells("A1:K1")
+    ws["A1"] = titre
+    ws["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="1a2332")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 22
+
+    ws.append([])  # ligne vide
+
+    # En-têtes
+    hdrs = ["Journalier","Profession","Site","Période du","au",
+            "Nb jours","Total heures","Taux/h (FCFA)","Montant brut (FCFA)","Statut","Date paiement"]
     ws.append(hdrs)
     for c_idx, h in enumerate(hdrs, 1):
         cell = ws.cell(row=3, column=c_idx, value=h)
-        cell.font = Font(bold=True, color="FFFFFF")
-        cell.fill = PatternFill("solid", fgColor="1a2332")
-        cell.alignment = Alignment(horizontal="center")
+        cell.font  = HDR_FONT
+        cell.fill  = HDR_FILL
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+    ws.row_dimensions[3].height = 18
 
-    # Affectation site pour chaque journalier
-    aff_map = {a.journalier_id: a.site.nom for a in AffectationSite.query.filter_by(
-        tenant_id=t.id, actif=True
-    ).filter(AffectationSite.journalier_id.isnot(None)).all()}
-
-    total_montant = 0
+    # Données
+    total_montant  = 0
+    total_jours    = 0
+    total_heures   = 0
     for row_idx, f in enumerate(feuilles, 4):
-        site_nom = aff_map.get(f.journalier_id, "—")
-        row = [
+        site_nom  = aff_map.get(f.journalier_id, "—")
+        montant   = float(f.montant_brut  or 0)
+        heures    = float(f.total_heures  or 0)
+        jours     = int(f.nb_jours or 0)
+        total_montant += montant
+        total_jours   += jours
+        total_heures  += heures
+        row_data = [
             f.journalier.nom_complet,
             f.journalier.profession or "—",
             site_nom,
             f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
-            f.date_fin.strftime("%d/%m/%Y") if f.date_fin else "",
-            f.nb_jours,
-            float(f.total_heures or 0),
+            f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+            jours,
+            round(heures, 2),
             float(f.taux_horaire or 0),
-            float(f.montant_brut or 0),
+            montant,
             f.statut,
             f.date_paiement.strftime("%d/%m/%Y") if f.date_paiement else "",
         ]
-        ws.append(row)
-        total_montant += float(f.montant_brut or 0)
-        if row_idx % 2 == 0:
-            for c in ws[row_idx]: c.fill = PatternFill("solid", fgColor="F5F5F5")
+        ws.append(row_data)
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            # Formats numériques
+            if c_idx in (6, 7):   cell.alignment = CENTER
+            if c_idx in (8, 9):
+                cell.number_format = MONEY_FMT
+                cell.alignment     = RIGHT
+            # Statut coloré
+            if c_idx == 10:
+                cell.alignment = CENTER
+                if val == "PAYÉ":
+                    cell.font = Font(bold=True, color="065F46", size=9)
+                else:
+                    cell.font = Font(bold=True, color="92400E", size=9)
 
-    # Ligne total
+    # Ligne totaux
     ws.append([])
-    total_row = ws.max_row + 1
-    ws.cell(total_row, 1, "TOTAL").font = Font(bold=True)
-    ws.cell(total_row, 9, total_montant).font = Font(bold=True)
-    ws.cell(total_row, 9).number_format = "#,##0"
+    tr = ws.max_row + 1
+    totals = ["", "", "", "", "TOTAL", total_jours, round(total_heures,2),
+              "", total_montant, "", ""]
+    ws.append(totals)
+    for c_idx, val in enumerate(totals, 1):
+        cell = ws.cell(row=tr, column=c_idx)
+        cell.font   = TOTAL_FONT
+        cell.fill   = TOTAL_FILL
+        cell.border = BORDER
+        if c_idx in (8, 9):
+            cell.number_format = MONEY_FMT
+            cell.alignment     = RIGHT
+        if c_idx == 5:
+            cell.alignment = RIGHT
 
-    for col in ws.columns:
-        max_len = max((len(str(c.value or "")) for c in col), default=10)
-        ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+    # Largeurs colonnes
+    col_widths = [28, 18, 20, 13, 13, 10, 13, 16, 20, 14, 15]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[ws.cell(1, i).column_letter].width = w
 
-    import io
-    out = io.BytesIO(); wb.save(out); out.seek(0)
-    fname = f"Paie_Journaliers{'_' + site.nom.replace(' ','_') if site else ''}_{datetime.now().strftime('%Y%m%d')}.xlsx"
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 2 — Récap par site
+    # ══════════════════════════════════════════════════════════════════════════
+    ws2 = wb.create_sheet("Récap par site")
+    ws2.freeze_panes = "A3"
+
+    ws2.merge_cells("A1:F1")
+    ws2["A1"] = f"RÉCAPITULATIF PAR SITE — {t.denomination}"
+    ws2["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws2["A1"].fill = PatternFill("solid", fgColor="374151")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 20
+
+    hdrs2 = ["Site","Nb journaliers","Nb jours total","Total heures","Montant brut (FCFA)","Statut"]
+    ws2.append(hdrs2)
+    for c_idx, h in enumerate(hdrs2, 1):
+        cell = ws2.cell(row=2, column=c_idx, value=h)
+        cell.font  = HDR_FONT
+        cell.fill  = PatternFill("solid", fgColor="374151")
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+
+    # Grouper par site
+    from collections import defaultdict
+    by_site = defaultdict(lambda: {"journaliers": set(), "jours": 0, "heures": 0.0,
+                                    "montant": 0.0, "nb_payes": 0, "nb_total": 0})
+    for f in feuilles:
+        s_nom = aff_map.get(f.journalier_id, "Sans site")
+        by_site[s_nom]["journaliers"].add(f.journalier_id)
+        by_site[s_nom]["jours"]    += int(f.nb_jours or 0)
+        by_site[s_nom]["heures"]   += float(f.total_heures or 0)
+        by_site[s_nom]["montant"]  += float(f.montant_brut or 0)
+        by_site[s_nom]["nb_total"] += 1
+        if f.statut == "PAYÉ": by_site[s_nom]["nb_payes"] += 1
+
+    grand_total = 0
+    for row_idx, (s_nom, data) in enumerate(sorted(by_site.items()), 3):
+        pct_paye = int(data["nb_payes"] / data["nb_total"] * 100) if data["nb_total"] else 0
+        statut_txt = f"{data['nb_payes']}/{data['nb_total']} payé(s) ({pct_paye}%)"
+        row_data = [
+            s_nom,
+            len(data["journaliers"]),
+            data["jours"],
+            round(data["heures"], 2),
+            round(data["montant"], 2),
+            statut_txt,
+        ]
+        ws2.append(row_data)
+        grand_total += data["montant"]
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws2.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            if c_idx == 5:
+                cell.number_format = MONEY_FMT
+                cell.alignment     = RIGHT
+            if c_idx in (2, 3, 4):
+                cell.alignment = CENTER
+
+    # Total récap
+    ws2.append([])
+    tr2 = ws2.max_row + 1
+    ws2.append(["TOTAL GÉNÉRAL", "", "", "", grand_total, ""])
+    for c_idx in range(1, 7):
+        cell = ws2.cell(row=tr2, column=c_idx)
+        cell.font   = TOTAL_FONT
+        cell.fill   = PatternFill("solid", fgColor="374151")
+        cell.border = BORDER
+        if c_idx == 5:
+            cell.number_format = MONEY_FMT
+            cell.alignment     = RIGHT
+
+    for i, w in enumerate([28, 16, 14, 14, 22, 22], 1):
+        ws2.column_dimensions[ws2.cell(1, i).column_letter].width = w
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 3 — Récap par journalier
+    # ══════════════════════════════════════════════════════════════════════════
+    ws3 = wb.create_sheet("Récap par journalier")
+    ws3.freeze_panes = "A3"
+
+    ws3.merge_cells("A1:G1")
+    ws3["A1"] = f"RÉCAPITULATIF PAR JOURNALIER — {t.denomination}"
+    ws3["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws3["A1"].fill = PatternFill("solid", fgColor="065F46")
+    ws3["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[1].height = 20
+
+    hdrs3 = ["Journalier","Profession","Site","Nb périodes","Nb jours","Total heures","Total perçu (FCFA)"]
+    ws3.append(hdrs3)
+    for c_idx, h in enumerate(hdrs3, 1):
+        cell = ws3.cell(row=2, column=c_idx, value=h)
+        cell.font  = HDR_FONT
+        cell.fill  = PatternFill("solid", fgColor="065F46")
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+
+    by_jour = defaultdict(lambda: {"nom":"","profession":"","site":"","periodes":0,"jours":0,"heures":0.0,"montant":0.0})
+    for f in feuilles:
+        jid = f.journalier_id
+        by_jour[jid]["nom"]       = f.journalier.nom_complet
+        by_jour[jid]["profession"]= f.journalier.profession or "—"
+        by_jour[jid]["site"]      = aff_map.get(jid, "—")
+        by_jour[jid]["periodes"]  += 1
+        by_jour[jid]["jours"]     += int(f.nb_jours or 0)
+        by_jour[jid]["heures"]    += float(f.total_heures or 0)
+        by_jour[jid]["montant"]   += float(f.montant_brut or 0)
+
+    grand_total3 = 0
+    for row_idx, (jid, d) in enumerate(sorted(by_jour.items(), key=lambda x: x[1]["nom"]), 3):
+        row_data = [d["nom"], d["profession"], d["site"],
+                    d["periodes"], d["jours"], round(d["heures"],2), round(d["montant"],2)]
+        ws3.append(row_data)
+        grand_total3 += d["montant"]
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws3.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            if c_idx == 7:
+                cell.number_format = MONEY_FMT; cell.alignment = RIGHT
+            if c_idx in (4, 5, 6): cell.alignment = CENTER
+
+    ws3.append([])
+    tr3 = ws3.max_row + 1
+    ws3.append(["TOTAL GÉNÉRAL","","","","","", grand_total3])
+    for c_idx in range(1, 8):
+        cell = ws3.cell(row=tr3, column=c_idx)
+        cell.font = TOTAL_FONT
+        cell.fill = PatternFill("solid", fgColor="065F46")
+        cell.border = BORDER
+        if c_idx == 7:
+            cell.number_format = MONEY_FMT; cell.alignment = RIGHT
+
+    for i, w in enumerate([28, 18, 20, 12, 11, 13, 22], 1):
+        ws3.column_dimensions[ws3.cell(1, i).column_letter].width = w
+
+    # ── Export ────────────────────────────────────────────────────────────────
+    out = io.BytesIO()
+    wb.save(out); out.seek(0)
+
+    parts = ["Paie_Journaliers"]
+    if site:       parts.append(site.nom.replace(" ", "_"))
+    if date_debut: parts.append(date_debut.strftime("%Y%m%d"))
+    if date_fin:   parts.append("au" + date_fin.strftime("%Y%m%d"))
+    parts.append(datetime.now().strftime("%Y%m%d"))
+    fname = "_".join(parts) + ".xlsx"
+
     return send_file(out,
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True, download_name=fname)
