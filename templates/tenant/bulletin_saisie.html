@@ -23,7 +23,7 @@
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Salarié *</label>
           <select name="salarie_id" id="sel_salarie" required
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"
-            onchange="chargerContrat(this.value)">
+            onchange="onSalarieChange(this.value)">
             <option value="">— Sélectionner —</option>
             {% for s in salaries %}
             <option value="{{ s.id }}" {% if salarie_sel and salarie_sel.id==s.id %}selected{% endif %}>
@@ -34,7 +34,7 @@
         </div>
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Période *</label>
-          <select name="periode_id" id="sel_periode" required
+          <select name="periode_id" id="sel_periode" required onchange="onPeriodeChange()"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
             <option value="">— Sélectionner —</option>
             {% for p in periodes %}
@@ -51,6 +51,41 @@
           <div style="font-size:.75rem;color:#0369a1;font-weight:700" id="info_nom">—</div>
           <div style="font-size:.75rem;color:#0284c7" id="info_poste">—</div>
           <div style="font-size:.875rem;font-weight:900;color:#0c4a6e" id="info_salaire">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Récupération depuis le pointage ── -->
+    <div id="bloc_pointage" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:.875rem;padding:.875rem 1rem;margin-bottom:.75rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.625rem">
+        <div style="display:flex;align-items:center;gap:.5rem">
+          <span style="font-size:1rem">📋</span>
+          <span style="font-size:.8rem;font-weight:700;color:#065f46">Données du pointage disponibles</span>
+          <span id="ptg_message" style="font-size:.75rem;color:#047857"></span>
+        </div>
+        <button type="button" id="btn_appliquer_pointage" onclick="appliquerPointage()"
+          style="background:#059669;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+          ⬇️ Appliquer dans le bulletin
+        </button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem">
+        <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:#065f46" id="ptg_jours">—</div>
+          <div style="font-size:.65rem;color:#6b7280">Jours pointés</div>
+        </div>
+        <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:#dc2626" id="ptg_absences">—</div>
+          <div style="font-size:.65rem;color:#6b7280">Absences</div>
+        </div>
+        <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:#d97706" id="ptg_sup_total">—</div>
+          <div style="font-size:.65rem;color:#6b7280">H.sup totales</div>
+        </div>
+        <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
+          <div style="font-size:.7rem;color:#6b7280">+10% <strong id="ptg_10">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">+30% <strong id="ptg_30">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">+40% <strong id="ptg_40">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">+70% <strong id="ptg_70">0h</strong></div>
         </div>
       </div>
     </div>
@@ -445,6 +480,63 @@
 <script>
 const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " FCFA";
 let timer;
+let _ptgData = null;
+
+function chargerPointage(salId, mois, annee) {
+  if (!salId || !mois || !annee) return;
+  fetch(`/api/salarie/${salId}/pointage-mois?mois=${mois}&annee=${annee}`)
+    .then(r => r.json()).then(d => {
+      _ptgData = d;
+      const bloc = document.getElementById('bloc_pointage');
+      if (!bloc) return;
+      if (d.nb_jours > 0 || d.nb_absences > 0) {
+        bloc.style.display = 'block';
+        document.getElementById('ptg_jours').textContent     = d.nb_jours;
+        document.getElementById('ptg_absences').textContent  = d.nb_absences;
+        document.getElementById('ptg_sup_total').textContent = (d.total_sup||0) + 'h';
+        document.getElementById('ptg_10').textContent = (d.heures_sup_10||0) + 'h';
+        document.getElementById('ptg_30').textContent = (d.heures_sup_30||0) + 'h';
+        document.getElementById('ptg_40').textContent = (d.heures_sup_40||0) + 'h';
+        document.getElementById('ptg_70').textContent = (d.heures_sup_70||0) + 'h';
+        document.getElementById('ptg_message').textContent = '— ' + d.message;
+      } else {
+        bloc.style.display = 'none'; _ptgData = null;
+      }
+    }).catch(() => { const b = document.getElementById('bloc_pointage'); if(b) b.style.display='none'; });
+}
+
+function appliquerPointage() {
+  if (!_ptgData) return;
+  if (_ptgData.nb_jours > 0) {
+    const el = document.getElementById('nb_jours'); if(el) el.value = _ptgData.nb_jours;
+  }
+  [['heures_sup_10',_ptgData.heures_sup_10||0],['heures_sup_30',_ptgData.heures_sup_30||0],
+   ['heures_sup_40',_ptgData.heures_sup_40||0],['heures_sup_70',_ptgData.heures_sup_70||0]
+  ].forEach(([nom, val]) => {
+    const el = document.getElementById('f_' + nom);
+    if (el) {
+      el.value = val;
+      if (val > 0) {
+        el.style.background = '#f0fdf4'; el.style.borderColor = '#86efac';
+        setTimeout(() => { el.style.background=''; el.style.borderColor=''; }, 3000);
+      }
+    }
+  });
+  recalculer();
+  const btn = document.getElementById('btn_appliquer_pointage');
+  if (btn) { btn.textContent='✅ Appliqué !'; btn.style.background='#047857';
+    setTimeout(() => { btn.textContent='⬇️ Appliquer dans le bulletin'; btn.style.background='#059669'; }, 2500); }
+}
+
+function onPeriodeChange() {
+  const sel = document.getElementById('sel_periode');
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  const mois = opt ? opt.dataset.mois : null;
+  const annee = opt ? opt.dataset.annee : null;
+  const salId = document.getElementById('sel_salarie').value;
+  if (salId && mois && annee) chargerPointage(salId, mois, annee);
+  recalculer();
+}
 
 function calcMontant(name) {
   const base = parseFloat(document.getElementById("base_" + name)?.value || 0) || 0;
@@ -498,6 +590,13 @@ function recalculer() {
 
 document.querySelectorAll(".champ-calcul").forEach(inp => inp.addEventListener("input", recalculer));
 
+function onSalarieChange(id) {
+  chargerContrat(id);
+  const sel = document.getElementById('sel_periode');
+  const opt = sel ? sel.options[sel.selectedIndex] : null;
+  if (opt && opt.dataset.mois) chargerPointage(id, opt.dataset.mois, opt.dataset.annee);
+}
+
 function chargerContrat(id) {
   if(!id) { document.getElementById("info_salarie").style.display="none"; return; }
   fetch("/api/salarie/" + id + "/contrat")
@@ -513,6 +612,10 @@ function chargerContrat(id) {
       }
     });
 }
+
+document.getElementById('formBulletin').addEventListener('submit', function() {
+  this.querySelectorAll('button[type="submit"]').forEach(b => { b.disabled=true; b.style.opacity='.6'; });
+});
 
 {% if salarie_sel %}chargerContrat("{{ salarie_sel.id }}");{% endif %}
 recalculer();
