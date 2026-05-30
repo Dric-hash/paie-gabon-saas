@@ -2466,6 +2466,47 @@ def api_contrat(id):
     if c: base["salaire_base"]=float(c.salaire_base); base["poste"]=c.poste or s.emploi
     return jsonify(base)
 
+@app.route("/api/salarie/<int:id>/pointage-mois")
+@login_required
+def api_pointage_mois(id):
+    """Retourne le cumul des heures du pointage pour un salarié sur un mois donné."""
+    t = get_tenant()
+    if not t: return jsonify({})
+    mois  = request.args.get("mois",  type=int)
+    annee = request.args.get("annee", type=int)
+    if not mois or not annee:
+        return jsonify({"erreur": "mois et annee requis"})
+    import calendar
+    dernier_jour = calendar.monthrange(annee, mois)[1]
+    debut = date(annee, mois, 1)
+    fin   = date(annee, mois, dernier_jour)
+    pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
+                Pointage.present == True).all()
+    if not pts:
+        return jsonify({"nb_jours": 0, "nb_absences": 0,
+            "heures_sup_10": 0, "heures_sup_30": 0, "heures_sup_40": 0, "heures_sup_70": 0,
+            "heures_normales_total": 0, "total_sup": 0,
+            "message": "Aucun pointage pour cette période"})
+    nb_jours        = len(pts)
+    heures_normales = sum(float(p.heures_normales or 8) for p in pts)
+    heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts)
+    heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts)
+    heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts)
+    heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts)
+    pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
+                Pointage.absent == True).all()
+    return jsonify({
+        "nb_jours":              nb_jours,
+        "nb_absences":           len(pts_absents),
+        "heures_normales_total": round(heures_normales, 2),
+        "heures_sup_10":         round(heures_sup_10, 2),
+        "heures_sup_30":         round(heures_sup_30, 2),
+        "heures_sup_40":         round(heures_sup_40, 2),
+        "heures_sup_70":         round(heures_sup_70, 2),
+        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_40+heures_sup_70, 2),
+        "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
+    })
+
 @app.route("/api/salarie/<int:id>/acomptes-mois")
 @login_required
 def api_acomptes_mois(id):
