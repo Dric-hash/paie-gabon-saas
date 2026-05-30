@@ -512,6 +512,9 @@ class Journalier(db.Model):
     taux_horaire  = db.Column(db.Numeric(12,2), nullable=False)
     statut        = db.Column(db.String(20), default="ACTIF")
     date_embauche = db.Column(db.Date)
+    date_debut    = db.Column(db.Date)           # début de mission (libre)
+    date_fin      = db.Column(db.Date)           # fin de mission (optionnel)
+    nationalite   = db.Column(db.String(60))
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
     pointages = db.relationship("Pointage", backref="journalier", lazy=True,
                 foreign_keys="Pointage.journalier_id")
