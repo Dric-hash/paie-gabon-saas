@@ -963,25 +963,55 @@ def salarie_nouveau():
 @login_required
 def salarie_detail(id):
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t=get_tenant()
+    t = get_tenant()
     if not t: return redirect(url_for("login"))
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).all()
+    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)        .order_by(BulletinPaie.date_creation.desc()).all()
     contrat = Contrat.query.filter_by(salarie_id=id, tenant_id=t.id, actif=True).first()
-    conge = Conge.query.filter_by(salarie_id=id, tenant_id=t.id, annee=datetime.now().year).first()
+    conge   = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
+                                     annee=datetime.now().year).first()
     total_brut = sum(float(b.salaire_brut or 0) for b in bulletins)
-    total_net  = sum(float(b.net_a_payer or 0) for b in bulletins)
+    total_net  = sum(float(b.net_a_payer  or 0) for b in bulletins)
     total_cnss = sum(float(b.cnss_salarie or 0) for b in bulletins)
-    total_irpp = sum(float(b.irpp or 0) for b in bulletins)
+    total_irpp = sum(float(b.irpp         or 0) for b in bulletins)
     nb_mois    = len(bulletins)
     anciennete_jours = (datetime.now().date() - s.date_embauche).days if s.date_embauche else 0
     anciennete_ans   = anciennete_jours // 365
     anciennete_mois  = (anciennete_jours % 365) // 30
+
+    # ── Historique des pointages (30 derniers jours) ──────────────────────────
+    nb_jours = request.args.get("nb_jours", type=int, default=30)
+    nb_jours = min(max(nb_jours, 7), 90)          # borne 7-90 jours
+    date_fin   = datetime.now().date()
+    date_debut = date_fin - timedelta(days=nb_jours - 1)
+
+    pts_hist = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= date_debut,
+                Pointage.date_pointage <= date_fin)        .order_by(Pointage.date_pointage.desc()).all()
+
+    # Stats synthèse
+    nb_presences  = sum(1 for p in pts_hist if p.present)
+    nb_absences   = sum(1 for p in pts_hist if p.absent)
+    nb_non_pointes = nb_jours - len(pts_hist)
+    h_normales_tot = round(sum(float(p.heures_normales or 0) for p in pts_hist if p.present), 1)
+    h_sup_tot      = round(sum(
+        float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+        float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0)
+        for p in pts_hist if p.present), 1)
+    taux_presence = round(nb_presences / (nb_presences + nb_absences) * 100
+                          ) if (nb_presences + nb_absences) > 0 else 0
+
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
         total_irpp=total_irpp, nb_mois=nb_mois,
-        anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois)
+        anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois,
+        # Historique pointage
+        pts_hist=pts_hist, nb_jours=nb_jours,
+        nb_presences=nb_presences, nb_absences=nb_absences,
+        nb_non_pointes=nb_non_pointes,
+        h_normales_tot=h_normales_tot, h_sup_tot=h_sup_tot,
+        taux_presence=taux_presence,
+        date_debut_hist=date_debut, date_fin_hist=date_fin)
 
 @app.route("/salaries/<int:id>/modifier", methods=["GET","POST"])
 @login_required
@@ -1697,6 +1727,52 @@ def journalier_nouveau():
         flash(f"Journalier {j.nom_complet} créé.", "success")
         return redirect(url_for("journaliers"))
     return render_template("tenant/journalier_form.html", tenant=t, journalier=None)
+
+@app.route("/journaliers/<int:id>")
+@login_required
+def journalier_detail(id):
+    """Fiche détail d'un journalier avec historique de pointage."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Feuilles de paie
+    feuilles = FeuillePaieJournalier.query.filter_by(
+        journalier_id=id, tenant_id=t.id
+    ).order_by(FeuillePaieJournalier.date_fin.desc()).all()
+    total_percu = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "PAYÉ")
+
+    # Affectation site courante
+    aff = AffectationSite.query.filter_by(
+        journalier_id=id, tenant_id=t.id, actif=True).first()
+
+    # ── Historique des pointages ──────────────────────────────────────────────
+    nb_jours = request.args.get("nb_jours", type=int, default=30)
+    nb_jours = min(max(nb_jours, 7), 90)
+    date_fin   = datetime.now().date()
+    date_debut = date_fin - timedelta(days=nb_jours - 1)
+
+    pts_hist = Pointage.query.filter_by(tenant_id=t.id, journalier_id=id)        .filter(Pointage.date_pointage >= date_debut,
+                Pointage.date_pointage <= date_fin)        .order_by(Pointage.date_pointage.desc()).all()
+
+    nb_presences   = sum(1 for p in pts_hist if p.present)
+    nb_absences    = sum(1 for p in pts_hist if p.absent)
+    nb_non_pointes = nb_jours - len(pts_hist)
+    h_normales_tot = round(sum(float(p.heures_normales or 0) for p in pts_hist if p.present), 1)
+    h_sup_tot      = round(sum(float(p.heures_sup or 0) for p in pts_hist if p.present), 1)
+    taux_presence  = round(nb_presences / (nb_presences + nb_absences) * 100
+                           ) if (nb_presences + nb_absences) > 0 else 0
+
+    return render_template("tenant/journalier_detail.html",
+        journalier=j, tenant=t, feuilles=feuilles,
+        total_percu=total_percu, aff=aff,
+        pts_hist=pts_hist, nb_jours=nb_jours,
+        nb_presences=nb_presences, nb_absences=nb_absences,
+        nb_non_pointes=nb_non_pointes,
+        h_normales_tot=h_normales_tot, h_sup_tot=h_sup_tot,
+        taux_presence=taux_presence,
+        date_debut_hist=date_debut, date_fin_hist=date_fin)
 
 @app.route("/journaliers/<int:id>/modifier", methods=["GET","POST"])
 @login_required
