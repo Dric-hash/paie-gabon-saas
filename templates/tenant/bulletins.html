@@ -1,4 +1,5 @@
 {% extends "tenant/base.html" %}
+{% from "tenant/_macros.html" import pagination_widget %}
 {% block title %}Bulletins — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
@@ -265,6 +266,7 @@
     </div>
   </div>
 
+  {{ pagination_widget(pagination, request.args) }}
 </div><!-- fin .card -->
 </form>
 
