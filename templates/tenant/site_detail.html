@@ -47,6 +47,266 @@
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<!-- POINTAGE RAPIDE                                                        -->
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<div class="card overflow-hidden mb-5">
+  <!-- En-tête navigation -->
+  <div style="background:#1a2332;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:1rem;font-weight:900;color:white">📋 Pointage rapide</span>
+      <span style="font-size:.8rem;color:rgba(255,255,255,.6)">{{ site.nom }}</span>
+    </div>
+    <!-- Navigation date -->
+    <div style="display:flex;align-items:center;gap:.5rem">
+      <a href="?date_ptg={{ date_hier }}"
+         style="background:rgba(255,255,255,.15);color:white;padding:.375rem .625rem;border-radius:.5rem;text-decoration:none;font-size:.8rem">← Hier</a>
+      <form method="GET" style="display:inline">
+        <input type="date" name="date_ptg" value="{{ date_ptg }}"
+          onchange="this.form.submit()"
+          style="border:1px solid rgba(255,255,255,.3);border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem;background:rgba(255,255,255,.1);color:white;cursor:pointer"/>
+      </form>
+      {% if date_ptg.strftime('%Y-%m-%d') < today %}
+      <a href="?date_ptg={{ date_demain }}"
+         style="background:rgba(255,255,255,.15);color:white;padding:.375rem .625rem;border-radius:.5rem;text-decoration:none;font-size:.8rem">Demain →</a>
+      {% endif %}
+      <a href="?date_ptg={{ today }}"
+         style="background:{% if date_ptg.strftime('%Y-%m-%d') == today %}#f59e0b{% else %}rgba(255,255,255,.1){% endif %};color:white;padding:.375rem .625rem;border-radius:.5rem;text-decoration:none;font-size:.8rem;font-weight:700">
+        Aujourd'hui
+      </a>
+      <a href="/pointage?date={{ date_ptg }}&site_id={{ site.id }}"
+         style="background:rgba(255,255,255,.15);color:white;padding:.375rem .75rem;border-radius:.5rem;text-decoration:none;font-size:.75rem;font-weight:700">
+        📊 Vue complète
+      </a>
+    </div>
+  </div>
+
+  <!-- Stats du jour -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid #f3f4f6">
+    {% for label, val, color, bg in [
+      ("Présents",    nb_presents,    "#065f46", "#f0fdf4"),
+      ("Absents",     nb_absents,     "#991b1b", "#fef2f2"),
+      ("Non pointés", nb_non_pointes, "#92400e", "#fffbeb"),
+      ("Total site",  (salaries_site|length + journaliers_site|length), "#1e40af", "#eff6ff"),
+    ] %}
+    <div style="padding:.75rem;text-align:center;background:{{ bg }};{% if not loop.last %}border-right:1px solid #f3f4f6;{% endif %}">
+      <div style="font-size:1.5rem;font-weight:900;color:{{ color }}">{{ val }}</div>
+      <div style="font-size:.65rem;font-weight:700;color:#6b7280;text-transform:uppercase">{{ label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  {% if salaries_site or journaliers_site %}
+  <form method="POST" action="/sites/{{ site.id }}/pointage-rapide" id="form-ptg-rapide">
+    <input type="hidden" name="date_pointage" value="{{ date_ptg }}">
+
+    <!-- Boutons rapides -->
+    <div style="padding:.625rem 1rem;background:#f9fafb;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <span style="font-size:.75rem;font-weight:700;color:#374151">Sélection rapide :</span>
+      <button type="button" onclick="tousPresents()"
+        style="font-size:.75rem;background:#d1fae5;color:#065f46;padding:.3rem .625rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700">✅ Tous présents</button>
+      <button type="button" onclick="tousAbsents()"
+        style="font-size:.75rem;background:#fee2e2;color:#dc2626;padding:.3rem .625rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700">❌ Tous absents</button>
+      <button type="button" onclick="resetPointage()"
+        style="font-size:.75rem;background:#f3f4f6;color:#6b7280;padding:.3rem .625rem;border-radius:.5rem;border:none;cursor:pointer">↺ Réinitialiser</button>
+      <span style="margin-left:auto;font-size:.75rem;color:#6b7280" id="ptg-cpt">0 modifié(s)</span>
+    </div>
+
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead>
+        <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+          <th style="padding:.5rem 1rem;text-align:left">Travailleur</th>
+          <th style="padding:.5rem;text-align:center;width:130px">Présence</th>
+          <th style="padding:.5rem;text-align:center;width:70px">H. norm.</th>
+          {% if salaries_site %}
+          <th style="padding:.5rem;text-align:center;width:60px">+10%</th>
+          <th style="padding:.5rem;text-align:center;width:60px">+30%</th>
+          <th style="padding:.5rem;text-align:center;width:60px">+40%</th>
+          <th style="padding:.5rem;text-align:center;width:60px">+70%</th>
+          {% else %}
+          <th style="padding:.5rem;text-align:center;width:70px">H.sup</th>
+          {% endif %}
+          <th style="padding:.5rem;text-align:left">Motif absence</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- ── Salariés mensuels ── -->
+        {% if salaries_site %}
+        <tr><td colspan="9" style="padding:.375rem 1rem;background:#eff6ff;font-size:.7rem;font-weight:700;color:#1e40af">
+          👔 SALARIÉS MENSUELS ({{ salaries_site|length }})
+        </td></tr>
+        {% for s in salaries_site %}
+        {% set p = pts_sal.get(s.id) %}
+        <tr style="border-bottom:1px solid #f9fafb" id="row_sal_{{ s.id }}">
+          <td style="padding:.5rem 1rem">
+            <div style="display:flex;align-items:center;gap:.625rem">
+              <div style="width:30px;height:30px;border-radius:50%;background:#1d4ed8;color:white;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:900;flex-shrink:0">
+                {{ s.nom[0] }}{{ s.prenom[0] if s.prenom else '' }}
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:.825rem">{{ s.nom_complet }}</div>
+                <div style="font-size:.7rem;color:#9ca3af">{{ s.emploi or s.matricule }}</div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:.5rem;text-align:center">
+            <div style="display:flex;justify-content:center;gap:.375rem">
+              <label style="cursor:pointer">
+                <input type="radio" name="sal_present_{{ s.id }}" value="1"
+                  class="radio-presence" data-id="sal_{{ s.id }}"
+                  {% if p and p.present %}checked{% elif not p %}checked{% endif %}
+                  onchange="onPresenceChange('sal', {{ s.id }})">
+                <span class="lbl-radio-p" id="lbl_sal_p_{{ s.id }}"
+                  style="display:inline-block;padding:.3rem .6rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:2px solid;
+                  {{ 'background:#d1fae5;color:#065f46;border-color:#6ee7b7' if (p and p.present) or not p else 'background:#f9fafb;color:#9ca3af;border-color:#e5e7eb' }}">
+                  ✅ P
+                </span>
+              </label>
+              <label style="cursor:pointer">
+                <input type="radio" name="sal_present_{{ s.id }}" value="0"
+                  class="radio-presence" data-id="sal_{{ s.id }}"
+                  {% if p and p.absent %}checked{% endif %}
+                  onchange="onPresenceChange('sal', {{ s.id }})">
+                <span class="lbl-radio-a" id="lbl_sal_a_{{ s.id }}"
+                  style="display:inline-block;padding:.3rem .6rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:2px solid;
+                  {{ 'background:#fee2e2;color:#dc2626;border-color:#fca5a5' if p and p.absent else 'background:#f9fafb;color:#9ca3af;border-color:#e5e7eb' }}">
+                  ❌ A
+                </span>
+              </label>
+            </div>
+          </td>
+          <td style="padding:.375rem .25rem;text-align:center">
+            <input type="number" name="sal_h_{{ s.id }}" step="any" min="0" max="24"
+              value="{{ p.heures_normales|float if p else 8 }}"
+              style="width:56px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .25rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td style="padding:.25rem;text-align:center">
+            <input type="number" name="sal_s10_{{ s.id }}" step="any" min="0"
+              value="{{ p.heures_sup_10|float if p else 0 }}"
+              style="width:54px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .2rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td style="padding:.25rem;text-align:center">
+            <input type="number" name="sal_s30_{{ s.id }}" step="any" min="0"
+              value="{{ p.heures_sup_30|float if p else 0 }}"
+              style="width:54px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .2rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td style="padding:.25rem;text-align:center">
+            <input type="number" name="sal_s40_{{ s.id }}" step="any" min="0"
+              value="{{ p.heures_sup_40|float if p else 0 }}"
+              style="width:54px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .2rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td style="padding:.25rem;text-align:center">
+            <input type="number" name="sal_s70_{{ s.id }}" step="any" min="0"
+              value="{{ p.heures_sup_70|float if p else 0 }}"
+              style="width:54px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .2rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td style="padding:.375rem .5rem">
+            <input type="text" name="sal_motif_{{ s.id }}"
+              value="{{ p.motif_absence or '' if p else '' }}"
+              placeholder="Motif..." id="motif_sal_{{ s.id }}"
+              style="width:120px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.75rem;
+              {% if p and p.absent %}display:block{% else %}display:none{% endif %}"/>
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+
+        <!-- ── Journaliers ── -->
+        {% if journaliers_site %}
+        <tr><td colspan="9" style="padding:.375rem 1rem;background:#fffbeb;font-size:.7rem;font-weight:700;color:#92400e">
+          🦺 JOURNALIERS ({{ journaliers_site|length }})
+        </td></tr>
+        {% for j in journaliers_site %}
+        {% set p = pts_jour.get(j.id) %}
+        <tr style="border-bottom:1px solid #f9fafb" id="row_jour_{{ j.id }}">
+          <td style="padding:.5rem 1rem">
+            <div style="display:flex;align-items:center;gap:.625rem">
+              <div style="width:30px;height:30px;border-radius:50%;background:#d97706;color:white;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:900;flex-shrink:0">
+                {{ j.nom[0] }}{{ j.prenom[0] if j.prenom else '' }}
+              </div>
+              <div>
+                <div style="font-weight:700;font-size:.825rem">{{ j.nom_complet }}</div>
+                <div style="font-size:.7rem;color:#9ca3af">{{ j.profession or '—' }} · {{ "%.0f"|format(j.taux_horaire|float) }} FCFA/h</div>
+              </div>
+            </div>
+          </td>
+          <td style="padding:.5rem;text-align:center">
+            <div style="display:flex;justify-content:center;gap:.375rem">
+              <label style="cursor:pointer">
+                <input type="radio" name="jour_present_{{ j.id }}" value="1"
+                  class="radio-presence" data-id="jour_{{ j.id }}"
+                  {% if p and p.present %}checked{% elif not p %}checked{% endif %}
+                  onchange="onPresenceChange('jour', {{ j.id }})">
+                <span class="lbl-radio-p" id="lbl_jour_p_{{ j.id }}"
+                  style="display:inline-block;padding:.3rem .6rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:2px solid;
+                  {{ 'background:#d1fae5;color:#065f46;border-color:#6ee7b7' if (p and p.present) or not p else 'background:#f9fafb;color:#9ca3af;border-color:#e5e7eb' }}">
+                  ✅ P
+                </span>
+              </label>
+              <label style="cursor:pointer">
+                <input type="radio" name="jour_present_{{ j.id }}" value="0"
+                  class="radio-presence" data-id="jour_{{ j.id }}"
+                  {% if p and p.absent %}checked{% endif %}
+                  onchange="onPresenceChange('jour', {{ j.id }})">
+                <span class="lbl-radio-a" id="lbl_jour_a_{{ j.id }}"
+                  style="display:inline-block;padding:.3rem .6rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:2px solid;
+                  {{ 'background:#fee2e2;color:#dc2626;border-color:#fca5a5' if p and p.absent else 'background:#f9fafb;color:#9ca3af;border-color:#e5e7eb' }}">
+                  ❌ A
+                </span>
+              </label>
+            </div>
+          </td>
+          <td style="padding:.375rem .25rem;text-align:center">
+            <input type="number" name="jour_h_{{ j.id }}" step="any" min="0" max="24"
+              value="{{ p.heures_normales|float if p else 8 }}"
+              style="width:56px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .25rem;font-size:.8rem;text-align:center"/>
+          </td>
+          <td colspan="4" style="padding:.25rem .5rem;text-align:center">
+            <div style="display:flex;align-items:center;gap:.375rem;justify-content:center">
+              <span style="font-size:.7rem;color:#9ca3af">H.sup</span>
+              <input type="number" name="jour_s_{{ j.id }}" step="any" min="0"
+                value="{{ p.heures_sup|float if p else 0 }}"
+                style="width:56px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .25rem;font-size:.8rem;text-align:center"/>
+            </div>
+          </td>
+          <td style="padding:.375rem .5rem">
+            <input type="text" name="jour_motif_{{ j.id }}"
+              value="{{ p.motif_absence or '' if p else '' }}"
+              placeholder="Motif..." id="motif_jour_{{ j.id }}"
+              style="width:120px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.75rem;
+              {% if p and p.absent %}display:block{% else %}display:none{% endif %}"/>
+          </td>
+        </tr>
+        {% endfor %}
+        {% endif %}
+
+      </tbody>
+    </table>
+    </div>
+
+    <!-- Bouton Sauvegarder -->
+    <div style="padding:1rem 1.25rem;border-top:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;background:#f9fafb">
+      <span style="font-size:.8rem;color:#6b7280" id="ptg-info">
+        {{ (salaries_site|length + journaliers_site|length) }} travailleur(s) sur ce site
+      </span>
+      <button type="submit" id="btn-sauver-ptg"
+        style="background:#1a2332;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+        💾 Sauvegarder le pointage
+      </button>
+    </div>
+  </form>
+
+  {% else %}
+  <div style="text-align:center;padding:2.5rem;color:#9ca3af">
+    <div style="font-size:2rem;margin-bottom:.5rem">👥</div>
+    <p style="font-size:.875rem;font-weight:600">Aucun travailleur affecté à ce site</p>
+    <p style="font-size:.8rem;margin-top:.25rem">Affectez des travailleurs ci-dessous pour commencer le pointage.</p>
+  </div>
+  {% endif %}
+</div>
+<!-- ══ FIN POINTAGE RAPIDE ══ -->
+
 <div style="display:grid;grid-template-columns:1fr 380px;gap:1.5rem">
 
   <!-- ── COLONNE GAUCHE : Liste des affectés ── -->
@@ -307,6 +567,67 @@
 </div>
 
 <script>
+// ── Pointage rapide ───────────────────────────────────────────────────────────
+let ptgModifies = new Set();
+
+function onPresenceChange(type, id) {
+  const key = `${type}_${id}`;
+  ptgModifies.add(key);
+  updatePtgCpt();
+  const isAbsent = document.querySelector(`[name="${type}_present_${id}"]:checked`)?.value === "0";
+  const motif = document.getElementById(`motif_${type}_${id}`);
+  if (motif) motif.style.display = isAbsent ? 'block' : 'none';
+  // Style visuel des boutons P/A
+  const lp = document.getElementById(`lbl_${type}_p_${id}`);
+  const la = document.getElementById(`lbl_${type}_a_${id}`);
+  if (lp && la) {
+    if (!isAbsent) {
+      lp.style.cssText += ';background:#d1fae5;color:#065f46;border-color:#6ee7b7';
+      la.style.cssText += ';background:#f9fafb;color:#9ca3af;border-color:#e5e7eb';
+    } else {
+      la.style.cssText += ';background:#fee2e2;color:#dc2626;border-color:#fca5a5';
+      lp.style.cssText += ';background:#f9fafb;color:#9ca3af;border-color:#e5e7eb';
+    }
+  }
+}
+
+function updatePtgCpt() {
+  const el = document.getElementById('ptg-cpt');
+  if (el) el.textContent = ptgModifies.size + ' modifié(s)';
+}
+
+function tousPresents() {
+  document.querySelectorAll('.radio-presence[value="1"]').forEach(r => {
+    r.checked = true;
+    const parts = r.name.split('_');
+    const type = parts[0]; const id = parts[parts.length-1];
+    onPresenceChange(type, id);
+  });
+}
+
+function tousAbsents() {
+  document.querySelectorAll('.radio-presence[value="0"]').forEach(r => {
+    r.checked = true;
+    const parts = r.name.split('_');
+    const type = parts[0]; const id = parts[parts.length-1];
+    onPresenceChange(type, id);
+  });
+}
+
+function resetPointage() {
+  document.querySelectorAll('.radio-presence[value="1"]').forEach(r => r.checked = true);
+  document.querySelectorAll('[id^="motif_"]').forEach(m => m.style.display = 'none');
+  ptgModifies.clear(); updatePtgCpt();
+}
+
+// Anti double-soumission
+const fptg = document.getElementById('form-ptg-rapide');
+if (fptg) fptg.addEventListener('submit', function() {
+  const btn = document.getElementById('btn-sauver-ptg');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Sauvegarde...'; btn.style.opacity = '.7'; }
+});
+
+// ── Permutation / Retrait ─────────────────────────────────────────────────────
 function ouvrirPermutation(affId, nom) {
   document.getElementById('permut-aff-id').value = affId;
   document.getElementById('permut-nom').textContent = nom;
