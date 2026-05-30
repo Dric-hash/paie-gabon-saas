@@ -1,0 +1,304 @@
+{% extends "tenant/base.html" %}
+{% block title %}Rapport mensuel — {{ mois_nom }} {{ annee }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">Rapport mensuel par site</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      {{ mois_nom }} {{ annee }}{% if site_sel %} — 📍 {{ site_sel.nom }}{% endif %}
+    </p>
+  </div>
+  <div style="display:flex;gap:.625rem;flex-wrap:wrap">
+    <button onclick="window.print()"
+      style="font-size:.8rem;font-weight:700;color:#374151;background:#f3f4f6;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
+      🖨️ Imprimer
+    </button>
+    <a href="/rapports/mensuel-site/export?mois={{ mois }}&annee={{ annee }}{% if site_sel %}&site_id={{ site_sel.id }}{% endif %}"
+       style="font-size:.8rem;font-weight:700;color:white;background:#059669;padding:.5rem .875rem;border-radius:.75rem;text-decoration:none">
+      📥 Export Excel
+    </a>
+  </div>
+</div>
+
+<!-- ── Filtres ─────────────────────────────────────────────────────────────── -->
+<div class="card p-4 mb-5">
+  <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Mois</label>
+      <select name="mois" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+        {% for m in range(1, 13) %}
+        <option value="{{ m }}" {% if m == mois %}selected{% endif %}>{{ MOIS_NOMS[m] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Année</label>
+      <select name="annee" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+        {% for y in range(now.year - 2, now.year + 2) %}
+        <option value="{{ y }}" {% if y == annee %}selected{% endif %}>{{ y }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div style="min-width:180px">
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Site</label>
+      <select name="site_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+        <option value="">Tous les sites</option>
+        {% for s in sites %}
+        <option value="{{ s.id }}" {% if site_sel and site_sel.id == s.id %}selected{% endif %}>🏗️ {{ s.nom }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-primary" style="align-self:flex-end">Générer</button>
+  </form>
+</div>
+
+{% if rapports %}
+
+<!-- ── KPIs globaux ─────────────────────────────────────────────────────────── -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.875rem;margin-bottom:1.75rem">
+  {% set taux_g = ((totaux.presences / (totaux.presences + totaux.absences) * 100)|int) if (totaux.presences + totaux.absences) > 0 else 0 %}
+  {% for label, val, color, icon in [
+    ("Effectif total",       totaux.effectif,                         "#1a2332", "👷"),
+    ("Présences",            totaux.presences,                        "#065f46", "✅"),
+    ("Absences",             totaux.absences,                         "#991b1b", "❌"),
+    ("Masse journaliers",    totaux.masse_jour|int|fcfa,               "#92400e", "🦺"),
+    ("Net salariés",         totaux.masse_men|int|fcfa,                "#1e40af", "📄"),
+  ] %}
+  <div style="background:{{ color }};border-radius:1rem;padding:1.125rem;color:white;text-align:center">
+    <div style="font-size:1.25rem;margin-bottom:.25rem">{{ icon }}</div>
+    <div style="font-size:{% if val|string|length > 10 %}.9rem{% else %}1.1rem{% endif %};font-weight:900">{{ val }}</div>
+    <div style="font-size:.65rem;opacity:.75;margin-top:.25rem;text-transform:uppercase">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── RAPPORT PAR SITE ────────────────────────────────────────────────────── -->
+{% for r in rapports %}
+{% set s = r.site %}
+<div class="card overflow-hidden mb-6" id="site-{{ s.id }}">
+
+  <!-- En-tête site -->
+  <div style="background:#1a2332;color:white;padding:1rem 1.25rem">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+      <div>
+        <div style="font-size:1rem;font-weight:900">🏗️ {{ s.nom }}{% if s.ville %} <span style="opacity:.6;font-size:.875rem">· {{ s.ville }}</span>{% endif %}</div>
+        <div style="font-size:.75rem;opacity:.7;margin-top:.25rem">
+          {{ r.effectif_total }} travailleur(s) · {{ r.effectif_sal }} mensuel(s) · {{ r.effectif_jour }} journalier(s)
+        </div>
+      </div>
+      <div style="display:flex;gap:1.5rem">
+        {% for label, val, color in [
+          ("Présences",   r.nb_presences,   "#6ee7b7"),
+          ("Absences",    r.nb_absences,    "#fca5a5"),
+          ("Taux",        r.taux_presence|string + "%", "#fcd34d"),
+          ("Heures norm.",r.heures_normales|string + "h", "#93c5fd"),
+        ] %}
+        <div style="text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:{{ color }}">{{ val }}</div>
+          <div style="font-size:.65rem;opacity:.6;text-transform:uppercase">{{ label }}</div>
+        </div>
+        {% endfor %}
+        {% if r.heures_sup > 0 %}
+        <div style="text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:#fde68a">{{ r.heures_sup }}h</div>
+          <div style="font-size:.65rem;opacity:.6;text-transform:uppercase">H.sup</div>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    <!-- Barre taux de présence -->
+    <div style="margin-top:.75rem">
+      <div style="display:flex;justify-content:space-between;font-size:.65rem;opacity:.6;margin-bottom:.25rem">
+        <span>Taux de présence</span><span>{{ r.taux_presence }}%</span>
+      </div>
+      <div style="background:rgba(255,255,255,.15);border-radius:9999px;height:5px;overflow:hidden">
+        <div style="height:100%;width:{{ r.taux_presence }}%;border-radius:9999px;
+          background:{% if r.taux_presence >= 90 %}#6ee7b7{% elif r.taux_presence >= 70 %}#fcd34d{% else %}#fca5a5{% endif %}">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Section Pointage ── -->
+  {% if r.detail_sal or r.detail_jour %}
+  <div style="padding:.75rem 1rem;background:#f0fdf4;border-bottom:2px solid #86efac;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:.75rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em">📅 Pointage — {{ mois_nom }} {{ annee }}</span>
+    <span style="font-size:.75rem;color:#6b7280">{{ (r.detail_sal|length + r.detail_jour|length) }} travailleurs</span>
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Travailleur</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:90px">Type</th>
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Emploi</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Prés.</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Abs.</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Taux</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:80px">H.norm.</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">H.sup</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in r.detail_sal + r.detail_jour %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.5rem .875rem;font-weight:700;font-size:.875rem">{{ d.nom }}</td>
+        <td style="text-align:center;padding:.5rem">
+          <span style="font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;
+            {{ 'background:#dbeafe;color:#1e40af' if d.type == 'MENSUEL' else 'background:#fef3c7;color:#92400e' }}">
+            {{ d.type }}
+          </span>
+        </td>
+        <td style="padding:.5rem .875rem;font-size:.8rem;color:#6b7280">{{ d.emploi if d.type == 'MENSUEL' else d.profession }}</td>
+        <td style="text-align:center;font-weight:700;color:#065f46">{{ d.nb_presences }}</td>
+        <td style="text-align:center;font-weight:700;color:{% if d.nb_absences > 0 %}#dc2626{% else %}#9ca3af{% endif %}">{{ d.nb_absences }}</td>
+        <td style="text-align:center;padding:.375rem">
+          <div style="font-size:.75rem;font-weight:700;margin-bottom:.2rem;
+            color:{% if d.taux >= 90 %}#065f46{% elif d.taux >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+            {{ d.taux }}%
+          </div>
+          <div style="background:#e5e7eb;border-radius:9999px;height:4px;overflow:hidden;width:48px;margin:0 auto">
+            <div style="height:100%;width:{{ d.taux }}%;background:{% if d.taux >= 90 %}#059669{% elif d.taux >= 70 %}#f59e0b{% else %}#dc2626{% endif %};border-radius:9999px"></div>
+          </div>
+        </td>
+        <td style="text-align:center;font-family:monospace;font-size:.8rem;color:#1e40af">{{ d.heures_normales }}h</td>
+        <td style="text-align:center;font-family:monospace;font-size:.8rem;color:{% if d.heures_sup > 0 %}#d97706{% else %}#9ca3af{% endif %}">
+          {{ d.heures_sup }}h
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% endif %}
+
+  <!-- ── Section Paie journaliers ── -->
+  {% if r.feuilles %}
+  <div style="padding:.75rem 1rem;background:#fffbeb;border-top:2px solid #fcd34d;border-bottom:2px solid #fcd34d;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:.75rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">🦺 Paie journaliers</span>
+    <span style="font-size:.875rem;font-weight:900;color:#92400e">{{ r.masse_jour_brut|int|fcfa }}</span>
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#fef3c7;font-size:.65rem;color:#92400e;text-transform:uppercase">
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Journalier</th>
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Profession</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Période</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Jours</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Heures</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">Taux/h</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">Montant</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in r.feuilles %}
+      <tr style="border-bottom:1px solid #fef9c3">
+        <td style="padding:.5rem .875rem;font-weight:700;font-size:.875rem">{{ f.nom }}</td>
+        <td style="padding:.5rem .875rem;font-size:.8rem;color:#6b7280">{{ f.profession }}</td>
+        <td style="text-align:center;font-size:.8rem;color:#374151">{{ f.date_debut }} → {{ f.date_fin }}</td>
+        <td style="text-align:center;font-weight:700">{{ f.nb_jours }}</td>
+        <td style="text-align:center;font-family:monospace;font-size:.8rem">{{ f.heures }}h</td>
+        <td style="text-align:right;font-family:monospace;font-size:.8rem;color:#6b7280">{{ f.taux|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900;color:#92400e">{{ f.montant|int|fcfa }}</td>
+        <td style="text-align:center">
+          <span style="font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:9999px;
+            {{ 'background:#d1fae5;color:#065f46' if f.statut == 'PAYÉ' else 'background:#fef3c7;color:#92400e' }}">
+            {{ f.statut }}
+          </span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#fef3c7;font-weight:900">
+        <td colspan="6" style="padding:.5rem .875rem;font-size:.8rem">TOTAL JOURNALIERS ({{ r.feuilles|length }} feuille(s))</td>
+        <td style="text-align:right;padding:.5rem .875rem;font-family:monospace;color:#92400e">{{ r.masse_jour_brut|int|fcfa }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% endif %}
+
+  <!-- ── Section Bulletins mensuels ── -->
+  {% if r.bulletins %}
+  <div style="padding:.75rem 1rem;background:#eff6ff;border-top:2px solid #bfdbfe;border-bottom:2px solid #bfdbfe;display:flex;justify-content:space-between;align-items:center">
+    <span style="font-size:.75rem;font-weight:700;color:#1e40af;text-transform:uppercase;letter-spacing:.05em">📄 Bulletins de paie mensuels</span>
+    <span style="font-size:.875rem;font-weight:900;color:#1e40af">Net : {{ r.masse_mensuelle.get('total_net',0)|int|fcfa }}</span>
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#eff6ff;font-size:.65rem;color:#1e40af;text-transform:uppercase">
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Salarié</th>
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Emploi</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">Brut</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">CNSS</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">IRPP</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700">Net à payer</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in r.bulletins %}
+      <tr style="border-bottom:1px solid #eff6ff">
+        <td style="padding:.5rem .875rem;font-weight:700;font-size:.875rem">{{ b.nom }}</td>
+        <td style="padding:.5rem .875rem;font-size:.8rem;color:#6b7280">{{ b.emploi }}</td>
+        <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">{{ b.brut|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.cnss|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.irpp|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900;color:#1e40af">{{ b.net|int|fcfa }}</td>
+        <td style="text-align:center">
+          <span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#dbeafe;font-weight:900">
+        <td colspan="2" style="padding:.5rem .875rem;font-size:.8rem">TOTAL SALARIÉS ({{ r.bulletins|length }})</td>
+        <td style="text-align:right;padding:.5rem .875rem;font-family:monospace;font-size:.8rem;color:#6b7280">{{ r.masse_mensuelle.get('total_brut',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.5rem .875rem;font-family:monospace;font-size:.8rem;color:#dc2626">{{ r.masse_mensuelle.get('total_cnss_sal',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.5rem .875rem;font-family:monospace;font-size:.8rem;color:#dc2626">{{ r.masse_mensuelle.get('total_irpp',0)|int|fcfa }}</td>
+        <td style="text-align:right;padding:.5rem .875rem;font-family:monospace;font-size:.875rem;color:#1e40af">{{ r.masse_mensuelle.get('total_net',0)|int|fcfa }}</td>
+        <td></td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+  {% endif %}
+
+  <!-- Aucune donnée -->
+  {% if not r.detail_sal and not r.detail_jour and not r.feuilles and not r.bulletins %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af">
+    <div style="font-size:2rem;margin-bottom:.5rem">📭</div>
+    <p style="font-size:.875rem">Aucune donnée pour {{ mois_nom }} {{ annee }}</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card" style="text-align:center;padding:4rem;color:#9ca3af">
+  <div style="font-size:3rem;margin-bottom:.75rem">📊</div>
+  <p>Sélectionnez un mois et une année pour générer le rapport</p>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<style>
+@media print {
+  nav, .sidebar, form, button, .no-print { display:none !important; }
+  .card { box-shadow:none !important; border:1px solid #e5e7eb !important; break-inside:avoid; }
+  body { background:white !important; font-size:10px; }
+  h1 { font-size:14px; }
+  @page { margin:10mm; size:A4 landscape; }
+}
+</style>
+{% endblock %}
