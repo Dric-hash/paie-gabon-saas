@@ -1114,36 +1114,69 @@ def bulletins():
 @app.route("/bulletins/valider-lot", methods=["POST"])
 @login_required
 def bulletins_valider_lot():
-    """Valider tous les bulletins BROUILLON d'une période (filtrés par site si besoin)."""
+    """Valider une sélection de bulletins ou tous les brouillons d'une période."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     if not current_user.can_edit: abort(403)
-    pid     = request.form.get("periode_id", type=int)
-    site_id = request.form.get("site_id", type=int)
+
+    pid      = request.form.get("periode_id", type=int)
+    site_id  = request.form.get("site_id",    type=int)
+    action   = request.form.get("action_lot", "valider")      # valider | payer | supprimer_brouillons
+    ids_str  = request.form.get("bulletin_ids", "")           # IDs cochés séparés par virgule
+    ids_sel  = [int(x) for x in ids_str.split(",") if x.strip().isdigit()]
+
     if not pid:
         flash("Période manquante.", "error")
         return redirect(url_for("bulletins"))
-    q = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=pid, statut="BROUILLON")
-    if site_id:
-        ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
-            tenant_id=t.id, site_id=site_id, actif=True
-        ).filter(AffectationSite.salarie_id.isnot(None)).all()]
-        q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
-    buls = q.all()
+
+    # Si IDs explicites → utiliser la sélection ; sinon → tous les brouillons
+    if ids_sel:
+        buls = BulletinPaie.query.filter(
+            BulletinPaie.id.in_(ids_sel),
+            BulletinPaie.tenant_id == t.id
+        ).all()
+    else:
+        q = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=pid, statut="BROUILLON")
+        if site_id:
+            ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+                tenant_id=t.id, site_id=site_id, actif=True
+            ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+            q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
+        buls = q.all()
+
     nb = 0
-    for b in buls:
-        b.statut = "VALIDÉ"
-        b.date_validation = datetime.utcnow()
-        # Déduire les acomptes en attente
-        acomptes = Acompte.query.filter_by(
-            tenant_id=t.id, salarie_id=b.salarie_id,
-            mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
-        for a in acomptes:
-            a.statut = "DEDUIT"
-        nb += 1
+    if action == "valider":
+        for b in buls:
+            if b.statut != "BROUILLON": continue
+            b.statut          = "VALIDÉ"
+            b.date_validation = datetime.utcnow()
+            for a in Acompte.query.filter_by(
+                tenant_id=t.id, salarie_id=b.salarie_id,
+                mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all():
+                a.statut = "DEDUIT"
+            nb += 1
+        msg = f"✅ {nb} bulletin(s) validé(s)."
+
+    elif action == "payer":
+        for b in buls:
+            if b.statut not in ("VALIDÉ", "BROUILLON"): continue
+            b.statut = "PAYÉ"
+            nb += 1
+        msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
+
+    elif action == "supprimer_brouillons":
+        for b in buls:
+            if b.statut != "BROUILLON": continue
+            db.session.delete(b); nb += 1
+        msg = f"🗑️ {nb} brouillon(s) supprimé(s)."
+
+    else:
+        flash("Action inconnue.", "error")
+        return redirect(f"/bulletins?periode_id={pid}")
+
     db.session.commit()
-    flash(f"✅ {nb} bulletin(s) validé(s).", "success")
+    flash(msg, "success")
     redir = f"/bulletins?periode_id={pid}"
     if site_id: redir += f"&site_id={site_id}"
     return redirect(redir)
