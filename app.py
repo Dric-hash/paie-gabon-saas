@@ -1025,14 +1025,19 @@ def dashboard():
 @login_required
 def salaries():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
-    t=get_tenant()
+    t = get_tenant()
     if not t: return redirect(url_for("login"))
-    q=request.args.get("q",""); statut=request.args.get("statut","")
-    query=Salarie.query.filter_by(tenant_id=t.id)
-    if q: query=query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"),Salarie.prenom.ilike(f"%{q}%"),Salarie.matricule.ilike(f"%{q}%")))
-    if statut: query=query.filter_by(statut=statut)
-    return render_template("tenant/salaries.html", salaries=query.order_by(Salarie.nom).all(),
-        categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(), q=q, statut=statut, tenant=t)
+    q      = request.args.get("q", "")
+    statut = request.args.get("statut", "")
+    page   = request.args.get("page", 1, type=int)
+    query  = Salarie.query.filter_by(tenant_id=t.id)
+    if q:      query = query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"), Salarie.prenom.ilike(f"%{q}%"), Salarie.matricule.ilike(f"%{q}%")))
+    if statut: query = query.filter_by(statut=statut)
+    pagination = query.order_by(Salarie.nom).paginate(page=page, per_page=25, error_out=False)
+    return render_template("tenant/salaries.html",
+        salaries=pagination.items, pagination=pagination,
+        categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
+        q=q, statut=statut, tenant=t)
 
 @app.route("/salaries/nouveau", methods=["GET","POST"])
 @login_required
@@ -1247,8 +1252,12 @@ def bulletins():
             ).filter(AffectationSite.salarie_id.isnot(None)).all()]
             q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
 
-        buls  = q.join(Salarie).order_by(Salarie.nom).all()
-        masse = calculer_masse_salariale(buls)
+        page_bul   = request.args.get("page", 1, type=int)
+        # Totaux sur TOUS les bulletins (pour les KPIs), pagination seulement pour l'affichage
+        buls_tous  = q.join(Salarie).order_by(Salarie.nom).all()
+        masse      = calculer_masse_salariale(buls_tous)
+        pagination = q.join(Salarie).order_by(Salarie.nom).paginate(page=page_bul, per_page=25, error_out=False)
+        buls       = pagination.items
 
     # Affectation site de chaque salarié pour affichage dans le tableau
     aff_sal = {a.salarie_id: a.site for a in AffectationSite.query.filter_by(
@@ -1259,6 +1268,7 @@ def bulletins():
         periodes=periodes, periode_sel=ps,
         bulletins=buls, masse=masse, statut_filtre=sf,
         sites=sites_list, site_filtre=site_filtre, aff_sal=aff_sal,
+        pagination=pagination if pid else None,
         tenant=t)
 
 @app.route("/bulletins/valider-lot", methods=["POST"])
@@ -1811,10 +1821,13 @@ def journaliers():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    q = request.args.get("q","")
+    q    = request.args.get("q", "")
+    page = request.args.get("page", 1, type=int)
     query = Journalier.query.filter_by(tenant_id=t.id)
-    if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"),Journalier.prenom.ilike(f"%{q}%"),Journalier.profession.ilike(f"%{q}%")))
-    return render_template("tenant/journaliers.html", tenant=t, journaliers=query.order_by(Journalier.nom).all(), q=q)
+    if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"), Journalier.prenom.ilike(f"%{q}%"), Journalier.profession.ilike(f"%{q}%")))
+    pagination = query.order_by(Journalier.nom).paginate(page=page, per_page=25, error_out=False)
+    return render_template("tenant/journaliers.html",
+        tenant=t, journaliers=pagination.items, pagination=pagination, q=q)
 
 @app.route("/journaliers/nouveau", methods=["GET","POST"])
 @login_required
@@ -2077,12 +2090,14 @@ def journaliers_paie():
         q_feuilles = q_feuilles.filter(FeuillePaieJournalier.journalier_id.in_(ids_jour_all))
     if statut_filtre:
         q_feuilles = q_feuilles.filter_by(statut=statut_filtre)
-    feuilles = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).limit(100).all()
-
-    # ── KPIs ─────────────────────────────────────────────────────────────────
-    total_en_attente = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "EN_ATTENTE")
-    total_paye       = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "PAYÉ")
-    nb_en_attente    = sum(1 for f in feuilles if f.statut == "EN_ATTENTE")
+    page_f      = request.args.get("page", 1, type=int)
+    # KPIs sur toutes les feuilles (sans pagination)
+    feuilles_tous    = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).all()
+    total_en_attente = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "EN_ATTENTE")
+    total_paye       = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "PAYÉ")
+    nb_en_attente    = sum(1 for f in feuilles_tous if f.statut == "EN_ATTENTE")
+    pagination_f     = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).paginate(page=page_f, per_page=25, error_out=False)
+    feuilles         = pagination_f.items
 
     # Affectation site de chaque journalier (pour affichage dans la liste)
     aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(
@@ -2094,7 +2109,7 @@ def journaliers_paie():
         sites=sites_list, site_filtre=site_filtre, statut_filtre=statut_filtre,
         total_en_attente=total_en_attente, total_paye=total_paye,
         nb_en_attente=nb_en_attente, aff_jour=aff_jour,
-        now=datetime.now())
+        pagination=pagination_f, now=datetime.now())
 
 @app.route("/journaliers/paie/generer", methods=["POST"])
 @login_required
