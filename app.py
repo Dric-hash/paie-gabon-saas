@@ -3871,6 +3871,115 @@ def rapport_mensuel_site_export():
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True, download_name="_".join(fname_parts)+".xlsx")
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RECHERCHE GLOBALE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/recherche")
+@login_required
+def recherche_globale():
+    """Recherche globale : salariés, journaliers, bulletins, acomptes."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    q = request.args.get("q", "").strip()
+    if not q:
+        return render_template("tenant/recherche.html",
+            tenant=t, q="", resultats={}, nb_total=0)
+
+    like = f"%{q}%"
+    resultats = {}
+
+    # ── Salariés ────────────────────────────────────────────────────────────
+    sals = Salarie.query.filter_by(tenant_id=t.id).filter(
+        db.or_(
+            Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+            Salarie.matricule.ilike(like), Salarie.emploi.ilike(like),
+            Salarie.numero_cnss.ilike(like), Salarie.telephone.ilike(like),
+        )
+    ).order_by(Salarie.nom).limit(10).all()
+    if sals:
+        resultats["salaries"] = [{"id": s.id, "titre": s.nom_complet,
+            "sous_titre": f"{s.emploi or '—'} · {s.matricule}",
+            "badge": s.statut, "lien": f"/salaries/{s.id}",
+            "icone": "👤"} for s in sals]
+
+    # ── Journaliers ──────────────────────────────────────────────────────────
+    jours = Journalier.query.filter_by(tenant_id=t.id).filter(
+        db.or_(
+            Journalier.nom.ilike(like), Journalier.prenom.ilike(like),
+            Journalier.profession.ilike(like), Journalier.telephone.ilike(like),
+        )
+    ).order_by(Journalier.nom).limit(10).all()
+    if jours:
+        resultats["journaliers"] = [{"id": j.id, "titre": j.nom_complet,
+            "sous_titre": f"{j.profession or '—'} · {int(j.taux_horaire or 0)} FCFA/h",
+            "badge": j.statut, "lien": f"/journaliers/{j.id}",
+            "icone": "🦺"} for j in jours]
+
+    # ── Bulletins ────────────────────────────────────────────────────────────
+    buls = BulletinPaie.query.filter_by(tenant_id=t.id)        .join(Salarie, BulletinPaie.salarie_id == Salarie.id)        .join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)        .filter(db.or_(
+            Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+            Salarie.matricule.ilike(like),
+        ))        .order_by(BulletinPaie.date_creation.desc()).limit(10).all()
+    if buls:
+        resultats["bulletins"] = [{"id": b.id,
+            "titre": b.salarie.nom_complet,
+            "sous_titre": f"{b.periode.libelle_complet} · Net : {int(b.net_a_payer or 0):,} FCFA",
+            "badge": b.statut, "lien": f"/bulletins/{b.id}",
+            "icone": "📄"} for b in buls]
+
+    # ── Acomptes ─────────────────────────────────────────────────────────────
+    acomps = Acompte.query.filter_by(tenant_id=t.id)        .join(Salarie, Acompte.salarie_id == Salarie.id)        .filter(db.or_(
+            Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+            Salarie.matricule.ilike(like),
+        ))        .order_by(Acompte.date_demande.desc()).limit(10).all()
+    if acomps:
+        resultats["acomptes"] = [{"id": a.id,
+            "titre": a.salarie.nom_complet,
+            "sous_titre": f"{int(a.montant or 0):,} FCFA · {a.date_demande.strftime('%d/%m/%Y') if a.date_demande else ''}",
+            "badge": a.statut, "lien": "/acomptes",
+            "icone": "💸"} for a in acomps]
+
+    nb_total = sum(len(v) for v in resultats.values())
+    return render_template("tenant/recherche.html",
+        tenant=t, q=q, resultats=resultats, nb_total=nb_total)
+
+
+@app.route("/api/recherche-rapide")
+@login_required
+def api_recherche_rapide():
+    """API JSON pour l'autocomplétion dans la barre de recherche."""
+    t = get_tenant()
+    if not t: return jsonify([])
+    q = request.args.get("q", "").strip()
+    if len(q) < 2: return jsonify([])
+
+    like = f"%{q}%"
+    resultats = []
+
+    # Salariés (5 max)
+    for s in Salarie.query.filter_by(tenant_id=t.id).filter(
+        db.or_(Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+               Salarie.matricule.ilike(like))
+    ).limit(5).all():
+        resultats.append({"icone":"👤","titre":s.nom_complet,
+            "sous_titre":s.emploi or "Salarié","lien":f"/salaries/{s.id}",
+            "categorie":"Salariés"})
+
+    # Journaliers (5 max)
+    for j in Journalier.query.filter_by(tenant_id=t.id).filter(
+        db.or_(Journalier.nom.ilike(like), Journalier.prenom.ilike(like),
+               Journalier.profession.ilike(like))
+    ).limit(5).all():
+        resultats.append({"icone":"🦺","titre":j.nom_complet,
+            "sous_titre":j.profession or "Journalier","lien":f"/journaliers/{j.id}",
+            "categorie":"Journaliers"})
+
+    return jsonify(resultats[:10])
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 def _pd(v):
     if not v: return None
