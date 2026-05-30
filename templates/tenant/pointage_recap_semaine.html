@@ -1,0 +1,401 @@
+{% extends "tenant/base.html" %}
+{% block title %}Récap semaine — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">Récapitulatif hebdomadaire</h1>
+    <p class="text-gray-500 text-sm mt-1">Présences, absences et heures par site · semaine du {{ lundi.strftime('%d/%m/%Y') }}</p>
+  </div>
+  <div style="display:flex;gap:.625rem;align-items:center">
+    <a href="/pointage" style="font-size:.8rem;font-weight:700;color:#6b7280;text-decoration:none;background:#f3f4f6;padding:.5rem .875rem;border-radius:.75rem">
+      ← Pointage
+    </a>
+    <button onclick="window.print()"
+      style="font-size:.8rem;font-weight:700;color:white;background:#1a2332;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
+      🖨️ Imprimer
+    </button>
+  </div>
+</div>
+
+<!-- Navigation semaine -->
+<div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:.875rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
+  <a href="/pointage/recap-semaine?date={{ semaine_prec }}"
+     style="display:flex;align-items:center;gap:.375rem;font-size:.875rem;font-weight:700;color:#374151;text-decoration:none;padding:.375rem .75rem;border-radius:.625rem;border:1px solid #e5e7eb">
+    ← Semaine précédente
+  </a>
+  <div style="text-align:center">
+    <div style="font-size:1rem;font-weight:900;color:#1a2332">
+      Semaine du {{ lundi.strftime('%d %B') }} au {{ samedi.strftime('%d %B %Y') }}
+    </div>
+    <div style="display:flex;gap:.375rem;margin-top:.375rem;justify-content:center">
+      {% for j in jours %}
+      <span style="font-size:.7rem;padding:.2rem .5rem;border-radius:.375rem;font-weight:700;
+        {{ 'background:#1a2332;color:white' if j == date_ref else 'background:#f3f4f6;color:#6b7280' }}">
+        {{ ['L','Ma','Me','J','V','S'][loop.index0] }} {{ j.strftime('%d') }}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  <a href="/pointage/recap-semaine?date={{ semaine_suiv }}"
+     style="display:flex;align-items:center;gap:.375rem;font-size:.875rem;font-weight:700;color:#374151;text-decoration:none;padding:.375rem .75rem;border-radius:.625rem;border:1px solid #e5e7eb">
+    Semaine suivante →
+  </a>
+</div>
+
+<!-- KPIs globaux -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+  {% set taux_pres = ((totaux_globaux.presents / (totaux_globaux.presents + totaux_globaux.absents) * 100)|int) if (totaux_globaux.presents + totaux_globaux.absents) > 0 else 0 %}
+  {% for label, val, color, icon in [
+    ("Présences (semaine)",  totaux_globaux.presents,            "#065f46", "✅"),
+    ("Absences (semaine)",   totaux_globaux.absents,             "#991b1b", "❌"),
+    ("Heures normales",      (totaux_globaux.heures|round(1)|string + " h"), "#1e40af", "⏱️"),
+    ("Taux de présence",     (taux_pres|string + " %"),          "#d97706", "📊"),
+  ] %}
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;text-align:center">
+    <div style="font-size:1.5rem;margin-bottom:.25rem">{{ icon }}</div>
+    <div style="font-size:1.25rem;font-weight:900;color:{{ color }}">{{ val }}</div>
+    <div style="font-size:.7rem;color:#6b7280;font-weight:600;text-transform:uppercase;margin-top:.25rem">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+<!-- TABLEAU PAR SITE                                                         -->
+<!-- ════════════════════════════════════════════════════════════════════════ -->
+{% for key, data in recap.items() %}
+{% set site = data.site %}
+{% set effectif = data.effectif %}
+{% set totaux = data.totaux %}
+
+<div class="card overflow-hidden mb-4">
+  <!-- En-tête site -->
+  <div style="background:{% if site %}#1a2332{% else %}#374151{% endif %};color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <span style="font-size:1.1rem">🏗️</span>
+      <div>
+        <div style="font-size:.9rem;font-weight:900">
+          {% if site %}{{ site.nom }}{% if site.ville %} <span style="opacity:.7;font-size:.8rem">· {{ site.ville }}</span>{% endif %}
+          {% else %}Sans affectation de site{% endif %}
+        </div>
+        <div style="font-size:.75rem;opacity:.7;margin-top:.125rem">
+          {{ effectif }} travailleur(s) affecté(s)
+          {% if site %}
+          · <a href="/pointage?site_id={{ site.id }}&date={{ date_ref }}" style="color:rgba(255,255,255,.8);text-decoration:none;font-weight:700">Pointer ce site →</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <!-- Totaux semaine -->
+    <div style="display:flex;gap:1.25rem">
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:#6ee7b7">{{ totaux.presents }}</div>
+        <div style="font-size:.65rem;opacity:.7">Présences</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:#fca5a5">{{ totaux.absents }}</div>
+        <div style="font-size:.65rem;opacity:.7">Absences</div>
+      </div>
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:#93c5fd">{{ totaux.heures|round(1) }}h</div>
+        <div style="font-size:.65rem;opacity:.7">Heures norm.</div>
+      </div>
+      {% if totaux.h_sup > 0 %}
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:#fcd34d">{{ totaux.h_sup|round(1) }}h</div>
+        <div style="font-size:.65rem;opacity:.7">H. sup</div>
+      </div>
+      {% endif %}
+      {% set tp = ((totaux.presents / (totaux.presents + totaux.absents) * 100)|int) if (totaux.presents + totaux.absents) > 0 else 0 %}
+      <div style="text-align:center">
+        <div style="font-size:1.1rem;font-weight:900;color:{% if tp >= 90 %}#6ee7b7{% elif tp >= 70 %}#fcd34d{% else %}#fca5a5{% endif %}">{{ tp }}%</div>
+        <div style="font-size:.65rem;opacity:.7">Taux prés.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Grille des jours -->
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f9fafb">
+        <th style="padding:.5rem .875rem;text-align:left;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;width:100px">Indicateur</th>
+        {% for j in jours %}
+        {% set is_today = j == date_ref %}
+        <th style="padding:.5rem .5rem;text-align:center;font-size:.75rem;font-weight:700;
+          color:{{ '#1a2332' if is_today else '#6b7280' }};min-width:90px;
+          {% if is_today %}background:#eff6ff;border-bottom:2px solid #2563eb;{% endif %}">
+          <div>{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'][loop.index0] }}</div>
+          <div style="font-size:.8rem;font-weight:900;color:{{ '#2563eb' if is_today else '#374151' }}">
+            {{ j.strftime('%d/%m') }}
+          </div>
+        </th>
+        {% endfor %}
+        <th style="padding:.5rem;text-align:center;font-size:.7rem;font-weight:700;color:#9ca3af;background:#f9fafb;width:80px">TOTAL</th>
+      </tr>
+    </thead>
+    <tbody>
+
+      <!-- Ligne Présents -->
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#065f46;background:#f0fdf4">
+          ✅ Présents
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        <td style="text-align:center;padding:.625rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if cell.presents > 0 %}
+          <span style="font-size:1rem;font-weight:900;color:#065f46">{{ cell.presents }}</span>
+          <span style="font-size:.7rem;color:#9ca3af;display:block">/ {{ effectif }}</span>
+          {% else %}
+          <span style="font-size:.8rem;color:#d1d5db">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;padding:.625rem .5rem;background:#f0fdf4">
+          <span style="font-size:1rem;font-weight:900;color:#065f46">{{ totaux.presents }}</span>
+        </td>
+      </tr>
+
+      <!-- Ligne Absents -->
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#991b1b;background:#fef2f2">
+          ❌ Absents
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        <td style="text-align:center;padding:.625rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if cell.absents > 0 %}
+          <span style="font-size:1rem;font-weight:900;color:#dc2626">{{ cell.absents }}</span>
+          {% else %}
+          <span style="font-size:.8rem;color:#d1d5db">0</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;padding:.625rem .5rem;background:#fef2f2">
+          <span style="font-size:1rem;font-weight:900;color:#dc2626">{{ totaux.absents }}</span>
+        </td>
+      </tr>
+
+      <!-- Ligne Non pointés -->
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#92400e;background:#fffbeb">
+          ⏳ Non pointés
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        <td style="text-align:center;padding:.625rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if cell.non_pointes > 0 %}
+          <span style="font-size:.9rem;font-weight:700;color:#d97706">{{ cell.non_pointes }}</span>
+          {% else %}
+          <span style="font-size:.8rem;color:#d1d5db">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;padding:.625rem .5rem;background:#fffbeb">
+          <span style="font-size:.9rem;font-weight:700;color:#d97706">
+            {{ data.jours.values()|sum(attribute='non_pointes') }}
+          </span>
+        </td>
+      </tr>
+
+      <!-- Ligne Heures normales -->
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#1e40af;background:#eff6ff">
+          ⏱️ H. normales
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        <td style="text-align:center;padding:.625rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if cell.heures > 0 %}
+          <span style="font-size:.875rem;font-weight:700;color:#1e40af">{{ cell.heures|round(1) }}h</span>
+          {% else %}
+          <span style="font-size:.8rem;color:#d1d5db">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;padding:.625rem .5rem;background:#eff6ff">
+          <span style="font-size:.875rem;font-weight:900;color:#1e40af">{{ totaux.heures|round(1) }}h</span>
+        </td>
+      </tr>
+
+      <!-- Ligne Heures sup (si > 0 dans la semaine) -->
+      {% if totaux.h_sup > 0 %}
+      <tr>
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#d97706;background:#fffbeb">
+          ⚡ H. sup
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        <td style="text-align:center;padding:.625rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if cell.h_sup > 0 %}
+          <span style="font-size:.875rem;font-weight:700;color:#d97706">{{ cell.h_sup|round(1) }}h</span>
+          {% else %}
+          <span style="font-size:.8rem;color:#d1d5db">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;padding:.625rem .5rem;background:#fffbeb">
+          <span style="font-size:.875rem;font-weight:900;color:#d97706">{{ totaux.h_sup|round(1) }}h</span>
+        </td>
+      </tr>
+      {% endif %}
+
+      <!-- Ligne Taux de présence (barre visuelle) -->
+      <tr style="background:#fafafa">
+        <td style="padding:.625rem .875rem;font-size:.8rem;font-weight:700;color:#6b7280">
+          📊 Taux présence
+        </td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set is_today = j == date_ref %}
+        {% set total_j = cell.presents + cell.absents %}
+        {% set pct = ((cell.presents / total_j * 100)|int) if total_j > 0 else 0 %}
+        <td style="padding:.375rem .5rem;{% if is_today %}background:#eff6ff;{% endif %}">
+          {% if total_j > 0 %}
+          <div style="text-align:center;font-size:.75rem;font-weight:700;margin-bottom:.25rem;
+            color:{% if pct >= 90 %}#065f46{% elif pct >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+            {{ pct }}%
+          </div>
+          <div style="background:#e5e7eb;border-radius:9999px;height:5px;overflow:hidden">
+            <div style="height:100%;width:{{ pct }}%;border-radius:9999px;transition:width .3s;
+              background:{% if pct >= 90 %}#059669{% elif pct >= 70 %}#f59e0b{% else %}#dc2626{% endif %}">
+            </div>
+          </div>
+          {% else %}
+          <div style="text-align:center;font-size:.75rem;color:#d1d5db">—</div>
+          {% endif %}
+        </td>
+        {% endfor %}
+        {% set tp = ((totaux.presents / (totaux.presents + totaux.absents) * 100)|int) if (totaux.presents + totaux.absents) > 0 else 0 %}
+        <td style="padding:.375rem .5rem;background:#fafafa;text-align:center">
+          <span style="font-size:.875rem;font-weight:900;
+            color:{% if tp >= 90 %}#065f46{% elif tp >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+            {{ tp }}%
+          </span>
+        </td>
+      </tr>
+
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Lien pointer ce site directement -->
+  {% if site %}
+  <div style="padding:.625rem 1.25rem;border-top:1px solid #f3f4f6;background:#fafafa;display:flex;gap:.625rem;align-items:center;flex-wrap:wrap">
+    <span style="font-size:.75rem;color:#9ca3af">Accès rapide :</span>
+    <a href="/sites/{{ site.id }}"
+       style="font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:#f3f4f6;padding:.3rem .625rem;border-radius:.5rem">
+      📋 Fiche site
+    </a>
+    <a href="/pointage?site_id={{ site.id }}&date={{ date_ref }}"
+       style="font-size:.75rem;font-weight:700;color:#1e40af;text-decoration:none;background:#eff6ff;padding:.3rem .625rem;border-radius:.5rem">
+      ✏️ Pointer aujourd'hui
+    </a>
+    <a href="/sites/{{ site.id }}?date_ptg={{ date_ref }}"
+       style="font-size:.75rem;font-weight:700;color:#065f46;text-decoration:none;background:#f0fdf4;padding:.3rem .625rem;border-radius:.5rem">
+      ⚡ Pointage rapide
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+<!-- ── Synthèse globale ─────────────────────────────────────────────────────── -->
+<div class="card overflow-hidden mt-4" style="border:2px solid #1a2332">
+  <div style="background:#1a2332;color:white;padding:.875rem 1.25rem">
+    <span style="font-weight:900;font-size:.9rem">📈 Synthèse globale de la semaine — tous sites</span>
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f9fafb">
+        <th style="padding:.5rem .875rem;text-align:left;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase">Site</th>
+        <th style="padding:.5rem;text-align:center;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase">Effectif</th>
+        {% for j in jours %}
+        <th style="padding:.5rem;text-align:center;font-size:.7rem;font-weight:700;color:#6b7280;min-width:70px">
+          {{ ['L','Ma','Me','J','V','S'][loop.index0] }}<br>{{ j.strftime('%d') }}
+        </th>
+        {% endfor %}
+        <th style="padding:.5rem;text-align:center;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase">Total h.</th>
+        <th style="padding:.5rem;text-align:center;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase">Taux</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for key, data in recap.items() %}
+      <tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:.625rem .875rem;font-weight:700;font-size:.875rem">
+          {% if data.site %}🏗️ {{ data.site.nom }}{% else %}Sans site{% endif %}
+        </td>
+        <td style="text-align:center;font-size:.8rem;color:#6b7280;font-weight:600">{{ data.effectif }}</td>
+        {% for j in jours %}
+        {% set cell = data.jours[j|string] %}
+        {% set total_j = cell.presents + cell.absents %}
+        {% set pct_j = ((cell.presents / total_j * 100)|int) if total_j > 0 else 0 %}
+        <td style="text-align:center;padding:.375rem">
+          {% if total_j > 0 %}
+          <div style="font-size:.8rem;font-weight:700;color:{% if pct_j >= 90 %}#065f46{% elif pct_j >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+            {{ cell.presents }}/{{ total_j }}
+          </div>
+          <div style="background:#e5e7eb;border-radius:9999px;height:4px;margin:.2rem auto;width:48px;overflow:hidden">
+            <div style="height:100%;width:{{ pct_j }}%;background:{% if pct_j >= 90 %}#059669{% elif pct_j >= 70 %}#f59e0b{% else %}#dc2626{% endif %};border-radius:9999px"></div>
+          </div>
+          {% else %}
+          <span style="font-size:.75rem;color:#d1d5db">—</span>
+          {% endif %}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;font-weight:700;font-size:.875rem;color:#1e40af">
+          {{ data.totaux.heures|round(1) }}h
+        </td>
+        {% set tp2 = ((data.totaux.presents / (data.totaux.presents + data.totaux.absents) * 100)|int) if (data.totaux.presents + data.totaux.absents) > 0 else 0 %}
+        <td style="text-align:center;font-weight:900;font-size:.875rem;
+          color:{% if tp2 >= 90 %}#065f46{% elif tp2 >= 70 %}#92400e{% else %}#991b1b{% endif %}">
+          {{ tp2 }}%
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#1a2332;color:white;font-weight:900">
+        <td style="padding:.625rem .875rem;font-size:.875rem" colspan="2">TOTAL GÉNÉRAL</td>
+        {% for j in jours %}
+        {% set tot_j_p = namespace(v=0) %}{% set tot_j_t = namespace(v=0) %}
+        {% for key, data in recap.items() %}
+          {% set cell = data.jours[j|string] %}
+          {% set tot_j_p.v = tot_j_p.v + cell.presents %}
+          {% set tot_j_t.v = tot_j_t.v + cell.presents + cell.absents %}
+        {% endfor %}
+        <td style="text-align:center;padding:.5rem;font-size:.8rem;color:rgba(255,255,255,.9)">
+          {{ tot_j_p.v }}/{{ tot_j_t.v }}
+        </td>
+        {% endfor %}
+        <td style="text-align:center;font-size:.875rem;color:#93c5fd">{{ totaux_globaux.heures|round(1) }}h</td>
+        {% set tp_g = ((totaux_globaux.presents / (totaux_globaux.presents + totaux_globaux.absents) * 100)|int) if (totaux_globaux.presents + totaux_globaux.absents) > 0 else 0 %}
+        <td style="text-align:center;font-size:.875rem;color:{% if tp_g >= 90 %}#6ee7b7{% elif tp_g >= 70 %}#fcd34d{% else %}#fca5a5{% endif %}">
+          {{ tp_g }}%
+        </td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script></script>
+<style>
+@media print {
+  .no-print, nav, .sidebar { display: none !important; }
+  .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+  body { background: white !important; }
+  .page { margin: 0 !important; }
+}
+</style>
+{% endblock %}
