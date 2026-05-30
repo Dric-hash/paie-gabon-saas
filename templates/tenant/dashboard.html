@@ -56,11 +56,80 @@
     else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
   {% endfor %}</div>{% endif %}{% endwith %}
 
-  {% for a in alertes %}
-  <div class="mb-3 px-4 py-3 rounded-xl text-sm font-semibold border
-    {{ 'bg-amber-50 text-amber-800 border-amber-200' if a.type=='warning' else 'bg-blue-50 text-blue-800 border-blue-200' }}">
-    {{ a.msg }}
-  </div>{% endfor %}
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- ALERTES INTELLIGENTES                                  -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  {% if alertes %}
+  <div style="margin-bottom:1.25rem">
+
+    <!-- En-tête résumé -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.625rem;flex-wrap:wrap;gap:.5rem">
+      <div style="display:flex;align-items:center;gap:.625rem">
+        <span style="font-size:.875rem;font-weight:900;color:#1a2332">🔔 Alertes</span>
+        {% if nb_alertes_critiques > 0 %}
+        <span style="background:#dc2626;color:white;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">
+          {{ nb_alertes_critiques }} critique(s)
+        </span>
+        {% endif %}
+        {% if nb_alertes_warning > 0 %}
+        <span style="background:#f59e0b;color:white;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">
+          {{ nb_alertes_warning }} warning(s)
+        </span>
+        {% endif %}
+        <span style="font-size:.75rem;color:#9ca3af">{{ alertes|length }} alerte(s) au total</span>
+      </div>
+      <button onclick="toggleAlertes()"
+        style="font-size:.75rem;color:#6b7280;background:none;border:none;cursor:pointer;font-weight:600"
+        id="btn-toggle-alertes">▼ Tout replier</button>
+    </div>
+
+    <!-- Liste des alertes -->
+    <div id="bloc-alertes" style="display:flex;flex-direction:column;gap:.5rem">
+      {% for a in alertes %}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem;
+        padding:.75rem 1rem;border-radius:.875rem;border:1px solid;
+        {% if a.type == 'danger' %}
+          background:#fef2f2;border-color:#fca5a5;
+        {% elif a.type == 'warning' %}
+          background:#fffbeb;border-color:#fcd34d;
+        {% else %}
+          background:#f0f9ff;border-color:#bae6fd;
+        {% endif %}
+        ">
+        <!-- Icône + contenu -->
+        <div style="display:flex;align-items:flex-start;gap:.625rem;flex:1;min-width:0">
+          <span style="font-size:1.125rem;flex-shrink:0;margin-top:.1rem">{{ a.icone }}</span>
+          <div>
+            <div style="font-size:.825rem;font-weight:700;
+              {% if a.type == 'danger' %}color:#991b1b;
+              {% elif a.type == 'warning' %}color:#92400e;
+              {% else %}color:#1e40af;{% endif %}">
+              {{ a.titre }}
+            </div>
+            <div style="font-size:.775rem;margin-top:.2rem;
+              {% if a.type == 'danger' %}color:#b91c1c;
+              {% elif a.type == 'warning' %}color:#a16207;
+              {% else %}color:#1d4ed8;{% endif %}
+              opacity:.9">
+              {{ a.msg }}
+            </div>
+          </div>
+        </div>
+        <!-- Lien action -->
+        {% if a.lien %}
+        <a href="{{ a.lien }}"
+           style="font-size:.75rem;font-weight:700;white-space:nowrap;padding:.3rem .75rem;border-radius:.5rem;text-decoration:none;flex-shrink:0;
+           {% if a.type == 'danger' %}background:#dc2626;color:white;
+           {% elif a.type == 'warning' %}background:#f59e0b;color:white;
+           {% else %}background:#2563eb;color:white;{% endif %}">
+          {{ a.lien_texte }} →
+        </a>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
 
   <div class="flex items-center justify-between mb-5">
     <div>
@@ -219,6 +288,20 @@ new Chart(document.getElementById('chartEvolution'), {
   options: { responsive: true, plugins: { legend: { position: 'top' } },
     scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('fr') + ' F' } } } }
 });
+</script>
+<script>
+function toggleAlertes() {
+  const bloc = document.getElementById('bloc-alertes');
+  const btn  = document.getElementById('btn-toggle-alertes');
+  if (!bloc) return;
+  if (bloc.style.display === 'none') {
+    bloc.style.display = 'flex';
+    btn.textContent    = '▼ Tout replier';
+  } else {
+    bloc.style.display = 'none';
+    btn.textContent    = '▶ Voir les alertes (' + document.querySelectorAll('#bloc-alertes > div').length + ')';
+  }
+}
 </script>
 </body>
 </html>
