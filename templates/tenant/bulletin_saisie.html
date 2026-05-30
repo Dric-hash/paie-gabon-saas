@@ -613,8 +613,40 @@ function chargerContrat(id) {
     });
 }
 
-document.getElementById('formBulletin').addEventListener('submit', function() {
-  this.querySelectorAll('button[type="submit"]').forEach(b => { b.disabled=true; b.style.opacity='.6'; });
+// ── Protection double-soumission bulletin ────────────────────────────────────
+let _bulletinSoumis = false;
+
+document.getElementById('formBulletin').addEventListener('submit', function(e) {
+  if (_bulletinSoumis) { e.preventDefault(); return false; }
+  _bulletinSoumis = true;
+
+  // Identifier quel bouton a été cliqué (brouillon ou valider)
+  const btnClique = document.activeElement;
+  this.querySelectorAll('button[type="submit"]').forEach(b => {
+    b.disabled = true;
+    b.style.opacity = '.5';
+    b.style.cursor  = 'not-allowed';
+  });
+  if (btnClique && btnClique.type === 'submit') {
+    const labels = {brouillon:'⏳ Sauvegarde…', valider:'⏳ Validation…'};
+    btnClique.textContent = labels[btnClique.value] || '⏳ En cours…';
+    btnClique.style.opacity = '1';
+    btnClique.style.cursor  = 'wait';
+  }
+});
+
+// Ré-activer si l'utilisateur revient en arrière (bouton retour navigateur)
+window.addEventListener('pageshow', function(e) {
+  if (e.persisted) {
+    _bulletinSoumis = false;
+    document.querySelectorAll('#formBulletin button[type="submit"]').forEach(b => {
+      b.disabled = false; b.style.opacity = ''; b.style.cursor = '';
+    });
+    const brouillon = document.querySelector('button[value="brouillon"]');
+    const valider   = document.querySelector('button[value="valider"]');
+    if (brouillon) brouillon.textContent = '💾 Sauvegarder brouillon';
+    if (valider)   valider.textContent   = '✅ Valider le bulletin';
+  }
 });
 
 {% if salarie_sel %}chargerContrat("{{ salarie_sel.id }}");{% endif %}
