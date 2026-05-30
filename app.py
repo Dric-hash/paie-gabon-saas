@@ -1236,7 +1236,7 @@ def bulletins():
     periodes     = PeriodePaie.query.filter_by(tenant_id=t.id)                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
     sites_list   = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
     site_filtre  = Site.query.get(site_filtre_id) if site_filtre_id else None
-    ps = None; buls = []; masse = {}
+    ps = None; buls = []; masse = {}; pagination = None
 
     if pid:
         ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
@@ -1253,10 +1253,11 @@ def bulletins():
             q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
 
         page_bul   = request.args.get("page", 1, type=int)
-        # Totaux sur TOUS les bulletins (pour les KPIs), pagination seulement pour l'affichage
-        buls_tous  = q.join(Salarie).order_by(Salarie.nom).all()
+        # Une seule query base avec le join, puis on pagine
+        q_joined   = q.join(Salarie).order_by(Salarie.nom)
+        buls_tous  = q_joined.all()
         masse      = calculer_masse_salariale(buls_tous)
-        pagination = q.join(Salarie).order_by(Salarie.nom).paginate(page=page_bul, per_page=25, error_out=False)
+        pagination = q_joined.paginate(page=page_bul, per_page=25, error_out=False)
         buls       = pagination.items
 
     # Affectation site de chaque salarié pour affichage dans le tableau
