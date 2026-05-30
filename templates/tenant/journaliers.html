@@ -129,7 +129,8 @@
         </td></tr>
         {% endfor %}
       </tbody>
-    </table>
+      {{ pagination_widget(pagination, request.args) }}
+</table>
   </div>
 </main>
 </body>
