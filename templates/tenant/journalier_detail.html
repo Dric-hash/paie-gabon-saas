@@ -1,0 +1,168 @@
+{% extends "tenant/base.html" %}
+{% from "_macros.html" import historique_pointage %}
+{% block title %}{{ journalier.nom_complet }} — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <a href="/journaliers" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Journaliers</a>
+  <h1 class="text-2xl font-black text-gray-900">{{ journalier.nom_complet }}</h1>
+  <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;
+    {{ 'background:#d1fae5;color:#065f46' if journalier.statut=='ACTIF' else 'background:#f3f4f6;color:#6b7280' }}">
+    {{ journalier.statut }}
+  </span>
+</div>
+
+<!-- Carte identité -->
+<div style="background:linear-gradient(135deg,#92400e,#d97706);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem">
+  <div style="display:flex;align-items:center;gap:1.25rem">
+    <div style="width:5rem;height:5rem;border-radius:1rem;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.75rem;font-weight:900">
+      {{ journalier.nom[0] }}{{ journalier.prenom[0] if journalier.prenom else '' }}
+    </div>
+    <div>
+      <div style="font-size:1.375rem;font-weight:900">{{ journalier.nom }} {{ journalier.prenom }}</div>
+      <div style="opacity:.75;margin-top:.25rem">{{ journalier.profession or 'Profession non définie' }}</div>
+      <div style="display:flex;gap:.75rem;margin-top:.5rem;flex-wrap:wrap">
+        {% if journalier.telephone %}
+        <span style="font-size:.8rem;opacity:.85">📞 {{ journalier.telephone }}</span>
+        {% endif %}
+        {% if aff and aff.site %}
+        <span style="font-size:.8rem;background:rgba(255,255,255,.2);padding:.1rem .5rem;border-radius:9999px">
+          🏗️ {{ aff.site.nom }}
+        </span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div style="display:flex;gap:1.5rem">
+    <div style="text-align:center">
+      <div style="font-size:1.25rem;font-weight:900">{{ "%.0f"|format(journalier.taux_horaire|float) }}</div>
+      <div style="font-size:.7rem;opacity:.7">FCFA/h</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:1.25rem;font-weight:900">{{ total_percu|int|fcfa }}</div>
+      <div style="font-size:.7rem;opacity:.7">Total perçu</div>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:1.25rem;font-weight:900">{{ feuilles|length }}</div>
+      <div style="font-size:.7rem;opacity:.7">Feuilles paie</div>
+    </div>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 340px;gap:1.5rem">
+
+  <!-- Colonne gauche -->
+  <div>
+
+    <!-- Historique pointage -->
+    {{ historique_pointage(
+        pts_hist, nb_jours, nb_presences, nb_absences,
+        nb_non_pointes, h_normales_tot, h_sup_tot, taux_presence,
+        date_debut_hist, date_fin_hist,
+        url_base="/journaliers/" ~ journalier.id,
+        type_worker="jour") }}
+
+  </div>
+
+  <!-- Colonne droite -->
+  <div>
+
+    <!-- Feuilles de paie -->
+    <div class="card overflow-hidden">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">
+          Feuilles de paie ({{ feuilles|length }})
+        </h2>
+        <a href="/journaliers/paie{% if aff and aff.site %}?site_id={{ aff.site.id }}{% endif %}"
+           class="btn-primary" style="font-size:.75rem">Paie →</a>
+      </div>
+      {% if feuilles %}
+      <table>
+        <thead>
+          <tr>
+            <th>Période</th>
+            <th style="text-align:right">Montant</th>
+            <th style="text-align:center">Statut</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in feuilles[:15] %}
+          <tr>
+            <td style="font-size:.8rem">
+              {{ f.date_debut.strftime('%d/%m') if f.date_debut else '?' }} →
+              {{ f.date_fin.strftime('%d/%m/%Y') if f.date_fin else '?' }}
+            </td>
+            <td style="text-align:right;font-family:monospace;font-weight:700;font-size:.8rem">
+              {{ f.montant_brut|int|fcfa }}
+            </td>
+            <td style="text-align:center">
+              <span style="font-size:.65rem;font-weight:700;padding:.15rem .4rem;border-radius:9999px;
+                {{ 'background:#d1fae5;color:#065f46' if f.statut=='PAYÉ' else 'background:#fef3c7;color:#92400e' }}">
+                {{ f.statut }}
+              </span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f9fafb;font-weight:900">
+            <td style="padding:.5rem .75rem;font-size:.8rem">Total perçu</td>
+            <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.8rem;color:#059669">
+              {{ total_percu|int|fcfa }}
+            </td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">
+        <div style="font-size:2rem;margin-bottom:.5rem">📋</div>
+        Aucune feuille de paie
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Infos -->
+    <div class="card p-4 mt-4">
+      <h3 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Informations</h3>
+      <div style="display:flex;flex-direction:column;gap:.5rem;font-size:.8rem">
+        {% if journalier.nationalite %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">Nationalité</span>
+          <span style="font-weight:600">{{ journalier.nationalite }}</span>
+        </div>
+        {% endif %}
+        {% if journalier.numero_cnss %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">N° CNSS</span>
+          <span style="font-weight:600;font-family:monospace">{{ journalier.numero_cnss }}</span>
+        </div>
+        {% endif %}
+        {% if journalier.date_debut %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">Depuis le</span>
+          <span style="font-weight:600">{{ journalier.date_debut.strftime('%d/%m/%Y') }}</span>
+        </div>
+        {% endif %}
+        {% if aff %}
+        <div style="display:flex;justify-content:space-between">
+          <span style="color:#6b7280">Site actuel</span>
+          <a href="/sites/{{ aff.site.id }}" style="font-weight:700;color:#1e40af;text-decoration:none">
+            🏗️ {{ aff.site.nom }}
+          </a>
+        </div>
+        {% endif %}
+      </div>
+      <div style="margin-top:.875rem;display:flex;gap:.5rem">
+        <a href="/journaliers/{{ journalier.id }}/modifier"
+           style="flex:1;text-align:center;background:#f3f4f6;color:#374151;padding:.5rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+          ✏️ Modifier
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
