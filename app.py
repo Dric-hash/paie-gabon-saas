@@ -2938,6 +2938,141 @@ def api_acomptes_mois(id):
             .filter_by(tenant_id=t.id,salarie_id=id,mois=mois,annee=annee,statut="EN_ATTENTE").scalar() or 0
     return jsonify({"total":float(total)})
 
+@app.route("/pointage/recap-semaine")
+@login_required
+def pointage_recap_semaine():
+    """Récapitulatif de présence hebdomadaire par site."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    # Semaine sélectionnée
+    date_str = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    try:    date_ref = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_ref = datetime.now().date()
+
+    lundi  = date_ref - timedelta(days=date_ref.weekday())
+    jours  = [lundi + timedelta(days=i) for i in range(6)]  # lundi→samedi
+    samedi = jours[-1]
+
+    # Sites actifs
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+
+    # Tous les pointages de la semaine
+    pts_semaine = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.date_pointage >= lundi,
+                Pointage.date_pointage <= samedi).all()
+
+    # Affectations actives (site → workers)
+    aff_sal  = {}  # salarie_id  → site_id
+    aff_jour = {}  # journalier_id → site_id
+    for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all():
+        if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+        if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    # ── Construire les données par site et par jour ───────────────────────────
+    # Structure : { site_id: { date: { presents, absents, heures, h_sup, non_pointes } } }
+    JOURS_FR = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"]
+
+    # Nb de travailleurs affectés à chaque site
+    effectif_site = {}
+    for s in sites_list:
+        nb_sal  = sum(1 for v in aff_sal.values()  if v == s.id)
+        nb_jour = sum(1 for v in aff_jour.values() if v == s.id)
+        effectif_site[s.id] = nb_sal + nb_jour
+
+    recap = {}
+    for s in sites_list:
+        recap[s.id] = {
+            "site": s,
+            "effectif": effectif_site.get(s.id, 0),
+            "jours": {},
+            "totaux": {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0},
+        }
+        for j in jours:
+            recap[s.id]["jours"][str(j)] = {
+                "date":        j,
+                "jour_fr":     JOURS_FR[j.weekday()],
+                "presents":    0,
+                "absents":     0,
+                "non_pointes": effectif_site.get(s.id, 0),
+                "heures":      0.0,
+                "h_sup":       0.0,
+            }
+
+    # Sac sans site
+    recap["sans_site"] = {
+        "site": None,
+        "effectif": 0,
+        "jours": {},
+        "totaux": {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0},
+    }
+    for j in jours:
+        recap["sans_site"]["jours"][str(j)] = {
+            "date": j, "jour_fr": JOURS_FR[j.weekday()],
+            "presents": 0, "absents": 0, "non_pointes": 0,
+            "heures": 0.0, "h_sup": 0.0,
+        }
+
+    # Remplir avec les pointages réels
+    for p in pts_semaine:
+        d = str(p.date_pointage)
+        site_id = aff_sal.get(p.salarie_id) or aff_jour.get(p.journalier_id)
+        key = site_id if site_id and site_id in recap else "sans_site"
+
+        if d not in recap[key]["jours"]:
+            continue
+
+        cell = recap[key]["jours"][d]
+        if p.present:
+            cell["presents"]    += 1
+            h_norm = float(p.heures_normales or 8)
+            h_sup  = (float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                      float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+                      float(p.heures_sup or 0))
+            cell["heures"] += h_norm
+            cell["h_sup"]  += h_sup
+        else:
+            cell["absents"] += 1
+        # Recalcul non_pointés
+        cell["non_pointes"] = max(0,
+            recap[key]["effectif"] - cell["presents"] - cell["absents"])
+
+    # Calculer les totaux semaine par site
+    for key in recap:
+        tot = recap[key]["totaux"]
+        for d, cell in recap[key]["jours"].items():
+            tot["presents"] += cell["presents"]
+            tot["absents"]  += cell["absents"]
+            tot["heures"]   += cell["heures"]
+            tot["h_sup"]    += cell["h_sup"]
+
+    # Totaux globaux tous sites
+    totaux_globaux = {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0}
+    for key in recap:
+        t2 = recap[key]["totaux"]
+        totaux_globaux["presents"] += t2["presents"]
+        totaux_globaux["absents"]  += t2["absents"]
+        totaux_globaux["heures"]   += t2["heures"]
+        totaux_globaux["h_sup"]    += t2["h_sup"]
+
+    # Filtrer "sans_site" si vide
+    if recap["sans_site"]["totaux"]["presents"] == 0 and recap["sans_site"]["totaux"]["absents"] == 0:
+        del recap["sans_site"]
+
+    return render_template("tenant/pointage_recap_semaine.html",
+        tenant=t,
+        jours=jours,
+        jours_fr=JOURS_FR,
+        recap=recap,
+        sites_list=sites_list,
+        totaux_globaux=totaux_globaux,
+        lundi=lundi,
+        samedi=samedi,
+        date_ref=date_ref,
+        semaine_prec=(lundi - timedelta(days=7)).strftime("%Y-%m-%d"),
+        semaine_suiv=(lundi + timedelta(days=7)).strftime("%Y-%m-%d"),
+        now=datetime.now())
+
 @app.route("/api/pointage/semaine")
 @login_required
 def api_pointage_semaine():
