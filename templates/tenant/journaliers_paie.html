@@ -1,52 +1,119 @@
 {% extends "tenant/base.html" %}
-{% block title %}Paie Journaliers{% endblock %}
+{% block title %}Paie Journaliers — {{ tenant.denomination }}{% endblock %}
 {% block content %}
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
     <h1 class="text-2xl font-black">Paie des Journaliers</h1>
-    <p class="text-gray-500 text-sm mt-1">Période libre — sélectionnez les journaliers et la période à payer</p>
+    <p class="text-gray-500 text-sm mt-1">
+      {% if site_filtre %}📍 Site : <strong>{{ site_filtre.nom }}</strong> —{% endif %}
+      Générez et payez les feuilles de paie par période libre
+    </p>
   </div>
-  <a href="/journaliers" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Journaliers</a>
+  <div style="display:flex;gap:.625rem;align-items:center;flex-wrap:wrap">
+    <a href="/journaliers" style="font-size:.8rem;font-weight:700;color:#6b7280;text-decoration:none;background:#f3f4f6;padding:.5rem .875rem;border-radius:.75rem">← Journaliers</a>
+    <a href="/journaliers/paie/export?{% if site_filtre %}site_id={{ site_filtre.id }}&{% endif %}{% if statut_filtre %}statut={{ statut_filtre }}{% endif %}"
+       style="font-size:.8rem;font-weight:700;color:white;background:#059669;padding:.5rem .875rem;border-radius:.75rem;text-decoration:none">
+      📊 Export Excel
+    </a>
+  </div>
 </div>
 
-<!-- Générer -->
+<!-- ── Filtre par site ─────────────────────────────────────────────────────── -->
+{% if sites %}
+<div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:.875rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.625rem;flex-wrap:wrap">
+  <span style="font-size:.75rem;font-weight:700;color:#6b7280;white-space:nowrap">🏗️ Site :</span>
+  <a href="/journaliers/paie"
+     style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
+     {{ 'background:#1a2332;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
+    Tous les sites
+  </a>
+  {% for s in sites %}
+  <a href="/journaliers/paie?site_id={{ s.id }}"
+     style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
+     {{ 'background:#1a2332;color:white' if site_filtre and site_filtre.id == s.id else 'background:#f3f4f6;color:#374151' }}">
+    {{ s.nom }}
+    <span style="opacity:.6;font-size:.65rem">({{ s.nb_actifs }})</span>
+  </a>
+  {% endfor %}
+</div>
+{% if site_filtre %}
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.875rem;padding:.5rem 1rem;margin-bottom:1rem;font-size:.8rem;color:#1e40af;display:flex;align-items:center;justify-content:space-between">
+  <span>📍 <strong>{{ site_filtre.nom }}</strong> — {{ journaliers|length }} journalier(s) affecté(s) · {{ nb_en_attente }} feuille(s) en attente</span>
+  <a href="/journaliers/paie" style="color:#6b7280;font-size:.75rem">✕ Voir tous</a>
+</div>
+{% endif %}
+{% endif %}
+
+<!-- ── KPIs ────────────────────────────────────────────────────────────────── -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.5rem;font-weight:900;color:#1a2332">{{ journaliers|length }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">
+      Journaliers{% if site_filtre %} sur ce site{% endif %}
+    </div>
+  </div>
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.25rem;font-weight:900;color:#d97706">{{ total_en_attente|int|fcfa }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">En attente de paiement</div>
+  </div>
+  <div class="card p-4" style="text-align:center">
+    <div style="font-size:1.25rem;font-weight:900;color:#059669">{{ total_paye|int|fcfa }}</div>
+    <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">Déjà payé</div>
+  </div>
+</div>
+
+<!-- ── Générer ─────────────────────────────────────────────────────────────── -->
 <div class="card p-5 mb-6">
-  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Générer les feuilles de paie</h2>
-  <form method="POST" action="/journaliers/paie/generer">
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+    ⚙️ Générer les feuilles de paie{% if site_filtre %} — {{ site_filtre.nom }}{% endif %}
+  </h2>
+  <form method="POST" action="/journaliers/paie/generer" id="form-generer">
+    {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
 
     <!-- Période -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem">
+    <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;margin-bottom:1rem;align-items:end">
       <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Début de période *</label>
-        <input type="date" name="date_debut" required
+        <input type="date" name="date_debut" id="inp-debut" required
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>
       </div>
       <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Fin de période *</label>
-        <input type="date" name="date_fin" required
+        <input type="date" name="date_fin" id="inp-fin" required
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>
       </div>
+      <button type="button" onclick="setMoisActuel()"
+        style="background:#f3f4f6;color:#374151;padding:.625rem 1rem;border-radius:.75rem;font-weight:700;font-size:.75rem;border:none;cursor:pointer;white-space:nowrap">
+        📅 Mois en cours
+      </button>
     </div>
 
-    <!-- Sélection journaliers avec heures et taux personnalisables -->
+    <!-- Table journaliers -->
     <div style="border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden;margin-bottom:1rem">
       <div style="background:#f9fafb;padding:.5rem 1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase">
-          Sélectionner les journaliers à payer
+          Journaliers à payer
+          <span id="cpt-coche" style="color:#2563eb;margin-left:.375rem">({{ journaliers|length }})</span>
         </span>
-        <button type="button" onclick="cocherTous()" style="font-size:.75rem;color:#2563eb;font-weight:700;background:none;border:none;cursor:pointer">
-          ✅ Tout sélectionner
-        </button>
+        <div style="display:flex;gap:.625rem">
+          <button type="button" onclick="cocherTous(true)"
+            style="font-size:.75rem;color:#059669;font-weight:700;background:none;border:none;cursor:pointer">✅ Tout</button>
+          <button type="button" onclick="cocherTous(false)"
+            style="font-size:.75rem;color:#dc2626;font-weight:700;background:none;border:none;cursor:pointer">☐ Aucun</button>
+        </div>
       </div>
       <table style="width:100%;border-collapse:collapse">
         <thead>
-          <tr style="background:#f3f4f6;font-size:.75rem;color:#6b7280;text-transform:uppercase">
-            <th style="padding:.5rem .75rem;text-align:center;width:40px">✓</th>
+          <tr style="background:#f3f4f6;font-size:.7rem;color:#6b7280;text-transform:uppercase">
+            <th style="padding:.5rem .75rem;text-align:center;width:36px">✓</th>
             <th style="padding:.5rem .75rem;text-align:left">Journalier</th>
-            <th style="padding:.5rem .75rem;text-align:left">Profession</th>
-            <th style="padding:.5rem .75rem;text-align:right">Taux/h par défaut</th>
-            <th style="padding:.5rem .75rem;text-align:right">Taux/h à appliquer</th>
-            <th style="padding:.5rem .75rem;text-align:right">Heures (manuel)</th>
+            <th style="padding:.5rem .75rem;text-align:left">Site</th>
+            <th style="padding:.5rem .75rem;text-align:right">Taux défaut</th>
+            <th style="padding:.5rem .75rem;text-align:right">Taux à appliquer</th>
+            <th style="padding:.5rem .75rem;text-align:right">Heures manuelles</th>
+            <th style="padding:.5rem .75rem;text-align:right">Gain estimé</th>
           </tr>
         </thead>
         <tbody>
@@ -54,254 +121,258 @@
           <tr style="border-bottom:1px solid #f3f4f6" id="jrow_{{ j.id }}">
             <td style="text-align:center;padding:.5rem">
               <input type="checkbox" name="journalier_ids" value="{{ j.id }}"
-                class="cb-journalier" id="cj_{{ j.id }}"
-                onchange="toggleLigne({{ j.id }}, this.checked)"/>
+                class="cb-jour" checked
+                onchange="updateCpt(); calculerGain({{ j.id }})"/>
             </td>
             <td style="padding:.5rem .75rem;font-weight:700;font-size:.875rem">
-              <label for="cj_{{ j.id }}" style="cursor:pointer">{{ j.nom_complet }}</label>
+              {{ j.nom_complet }}
+              <div style="font-size:.7rem;color:#9ca3af">{{ j.profession or '' }}</div>
             </td>
-            <td style="padding:.5rem .75rem;font-size:.8rem;color:#6b7280">{{ j.profession or '—' }}</td>
+            <td style="padding:.5rem .75rem;font-size:.75rem;color:#6b7280">
+              {% if aff_jour.get(j.id) %}
+              <span style="background:#f0fdf4;color:#065f46;padding:.15rem .5rem;border-radius:9999px;font-weight:700">
+                🏗️ {{ aff_jour[j.id].nom }}
+              </span>
+              {% else %}—{% endif %}
+            </td>
             <td style="padding:.5rem .75rem;text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">
-              {{ "%.2f"|format(j.taux_horaire|float) }} FCFA/h
+              {{ "%.2f"|format(j.taux_horaire|float) }}
             </td>
             <td style="padding:.5rem .75rem;text-align:right">
               <input type="number" name="taux_{{ j.id }}" step="any" min="0"
                 placeholder="{{ "%.2f"|format(j.taux_horaire|float) }}"
-                style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right;font-family:monospace"
-                class="inp-taux" data-id="{{ j.id }}"/>
+                data-default="{{ j.taux_horaire|float }}" data-id="{{ j.id }}"
+                class="inp-taux"
+                oninput="calculerGain({{ j.id }})"
+                style="width:90px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right;font-family:monospace"/>
             </td>
             <td style="padding:.5rem .75rem;text-align:right">
               <input type="number" name="heures_{{ j.id }}" step="any" min="0"
-                placeholder="Auto (pointage)"
-                style="width:110px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right"
-                class="inp-heures" data-id="{{ j.id }}"/>
+                placeholder="Auto pointage" data-id="{{ j.id }}"
+                class="inp-heures"
+                oninput="calculerGain({{ j.id }})"
+                style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right"/>
             </td>
+            <td style="padding:.5rem .75rem;text-align:right;font-family:monospace;font-size:.8rem;font-weight:700;color:#059669" id="gain_{{ j.id }}">—</td>
           </tr>
           {% else %}
-          <tr><td colspan="6" style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">
-            Aucun journalier actif
+          <tr><td colspan="7" style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">
+            {% if site_filtre %}
+            Aucun journalier affecté à {{ site_filtre.nom }}.
+            <a href="/sites/{{ site_filtre.id }}" style="color:#2563eb">Affecter des journaliers →</a>
+            {% else %}Aucun journalier actif{% endif %}
           </td></tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
 
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.75rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.8rem;color:#1e40af">
-      💡 <strong>Heures (manuel)</strong> : si renseigné, utilisé directement (ignore le pointage).
-      Si vide, les heures sont calculées depuis le pointage de la période.<br/>
-      💡 <strong>Taux/h à appliquer</strong> : si vide, le taux par défaut du journalier est utilisé.<br/>
-      💡 <strong>Heures sup = même taux</strong> que les heures normales (pas de majoration).
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.75rem;padding:.625rem 1rem;margin-bottom:1rem;font-size:.75rem;color:#1e40af">
+      💡 Si <strong>Heures manuelles</strong> est renseigné, ce nombre est utilisé directement (ignore le pointage).
+      Sinon, les heures sont calculées depuis le pointage de la période sélectionnée.
     </div>
 
-    <button type="submit" onclick="return validerForm()"
+    <button type="submit" id="btn-generer" onclick="return confirmerGeneration()"
       style="background:#2563eb;color:white;padding:.625rem 1.5rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
       ⚙️ Générer les feuilles sélectionnées
     </button>
   </form>
 </div>
 
-<!-- Liste feuilles -->
+<!-- ── Liste des feuilles ──────────────────────────────────────────────────── -->
 <div class="card overflow-hidden">
-  <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
+  <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
     <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">
       Feuilles de paie ({{ feuilles|length }})
     </h2>
-    <div style="display:flex;gap:.75rem;align-items:center">
-      <span style="font-size:.875rem;font-weight:700;color:#059669">
-        EN ATTENTE : {{ feuilles|selectattr('statut','equalto','EN_ATTENTE')|sum(attribute='montant_brut')|int|fcfa }}
+    <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+      <!-- Filtre statut -->
+      <div style="display:flex;gap:.375rem">
+        {% for st, label, color in [('','Tous','#6b7280'),('EN_ATTENTE','En attente','#d97706'),('PAYÉ','Payés','#059669')] %}
+        <a href="/journaliers/paie?{% if site_filtre %}site_id={{ site_filtre.id }}&{% endif %}statut={{ st }}"
+           style="font-size:.75rem;font-weight:700;padding:.3rem .625rem;border-radius:.5rem;text-decoration:none;
+           {{ 'background:#1a2332;color:white' if statut_filtre == st else 'background:#f3f4f6;color:' + color }}">
+          {{ label }}
+        </a>
+        {% endfor %}
+      </div>
+      <span style="font-size:.875rem;font-weight:700;color:#d97706">
+        {{ total_en_attente|int|fcfa }} en attente
       </span>
-      {% if feuilles %}
-      <button onclick="window.print()" style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
-        🖨️ Imprimer
-      </button>
+      <!-- Payer tout -->
+      {% set ids_attente = feuilles|selectattr('statut','equalto','EN_ATTENTE')|map(attribute='id')|list %}
+      {% if ids_attente %}
+      <form method="POST" action="/journaliers/paie/payer-selection" style="display:inline"
+        onsubmit="return confirm('Confirmer le paiement de {{ ids_attente|length }} feuille(s) — {{ total_en_attente|int|fcfa }} ?')">
+        <input type="hidden" name="feuille_ids" value="{{ ids_attente|join(',') }}">
+        {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
+        <button type="submit"
+          style="background:#059669;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+          💰 Tout payer
+        </button>
+      </form>
       {% endif %}
     </div>
   </div>
+
+  {% if feuilles %}
   <table>
-    <thead><tr>
-      <th style="width:30px">
-        <input type="checkbox" id="selectAll" onchange="toggleAll(this)" title="Tout sélectionner"/>
-      </th>
-      <th>Journalier</th>
-      <th>Profession</th>
-      <th style="text-align:center">Période</th>
-      <th style="text-align:center">Jours</th>
-      <th style="text-align:center">Heures</th>
-      <th style="text-align:right">Taux/h</th>
-      <th style="text-align:right">Montant</th>
-      <th style="text-align:center">Statut</th>
-      <th style="text-align:center">Actions</th>
-    </tr></thead>
+    <thead>
+      <tr>
+        <th>Journalier</th>
+        <th>Site</th>
+        <th>Période</th>
+        <th style="text-align:center">Jours</th>
+        <th style="text-align:right">Heures</th>
+        <th style="text-align:right">Taux/h</th>
+        <th style="text-align:right">Montant brut</th>
+        <th style="text-align:center">Statut</th>
+        <th style="text-align:center">Actions</th>
+      </tr>
+    </thead>
     <tbody>
       {% for f in feuilles %}
-      <tr id="row_{{ f.id }}">
+      <tr>
         <td>
-          {% if f.statut == 'EN_ATTENTE' %}
-          <input type="checkbox" class="cb-feuille" value="{{ f.id }}" name="feuille_ids"/>
-          {% endif %}
+          <div style="font-weight:700;font-size:.875rem">{{ f.journalier.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ f.journalier.profession or '' }}</div>
         </td>
-        <td style="font-weight:700;font-size:.875rem">{{ f.journalier.nom_complet }}</td>
-        <td style="font-size:.8rem;color:#6b7280">{{ f.journalier.profession or '—' }}</td>
-        <td style="text-align:center;font-size:.8rem;color:#6b7280">
-          {{ f.date_debut|date_fr }} → {{ f.date_fin|date_fr }}
+        <td style="font-size:.75rem">
+          {% set site_aff = aff_jour.get(f.journalier_id) %}
+          {% if site_aff %}
+          <span style="background:#f0fdf4;color:#065f46;padding:.15rem .5rem;border-radius:9999px;font-weight:700;font-size:.7rem">
+            🏗️ {{ site_aff.nom }}
+          </span>
+          {% else %}<span style="color:#9ca3af">—</span>{% endif %}
         </td>
-        <td style="text-align:center;font-weight:700">{{ f.nb_jours }}j</td>
-        <td style="text-align:center;font-weight:700">{{ "%.1f"|format(f.total_heures|float) }}h</td>
-        <td style="text-align:right;font-family:monospace;color:#6b7280;font-size:.8rem">
-          {{ "%.2f"|format(f.taux_horaire|float) }} FCFA
+        <td style="font-size:.8rem;color:#374151">
+          {{ f.date_debut.strftime('%d/%m/%Y') }} → {{ f.date_fin.strftime('%d/%m/%Y') }}
         </td>
-        <td style="text-align:right;font-weight:900;font-family:monospace">{{ f.montant_brut|int|fcfa }}</td>
+        <td style="text-align:center;font-weight:700">{{ f.nb_jours }}</td>
+        <td style="text-align:right;font-family:monospace;font-size:.8rem">{{ "%.1f"|format(f.total_heures|float) }}h</td>
+        <td style="text-align:right;font-family:monospace;font-size:.8rem;color:#6b7280">{{ f.taux_horaire|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900">{{ f.montant_brut|int|fcfa }}</td>
         <td style="text-align:center">
-          <span style="font-size:.75rem;font-weight:700;padding:.125rem .5rem;border-radius:9999px;
-            {% if f.statut=='EN_ATTENTE' %}background:#fef3c7;color:#92400e
-            {% else %}background:#d1fae5;color:#065f46{% endif %}">
+          <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;
+            {{ 'background:#d1fae5;color:#065f46' if f.statut=='PAYÉ' else 'background:#fef3c7;color:#92400e' }}">
             {{ f.statut }}
           </span>
+          {% if f.date_paiement %}
+          <div style="font-size:.65rem;color:#9ca3af;margin-top:.15rem">{{ f.date_paiement.strftime('%d/%m/%Y') }}</div>
+          {% endif %}
         </td>
         <td style="text-align:center">
-          <div style="display:flex;gap:.25rem;justify-content:center;flex-wrap:wrap">
+          <div style="display:flex;gap:.375rem;justify-content:center;align-items:center">
             {% if f.statut == 'EN_ATTENTE' %}
-            <button onclick="ouvrirModif({{ f.id }}, {{ f.montant_brut|float }}, {{ f.total_heures|float }}, {{ f.taux_horaire|float }}, '{{ f.observation or '' }}')"
-              style="font-size:.7rem;background:#f59e0b;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer">✏️</button>
             <form method="POST" action="/journaliers/paie/{{ f.id }}/payer" style="display:inline">
-              <button type="submit"
-                style="font-size:.7rem;background:#059669;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer"
-                onclick="return confirm('Confirmer le paiement de {{ f.journalier.nom_complet }} ?')">✅ Payer</button>
+              <button type="submit" title="Marquer payé"
+                style="background:#d1fae5;color:#065f46;border:none;padding:.3rem .625rem;border-radius:.5rem;font-size:.75rem;font-weight:700;cursor:pointer">
+                💰 Payer
+              </button>
             </form>
-            {% else %}
-            <span style="font-size:.75rem;color:#9ca3af">{{ f.date_paiement|date_fr if f.date_paiement else '—' }}</span>
+            <!-- Modifier montant -->
+            <button onclick="toggleEdit({{ f.id }})" title="Modifier"
+              style="background:#f3f4f6;color:#374151;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">✏️</button>
             {% endif %}
-            <form method="POST" action="/journaliers/paie/{{ f.id }}/supprimer" style="display:inline">
-              <button type="submit"
-                style="font-size:.7rem;background:#dc2626;color:white;padding:.2rem .4rem;border-radius:.375rem;border:none;cursor:pointer"
-                onclick="return confirm('Supprimer cette feuille ?')">🗑️</button>
+            <form method="POST" action="/journaliers/paie/{{ f.id }}/supprimer" style="display:inline"
+              onsubmit="return confirm('Supprimer cette feuille ?')">
+              <button type="submit" style="background:#fee2e2;color:#dc2626;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">🗑️</button>
+            </form>
+          </div>
+          <!-- Formulaire modification (masqué) -->
+          <div id="edit_{{ f.id }}" style="display:none;margin-top:.5rem">
+            <form method="POST" action="/journaliers/paie/{{ f.id }}/modifier">
+              <input type="number" name="montant_brut" value="{{ f.montant_brut|int }}" step="any"
+                style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right">
+              <button type="submit" style="background:#2563eb;color:white;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">✓</button>
             </form>
           </div>
         </td>
       </tr>
-      {% else %}
-      <tr><td colspan="10" style="text-align:center;padding:3rem;color:#9ca3af">
-        <div style="font-size:2rem;margin-bottom:.5rem">💵</div>
-        <p>Aucune feuille générée</p>
-      </td></tr>
       {% endfor %}
     </tbody>
+    <tfoot>
+      <tr style="background:#f9fafb;font-weight:900">
+        <td style="padding:.5rem .75rem;font-size:.8rem" colspan="6">TOTAL ({{ feuilles|length }} feuilles)</td>
+        <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.875rem;color:#1a2332">
+          {{ feuilles|sum(attribute='montant_brut')|int|fcfa }}
+        </td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
   </table>
-
-  {% if feuilles|selectattr('statut','equalto','EN_ATTENTE')|list|length > 0 %}
-  <div style="padding:1rem 1.25rem;border-top:1px solid #f3f4f6;display:flex;gap:.75rem;align-items:center">
-    <span style="font-size:.8rem;color:#6b7280" id="nb_sel">0 sélectionné(s)</span>
-    <form method="POST" action="/journaliers/paie/payer-selection" style="display:inline" id="form_selection">
-      <input type="hidden" name="feuille_ids" id="ids_selectionnes"/>
-      <button type="submit" id="btn_payer_sel" disabled
-        style="background:#059669;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer;opacity:.5"
-        onclick="return prepSelection()">
-        ✅ Payer la sélection
-      </button>
-    </form>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">📋</div>
+    <p style="font-size:.875rem">Aucune feuille de paie{% if site_filtre %} pour {{ site_filtre.nom }}{% endif %}.</p>
+    <p style="font-size:.8rem;margin-top:.25rem">Sélectionnez une période et générez les feuilles ci-dessus.</p>
   </div>
   {% endif %}
 </div>
 
-<!-- Modal modification -->
-<div id="modal_modif" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
-  <div style="background:white;border-radius:1rem;padding:1.5rem;width:420px;max-width:90vw">
-    <h3 style="font-weight:900;margin-bottom:1rem">Modifier la feuille de paie</h3>
-    <form method="POST" id="form_modif">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Heures totales</label>
-          <input type="number" name="total_heures" id="mod_heures" step="any" min="0"
-            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;font-family:monospace;box-sizing:border-box"
-            oninput="recalcMontant()"/>
-        </div>
-        <div>
-          <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Taux horaire (FCFA)</label>
-          <input type="number" name="taux_horaire_modif" id="mod_taux" step="any" min="0"
-            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;font-family:monospace;box-sizing:border-box"
-            oninput="recalcMontant()"/>
-        </div>
-      </div>
-      <div style="margin-bottom:.75rem">
-        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Montant total (FCFA)</label>
-        <input type="number" name="montant_brut" id="mod_montant" step="any"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:1rem;font-family:monospace;font-weight:900;box-sizing:border-box"/>
-        <div style="font-size:.7rem;color:#9ca3af;margin-top:.25rem">Calculé automatiquement ou saisissez manuellement</div>
-      </div>
-      <div style="margin-bottom:1rem">
-        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Observation</label>
-        <input type="text" name="observation" id="mod_obs"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
-      </div>
-      <div style="display:flex;gap:.75rem">
-        <button type="button" onclick="fermerModal()"
-          style="flex:1;background:#f3f4f6;color:#374151;padding:.625rem;border-radius:.75rem;font-weight:700;border:none;cursor:pointer">Annuler</button>
-        <button type="submit"
-          style="flex:1;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;border:none;cursor:pointer">Enregistrer</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<style>
-@media print {
-  nav, .no-print, form, button, .btn-primary { display:none !important; }
-  body { font-size:11px; }
-}
-</style>
-
+{% endblock %}
+{% block scripts %}
 <script>
-function cocherTous() {
-  document.querySelectorAll('.cb-journalier').forEach(c => {
-    c.checked = true;
-    toggleLigne(c.value, true);
+const today = new Date();
+
+function setMoisActuel() {
+  const y = today.getFullYear(), m = String(today.getMonth()+1).padStart(2,'0');
+  const lastDay = new Date(y, today.getMonth()+1, 0).getDate();
+  document.getElementById('inp-debut').value = `${y}-${m}-01`;
+  document.getElementById('inp-fin').value   = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
+}
+
+function cocherTous(etat) {
+  document.querySelectorAll('.cb-jour').forEach(cb => {
+    cb.checked = etat;
+    calculerGain(parseInt(cb.value));
   });
+  updateCpt();
 }
-function toggleLigne(id, checked) {
-  const row = document.getElementById(`jrow_${id}`);
-  if (row) row.style.background = checked ? '#eff6ff' : '';
+
+function updateCpt() {
+  const n = document.querySelectorAll('.cb-jour:checked').length;
+  document.getElementById('cpt-coche').textContent = `(${n} sélectionné${n>1?'s':''})`;
 }
-function validerForm() {
-  const coches = document.querySelectorAll('.cb-journalier:checked');
-  if (coches.length === 0) {
-    alert('Veuillez sélectionner au moins un journalier.');
-    return false;
+
+function calculerGain(id) {
+  const tInput   = document.querySelector(`[name="taux_${id}"]`);
+  const hInput   = document.querySelector(`[name="heures_${id}"]`);
+  const gainCell = document.getElementById(`gain_${id}`);
+  if (!gainCell) return;
+  const taux   = parseFloat(tInput.value || tInput.placeholder || tInput.dataset.default || 0);
+  const heures = parseFloat(hInput.value || 0);
+  if (heures > 0 && taux > 0) {
+    const montant = Math.round(heures * taux);
+    gainCell.textContent = montant.toLocaleString('fr-FR') + ' FCFA';
+    gainCell.style.color = '#059669';
+  } else {
+    gainCell.textContent = '—';
+    gainCell.style.color = '#9ca3af';
   }
+}
+
+function confirmerGeneration() {
+  const nb = document.querySelectorAll('.cb-jour:checked').length;
+  const debut = document.getElementById('inp-debut').value;
+  const fin   = document.getElementById('inp-fin').value;
+  if (nb === 0) { alert('Cochez au moins un journalier.'); return false; }
+  if (!debut || !fin) { alert('Renseignez les dates de début et fin.'); return false; }
+  const btn = document.getElementById('btn-generer');
+  btn.disabled = true;
+  btn.textContent = '⏳ Génération en cours…';
   return true;
 }
-function ouvrirModif(id, montant, heures, taux, obs) {
-  document.getElementById('form_modif').action = `/journaliers/paie/${id}/modifier`;
-  document.getElementById('mod_montant').value = montant;
-  document.getElementById('mod_heures').value = heures;
-  document.getElementById('mod_taux').value = taux;
-  document.getElementById('mod_obs').value = obs;
-  document.getElementById('modal_modif').style.display = 'flex';
+
+function toggleEdit(id) {
+  const el = document.getElementById(`edit_${id}`);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
-function fermerModal() {
-  document.getElementById('modal_modif').style.display = 'none';
-}
-function recalcMontant() {
-  const h = parseFloat(document.getElementById('mod_heures').value) || 0;
-  const t = parseFloat(document.getElementById('mod_taux').value) || 0;
-  if (h > 0 && t > 0) {
-    document.getElementById('mod_montant').value = Math.round(h * t);
-  }
-}
-function toggleAll(cb) {
-  document.querySelectorAll('.cb-feuille').forEach(c => c.checked = cb.checked);
-  majSelection();
-}
-function majSelection() {
-  const ids = [...document.querySelectorAll('.cb-feuille:checked')].map(c=>c.value);
-  document.getElementById('nb_sel').textContent = `${ids.length} sélectionné(s)`;
-  const btn = document.getElementById('btn_payer_sel');
-  if(btn){ btn.disabled = ids.length===0; btn.style.opacity = ids.length>0?'1':'.5'; }
-}
-function prepSelection() {
-  const ids = [...document.querySelectorAll('.cb-feuille:checked')].map(c=>c.value).join(',');
-  document.getElementById('ids_selectionnes').value = ids;
-  return confirm(`Confirmer le paiement de ${document.querySelectorAll('.cb-feuille:checked').length} journalier(s) ?`);
-}
-document.querySelectorAll('.cb-feuille').forEach(c => c.addEventListener('change', majSelection));
+
+// Init
+document.addEventListener('DOMContentLoaded', () => {
+  setMoisActuel();
+  updateCpt();
+});
 </script>
 {% endblock %}
