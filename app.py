@@ -1722,6 +1722,9 @@ def journalier_nouveau():
             profession=request.form.get("profession","").strip().upper(),
             taux_horaire=float(request.form.get("taux_horaire",0) or 0),
             date_embauche=_parse_date(request.form.get("date_embauche")),
+            date_debut=   _parse_date(request.form.get("date_debut")),
+            date_fin=     _parse_date(request.form.get("date_fin")),
+            nationalite=  request.form.get("nationalite","").strip() or None,
             statut="ACTIF")
         db.session.add(j); db.session.commit()
         flash(f"Journalier {j.nom_complet} créé.", "success")
@@ -1786,6 +1789,9 @@ def journalier_modifier(id):
         j.profession=request.form.get("profession","").strip().upper()
         j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
         j.date_embauche=_parse_date(request.form.get("date_embauche"))
+        j.date_debut=   _parse_date(request.form.get("date_debut"))
+        j.date_fin=     _parse_date(request.form.get("date_fin"))
+        j.nationalite=  request.form.get("nationalite","").strip() or None
         j.statut=request.form.get("statut","ACTIF")
         # ── Affectation site ──────────────────────────────────────────────
         site_id = request.form.get("site_id", type=int)
@@ -3907,6 +3913,9 @@ with app.app_context():
         "ALTER TABLE salaries ALTER COLUMN numero_cnss TYPE VARCHAR(30)",
         "ALTER TABLE salaries ALTER COLUMN numero_cnamgs TYPE VARCHAR(30)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_debut DATE",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_fin DATE",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS nationalite VARCHAR(60)",
         "ALTER TABLE journaliers ALTER COLUMN taux_horaire TYPE NUMERIC(12,2)",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token VARCHAR(200)",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS reset_token_expiry TIMESTAMP",
