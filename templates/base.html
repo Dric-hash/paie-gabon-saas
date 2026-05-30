@@ -34,7 +34,7 @@
   <aside class="w-64 bg-slate-900 text-white flex flex-col fixed h-full z-20 shadow-2xl">
     <!-- Logo -->
     <div class="px-6 py-5 border-b border-white/10">
-      <div class="text-lg font-black">🏗️ PaieGabon</div>
+      <div class="text-lg font-black">Ameriack I.T. Solutions</div>
       <div class="text-xs text-white/50 mt-0.5 truncate">
         {% if tenant %}{{ tenant.denomination }}{% else %}Espace entreprise{% endif %}
       </div>
@@ -43,6 +43,27 @@
         {{ tenant.plan.nom }}
       </span>
       {% endif %}
+    </div>
+
+    <!-- Recherche rapide -->
+    <div style="padding:.625rem .75rem;border-bottom:1px solid rgba(255,255,255,.1)">
+      <form action="/recherche" method="GET" style="position:relative">
+        <span style="position:absolute;left:.625rem;top:50%;transform:translateY(-50%);font-size:.8rem;opacity:.5;pointer-events:none">🔍</span>
+        <input type="text" name="q" id="sidebar-search"
+          placeholder="Rechercher... (Ctrl+K)"
+          style="width:100%;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
+          border-radius:.625rem;padding:.4rem .5rem .4rem 1.875rem;font-size:.8rem;color:white;
+          outline:none"
+          onfocus="this.style.background='rgba(255,255,255,.15)';this.style.borderColor='rgba(255,255,255,.4)'"
+          onblur="this.style.background='rgba(255,255,255,.1)';this.style.borderColor='rgba(255,255,255,.15)'"
+          autocomplete="off"
+          oninput="rechercheRapide(this.value)"/>
+        <!-- Dropdown autocomplétion -->
+        <div id="autocomplete-dropdown" style="display:none;position:absolute;top:calc(100% + 4px);left:0;right:0;
+          background:white;border-radius:.75rem;box-shadow:0 8px 24px rgba(0,0,0,.2);z-index:1000;
+          overflow:hidden;max-height:320px;overflow-y:auto">
+        </div>
+      </form>
     </div>
 
     <!-- Navigation -->
@@ -70,9 +91,15 @@
         💵 <span>Acomptes</span>
       </a>
       <div class="border-t border-white/10 my-2"></div>
-      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">Pointage</p>
+      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">Terrain</p>
       <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">
         📋 <span>Pointage</span>
+      </a>
+      <a href="/sites" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='sites' else 'text-white/80 hover:bg-white/10' }}">
+        🏗️ <span>Sites</span>
+      </a>
+      <a href="/rapports/mensuel-site" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all {{ 'bg-white text-slate-900' if ep=='rapport' else 'text-white/80 hover:bg-white/10' }}">
+        📊 <span>Rapports</span>
       </a>
       <a href="/journaliers" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journalier' in ep else 'text-white/80 hover:bg-white/10' }}">
         👷 <span>Journaliers</span>
@@ -86,6 +113,9 @@
         🔐 <span>Utilisateurs</span>
       </a>
       {% endif %}
+      <a href="/paiement" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='paiement' else 'text-white/80 hover:bg-white/10' }}">
+        💳 <span>Abonnement</span>
+      </a>
       <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
         ⚙️ <span>Paramètres</span>
       </a>
@@ -139,5 +169,76 @@
   </main>
 </div>
 {% block scripts %}{% endblock %}
+<script>
+// ── Recherche rapide autocomplete ─────────────────────────────────────────────
+let _rTimeout = null;
+
+function rechercheRapide(q) {
+  clearTimeout(_rTimeout);
+  const dd = document.getElementById('autocomplete-dropdown');
+  if (!dd) return;
+  if (q.length < 2) { dd.style.display = 'none'; return; }
+  _rTimeout = setTimeout(() => {
+    fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
+      .then(r => r.json())
+      .then(data => {
+        if (!data.length) { dd.style.display = 'none'; return; }
+        // Grouper par catégorie
+        const byCat = {};
+        data.forEach(item => {
+          if (!byCat[item.categorie]) byCat[item.categorie] = [];
+          byCat[item.categorie].push(item);
+        });
+        let html = '';
+        for (const [cat, items] of Object.entries(byCat)) {
+          html += `<div style="padding:.375rem .75rem;font-size:.65rem;font-weight:700;
+            color:#9ca3af;text-transform:uppercase;background:#f9fafb;border-bottom:1px solid #f3f4f6">
+            ${cat}</div>`;
+          items.forEach(item => {
+            html += `<a href="${item.lien}" style="display:flex;align-items:center;gap:.625rem;
+              padding:.5rem .875rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+              onmouseover="this.style.background='#f0f9ff'" onmouseout="this.style.background=''">
+              <span style="font-size:.875rem">${item.icone}</span>
+              <div style="flex:1;min-width:0">
+                <div style="font-weight:700;font-size:.8rem;color:#111827">${item.titre}</div>
+                <div style="font-size:.7rem;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${item.sous_titre}</div>
+              </div>
+            </a>`;
+          });
+        }
+        html += `<a href="/recherche?q=${encodeURIComponent(q)}"
+          style="display:block;padding:.5rem .875rem;text-align:center;font-size:.775rem;
+          font-weight:700;color:#1a2332;text-decoration:none;background:#f9fafb;border-top:1px solid #e5e7eb">
+          Voir tous les résultats pour « ${q} » →
+        </a>`;
+        dd.innerHTML = html;
+        dd.style.display = 'block';
+      })
+      .catch(() => { dd.style.display = 'none'; });
+  }, 220);
+}
+
+// Fermer au clic en dehors
+document.addEventListener('click', e => {
+  const dd = document.getElementById('autocomplete-dropdown');
+  if (dd && !dd.contains(e.target) && e.target.id !== 'sidebar-search') {
+    dd.style.display = 'none';
+  }
+});
+
+// Raccourci Ctrl+K
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+    e.preventDefault();
+    const inp = document.getElementById('sidebar-search');
+    if (inp) { inp.focus(); inp.select(); }
+  }
+  // Échap pour fermer
+  if (e.key === 'Escape') {
+    const dd = document.getElementById('autocomplete-dropdown');
+    if (dd) dd.style.display = 'none';
+  }
+});
+</script>
 </body>
 </html>
