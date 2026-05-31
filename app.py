@@ -2096,13 +2096,51 @@ def pointage_individuel():
         wid    = int(request.form.get("worker_id", 0))
         present = request.form.get("present") == "1"
         absent  = not present
+        def _hm(val):
+            """Valider et retourner un horaire HH:MM ou None."""
+            v = (val or "").strip()
+            if not v: return None
+            import re
+            return v if re.match(r"^\d{1,2}:\d{2}$", v) else None
+
+        def _diff_hm(debut, fin):
+            """Calculer la différence en heures entre deux horaires HH:MM."""
+            try:
+                h1,m1 = map(int, debut.split(":")); h2,m2 = map(int, fin.split(":"))
+                diff = (h2*60+m2 - h1*60-m1) / 60
+                return max(0.0, round(diff, 2))
+            except: return 0.0
+
+        # Horaires saisis
+        em = _hm(request.form.get("entree_matin"))
+        sm = _hm(request.form.get("sortie_matin"))
+        ea = _hm(request.form.get("entree_apmidi"))
+        sa = _hm(request.form.get("sortie_apmidi"))
+        es = _hm(request.form.get("entree_sup"))
+        ss = _hm(request.form.get("sortie_sup"))
+
+        # Calcul auto des heures normales depuis les horaires
+        h_normales_auto = 0.0
+        if em and sm: h_normales_auto += _diff_hm(em, sm)
+        if ea and sa: h_normales_auto += _diff_hm(ea, sa)
+        h_normales_man = float(request.form.get("heures_normales", 0) or 0)
+        # Priorité aux horaires si saisis, sinon saisie manuelle
+        heures_normales_final = round(h_normales_auto, 2) if h_normales_auto > 0 else h_normales_man or 8
+
+        # Heures sup depuis horaires
+        h_sup_horaire = _diff_hm(es, ss) if (es and ss) else 0.0
+
         kwargs = dict(
-            heures_normales = float(request.form.get("heures_normales", 8) or 8),
+            heures_normales = heures_normales_final,
             motif_absence   = request.form.get("motif_absence","") if absent else None,
+            entree_matin    = em, sortie_matin  = sm,
+            entree_apmidi   = ea, sortie_apmidi = sa,
+            entree_sup      = es, sortie_sup    = ss,
         )
         if wtype == "sal":
+            h_sup_10_man = float(request.form.get("heures_sup_10",0) or 0)
             kwargs.update(dict(
-                heures_sup_10 = float(request.form.get("heures_sup_10",0) or 0),
+                heures_sup_10 = round(h_sup_horaire, 2) if h_sup_horaire > 0 else h_sup_10_man,
                 heures_sup_30 = float(request.form.get("heures_sup_30",0) or 0),
                 heures_sup_40 = float(request.form.get("heures_sup_40",0) or 0),
                 heures_sup_70 = float(request.form.get("heures_sup_70",0) or 0),
@@ -4294,7 +4332,13 @@ with app.app_context():
     # ── site_id dans pointages ───────────────────────────────────────────────
     try:
         db.session.execute(db.text(
-            "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL"
+            "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_matin VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_matin VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_apmidi VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_apmidi VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_sup VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_sup VARCHAR(5)"
         ))
         db.session.commit()
     except Exception:
