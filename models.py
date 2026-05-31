@@ -546,6 +546,13 @@ class Pointage(db.Model):
     absent          = db.Column(db.Boolean, default=False)
     motif_absence   = db.Column(db.String(100))
     observation     = db.Column(db.String(200))
+    # Horaires entrée/sortie (stockés en STRING "HH:MM" pour simplicité)
+    entree_matin    = db.Column(db.String(5))   # ex: "08:00"
+    sortie_matin    = db.Column(db.String(5))   # ex: "13:00"
+    entree_apmidi   = db.Column(db.String(5))   # ex: "14:00"
+    sortie_apmidi   = db.Column(db.String(5))   # ex: "17:00"
+    entree_sup      = db.Column(db.String(5))   # ex: "17:00"
+    sortie_sup      = db.Column(db.String(5))   # ex: "18:00"
     site_id         = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=True)
     salarie = db.relationship("Salarie", backref="pointages", foreign_keys=[salarie_id])
     site    = db.relationship("Site", backref="pointages", foreign_keys=[site_id])
