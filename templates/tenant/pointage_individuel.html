@@ -74,7 +74,7 @@
          data-search="{{ s.nom_complet|lower }} {{ s.emploi|lower if s.emploi else '' }}"
          style="display:flex;align-items:center;gap:.75rem;padding:.625rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb;
          {% if worker and type_w=='sal' and worker.id==s.id %}background:#eff6ff;border-left:3px solid #1a2332;{% endif %}"
-         onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='{% if worker and type_w==\"sal\" and worker.id==s.id %}#eff6ff{% else %}{% endif %}'">
+         onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
         <div style="width:34px;height:34px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;color:#1e40af;flex-shrink:0">
           {{ s.nom[0] }}{{ s.prenom[0] if s.prenom else '' }}
         </div>
@@ -102,7 +102,7 @@
          data-search="{{ j.nom_complet|lower }} {{ j.profession|lower if j.profession else '' }}"
          style="display:flex;align-items:center;gap:.75rem;padding:.625rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb;
          {% if worker and type_w=='jour' and worker.id==j.id %}background:#fffbeb;border-left:3px solid #d97706;{% endif %}"
-         onmouseover="this.style.background='#fffde7'" onmouseout="this.style.background='{% if worker and type_w==\"jour\" and worker.id==j.id %}#fffbeb{% else %}{% endif %}'">
+         onmouseover="this.style.background='#fffde7'" onmouseout="this.style.background=''">
         <div style="width:34px;height:34px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;color:#d97706;flex-shrink:0">
           {{ j.nom[0] }}{{ j.prenom[0] if j.prenom else '' }}
         </div>
