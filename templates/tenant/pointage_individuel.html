@@ -251,9 +251,140 @@
 </div>
 
 <!-- Raccourci : pointer suivant après sauvegarde -->
-<div style="text-align:center;margin-top:1rem;font-size:.8rem;color:#9ca3af">
-  💡 Appuyez sur <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.1rem .4rem">Entrée</kbd> pour enregistrer
+<div style="text-align:center;margin-top:.75rem;font-size:.8rem;color:#9ca3af">
+  💡 <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.1rem .4rem">Entrée</kbd> enregistre ·
+  <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.1rem .4rem">→</kbd>/<kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.1rem .4rem">←</kbd> navigue
 </div>
+
+<!-- ══ HISTORIQUE 30 JOURS ══════════════════════════════════════════════════ -->
+{% if historique_30j or stats_30j %}
+<div class="card overflow-hidden mt-5">
+
+  <!-- En-tête -->
+  <div style="background:#1a2332;color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+    <div>
+      <span style="font-size:.875rem;font-weight:900">📅 Historique des 30 derniers jours</span>
+      <span style="font-size:.75rem;opacity:.6;margin-left:.625rem">{{ worker.nom_complet }}</span>
+    </div>
+    <a href="/pointage/individuel?date={{ now.strftime('%Y-%m-%d') }}&type={{ type_w }}&id={{ worker.id }}"
+       style="font-size:.75rem;color:rgba(255,255,255,.7);text-decoration:none;font-weight:600">
+      Aujourd'hui →
+    </a>
+  </div>
+
+  <!-- KPIs 30j -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;border-bottom:1px solid #f3f4f6">
+    {% for label, val, color, bg in [
+      ("Présences",   stats_30j.presences,              "#065f46","#f0fdf4"),
+      ("Absences",    stats_30j.absences,               "#991b1b","#fef2f2"),
+      ("H. normales", stats_30j.h_normales|string ~ "h","#1e40af","#eff6ff"),
+      ("H. sup",      stats_30j.h_sup|string ~ "h",     "#d97706","#fffbeb"),
+      ("Taux prés.",  stats_30j.taux|string ~ "%",
+        "#065f46" if stats_30j.taux >= 90 else "#92400e" if stats_30j.taux >= 70 else "#991b1b",
+        "#f0fdf4" if stats_30j.taux >= 90 else "#fffbeb" if stats_30j.taux >= 70 else "#fef2f2"),
+    ] %}
+    <div style="padding:.625rem .5rem;text-align:center;background:{{ bg }};{% if not loop.last %}border-right:1px solid #f3f4f6;{% endif %}">
+      <div style="font-size:1.1rem;font-weight:900;color:{{ color }}">{{ val }}</div>
+      <div style="font-size:.65rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-top:.15rem">{{ label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Tableau des pointages -->
+  {% if historique_30j %}
+  <div style="max-height:420px;overflow-y:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead style="position:sticky;top:0;z-index:1">
+      <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Date</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:90px">Statut</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:75px">H.norm.</th>
+        {% if type_w == "sal" %}
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+10%</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+30%</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+40%</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+70%</th>
+        {% else %}
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:75px">H.sup</th>
+        {% endif %}
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Total</th>
+        <th style="padding:.5rem;text-align:left;font-weight:700">Motif</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:55px">Modifier</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% set jours_fr = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"] %}
+      {% for p in historique_30j %}
+      {% set h_sup = (p.heures_sup_10|float + p.heures_sup_30|float + p.heures_sup_40|float + p.heures_sup_70|float) if type_w=="sal" else p.heures_sup|float %}
+      {% set total_h = p.heures_normales|float + h_sup if p.present else 0 %}
+      {% set is_today = p.date_pointage == date_sel %}
+      <tr style="border-bottom:1px solid #f9fafb;{% if p.absent %}background:#fff5f5;{% elif is_today %}background:#eff6ff;{% elif loop.index0 % 2 == 0 %}background:#fafafa;{% endif %}">
+        <td style="padding:.5rem .875rem">
+          <div style="font-weight:{% if is_today %}900{% else %}600{% endif %};font-size:.825rem;color:{% if is_today %}#1a2332{% else %}#374151{% endif %}">
+            {{ jours_fr[p.date_pointage.weekday()] }} {{ p.date_pointage.strftime('%d/%m/%Y') }}
+            {% if is_today %}<span style="font-size:.65rem;background:#1a2332;color:white;padding:.1rem .4rem;border-radius:9999px;margin-left:.375rem">Auj.</span>{% endif %}
+          </div>
+        </td>
+        <td style="text-align:center;padding:.5rem">
+          {% if p.present %}
+          <span style="font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:9999px;background:#d1fae5;color:#065f46">✅ P</span>
+          {% else %}
+          <span style="font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:9999px;background:#fee2e2;color:#dc2626">❌ A</span>
+          {% endif %}
+        </td>
+        <td style="text-align:center;font-family:monospace;font-size:.8rem;color:{% if p.present %}#1e40af{% else %}#d1d5db{% endif %}">
+          {% if p.present %}{{ p.heures_normales|float|round(1) }}h{% else %}—{% endif %}
+        </td>
+        {% if type_w == "sal" %}
+        {% for val in [p.heures_sup_10|float, p.heures_sup_30|float, p.heures_sup_40|float, p.heures_sup_70|float] %}
+        <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if val > 0 %}#d97706{% else %}#e5e7eb{% endif %}">
+          {% if p.present and val > 0 %}{{ val|round(1) }}h{% else %}—{% endif %}
+        </td>
+        {% endfor %}
+        {% else %}
+        <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if p.heures_sup|float > 0 %}#d97706{% else %}#e5e7eb{% endif %}">
+          {% if p.present and p.heures_sup|float > 0 %}{{ p.heures_sup|float|round(1) }}h{% else %}—{% endif %}
+        </td>
+        {% endif %}
+        <td style="text-align:center;font-family:monospace;font-size:.825rem;font-weight:700;color:{% if p.present %}#1a2332{% else %}#e5e7eb{% endif %}">
+          {% if p.present %}{{ total_h|round(1) }}h{% else %}—{% endif %}
+        </td>
+        <td style="padding:.5rem .625rem;font-size:.75rem;color:#6b7280">
+          {% if p.absent and p.motif_absence %}
+          <span style="background:#fef3c7;color:#92400e;padding:.1rem .375rem;border-radius:.375rem;font-size:.7rem;font-weight:600">{{ p.motif_absence }}</span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="text-align:center;padding:.5rem">
+          <a href="/pointage/individuel?date={{ p.date_pointage.strftime('%Y-%m-%d') }}&type={{ type_w }}&id={{ worker.id }}"
+             style="font-size:.7rem;font-weight:700;color:#2563eb;text-decoration:none;background:#eff6ff;padding:.2rem .5rem;border-radius:.375rem">
+            ✏️
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+
+  <!-- Totaux -->
+  <div style="padding:.625rem 1.25rem;border-top:1px solid #f3f4f6;background:#f9fafb;display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;font-size:.75rem;font-weight:700">
+    <span style="color:#374151">{{ historique_30j|length }} jour(s) pointé(s)</span>
+    <span style="color:#1e40af">⏱️ {{ stats_30j.h_normales }}h normales</span>
+    {% if stats_30j.h_sup > 0 %}
+    <span style="color:#d97706">⚡ {{ stats_30j.h_sup }}h sup</span>
+    {% endif %}
+    <span style="color:#059669">Total : {{ (stats_30j.h_normales + stats_30j.h_sup)|round(1) }}h</span>
+  </div>
+
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">
+    Aucun pointage enregistré sur les 30 derniers jours.
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+<!-- ══ FIN HISTORIQUE ══ -->
+
 {% else %}
 <div class="card" style="text-align:center;padding:4rem;color:#9ca3af">
   <div style="font-size:3rem;margin-bottom:.75rem">👆</div>
