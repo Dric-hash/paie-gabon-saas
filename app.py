@@ -4329,20 +4329,21 @@ with app.app_context():
             db.session.rollback()
     db.session.commit()
 
-    # ── site_id dans pointages ───────────────────────────────────────────────
-    try:
-        db.session.execute(db.text(
-            "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL",
+    # ── site_id + horaires dans pointages ───────────────────────────────────
+    for _sql in [
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS site_id INTEGER REFERENCES sites(id) ON DELETE SET NULL",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_matin VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_matin VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_apmidi VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_apmidi VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_sup VARCHAR(5)",
-        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_sup VARCHAR(5)"
-        ))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_sup VARCHAR(5)",
+    ]:
+        try:
+            db.session.execute(db.text(_sql))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
     # ── Sites & Affectations ──────────────────────────────────────────────
     for _sql in [
