@@ -2073,6 +2073,89 @@ def pointage():
         sites=sites_list, site_filtre=site_filtre,
         aff_sal=aff_sal, aff_jour=aff_jour)
 
+@app.route("/pointage/individuel", methods=["GET","POST"])
+@login_required
+def pointage_individuel():
+    """Pointage d'un seul salarié ou journalier."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    date_str  = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    type_w    = request.args.get("type", "sal")   # "sal" ou "jour"
+    worker_id = request.args.get("id", type=int)
+
+    try:   date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_sel = datetime.now().date()
+
+    if request.method == "POST":
+        # Sauvegarder le pointage individuel
+        date_p = datetime.strptime(
+            request.form.get("date_pointage", date_str), "%Y-%m-%d").date()
+        wtype  = request.form.get("worker_type", "sal")
+        wid    = int(request.form.get("worker_id", 0))
+        present = request.form.get("present") == "1"
+        absent  = not present
+        kwargs = dict(
+            heures_normales = float(request.form.get("heures_normales", 8) or 8),
+            motif_absence   = request.form.get("motif_absence","") if absent else None,
+        )
+        if wtype == "sal":
+            kwargs.update(dict(
+                heures_sup_10 = float(request.form.get("heures_sup_10",0) or 0),
+                heures_sup_30 = float(request.form.get("heures_sup_30",0) or 0),
+                heures_sup_40 = float(request.form.get("heures_sup_40",0) or 0),
+                heures_sup_70 = float(request.form.get("heures_sup_70",0) or 0),
+            ))
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, salarie_id=wid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=wid)
+                db.session.add(pt)
+        else:
+            kwargs["heures_sup"] = float(request.form.get("heures_sup",0) or 0)
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, journalier_id=wid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=wid)
+                db.session.add(pt)
+        pt.present = present
+        pt.absent  = absent
+        for k, v in kwargs.items():
+            setattr(pt, k, v)
+        db.session.commit()
+        worker_name = (Salarie.query.get(wid) or Journalier.query.get(wid)).nom_complet
+        flash(f"✅ Pointage de {worker_name} enregistré.", "success")
+        # Rester sur la même page pour pointer la personne suivante
+        redir = request.form.get("next_url") or f"/pointage/individuel?date={date_p}&type={wtype}&id={wid}"
+        return redirect(redir)
+
+    # GET : charger le travailleur sélectionné
+    worker = pt_existant = None
+    if worker_id:
+        if type_w == "sal":
+            worker = Salarie.query.filter_by(id=worker_id, tenant_id=t.id).first()
+            pt_existant = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_sel, salarie_id=worker_id).first()
+        else:
+            worker = Journalier.query.filter_by(id=worker_id, tenant_id=t.id).first()
+            pt_existant = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_sel, journalier_id=worker_id).first()
+
+    # Listes pour la recherche
+    salaries_list    = Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    journaliers_list = Journalier.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    return render_template("tenant/pointage_individuel.html",
+        tenant=t, date_sel=date_sel,
+        date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
+        type_w=type_w, worker=worker, pt_existant=pt_existant,
+        salaries=salaries_list, journaliers=journaliers_list,
+        now=datetime.now())
+
 @app.route("/pointage/sauvegarder", methods=["POST"])
 @login_required
 def pointage_sauvegarder():
