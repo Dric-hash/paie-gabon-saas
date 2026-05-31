@@ -182,36 +182,144 @@
         </div>
       </div>
 
-      <!-- Heures -->
+      <!-- Horaires entrée/sortie -->
       <div id="bloc-heures">
-        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.75rem">Heures travaillées</label>
-        <div style="display:grid;grid-template-columns:repeat({% if type_w=='sal' %}5{% else %}2{% endif %},1fr);gap:.75rem">
-          <div>
-            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. normales</label>
-            <input type="number" name="heures_normales" step="0.5" min="0" max="24"
-              value="{{ pt_existant.heures_normales|float|round(1) if pt_existant else 8 }}"
-              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
-              onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"/>
+        <!-- Onglet mode saisie -->
+        <div style="display:flex;gap:.375rem;margin-bottom:.875rem">
+          <button type="button" id="btn-mode-horaires" onclick="setMode('horaires')"
+            style="font-size:.75rem;font-weight:700;padding:.375rem .875rem;border-radius:.625rem;border:none;cursor:pointer;background:#1a2332;color:white">
+            🕐 Horaires entrée/sortie
+          </button>
+          <button type="button" id="btn-mode-manuel" onclick="setMode('manuel')"
+            style="font-size:.75rem;font-weight:700;padding:.375rem .875rem;border-radius:.625rem;border:none;cursor:pointer;background:#f3f4f6;color:#374151">
+            ✏️ Saisie manuelle
+          </button>
+        </div>
+
+        <!-- MODE HORAIRES -->
+        <div id="mode-horaires">
+          <!-- Résumé calcul auto -->
+          <div id="resume-heures" style="background:#f0fdf4;border:1px solid #86efac;border-radius:.75rem;padding:.625rem 1rem;margin-bottom:.875rem;font-size:.8rem;color:#065f46;font-weight:700;display:flex;gap:1.5rem">
+            <span>⏱️ H. norm. : <strong id="calc-hn">0h</strong></span>
+            <span>⚡ H. sup : <strong id="calc-hs">0h</strong></span>
+            <span>📊 Total : <strong id="calc-tot">0h</strong></span>
           </div>
-          {% if type_w == 'sal' %}
-          {% for taux, label in [('10','H.sup +10%'),('30','H.sup +30%'),('40','H.sup +40%'),('70','H.sup +70%')] %}
-          <div>
-            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">{{ label }}</label>
-            <input type="number" name="heures_sup_{{ taux }}" step="0.5" min="0"
-              value="{{ pt_existant['heures_sup_' ~ taux]|float|round(1) if pt_existant else 0 }}"
-              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
-              onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#e5e7eb'"/>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.875rem">
+            <!-- Matin -->
+            <div style="background:#f9fafb;border-radius:.75rem;padding:.875rem">
+              <div style="font-size:.7rem;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:.625rem;display:flex;align-items:center;gap:.375rem">
+                🌅 Matin
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+                <div>
+                  <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Entrée</label>
+                  <input type="time" name="entree_matin" id="inp_em"
+                    value="{{ pt_existant.entree_matin or '08:00' if pt_existant else '08:00' }}"
+                    oninput="calcAuto()"
+                    style="width:100%;border:1.5px solid #e5e7eb;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+                </div>
+                <div>
+                  <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Sortie</label>
+                  <input type="time" name="sortie_matin" id="inp_sm"
+                    value="{{ pt_existant.sortie_matin or '13:00' if pt_existant else '13:00' }}"
+                    oninput="calcAuto()"
+                    style="width:100%;border:1.5px solid #e5e7eb;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+                </div>
+              </div>
+            </div>
+            <!-- Après-midi -->
+            <div style="background:#f9fafb;border-radius:.75rem;padding:.875rem">
+              <div style="font-size:.7rem;font-weight:700;color:#374151;text-transform:uppercase;margin-bottom:.625rem">
+                ☀️ Après-midi
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+                <div>
+                  <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Entrée</label>
+                  <input type="time" name="entree_apmidi" id="inp_ea"
+                    value="{{ pt_existant.entree_apmidi or '14:00' if pt_existant else '14:00' }}"
+                    oninput="calcAuto()"
+                    style="width:100%;border:1.5px solid #e5e7eb;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+                </div>
+                <div>
+                  <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Sortie</label>
+                  <input type="time" name="sortie_apmidi" id="inp_sa"
+                    value="{{ pt_existant.sortie_apmidi or '17:00' if pt_existant else '17:00' }}"
+                    oninput="calcAuto()"
+                    style="width:100%;border:1.5px solid #e5e7eb;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+                </div>
+              </div>
+            </div>
           </div>
-          {% endfor %}
-          {% else %}
-          <div>
-            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. sup</label>
-            <input type="number" name="heures_sup" step="0.5" min="0"
-              value="{{ pt_existant.heures_sup|float|round(1) if pt_existant else 0 }}"
-              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
-              onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#e5e7eb'"/>
+
+          <!-- Heures supplémentaires -->
+          <div style="background:#fffbeb;border-radius:.75rem;padding:.875rem;margin-top:.625rem">
+            <div style="font-size:.7rem;font-weight:700;color:#92400e;text-transform:uppercase;margin-bottom:.625rem">
+              ⚡ Heures supplémentaires
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr {% if type_w=='sal' %}1fr 1fr 1fr{% endif %};gap:.5rem;align-items:end">
+              <div>
+                <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Entrée sup.</label>
+                <input type="time" name="entree_sup" id="inp_es"
+                  value="{{ pt_existant.entree_sup or '' if pt_existant else '' }}"
+                  oninput="calcAuto()"
+                  style="width:100%;border:1.5px solid #fcd34d;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+              </div>
+              <div>
+                <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Sortie sup.</label>
+                <input type="time" name="sortie_sup" id="inp_ss"
+                  value="{{ pt_existant.sortie_sup or '' if pt_existant else '' }}"
+                  oninput="calcAuto()"
+                  style="width:100%;border:1.5px solid #fcd34d;border-radius:.625rem;padding:.5rem;font-size:.9rem;font-family:monospace"/>
+              </div>
+              {% if type_w == 'sal' %}
+              {% for taux, label in [('30','H.sup +30%'),('40','H.sup +40%'),('70','H.sup +70%')] %}
+              <div>
+                <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">{{ label }}</label>
+                <input type="number" name="heures_sup_{{ taux }}" step="0.5" min="0"
+                  value="{{ pt_existant['heures_sup_' ~ taux]|float|round(1) if pt_existant else 0 }}"
+                  style="width:100%;border:1.5px solid #fcd34d;border-radius:.625rem;padding:.5rem;font-size:.9rem;text-align:center;font-family:monospace"/>
+              </div>
+              {% endfor %}
+              {% endif %}
+            </div>
           </div>
-          {% endif %}
+        </div>
+
+        <!-- MODE MANUEL -->
+        <div id="mode-manuel" style="display:none">
+          <!-- Champs manuels cachés pour transmission -->
+          <input type="hidden" name="entree_matin">
+          <input type="hidden" name="sortie_matin">
+          <input type="hidden" name="entree_apmidi">
+          <input type="hidden" name="sortie_apmidi">
+          <input type="hidden" name="entree_sup">
+          <input type="hidden" name="sortie_sup">
+          <div style="display:grid;grid-template-columns:repeat({% if type_w=='sal' %}5{% else %}2{% endif %},1fr);gap:.75rem">
+            <div>
+              <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. normales</label>
+              <input type="number" name="heures_normales" step="0.5" min="0" max="24"
+                value="{{ pt_existant.heures_normales|float|round(1) if pt_existant else 8 }}"
+                style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"/>
+            </div>
+            {% if type_w == 'sal' %}
+            {% for taux, label in [('10','H.sup +10%'),('30','H.sup +30%'),('40','H.sup +40%'),('70','H.sup +70%')] %}
+            <div>
+              <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">{{ label }}</label>
+              <input type="number" name="heures_sup_{{ taux }}" step="0.5" min="0"
+                value="{{ pt_existant['heures_sup_' ~ taux]|float|round(1) if pt_existant else 0 }}"
+                style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"/>
+            </div>
+            {% endfor %}
+            {% else %}
+            <div>
+              <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. sup</label>
+              <input type="number" name="heures_sup" step="0.5" min="0"
+                value="{{ pt_existant.heures_sup|float|round(1) if pt_existant else 0 }}"
+                style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"/>
+            </div>
+            {% endif %}
+          </div>
         </div>
       </div>
 
@@ -462,6 +570,68 @@ function naviguerWorker(dir) {
     window.location.href = `/pointage/individuel?date=${DATE}&type=${TYPE_W}&id=${ids[nextIdx]}`;
   }
 }
+
+// ── Calcul auto des heures depuis les horaires ───────────────────────────────
+function diffHM(debut, fin) {
+  if (!debut || !fin) return 0;
+  const [h1,m1] = debut.split(':').map(Number);
+  const [h2,m2] = fin.split(':').map(Number);
+  const diff = (h2*60+m2 - h1*60-m1) / 60;
+  return Math.max(0, Math.round(diff * 100) / 100);
+}
+
+function calcAuto() {
+  const em = document.getElementById('inp_em')?.value;
+  const sm = document.getElementById('inp_sm')?.value;
+  const ea = document.getElementById('inp_ea')?.value;
+  const sa = document.getElementById('inp_sa')?.value;
+  const es = document.getElementById('inp_es')?.value;
+  const ss = document.getElementById('inp_ss')?.value;
+
+  const hn  = diffHM(em, sm) + diffHM(ea, sa);
+  const hSup = diffHM(es, ss);
+  const tot = hn + hSup;
+
+  const fmt = h => h > 0 ? h.toFixed(2).replace('.00','') + 'h' : '0h';
+  const el_hn  = document.getElementById('calc-hn');
+  const el_hs  = document.getElementById('calc-hs');
+  const el_tot = document.getElementById('calc-tot');
+  if (el_hn)  el_hn.textContent  = fmt(hn);
+  if (el_hs)  el_hs.textContent  = fmt(hSup);
+  if (el_tot) el_tot.textContent = fmt(tot);
+
+  // Colorier le résumé
+  const resume = document.getElementById('resume-heures');
+  if (resume) resume.style.background = hn > 0 ? '#f0fdf4' : '#f9fafb';
+}
+
+// ── Basculer mode horaires / manuel ──────────────────────────────────────────
+function setMode(mode) {
+  const mh = document.getElementById('mode-horaires');
+  const mm = document.getElementById('mode-manuel');
+  const bh = document.getElementById('btn-mode-horaires');
+  const bm = document.getElementById('btn-mode-manuel');
+  if (mode === 'horaires') {
+    if (mh) mh.style.display = '';
+    if (mm) mm.style.display = 'none';
+    if (bh) { bh.style.background='#1a2332'; bh.style.color='white'; }
+    if (bm) { bm.style.background='#f3f4f6'; bm.style.color='#374151'; }
+    // Vider les champs hidden pour ne pas polluer
+    mm?.querySelectorAll('input[type="hidden"]').forEach(i => i.value='');
+  } else {
+    if (mh) mh.style.display = 'none';
+    if (mm) mm.style.display = '';
+    if (bm) { bm.style.background='#1a2332'; bm.style.color='white'; }
+    if (bh) { bh.style.background='#f3f4f6'; bh.style.color='#374151'; }
+    // Vider les time inputs pour ne pas polluer
+    ['inp_em','inp_sm','inp_ea','inp_sa','inp_es','inp_ss'].forEach(id => {
+      const el = document.getElementById(id); if(el) el.value='';
+    });
+  }
+}
+
+// Calculer au chargement
+document.addEventListener('DOMContentLoaded', calcAuto);
 
 // ── Anti double-soumission ───────────────────────────────────────────────────
 let _indivSoumis = false;
