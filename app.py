@@ -1034,10 +1034,14 @@ def salaries():
     if q:      query = query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"), Salarie.prenom.ilike(f"%{q}%"), Salarie.matricule.ilike(f"%{q}%")))
     if statut: query = query.filter_by(statut=statut)
     pagination = query.order_by(Salarie.nom).paginate(page=page, per_page=25, error_out=False)
+    _args  = {k: v for k, v in request.args.items() if k != 'page'}
+    _base  = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep   = '&' if _args else '?'
     return render_template("tenant/salaries.html",
         salaries=pagination.items, pagination=pagination,
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
-        q=q, statut=statut, tenant=t)
+        q=q, statut=statut, tenant=t,
+        pagination_base=_base + _sep)
 
 @app.route("/salaries/nouveau", methods=["GET","POST"])
 @login_required
@@ -1265,11 +1269,15 @@ def bulletins():
         tenant_id=t.id, actif=True
     ).filter(AffectationSite.salarie_id.isnot(None)).all()}
 
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
     return render_template("tenant/bulletins.html",
         periodes=periodes, periode_sel=ps,
         bulletins=buls, masse=masse, statut_filtre=sf,
         sites=sites_list, site_filtre=site_filtre, aff_sal=aff_sal,
         pagination=pagination if pid else None,
+        pagination_base=_base + _sep,
         tenant=t)
 
 @app.route("/bulletins/valider-lot", methods=["POST"])
@@ -1827,8 +1835,12 @@ def journaliers():
     query = Journalier.query.filter_by(tenant_id=t.id)
     if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"), Journalier.prenom.ilike(f"%{q}%"), Journalier.profession.ilike(f"%{q}%")))
     pagination = query.order_by(Journalier.nom).paginate(page=page, per_page=25, error_out=False)
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
     return render_template("tenant/journaliers.html",
-        tenant=t, journaliers=pagination.items, pagination=pagination, q=q)
+        tenant=t, journaliers=pagination.items, pagination=pagination, q=q,
+        pagination_base=_base + _sep)
 
 @app.route("/journaliers/nouveau", methods=["GET","POST"])
 @login_required
@@ -2105,12 +2117,16 @@ def journaliers_paie():
         tenant_id=t.id, actif=True
     ).filter(AffectationSite.journalier_id.isnot(None)).all()}
 
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
     return render_template("tenant/journaliers_paie.html",
         tenant=t, feuilles=feuilles, journaliers=journaliers_list,
         sites=sites_list, site_filtre=site_filtre, statut_filtre=statut_filtre,
         total_en_attente=total_en_attente, total_paye=total_paye,
         nb_en_attente=nb_en_attente, aff_jour=aff_jour,
-        pagination=pagination_f, now=datetime.now())
+        pagination=pagination_f, pagination_base=_base + _sep,
+        now=datetime.now())
 
 @app.route("/journaliers/paie/generer", methods=["POST"])
 @login_required
