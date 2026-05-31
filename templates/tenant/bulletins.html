@@ -1,5 +1,4 @@
 {% extends "tenant/base.html" %}
-{% from "tenant/_macros.html" import pagination_widget %}
 {% block title %}Bulletins — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
@@ -266,7 +265,42 @@
     </div>
   </div>
 
-  {{ pagination_widget(pagination, request.args) }}
+
+{% if pagination and pagination.pages > 1 %}
+<div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;
+  border-top:1px solid #f3f4f6;background:#fafafa;flex-wrap:wrap;gap:.5rem">
+  <span style="font-size:.75rem;color:#6b7280;font-weight:600">
+    Page {{ pagination.page }}/{{ pagination.pages }} — {{ pagination.total }} résultat(s)
+    ({{ (pagination.page - 1) * pagination.per_page + 1 }}–{{ [pagination.page * pagination.per_page, pagination.total]|min }})
+  </span>
+  <div style="display:flex;gap:.25rem;align-items:center">
+    {% if pagination.has_prev %}
+    <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}&page=1"
+       style="padding:.3rem .6rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">«</a>
+    <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}&page={{ pagination.prev_num }}"
+       style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">‹ Préc.</a>
+    {% endif %}
+    {% for num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+      {% if num %}
+        {% if num == pagination.page %}
+        <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+        {% else %}
+        <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}&page={{ num }}"
+           style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>
+        {% endif %}
+      {% else %}
+      <span style="padding:.3rem .375rem;font-size:.75rem;color:#9ca3af">…</span>
+      {% endif %}
+    {% endfor %}
+    {% if pagination.has_next %}
+    <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}&page={{ pagination.next_num }}"
+       style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">Suiv. ›</a>
+    <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}&page={{ pagination.pages }}"
+       style="padding:.3rem .6rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">»</a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 </div><!-- fin .card -->
 </form>
 
