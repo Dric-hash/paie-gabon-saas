@@ -2132,15 +2132,54 @@ def pointage_individuel():
 
     # GET : charger le travailleur sélectionné
     worker = pt_existant = None
+    historique_30j = []
+    stats_30j = {"presences": 0, "absences": 0, "h_normales": 0.0,
+                 "h_sup": 0.0, "taux": 0}
+
     if worker_id:
         if type_w == "sal":
             worker = Salarie.query.filter_by(id=worker_id, tenant_id=t.id).first()
             pt_existant = Pointage.query.filter_by(
                 tenant_id=t.id, date_pointage=date_sel, salarie_id=worker_id).first()
+            if worker:
+                date_debut_30 = date_sel - timedelta(days=29)
+                historique_30j = Pointage.query.filter_by(
+                    tenant_id=t.id, salarie_id=worker_id
+                ).filter(
+                    Pointage.date_pointage >= date_debut_30,
+                    Pointage.date_pointage <= date_sel
+                ).order_by(Pointage.date_pointage.desc()).all()
         else:
             worker = Journalier.query.filter_by(id=worker_id, tenant_id=t.id).first()
             pt_existant = Pointage.query.filter_by(
                 tenant_id=t.id, date_pointage=date_sel, journalier_id=worker_id).first()
+            if worker:
+                date_debut_30 = date_sel - timedelta(days=29)
+                historique_30j = Pointage.query.filter_by(
+                    tenant_id=t.id, journalier_id=worker_id
+                ).filter(
+                    Pointage.date_pointage >= date_debut_30,
+                    Pointage.date_pointage <= date_sel
+                ).order_by(Pointage.date_pointage.desc()).all()
+
+        # Stats sur les 30 jours
+        if historique_30j:
+            nb_p = sum(1 for p in historique_30j if p.present)
+            nb_a = sum(1 for p in historique_30j if p.absent)
+            hn   = round(sum(float(p.heures_normales or 0) for p in historique_30j if p.present), 1)
+            if type_w == "sal":
+                hs = round(sum(
+                    float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                    float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0)
+                    for p in historique_30j if p.present), 1)
+            else:
+                hs = round(sum(float(p.heures_sup or 0) for p in historique_30j if p.present), 1)
+            total_ptg = nb_p + nb_a
+            stats_30j = {
+                "presences": nb_p, "absences": nb_a,
+                "h_normales": hn, "h_sup": hs,
+                "taux": round(nb_p / total_ptg * 100) if total_ptg > 0 else 0
+            }
 
     # Listes pour la recherche
     salaries_list    = Salarie.query.filter_by(
@@ -2153,6 +2192,7 @@ def pointage_individuel():
         date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
         date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
         type_w=type_w, worker=worker, pt_existant=pt_existant,
+        historique_30j=historique_30j, stats_30j=stats_30j,
         salaries=salaries_list, journaliers=journaliers_list,
         now=datetime.now())
 
