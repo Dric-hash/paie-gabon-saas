@@ -993,14 +993,36 @@ def dashboard():
             "msg":f"{acomptes_att} acompte(s) n'ont pas encore été déduits des bulletins.",
             "lien":"/acomptes","lien_texte":"Voir les acomptes"})
 
-    # ── 9. Plan essai expirant bientôt ────────────────────────────────────────
-    if t.statut == "ESSAI" and t.date_fin_essai:
-        jours_restants = (t.date_fin_essai - now.date()).days
-        if jours_restants <= 7:
-            alertes.append({"type":"danger","icone":"⏰","titre":"Période d'essai bientôt terminée",
-                "msg":f"Votre essai gratuit expire dans {jours_restants} jour(s). "
-                      f"Souscrivez pour continuer à utiliser PaieGabon.",
-                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+    # ── 9. Essai ou abonnement expirant bientôt ─────────────────────────────
+    if t.date_expiration:
+        jours_restants = (t.date_expiration.date() - now.date()).days
+        if t.statut == "ESSAI":
+            if jours_restants <= 0:
+                alertes.append({"type":"danger","icone":"🚫","titre":"Période d'essai expirée",
+                    "msg":"Votre essai gratuit a expiré. Souscrivez maintenant pour continuer.",
+                    "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+            elif jours_restants <= 7:
+                alertes.append({"type":"danger","icone":"⏰","titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                    "msg":f"Votre essai gratuit expire le {t.date_expiration.strftime('%d/%m/%Y')}. "
+                          f"Souscrivez pour ne pas perdre vos données.",
+                    "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+            elif jours_restants <= 14:
+                alertes.append({"type":"warning","icone":"⏳","titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                    "msg":f"Votre période d'essai se termine le {t.date_expiration.strftime('%d/%m/%Y')}.",
+                    "lien":"/parametres","lien_texte":"Voir les plans"})
+        elif t.statut == "ACTIF":
+            if jours_restants <= 0:
+                alertes.append({"type":"danger","icone":"🔒","titre":"Abonnement expiré",
+                    "msg":"Votre abonnement a expiré. Renouvelez pour continuer à utiliser PaieGabon.",
+                    "lien":"/parametres","lien_texte":"Renouveler"})
+            elif jours_restants <= 7:
+                alertes.append({"type":"danger","icone":"⏰","titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                    "msg":f"Votre abonnement expire le {t.date_expiration.strftime('%d/%m/%Y')}. Renouvelez dès maintenant.",
+                    "lien":"/parametres","lien_texte":"Renouveler"})
+            elif jours_restants <= 30:
+                alertes.append({"type":"warning","icone":"📅","titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                    "msg":f"Votre abonnement expire le {t.date_expiration.strftime('%d/%m/%Y')}.",
+                    "lien":"/parametres","lien_texte":"Renouveler"})
 
     # Trier par priorité : danger > warning > info
     _prio = {"danger": 0, "warning": 1, "info": 2}
