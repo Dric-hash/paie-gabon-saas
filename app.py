@@ -2234,6 +2234,24 @@ def pointage_individuel():
         salaries=salaries_list, journaliers=journaliers_list,
         now=datetime.now())
 
+@app.route("/pointage/supprimer/<int:ptg_id>", methods=["POST"])
+@login_required
+def pointage_supprimer(ptg_id):
+    """Supprimer un pointage individuel."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    pt = Pointage.query.filter_by(id=ptg_id, tenant_id=t.id).first_or_404()
+    # Mémoriser le contexte pour rediriger au bon endroit
+    next_url = request.form.get("next_url", "/pointage")
+    date_str = str(pt.date_pointage)
+    type_w   = "sal" if pt.salarie_id else "jour"
+    wid      = pt.salarie_id or pt.journalier_id
+    db.session.delete(pt)
+    db.session.commit()
+    flash("🗑️ Pointage supprimé.", "success")
+    return redirect(next_url or f"/pointage/individuel?date={date_str}&type={type_w}&id={wid}")
+
 @app.route("/pointage/sauvegarder", methods=["POST"])
 @login_required
 def pointage_sauvegarder():
