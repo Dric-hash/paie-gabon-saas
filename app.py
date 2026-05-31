@@ -993,36 +993,59 @@ def dashboard():
             "msg":f"{acomptes_att} acompte(s) n'ont pas encore été déduits des bulletins.",
             "lien":"/acomptes","lien_texte":"Voir les acomptes"})
 
-    # ── 9. Essai ou abonnement expirant bientôt ─────────────────────────────
-    if t.date_expiration:
-        jours_restants = (t.date_expiration.date() - now.date()).days
-        if t.statut == "ESSAI":
-            if jours_restants <= 0:
-                alertes.append({"type":"danger","icone":"🚫","titre":"Période d'essai expirée",
-                    "msg":"Votre essai gratuit a expiré. Souscrivez maintenant pour continuer.",
-                    "lien":"/parametres","lien_texte":"Souscrire maintenant"})
-            elif jours_restants <= 7:
-                alertes.append({"type":"danger","icone":"⏰","titre":f"Essai : {jours_restants} jour(s) restant(s)",
-                    "msg":f"Votre essai gratuit expire le {t.date_expiration.strftime('%d/%m/%Y')}. "
-                          f"Souscrivez pour ne pas perdre vos données.",
-                    "lien":"/parametres","lien_texte":"Souscrire maintenant"})
-            elif jours_restants <= 14:
-                alertes.append({"type":"warning","icone":"⏳","titre":f"Essai : {jours_restants} jour(s) restant(s)",
-                    "msg":f"Votre période d'essai se termine le {t.date_expiration.strftime('%d/%m/%Y')}.",
-                    "lien":"/parametres","lien_texte":"Voir les plans"})
-        elif t.statut == "ACTIF":
-            if jours_restants <= 0:
-                alertes.append({"type":"danger","icone":"🔒","titre":"Abonnement expiré",
-                    "msg":"Votre abonnement a expiré. Renouvelez pour continuer à utiliser PaieGabon.",
-                    "lien":"/parametres","lien_texte":"Renouveler"})
-            elif jours_restants <= 7:
-                alertes.append({"type":"danger","icone":"⏰","titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
-                    "msg":f"Votre abonnement expire le {t.date_expiration.strftime('%d/%m/%Y')}. Renouvelez dès maintenant.",
-                    "lien":"/parametres","lien_texte":"Renouveler"})
-            elif jours_restants <= 30:
-                alertes.append({"type":"warning","icone":"📅","titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
-                    "msg":f"Votre abonnement expire le {t.date_expiration.strftime('%d/%m/%Y')}.",
-                    "lien":"/parametres","lien_texte":"Renouveler"})
+    # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
+    exp_date = t.date_expiration
+    jours_restants = (exp_date.date() - now.date()).days if exp_date else None
+
+    if t.statut == "ESSAI":
+        if jours_restants is None or jours_restants <= 0:
+            alertes.append({"type":"danger","icone":"🚫",
+                "titre":"Période d'essai expirée",
+                "msg":"Votre essai gratuit a expiré. Souscrivez maintenant pour continuer.",
+                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+        elif jours_restants <= 7:
+            alertes.append({"type":"danger","icone":"⏰",
+                "titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}. Souscrivez pour ne pas perdre vos données.",
+                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+        elif jours_restants <= 14:
+            alertes.append({"type":"warning","icone":"⏳",
+                "titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                "msg":f"Votre période d'essai se termine le {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Voir les plans"})
+        else:
+            alertes.append({"type":"info","icone":"🧪",
+                "titre":f"Période d'essai — {jours_restants} jour(s) restant(s)",
+                "msg":f"Essai gratuit jusqu'au {exp_date.strftime('%d/%m/%Y')}. Plan actuel : {t.plan.nom}.",
+                "lien":"/parametres","lien_texte":"Voir les plans"})
+
+    elif t.statut == "ACTIF":
+        if jours_restants is None or jours_restants <= 0:
+            alertes.append({"type":"danger","icone":"🔒",
+                "titre":"Abonnement expiré",
+                "msg":"Votre abonnement a expiré. Renouvelez pour continuer.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        elif jours_restants <= 7:
+            alertes.append({"type":"danger","icone":"⏰",
+                "titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}. Renouvelez dès maintenant.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        elif jours_restants <= 30:
+            alertes.append({"type":"warning","icone":"📅",
+                "titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        else:
+            alertes.append({"type":"info","icone":"✅",
+                "titre":f"Abonnement actif — {jours_restants} jour(s) restant(s)",
+                "msg":f"Plan {t.plan.nom} valide jusqu'au {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Gérer l'abonnement"})
+
+    elif t.statut == "PAIEMENT_EN_ATTENTE":
+        alertes.append({"type":"warning","icone":"💳",
+            "titre":"Paiement en attente",
+            "msg":"Votre paiement est en cours de traitement. L'accès complet sera rétabli dès confirmation.",
+            "lien":"/parametres","lien_texte":"Contacter le support"})
 
     # Trier par priorité : danger > warning > info
     _prio = {"danger": 0, "warning": 1, "info": 2}
