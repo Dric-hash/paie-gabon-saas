@@ -1,0 +1,354 @@
+{% extends "tenant/base.html" %}
+{% block title %}Pointage individuel — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <h1 class="text-2xl font-black text-gray-900">Pointage individuel</h1>
+      <a href="/pointage?date={{ date_sel.strftime('%Y-%m-%d') }}"
+         style="font-size:.75rem;font-weight:700;background:#f3f4f6;color:#374151;padding:.375rem .75rem;border-radius:.625rem;text-decoration:none">
+        ← Feuille complète
+      </a>
+    </div>
+    <p class="text-gray-500 text-sm mt-1">{{ date_sel.strftime('%A %d %B %Y') }}</p>
+  </div>
+  <!-- Navigation date -->
+  <div style="display:flex;align-items:center;gap:.5rem">
+    <a href="/pointage/individuel?date={{ date_hier }}{% if worker %}&type={{ type_w }}&id={{ worker.id }}{% endif %}"
+       style="background:#f3f4f6;padding:.5rem .75rem;border-radius:.75rem;text-decoration:none;font-size:.875rem">← Hier</a>
+    <form method="GET" style="display:flex;gap:.5rem">
+      {% if worker %}
+      <input type="hidden" name="type" value="{{ type_w }}">
+      <input type="hidden" name="id" value="{{ worker.id }}">
+      {% endif %}
+      <input type="date" name="date" value="{{ date_sel.strftime('%Y-%m-%d') }}"
+        style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .75rem;font-size:.875rem"
+        onchange="this.form.submit()"/>
+    </form>
+    <a href="/pointage/individuel?date={{ date_demain }}{% if worker %}&type={{ type_w }}&id={{ worker.id }}{% endif %}"
+       style="background:#f3f4f6;padding:.5rem .75rem;border-radius:.75rem;text-decoration:none;font-size:.875rem">Demain →</a>
+    <a href="/pointage/individuel?date={{ now.strftime('%Y-%m-%d') }}{% if worker %}&type={{ type_w }}&id={{ worker.id }}{% endif %}"
+       class="btn-primary">Aujourd'hui</a>
+  </div>
+</div>
+
+<!-- ══ SÉLECTION DU TRAVAILLEUR ══════════════════════════════════════════════ -->
+<div class="card p-5 mb-5">
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
+    🔍 Sélectionner un travailleur
+  </h2>
+
+  <!-- Recherche dynamique -->
+  <div style="position:relative;margin-bottom:1rem">
+    <span style="position:absolute;left:.875rem;top:50%;transform:translateY(-50%);color:#9ca3af;pointer-events:none">🔍</span>
+    <input type="text" id="search-worker"
+      placeholder="Taper un nom, prénom ou profession..."
+      style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem .75rem .75rem 2.75rem;font-size:.9rem"
+      onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"
+      oninput="filtrerWorkers(this.value)"
+      autocomplete="off"/>
+  </div>
+
+  <!-- Onglets Salariés / Journaliers -->
+  <div style="display:flex;gap:.375rem;margin-bottom:.875rem" id="tabs-type">
+    <button onclick="setTab('sal')" id="tab-sal"
+      style="font-size:.8rem;font-weight:700;padding:.375rem 1rem;border-radius:.625rem;border:none;cursor:pointer;
+      {{ 'background:#1a2332;color:white' if type_w == 'sal' else 'background:#f3f4f6;color:#374151' }}">
+      👤 Salariés ({{ salaries|length }})
+    </button>
+    <button onclick="setTab('jour')" id="tab-jour"
+      style="font-size:.8rem;font-weight:700;padding:.375rem 1rem;border-radius:.625rem;border:none;cursor:pointer;
+      {{ 'background:#1a2332;color:white' if type_w == 'jour' else 'background:#f3f4f6;color:#374151' }}">
+      🦺 Journaliers ({{ journaliers|length }})
+    </button>
+  </div>
+
+  <!-- Liste salariés -->
+  <div id="liste-sal" style="{{ 'display:none' if type_w != 'sal' else '' }}">
+    <div style="max-height:260px;overflow-y:auto;border:1px solid #f3f4f6;border-radius:.75rem">
+      {% for s in salaries %}
+      <a href="/pointage/individuel?date={{ date_sel.strftime('%Y-%m-%d') }}&type=sal&id={{ s.id }}"
+         class="worker-item"
+         data-search="{{ s.nom_complet|lower }} {{ s.emploi|lower if s.emploi else '' }}"
+         style="display:flex;align-items:center;gap:.75rem;padding:.625rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb;
+         {% if worker and type_w=='sal' and worker.id==s.id %}background:#eff6ff;border-left:3px solid #1a2332;{% endif %}"
+         onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='{% if worker and type_w==\"sal\" and worker.id==s.id %}#eff6ff{% else %}{% endif %}'">
+        <div style="width:34px;height:34px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;color:#1e40af;flex-shrink:0">
+          {{ s.nom[0] }}{{ s.prenom[0] if s.prenom else '' }}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.875rem;color:#111827">{{ s.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ s.emploi or '—' }} {% if s.matricule %}· {{ s.matricule }}{% endif %}</div>
+        </div>
+        <!-- Badge pointage du jour -->
+        {% set pt_j = none %}
+        <span style="font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;flex-shrink:0;
+          {% if worker and type_w=='sal' and worker.id==s.id %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#9ca3af{% endif %}">
+          {% if worker and type_w=='sal' and worker.id==s.id %}📍 Sélectionné{% else %}→{% endif %}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Liste journaliers -->
+  <div id="liste-jour" style="{{ 'display:none' if type_w != 'jour' else '' }}">
+    <div style="max-height:260px;overflow-y:auto;border:1px solid #f3f4f6;border-radius:.75rem">
+      {% for j in journaliers %}
+      <a href="/pointage/individuel?date={{ date_sel.strftime('%Y-%m-%d') }}&type=jour&id={{ j.id }}"
+         class="worker-item"
+         data-search="{{ j.nom_complet|lower }} {{ j.profession|lower if j.profession else '' }}"
+         style="display:flex;align-items:center;gap:.75rem;padding:.625rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb;
+         {% if worker and type_w=='jour' and worker.id==j.id %}background:#fffbeb;border-left:3px solid #d97706;{% endif %}"
+         onmouseover="this.style.background='#fffde7'" onmouseout="this.style.background='{% if worker and type_w==\"jour\" and worker.id==j.id %}#fffbeb{% else %}{% endif %}'">
+        <div style="width:34px;height:34px;border-radius:50%;background:#fef3c7;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;color:#d97706;flex-shrink:0">
+          {{ j.nom[0] }}{{ j.prenom[0] if j.prenom else '' }}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:700;font-size:.875rem;color:#111827">{{ j.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ j.profession or '—' }} · {{ "%.0f"|format(j.taux_horaire|float) }} FCFA/h</div>
+        </div>
+        <span style="font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;flex-shrink:0;
+          {% if worker and type_w=='jour' and worker.id==j.id %}background:#d97706;color:white{% else %}background:#f3f4f6;color:#9ca3af{% endif %}">
+          {% if worker and type_w=='jour' and worker.id==j.id %}📍 Sélectionné{% else %}→{% endif %}
+        </span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ══ FORMULAIRE DE POINTAGE ═════════════════════════════════════════════════ -->
+{% if worker %}
+<div class="card overflow-hidden">
+
+  <!-- En-tête travailleur -->
+  <div style="background:{% if type_w=='sal' %}linear-gradient(135deg,#1a2332,#374151){% else %}linear-gradient(135deg,#92400e,#d97706){% endif %};color:white;padding:1.25rem">
+    <div style="display:flex;align-items:center;gap:1rem">
+      <div style="width:3rem;height:3rem;border-radius:.75rem;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:900;flex-shrink:0">
+        {{ worker.nom[0] }}{{ worker.prenom[0] if worker.prenom else '' }}
+      </div>
+      <div>
+        <div style="font-size:1.1rem;font-weight:900">{{ worker.nom_complet }}</div>
+        <div style="font-size:.8rem;opacity:.75;margin-top:.15rem">
+          {% if type_w=='sal' %}{{ worker.emploi or '—' }} · {{ worker.matricule }}
+          {% else %}{{ worker.profession or '—' }} · {{ "%.0f"|format(worker.taux_horaire|float) }} FCFA/h{% endif %}
+        </div>
+      </div>
+      {% if pt_existant %}
+      <span style="margin-left:auto;font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:9999px;
+        {{ 'background:#d1fae5;color:#065f46' if pt_existant.present else 'background:#fee2e2;color:#dc2626' }}">
+        {% if pt_existant.present %}✅ Déjà pointé présent{% else %}❌ Déjà pointé absent{% endif %}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Formulaire -->
+  <form method="POST" action="/pointage/individuel" id="form-ptg-indiv">
+    <input type="hidden" name="worker_type" value="{{ type_w }}">
+    <input type="hidden" name="worker_id"   value="{{ worker.id }}">
+    <input type="hidden" name="date_pointage" value="{{ date_sel.strftime('%Y-%m-%d') }}">
+    <input type="hidden" name="next_url" value="/pointage/individuel?date={{ date_sel.strftime('%Y-%m-%d') }}&type={{ type_w }}">
+
+    <div style="padding:1.5rem">
+
+      <!-- Présence / Absence -->
+      <div style="margin-bottom:1.5rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.75rem">Présence</label>
+        <div style="display:flex;gap:1rem">
+          <label style="flex:1;cursor:pointer" id="lbl-present">
+            <input type="radio" name="present" value="1" id="radio-present"
+              {% if (pt_existant and pt_existant.present) or not pt_existant %}checked{% endif %}
+              onchange="onPresenceToggle()" style="display:none">
+            <div id="btn-present" style="padding:1rem;border-radius:.875rem;text-align:center;border:2px solid;transition:.15s;
+              {% if (pt_existant and pt_existant.present) or not pt_existant %}background:#d1fae5;border-color:#6ee7b7;{% else %}background:#f9fafb;border-color:#e5e7eb;{% endif %}">
+              <div style="font-size:1.75rem;margin-bottom:.25rem">✅</div>
+              <div style="font-weight:700;font-size:.875rem;{% if (pt_existant and pt_existant.present) or not pt_existant %}color:#065f46{% else %}color:#9ca3af{% endif %}">Présent</div>
+            </div>
+          </label>
+          <label style="flex:1;cursor:pointer" id="lbl-absent">
+            <input type="radio" name="present" value="0" id="radio-absent"
+              {% if pt_existant and pt_existant.absent %}checked{% endif %}
+              onchange="onPresenceToggle()" style="display:none">
+            <div id="btn-absent" style="padding:1rem;border-radius:.875rem;text-align:center;border:2px solid;transition:.15s;
+              {% if pt_existant and pt_existant.absent %}background:#fee2e2;border-color:#fca5a5;{% else %}background:#f9fafb;border-color:#e5e7eb;{% endif %}">
+              <div style="font-size:1.75rem;margin-bottom:.25rem">❌</div>
+              <div style="font-weight:700;font-size:.875rem;{% if pt_existant and pt_existant.absent %}color:#dc2626{% else %}color:#9ca3af{% endif %}">Absent</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Heures -->
+      <div id="bloc-heures">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.75rem">Heures travaillées</label>
+        <div style="display:grid;grid-template-columns:repeat({% if type_w=='sal' %}5{% else %}2{% endif %},1fr);gap:.75rem">
+          <div>
+            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. normales</label>
+            <input type="number" name="heures_normales" step="0.5" min="0" max="24"
+              value="{{ pt_existant.heures_normales|float|round(1) if pt_existant else 8 }}"
+              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
+              onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"/>
+          </div>
+          {% if type_w == 'sal' %}
+          {% for taux, label in [('10','H.sup +10%'),('30','H.sup +30%'),('40','H.sup +40%'),('70','H.sup +70%')] %}
+          <div>
+            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">{{ label }}</label>
+            <input type="number" name="heures_sup_{{ taux }}" step="0.5" min="0"
+              value="{{ pt_existant['heures_sup_' ~ taux]|float|round(1) if pt_existant else 0 }}"
+              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
+              onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#e5e7eb'"/>
+          </div>
+          {% endfor %}
+          {% else %}
+          <div>
+            <label style="display:block;font-size:.7rem;color:#9ca3af;margin-bottom:.3rem">H. sup</label>
+            <input type="number" name="heures_sup" step="0.5" min="0"
+              value="{{ pt_existant.heures_sup|float|round(1) if pt_existant else 0 }}"
+              style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.9rem;text-align:center;font-family:monospace"
+              onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#e5e7eb'"/>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Motif absence -->
+      <div id="bloc-motif" style="margin-top:1rem;{% if not (pt_existant and pt_existant.absent) %}display:none{% endif %}">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">Motif d'absence</label>
+        <select name="motif_absence"
+          style="width:100%;border:1.5px solid #fca5a5;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+          <option value="">— Choisir un motif —</option>
+          {% for m in ['Maladie','Congé','Congé sans solde','Absence injustifiée','Mission','Accident de travail','Autre'] %}
+          <option {% if pt_existant and pt_existant.motif_absence == m %}selected{% endif %}>{{ m }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+    </div>
+
+    <!-- Bouton soumettre -->
+    <div style="padding:1rem 1.5rem;border-top:1px solid #f3f4f6;background:#f9fafb;display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap">
+      <!-- Navigation rapide : travailleur précédent / suivant -->
+      <div style="display:flex;gap:.5rem">
+        <button type="button" onclick="naviguerWorker(-1)"
+          style="background:#f3f4f6;color:#374151;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+          ← Précédent
+        </button>
+        <button type="button" onclick="naviguerWorker(1)"
+          style="background:#f3f4f6;color:#374151;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+          Suivant →
+        </button>
+      </div>
+      <button type="submit" id="btn-save-indiv"
+        style="background:#1a2332;color:white;padding:.75rem 2rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.2)">
+        💾 Enregistrer le pointage
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- Raccourci : pointer suivant après sauvegarde -->
+<div style="text-align:center;margin-top:1rem;font-size:.8rem;color:#9ca3af">
+  💡 Appuyez sur <kbd style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:.3rem;padding:.1rem .4rem">Entrée</kbd> pour enregistrer
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:4rem;color:#9ca3af">
+  <div style="font-size:3rem;margin-bottom:.75rem">👆</div>
+  <p style="font-size:.9rem;font-weight:600;color:#374151;margin-bottom:.5rem">Sélectionnez un travailleur</p>
+  <p style="font-size:.8rem">Tapez un nom dans la barre ci-dessus ou cliquez sur une personne dans la liste.</p>
+</div>
+{% endif %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+const DATE = "{{ date_sel.strftime('%Y-%m-%d') }}";
+const TYPE_W = "{{ type_w }}";
+const WORKER_ID = {{ worker.id if worker else 'null' }};
+
+// Tableau des IDs dans l'ordre courant
+const SAL_IDS  = [{% for s in salaries %}{{ s.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+const JOUR_IDS = [{% for j in journaliers %}{{ j.id }}{% if not loop.last %},{% endif %}{% endfor %}];
+
+// ── Onglets ──────────────────────────────────────────────────────────────────
+function setTab(type) {
+  document.getElementById('liste-sal').style.display  = type === 'sal'  ? '' : 'none';
+  document.getElementById('liste-jour').style.display = type === 'jour' ? '' : 'none';
+  const ts = document.getElementById('tab-sal');
+  const tj = document.getElementById('tab-jour');
+  ts.style.background = type==='sal'  ? '#1a2332' : '#f3f4f6';
+  ts.style.color      = type==='sal'  ? 'white'   : '#374151';
+  tj.style.background = type==='jour' ? '#1a2332' : '#f3f4f6';
+  tj.style.color      = type==='jour' ? 'white'   : '#374151';
+  // Vider la recherche
+  document.getElementById('search-worker').value = '';
+  filtrerWorkers('');
+}
+
+// ── Recherche live ────────────────────────────────────────────────────────────
+function filtrerWorkers(q) {
+  const terme = q.toLowerCase().trim();
+  const listeActive = TYPE_W === 'sal' ? 'liste-sal' : 'liste-jour';
+  // Afficher l'onglet actif si on cherche
+  document.querySelectorAll('#' + listeActive + ' .worker-item').forEach(el => {
+    const match = !terme || el.dataset.search.includes(terme);
+    el.style.display = match ? '' : 'none';
+  });
+}
+
+// ── Présence toggle ───────────────────────────────────────────────────────────
+function onPresenceToggle() {
+  const isPresent = document.getElementById('radio-present').checked;
+  const bp = document.getElementById('btn-present');
+  const ba = document.getElementById('btn-absent');
+  if (isPresent) {
+    bp.style.background   = '#d1fae5'; bp.style.borderColor = '#6ee7b7';
+    bp.querySelector('div:last-child').style.color = '#065f46';
+    ba.style.background   = '#f9fafb'; ba.style.borderColor = '#e5e7eb';
+    ba.querySelector('div:last-child').style.color = '#9ca3af';
+    document.getElementById('bloc-heures').style.display = '';
+    document.getElementById('bloc-motif').style.display  = 'none';
+  } else {
+    ba.style.background   = '#fee2e2'; ba.style.borderColor = '#fca5a5';
+    ba.querySelector('div:last-child').style.color = '#dc2626';
+    bp.style.background   = '#f9fafb'; bp.style.borderColor = '#e5e7eb';
+    bp.querySelector('div:last-child').style.color = '#9ca3af';
+    document.getElementById('bloc-heures').style.display = 'none';
+    document.getElementById('bloc-motif').style.display  = '';
+  }
+}
+
+// ── Navigation précédent/suivant ──────────────────────────────────────────────
+function naviguerWorker(dir) {
+  if (!WORKER_ID) return;
+  const ids = TYPE_W === 'sal' ? SAL_IDS : JOUR_IDS;
+  const idx = ids.indexOf(WORKER_ID);
+  const nextIdx = idx + dir;
+  if (nextIdx >= 0 && nextIdx < ids.length) {
+    window.location.href = `/pointage/individuel?date=${DATE}&type=${TYPE_W}&id=${ids[nextIdx]}`;
+  }
+}
+
+// ── Anti double-soumission ───────────────────────────────────────────────────
+let _indivSoumis = false;
+document.getElementById('form-ptg-indiv').addEventListener('submit', function(e) {
+  if (_indivSoumis) { e.preventDefault(); return; }
+  _indivSoumis = true;
+  const btn = document.getElementById('btn-save-indiv');
+  btn.textContent = '⏳ Enregistrement…'; btn.disabled = true; btn.style.opacity = '.7';
+});
+
+// Raccourci Entrée pour soumettre
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.id !== 'search-worker' && e.target.tagName !== 'SELECT') {
+    const form = document.getElementById('form-ptg-indiv');
+    if (form) { e.preventDefault(); form.requestSubmit(); }
+  }
+  if (e.key === 'ArrowRight') naviguerWorker(1);
+  if (e.key === 'ArrowLeft')  naviguerWorker(-1);
+});
+</script>
+{% endblock %}
