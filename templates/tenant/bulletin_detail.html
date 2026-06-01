@@ -132,6 +132,10 @@
 
     <!-- Actions -->
     <div class="card p-4" style="display:flex;flex-direction:column;gap:.5rem">
+      <a href="/bulletins/{{ bulletin.id }}/pdf"
+         style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:#dc2626;color:white;padding:.75rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none;text-align:center">
+        📥 Télécharger PDF
+      </a>
       <a href="/bulletins/{{ bulletin.id }}/imprimer" target="_blank"
          class="btn-primary" style="display:block;text-align:center">🖨️ Imprimer le bulletin</a>
 
