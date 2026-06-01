@@ -182,6 +182,37 @@
         </div>
       </div>
 
+      <!-- Type de jour -->
+      <div style="margin-bottom:1.5rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.75rem">
+          Type de jour
+        </label>
+        <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.5rem" id="type-jour-grid">
+          {% set tj = pt_existant.type_jour if pt_existant and pt_existant.type_jour else 'NORMAL' %}
+          {% for code, label, icon, col, bg in [
+            ('NORMAL',           'Normal',          '📅','#374151','#f3f4f6'),
+            ('DIMANCHE',         'Dimanche',         '🌅','#1e40af','#dbeafe'),
+            ('FERIE',            'Jour férié',       '🎉','#065f46','#d1fae5'),
+            ('CHOME_PAYE',       'Chômé payé',       '✅','#92400e','#fef3c7'),
+            ('CHOME_RECUPERABLE','Chômé récup.',     '🔄','#6b21a8','#f3e8ff'),
+          ] %}
+          <label style="cursor:pointer;text-align:center">
+            <input type="radio" name="type_jour" value="{{ code }}" class="radio-type-jour"
+              {% if tj == code %}checked{% endif %}
+              onchange="onTypeJourChange('{{ code }}')" style="display:none">
+            <div id="tjbtn_{{ code }}"
+              style="padding:.5rem .25rem;border-radius:.75rem;border:2px solid;font-size:.75rem;font-weight:700;transition:.15s;
+              {% if tj == code %}background:{{ bg }};border-color:{{ col }};color:{{ col }};{% else %}background:#f9fafb;border-color:#e5e7eb;color:#9ca3af;{% endif %}">
+              <div style="font-size:1.25rem;margin-bottom:.2rem">{{ icon }}</div>
+              {{ label }}
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+        <!-- Info contextuelle -->
+        <div id="info-type-jour" style="margin-top:.5rem;font-size:.75rem;padding:.375rem .75rem;border-radius:.625rem;font-weight:600;display:none"></div>
+      </div>
+
       <!-- Horaires entrée/sortie -->
       <div id="bloc-heures">
         <!-- Onglet mode saisie -->
@@ -443,6 +474,18 @@
             {{ jours_fr[p.date_pointage.weekday()] }} {{ p.date_pointage.strftime('%d/%m/%Y') }}
             {% if is_today %}<span style="font-size:.65rem;background:#1a2332;color:white;padding:.1rem .4rem;border-radius:9999px;margin-left:.375rem">Auj.</span>{% endif %}
           </div>
+          {% if p.type_jour and p.type_jour != 'NORMAL' %}
+          {% set tj_styles = {
+            'DIMANCHE':         ('🌅',  '#1e40af', '#dbeafe'),
+            'FERIE':            ('🎉',  '#065f46', '#d1fae5'),
+            'CHOME_PAYE':       ('✅',  '#92400e', '#fef3c7'),
+            'CHOME_RECUPERABLE':('🔄',  '#6b21a8', '#f3e8ff'),
+          } %}
+          {% set tj_info = tj_styles.get(p.type_jour, ('','#374151','#f3f4f6')) %}
+          <span style="font-size:.65rem;font-weight:700;padding:.1rem .4rem;border-radius:9999px;margin-top:.2rem;display:inline-block;background:{{ tj_info[2] }};color:{{ tj_info[1] }}">
+            {{ tj_info[0] }} {{ p.type_jour.replace('_',' ') }}
+          </span>
+          {% endif %}
         </td>
         <td style="text-align:center;padding:.5rem">
           {% if p.present %}
@@ -590,6 +633,55 @@ function naviguerWorker(dir) {
   const nextIdx = idx + dir;
   if (nextIdx >= 0 && nextIdx < ids.length) {
     window.location.href = `/pointage/individuel?date=${DATE}&type=${TYPE_W}&id=${ids[nextIdx]}`;
+  }
+}
+
+// ── Type de jour ─────────────────────────────────────────────────────────────
+const TJ_INFOS = {
+  NORMAL:           {label:'Jour normal',       info:'',                              color:'#374151', bg:'#f3f4f6'},
+  DIMANCHE:         {label:'Dimanche +40%',      info:'Les heures seront comptées en H.sup +40%.', color:'#1e40af', bg:'#dbeafe'},
+  FERIE:            {label:'Jour férié +70%',    info:'Les heures seront comptées en H.sup +70%.', color:'#065f46', bg:'#d1fae5'},
+  CHOME_PAYE:       {label:'Chômé payé',         info:'Présent mais jour chômé payé — heures normales.', color:'#92400e', bg:'#fef3c7'},
+  CHOME_RECUPERABLE:{label:'Chômé récupérable',  info:'Absent payé. Les heures seront à récupérer.', color:'#6b21a8', bg:'#f3e8ff'},
+};
+
+function onTypeJourChange(code) {
+  // Mettre à jour les boutons
+  Object.keys(TJ_INFOS).forEach(c => {
+    const btn = document.getElementById('tjbtn_' + c);
+    if (!btn) return;
+    const info = TJ_INFOS[c];
+    if (c === code) {
+      btn.style.background   = info.bg;
+      btn.style.borderColor  = info.color;
+      btn.style.color        = info.color;
+    } else {
+      btn.style.background   = '#f9fafb';
+      btn.style.borderColor  = '#e5e7eb';
+      btn.style.color        = '#9ca3af';
+    }
+  });
+  // Info contextuelle
+  const infoEl = document.getElementById('info-type-jour');
+  if (infoEl) {
+    const tj = TJ_INFOS[code];
+    if (tj && tj.info) {
+      infoEl.textContent       = tj.info;
+      infoEl.style.display     = '';
+      infoEl.style.background  = tj.bg;
+      infoEl.style.color       = tj.color;
+    } else {
+      infoEl.style.display = 'none';
+    }
+  }
+  // Pour chômé récupérable → cocher Absent
+  if (code === 'CHOME_RECUPERABLE') {
+    const ra = document.getElementById('radio-absent');
+    if (ra) { ra.checked = true; onPresenceToggle(); }
+  } else if (code !== 'NORMAL') {
+    // Pour dimanche, férié, chômé payé → cocher Présent
+    const rp = document.getElementById('radio-present');
+    if (rp) { rp.checked = true; onPresenceToggle(); }
   }
 }
 
