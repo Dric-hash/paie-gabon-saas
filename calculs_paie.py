@@ -323,3 +323,74 @@ def calculer_masse_salariale(bulletins: list) -> dict:
     )
     totaux["total_charges_patronales"] = totaux["total_charges_pat"]
     return {k: round(v, 2) for k, v in totaux.items()}
+
+
+def distribuer_heures_semaine_btp(heures_par_jour: list,
+                                   types_par_jour: list = None) -> dict:
+    """
+    Distribue les heures d'une semaine selon la convention BTP Gabon.
+
+    heures_par_jour : liste de dict par jour travaillé :
+        {"heures_normales": 8.0, "heures_sup_nuit": 0, "type_jour": "NORMAL"}
+    types_par_jour  : optionnel, liste de str ("NORMAL","DIMANCHE","FERIE",...)
+
+    Logique BTP :
+        0  → 40h  : Heures normales
+        40 → 44h  : +10% (max 4h)
+        44 → 48h  : +30% (max 4h)
+        > 48h     : +30% (au-delà)
+        Nuit      : +40% (indépendant, cumulable)
+        Dim/Férié : +70% (remplace le taux normal pour ces heures)
+    """
+    total_norm  = 0.0  # heures normales cumulées (hors dim/férié/nuit)
+    h40_fin_btp = 0.0  # +40% cumulées (nuit)
+    h70_fin_btp = 0.0  # +70% cumulées (dim/férié)
+
+    SEUIL_10 = 40.0
+    SEUIL_30 = 44.0
+    SEUIL_48 = 48.0
+
+    for i, jour in enumerate(heures_par_jour):
+        if isinstance(jour, dict):
+            h     = float(jour.get("heures_normales", 0) or 0)
+            h_nuit = float(jour.get("heures_sup_nuit", 0) or 0)
+            tj    = (jour.get("type_jour", "NORMAL") or "NORMAL").upper()
+        else:
+            h = float(jour or 0)
+            h_nuit = 0
+            tj = (types_par_jour[i] if types_par_jour and i < len(types_par_jour) else "NORMAL").upper()
+
+        if tj in ("DIMANCHE", "FERIE"):
+            # Toutes les heures de ce jour → +70%
+            h70_fin_btp += h
+        else:
+            total_norm += h
+
+        if h_nuit > 0:
+            h40_fin_btp += h_nuit
+
+    # Distribution des heures normales sur la grille 40/44/48
+    h_norm_finale = min(total_norm, SEUIL_10)
+    reste = total_norm - h_norm_finale
+
+    h_10 = min(reste, SEUIL_30 - SEUIL_10)   # max 4h
+    reste -= h_10
+
+    h_30 = min(reste, SEUIL_48 - SEUIL_30)   # max 4h
+    reste -= h_30
+
+    h_30_plus = reste  # heures au-delà de 48h → aussi +30% en BTP
+
+    return {
+        "total_heures":     round(total_norm + h70_fin_btp + h40_fin_btp, 2),
+        "heures_normales":  round(h_norm_finale, 2),      # 0→40h
+        "heures_sup_10":    round(h_10, 2),               # 40→44h
+        "heures_sup_30":    round(h_30 + h_30_plus, 2),  # 44→48h + >48h
+        "heures_sup_40":    round(h40_fin_btp, 2),        # nuit
+        "heures_sup_70":    round(h70_fin_btp, 2),        # dim/férié
+        "seuil_10_atteint": total_norm >= SEUIL_10,
+        "seuil_30_atteint": total_norm >= SEUIL_30,
+        "seuil_48_depasse": total_norm > SEUIL_48,
+        "heures_restantes_avant_10": max(0, round(SEUIL_10 - total_norm, 2)),
+        "heures_restantes_avant_30": max(0, round(SEUIL_30 - total_norm, 2)),
+    }
