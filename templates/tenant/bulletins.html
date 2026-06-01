@@ -207,6 +207,12 @@
             <a href="/bulletins/{{ b.id }}"
                style="font-size:.75rem;color:#2563eb;font-weight:700;text-decoration:none">Voir</a>
             <span style="color:#e5e7eb">|</span>
+            <a href="/bulletins/{{ b.id }}/pdf"
+               style="font-size:.75rem;font-weight:700;color:#dc2626;text-decoration:none;
+               background:#fef2f2;padding:.15rem .5rem;border-radius:.375rem">
+               📥 PDF
+            </a>
+            <span style="color:#e5e7eb">|</span>
             <a href="/bulletins/{{ b.id }}/imprimer" target="_blank"
                style="font-size:.75rem;color:#059669;font-weight:700;text-decoration:none">🖨️</a>
             {% if b.statut == 'BROUILLON' %}
