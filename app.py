@@ -3509,6 +3509,87 @@ def api_pointage_mois(id):
         "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
     })
 
+@app.route("/api/semaine-btp")
+@login_required
+def api_semaine_btp():
+    """
+    Calcule la distribution BTP des heures pour un travailleur sur une semaine.
+    Params : type (sal|jour), id, date (n'importe quel jour de la semaine)
+    """
+    t = get_tenant()
+    if not t: return jsonify({"erreur": "non connecté"})
+
+    type_w    = request.args.get("type", "sal")
+    worker_id = request.args.get("id", type=int)
+    date_str  = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+
+    try:
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        date_ref = datetime.now().date()
+
+    lundi  = date_ref - timedelta(days=date_ref.weekday())
+    samedi = lundi + timedelta(days=5)
+
+    if type_w == "sal":
+        pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=worker_id)            .filter(Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi,
+                    Pointage.present == True).all()
+    else:
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=worker_id)            .filter(Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi,
+                    Pointage.present == True).all()
+
+    if not pts:
+        return jsonify({
+            "semaine": f"{lundi.strftime('%d/%m')} → {samedi.strftime('%d/%m/%Y')}",
+            "nb_jours": 0, "heures_normales": 0,
+            "heures_sup_10": 0, "heures_sup_30": 0,
+            "heures_sup_40": 0, "heures_sup_70": 0,
+            "message": "Aucun pointage cette semaine"
+        })
+
+    from calculs_paie import distribuer_heures_semaine_btp
+    jours_data = []
+    for p in pts:
+        h_norm = float(p.heures_normales or 0)
+        if type_w == "sal":
+            h_nuit = float(p.heures_sup_40 or 0)
+        else:
+            h_nuit = 0
+        jours_data.append({
+            "heures_normales": h_norm,
+            "heures_sup_nuit": h_nuit,
+            "type_jour": p.type_jour or "NORMAL"
+        })
+
+    dist = distribuer_heures_semaine_btp(jours_data)
+    dist["semaine"]  = f"{lundi.strftime('%d/%m')} → {samedi.strftime('%d/%m/%Y')}"
+    dist["nb_jours"] = len(pts)
+    dist["jours_detail"] = [
+        {
+            "date":     str(p.date_pointage),
+            "jour_fr":  ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][p.date_pointage.weekday()],
+            "heures":   float(p.heures_normales or 0),
+            "type_jour": p.type_jour or "NORMAL",
+        } for p in sorted(pts, key=lambda x: x.date_pointage)
+    ]
+
+    # Montants si salaire connu
+    salaire_base = request.args.get("salaire", type=float)
+    if salaire_base:
+        from calculs_paie import calculer_taux_horaire, COEFF_SUP_10, COEFF_SUP_30
+        th = calculer_taux_horaire(salaire_base)
+        dist["taux_horaire"]    = round(th, 2)
+        dist["montant_10"]      = round(dist["heures_sup_10"] * th * COEFF_SUP_10, 2)
+        dist["montant_30"]      = round(dist["heures_sup_30"] * th * COEFF_SUP_30, 2)
+        dist["montant_total_sup"] = round(dist["montant_10"] + dist["montant_30"]
+                                         + dist["heures_sup_40"] * th * 1.40
+                                         + dist["heures_sup_70"] * th * 1.70, 2)
+
+    return jsonify(dist)
+
+
 @app.route("/api/salarie/<int:id>/acomptes-mois")
 @login_required
 def api_acomptes_mois(id):
