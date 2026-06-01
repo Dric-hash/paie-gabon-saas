@@ -1,16 +1,21 @@
 """
 calculs_paie.py — Moteur de calcul de la paie selon la réglementation gabonaise
 Références : CGI Gabon, Décret 578/PR/MDSFPSSN, Arrêté 037/METPS
+
+Régime BTP (48h/semaine) :
+  - Heures normales mensuelles : 173,33 h  (40h × 43,33 semaines)
+  - Heures sup +10% structurelles : 17,33 h/mois (4h × 4,333 sem.)
+  - Heures sup +30% structurelles : 17,33 h/mois (4h × 4,333 sem.)
 """
 
 # ─── CONSTANTES RÉGLEMENTAIRES (Gabon 2026) ───────────────────────────────────
 CNSS_TAUX_SALARIE    = 0.05
 CNSS_TAUX_PATRONAL   = 0.18
-CNSS_PLAFOND         = 1_500_000   # FCFA/mois — plafond strict
+CNSS_PLAFOND         = 1_500_000   # FCFA/mois
 
 CNAMGS_TAUX_SALARIE  = 0.02
 CNAMGS_TAUX_PATRONAL = 0.041
-CNAMGS_PLAFOND       = 2_500_000   # FCFA/mois — plafond strict
+CNAMGS_PLAFOND       = 2_500_000
 
 FNH_TAUX             = 0.03
 FNH_PLAFOND          = 1_500_000
@@ -25,6 +30,15 @@ LOGEMENT_PLAFOND_MAX = 250_000
 TRANSPORT_EXONERATION_IRPP = 100_000
 TRANSPORT_EXONERATION_CNSS = 35_000
 
+# ─── CONSTANTES BTP ───────────────────────────────────────────────────────────
+H_NORMALES_MENSUEL   = 173.33   # heures normales / mois (40h × 43,33)
+H_SUP_STRUCT_10      = 17.33    # heures +10% structurelles / mois (4h × 4,333)
+H_SUP_STRUCT_30      = 17.33    # heures +30% structurelles / mois (4h × 4,333)
+COEFF_SUP_10         = 1.10
+COEFF_SUP_30         = 1.30
+COEFF_SUP_40         = 1.40     # nuit / dimanche
+COEFF_SUP_70         = 1.70     # jours fériés
+
 # Barème IRPP mensuel Gabon
 BAREME_IRPP = [
     (0,        125_000,   0.00),
@@ -36,6 +50,63 @@ BAREME_IRPP = [
     (625_001,  916_667,   0.30),
     (916_668,  float("inf"), 0.35),
 ]
+
+
+def calculer_taux_horaire(salaire_base: float) -> float:
+    """Taux horaire de base = salaire_base / 173,33."""
+    if salaire_base <= 0:
+        return 0.0
+    return round(salaire_base / H_NORMALES_MENSUEL, 4)
+
+
+def calculer_heures_sup_btp(salaire_base: float,
+                              h10: float = None, h30: float = None,
+                              h40: float = 0.0,  h70: float = 0.0) -> dict:
+    """
+    Calcule les montants des heures supplémentaires selon la logique BTP.
+
+    Si h10 et h30 sont None → utilise les valeurs structurelles BTP (17,33h).
+    Retourne un dict avec taux_horaire, montants et descriptifs pour le bulletin.
+    """
+    th = calculer_taux_horaire(salaire_base)
+    h10 = H_SUP_STRUCT_10 if h10 is None else float(h10)
+    h30 = H_SUP_STRUCT_30 if h30 is None else float(h30)
+    h40 = float(h40)
+    h70 = float(h70)
+
+    # Taux majorés
+    taux_10 = round(th * COEFF_SUP_10, 4)
+    taux_30 = round(th * COEFF_SUP_30, 4)
+    taux_40 = round(th * COEFF_SUP_40, 4)
+    taux_70 = round(th * COEFF_SUP_70, 4)
+
+    # Montants
+    montant_10 = round(h10 * taux_10, 2) if h10 > 0 else 0.0
+    montant_30 = round(h30 * taux_30, 2) if h30 > 0 else 0.0
+    montant_40 = round(h40 * taux_40, 2) if h40 > 0 else 0.0
+    montant_70 = round(h70 * taux_70, 2) if h70 > 0 else 0.0
+
+    return {
+        "taux_horaire":    th,
+        # Heures +10%
+        "h10":             h10,
+        "taux_10":         taux_10,
+        "montant_10":      montant_10,
+        # Heures +30%
+        "h30":             h30,
+        "taux_30":         taux_30,
+        "montant_30":      montant_30,
+        # Heures +40% (nuit/dimanche)
+        "h40":             h40,
+        "taux_40":         taux_40,
+        "montant_40":      montant_40,
+        # Heures +70% (jours fériés)
+        "h70":             h70,
+        "taux_70":         taux_70,
+        "montant_70":      montant_70,
+        # Total heures sup
+        "total_sup":       round(montant_10 + montant_30 + montant_40 + montant_70, 2),
+    }
 
 
 def calculer_irpp(base_imposable: float, nb_parts: float) -> float:
@@ -56,12 +127,7 @@ def calculer_irpp(base_imposable: float, nb_parts: float) -> float:
 def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     """
     Calcule un bulletin de paie complet selon la réglementation gabonaise.
-
-    Nouveaux éléments de salaire (interviennent dans le brut) :
-        indem_compensatrice_conge   — Indemnité compensatrice de congé / ancienneté
-        indem_services_rendus       — Indemnité de services rendus
-        indem_compensatrice_preavis — Indemnité compensatrice de préavis
-        indem_licenciement          — Indemnité de licenciement
+    Les heures sup sont attendues en MONTANTS (déjà calculés via calculer_heures_sup_btp).
     """
     def g(key):
         val = donnees.get(key, 0)
@@ -85,25 +151,22 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     prime_transport   = g("prime_transport")
     prime_responsabilite = g("prime_responsabilite")
     allocations_conge = g("allocations_conge")
-
-    # Avantages en nature
     indem_logement        = g("indem_logement")
     indem_domesticite     = g("indem_domesticite")
     indem_eau_electricite = g("indem_eau_electricite")
     indem_nourriture      = g("indem_nourriture")
-
-    # ✅ NOUVEAUX éléments de salaire
     indem_compensatrice_conge   = g("indem_compensatrice_conge")
     indem_services_rendus       = g("indem_services_rendus")
     indem_compensatrice_preavis = g("indem_compensatrice_preavis")
     indem_licenciement          = g("indem_licenciement")
-
-    # Éléments hors cotisations (net)
     prime_panier          = g("prime_panier")
     indem_transport_net   = g("indem_transport")
     indem_representation  = g("indem_representation")
     prime_salisure        = g("prime_salisure")
     acompte               = g("acompte")
+
+    # Taux horaire et détails heures sup (pour le retour enrichi)
+    th = calculer_taux_horaire(salaire_base)
 
     # ── 2. SALAIRE BRUT ─────────────────────────────────────────────────────
     salaire_brut = (
@@ -116,26 +179,22 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         + prime_rendement + prime_assiduité + prime_qualite + prime_performance
         + prime_transport + prime_responsabilite
         + allocations_conge
-        # ✅ Nouveaux éléments dans le brut
-        + indem_compensatrice_conge
-        + indem_services_rendus
-        + indem_compensatrice_preavis
-        + indem_licenciement
+        + indem_compensatrice_conge + indem_services_rendus
+        + indem_compensatrice_preavis + indem_licenciement
     )
 
-    # ── 3. CNSS — plafond strict 1 500 000 ──────────────────────────────────
+    # ── 3. CNSS ─────────────────────────────────────────────────────────────
     transport_exo_cnss = min(prime_transport, TRANSPORT_EXONERATION_CNSS)
     base_cnss = min(salaire_brut - transport_exo_cnss, CNSS_PLAFOND)
     base_cnss = max(base_cnss, 0)
     cnss_salarie   = round(base_cnss * CNSS_TAUX_SALARIE, 2)
     cnss_patronale = round(base_cnss * CNSS_TAUX_PATRONAL, 2)
 
-    # ── 4. CNAMGS — plafond strict 2 500 000 — prime_qualite EXCLUE ────────
+    # ── 4. CNAMGS ────────────────────────────────────────────────────────────
     transport_exo_cnamgs = min(prime_transport, TRANSPORT_EXONERATION_IRPP)
     logement_imposable = min(indem_logement, salaire_brut * LOGEMENT_PLAFOND_PCT, LOGEMENT_PLAFOND_MAX)
     base_cnamgs = min(
-        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable
-        - prime_qualite,   # ✅ Prime de qualité exclue de la base CNAMGS
+        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable - prime_qualite,
         CNAMGS_PLAFOND
     )
     base_cnamgs = max(base_cnamgs, 0)
@@ -150,17 +209,12 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     base_cfp = max(base_cnss - indem_logement, 0)
     cfp = round(base_cfp * CFP_TAUX, 2)
 
-    # ── 7. TCS — exclut prime_qualite, prime_rendement, prime_performance ──
-    # La base TCS = brut imposable - cotisations salariales - exclusions
+    # ── 7. TCS ──────────────────────────────────────────────────────────────
     base_tcs = (
         salaire_brut
-        - prime_qualite            # ✅ exclue de TCS
-        - prime_rendement          # exclue de TCS
-        - prime_performance        # exclue de TCS
-        - transport_exo_cnamgs     # transport exonéré
-        - indem_logement           # logement exonéré
-        - cnss_salarie
-        - cnamgs_salarie
+        - prime_qualite - prime_rendement - prime_performance
+        - transport_exo_cnamgs - indem_logement
+        - cnss_salarie - cnamgs_salarie
         + (indem_domesticite + indem_eau_electricite + indem_nourriture)
     )
     base_tcs_imposable = max(base_tcs - TCS_EXONERATION, 0)
@@ -173,23 +227,31 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     base_irpp = max(base_tcs - tcs, 0)
     irpp = calculer_irpp(base_irpp, nb_parts)
 
-    # ── 10. SALAIRE NET & NET À PAYER ────────────────────────────────────────
+    # ── 10. NET À PAYER ──────────────────────────────────────────────────────
     salaire_net = net_avant_irpp - irpp
     net_a_payer = (
         salaire_net
-        + prime_panier
-        + indem_transport_net
-        + indem_representation
-        + prime_salisure
+        + prime_panier + indem_transport_net + indem_representation + prime_salisure
         - acompte
     )
 
     return {
         "salaire_base":                round(salaire_base, 2),
+        # Heures supplémentaires — montants
         "heures_sup_10":               round(heures_sup_10, 2),
         "heures_sup_30":               round(heures_sup_30, 2),
         "heures_sup_40":               round(heures_sup_40, 2),
         "heures_sup_70":               round(heures_sup_70, 2),
+        # Infos calcul heures sup (pour affichage bulletin)
+        "taux_horaire_base":           round(th, 4),
+        "taux_horaire_10":             round(th * COEFF_SUP_10, 4),
+        "taux_horaire_30":             round(th * COEFF_SUP_30, 4),
+        "taux_horaire_40":             round(th * COEFF_SUP_40, 4),
+        "taux_horaire_70":             round(th * COEFF_SUP_70, 4),
+        "h_normales_mensuel":          H_NORMALES_MENSUEL,
+        "h_sup_struct_10":             H_SUP_STRUCT_10,
+        "h_sup_struct_30":             H_SUP_STRUCT_30,
+        # Tous les autres éléments
         "absences":                    round(absences, 2),
         "sursalaire":                  round(sursalaire, 2),
         "prime_caisse":                round(prime_caisse, 2),
@@ -259,6 +321,5 @@ def calculer_masse_salariale(bulletins: list) -> dict:
         totaux["total_cnss_pat"] + totaux["total_cnamgs_pat"]
         + totaux["total_fnh"] + totaux["total_cfp"]
     )
-    # Alias pour les templates
     totaux["total_charges_patronales"] = totaux["total_charges_pat"]
     return {k: round(v, 2) for k, v in totaux.items()}
