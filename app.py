@@ -2130,20 +2130,48 @@ def pointage_individuel():
         # Heures sup depuis horaires
         h_sup_horaire = _diff_hm(es, ss) if (es and ss) else 0.0
 
+        type_jour = request.form.get("type_jour", "NORMAL")
+
+        # Reclasser les heures selon le type de jour
+        h_sup_10_man = float(request.form.get("heures_sup_10",0) or 0)
+        h_sup_30_man = float(request.form.get("heures_sup_30",0) or 0)
+        h_sup_40_man = float(request.form.get("heures_sup_40",0) or 0)
+        h_sup_70_man = float(request.form.get("heures_sup_70",0) or 0)
+
+        if type_jour == "DIMANCHE":
+            # Tout va en +40% (dimanche)
+            h_sup_40_final = round(h_sup_horaire + heures_normales_final, 2)
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_70_final = 0
+            heures_normales_final = 0
+        elif type_jour == "FERIE":
+            # Tout va en +70% (jour férié)
+            h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
+            heures_normales_final = 0
+        elif type_jour in ("CHOME_PAYE", "CHOME_RECUPERABLE"):
+            # Présent mais jour chômé → heures normales conservées, pas de sup
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0; h_sup_70_final = 0
+        else:
+            # NORMAL
+            h_sup_10_final = round(h_sup_horaire, 2) if h_sup_horaire > 0 else h_sup_10_man
+            h_sup_30_final = h_sup_30_man
+            h_sup_40_final = h_sup_40_man
+            h_sup_70_final = h_sup_70_man
+
         kwargs = dict(
             heures_normales = heures_normales_final,
             motif_absence   = request.form.get("motif_absence","") if absent else None,
             entree_matin    = em, sortie_matin  = sm,
             entree_apmidi   = ea, sortie_apmidi = sa,
             entree_sup      = es, sortie_sup    = ss,
+            type_jour       = type_jour,
         )
         if wtype == "sal":
-            h_sup_10_man = float(request.form.get("heures_sup_10",0) or 0)
             kwargs.update(dict(
-                heures_sup_10 = round(h_sup_horaire, 2) if h_sup_horaire > 0 else h_sup_10_man,
-                heures_sup_30 = float(request.form.get("heures_sup_30",0) or 0),
-                heures_sup_40 = float(request.form.get("heures_sup_40",0) or 0),
-                heures_sup_70 = float(request.form.get("heures_sup_70",0) or 0),
+                heures_sup_10 = h_sup_10_final,
+                heures_sup_30 = h_sup_30_final,
+                heures_sup_40 = h_sup_40_final,
+                heures_sup_70 = h_sup_70_final,
             ))
             pt = Pointage.query.filter_by(
                 tenant_id=t.id, date_pointage=date_p, salarie_id=wid).first()
@@ -2151,7 +2179,12 @@ def pointage_individuel():
                 pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=wid)
                 db.session.add(pt)
         else:
-            kwargs["heures_sup"] = float(request.form.get("heures_sup",0) or 0)
+            # Journalier : gérer heures_sup selon type_jour
+            if type_jour in ("DIMANCHE", "FERIE"):
+                kwargs["heures_sup"]      = round(h_sup_horaire + heures_normales_final, 2)
+                kwargs["heures_normales"] = 0
+            else:
+                kwargs["heures_sup"] = float(request.form.get("heures_sup",0) or 0)
             pt = Pointage.query.filter_by(
                 tenant_id=t.id, date_pointage=date_p, journalier_id=wid).first()
             if not pt:
@@ -4356,6 +4389,7 @@ with app.app_context():
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_apmidi VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS entree_sup VARCHAR(5)",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS sortie_sup VARCHAR(5)",
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS type_jour VARCHAR(20) DEFAULT 'NORMAL'",
     ]:
         try:
             db.session.execute(db.text(_sql))
