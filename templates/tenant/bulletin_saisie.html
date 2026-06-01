@@ -63,10 +63,16 @@
           <span style="font-size:.8rem;font-weight:700;color:#065f46">Données du pointage disponibles</span>
           <span id="ptg_message" style="font-size:.75rem;color:#047857"></span>
         </div>
-        <button type="button" id="btn_appliquer_pointage" onclick="appliquerPointage()"
-          style="background:#059669;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
-          ⬇️ Appliquer dans le bulletin
-        </button>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          <button type="button" id="btn_appliquer_pointage" onclick="appliquerPointage()"
+            style="background:#059669;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+            ⬇️ Cumul mensuel
+          </button>
+          <button type="button" id="btn_semaine_btp" onclick="calculerSemaineBTP()"
+            style="background:#1e40af;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+            📊 Semaine BTP
+          </button>
+        </div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.5rem">
         <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
@@ -684,6 +690,212 @@ window.addEventListener('pageshow', function(e) {
 
 {% if salarie_sel %}chargerContrat("{{ salarie_sel.id }}");{% endif %}
 recalculer();
+
+// ── Modal semaine BTP ─────────────────────────────────────────────────────────
+let _btpData = null;
+
+function calculerSemaineBTP() {
+  const salId = document.getElementById('sel_salarie')?.value;
+  if (!salId) { alert('Sélectionnez un salarié.'); return; }
+
+  // Pré-remplir la date avec la période sélectionnée
+  const selP = document.getElementById('sel_periode');
+  const opt  = selP ? selP.options[selP.selectedIndex] : null;
+  const mois = opt ? opt.dataset.mois  : null;
+  const annee= opt ? opt.dataset.annee : null;
+  const d    = document.getElementById('btp_date_semaine');
+  if (d && mois && annee) {
+    // Dernier lundi du mois sélectionné
+    const lastDay = new Date(annee, mois, 0);
+    const monday  = new Date(lastDay);
+    monday.setDate(lastDay.getDate() - (lastDay.getDay() + 6) % 7);
+    d.value = monday.toISOString().split('T')[0];
+  } else if (d && !d.value) {
+    d.value = new Date().toISOString().split('T')[0];
+  }
+
+  const modal = document.getElementById('modal_btp');
+  modal.style.display = 'flex';
+  _btpData = null;
+  document.getElementById('btp_result').style.display = 'none';
+  document.getElementById('btn_appliquer_btp').style.display = 'none';
+}
+
+function chargerSemaineBTP() {
+  const salId = document.getElementById('sel_salarie')?.value;
+  const date  = document.getElementById('btp_date_semaine')?.value;
+  if (!salId || !date) return;
+
+  // Récupérer salaire pour estimation
+  const sb = parseFloat(document.getElementById('f_salaire_base')?.value || 0);
+
+  document.getElementById('btp_loading').style.display = '';
+  document.getElementById('btp_result').style.display  = 'none';
+  document.getElementById('btp_no_pointage').style.display = 'none';
+
+  let url = `/api/semaine-btp?type=sal&id=${salId}&date=${date}`;
+  if (sb > 0) url += `&salaire=${sb}`;
+
+  fetch(url)
+    .then(r => r.json())
+    .then(d => {
+      document.getElementById('btp_loading').style.display = 'none';
+      if (d.nb_jours === 0) {
+        document.getElementById('btp_no_pointage').style.display = '';
+        return;
+      }
+      _btpData = d;
+
+      document.getElementById('btp_result').style.display = '';
+      document.getElementById('btp_semaine_label').textContent = d.semaine;
+      document.getElementById('btp_nb_jours').textContent = `${d.nb_jours} jour(s) pointé(s) · ${d.total_heures}h totales`;
+
+      document.getElementById('btp_h_norm').textContent = d.heures_normales + 'h';
+      document.getElementById('btp_h10').textContent    = d.heures_sup_10 + 'h';
+      document.getElementById('btp_h30').textContent    = d.heures_sup_30 + 'h';
+      document.getElementById('btp_h70').textContent    = d.heures_sup_70 + 'h';
+
+      // Détail jours
+      let html = '';
+      if (d.jours_detail) {
+        d.jours_detail.forEach(j => {
+          const isSpe = j.type_jour !== 'NORMAL';
+          html += `<div style="padding:.375rem .75rem;border-bottom:1px solid #f9fafb;display:flex;justify-content:space-between;${isSpe?'background:#fffbeb;':''}">
+            <span style="font-weight:600">${j.jour_fr} ${j.date.substring(5).replace('-','/')}</span>
+            <span style="font-family:monospace">${j.heures}h</span>
+            ${isSpe ? `<span style="font-size:.7rem;background:#fef3c7;color:#92400e;padding:.1rem .4rem;border-radius:9999px">${j.type_jour.replace('_',' ')}</span>` : ''}
+          </div>`;
+        });
+      }
+      document.getElementById('btp_jours_detail').innerHTML = html;
+
+      // Alerte dépassement
+      const al = document.getElementById('btp_alerte');
+      if (d.seuil_48_depasse) {
+        al.textContent = `⚠️ Semaine > 48h ! ${d.heures_sup_30}h en +30% (dont dépassement BTP)`;
+        al.style.display = '';
+      } else if (d.heures_restantes_avant_30 > 0 && d.heures_restantes_avant_30 < 4) {
+        al.textContent = `ℹ️ Encore ${d.heures_restantes_avant_30}h avant le seuil +30% (44h)`;
+        al.style.display = '';
+      } else {
+        al.style.display = 'none';
+      }
+
+      // Montants si disponibles
+      const mEl = document.getElementById('btp_montants');
+      const mDet = document.getElementById('btp_montants_detail');
+      if (d.taux_horaire) {
+        mEl.style.display = '';
+        mDet.innerHTML = `TH : ${Math.round(d.taux_horaire)} FCFA/h<br>
+          +10% : ${d.heures_sup_10}h = <strong>${(d.montant_10||0).toLocaleString('fr-FR')} FCFA</strong><br>
+          +30% : ${d.heures_sup_30}h = <strong>${(d.montant_30||0).toLocaleString('fr-FR')} FCFA</strong><br>
+          Total heures sup : <strong>${(d.montant_total_sup||0).toLocaleString('fr-FR')} FCFA</strong>`;
+      } else {
+        mEl.style.display = 'none';
+      }
+
+      document.getElementById('btn_appliquer_btp').style.display = '';
+    })
+    .catch(() => {
+      document.getElementById('btp_loading').style.display = 'none';
+      document.getElementById('btp_no_pointage').style.display = '';
+    });
+}
+
+function appliquerDistribBTP() {
+  if (!_btpData) return;
+  // Remplir les champs du bulletin avec la distribution BTP
+  const set = (id, val) => { const el=document.getElementById(id); if(el) el.value=val; };
+
+  // Heures sup (en heures, pas en montants — le calcMontant va recalculer)
+  const sb = parseFloat(document.getElementById('f_salaire_base')?.value || 0);
+  if (sb > 0 && _btpData.taux_horaire) {
+    // Appliquer les montants directement si disponibles
+    set('f_heures_sup_10', Math.round(_btpData.montant_10 || 0));
+    set('f_heures_sup_30', Math.round(_btpData.montant_30 || 0));
+    set('f_heures_sup_40', Math.round((_btpData.heures_sup_40||0) * _btpData.taux_horaire * 1.40));
+    set('f_heures_sup_70', Math.round((_btpData.heures_sup_70||0) * _btpData.taux_horaire * 1.70));
+    // Bases et taux
+    const th = Math.round(_btpData.taux_horaire);
+    set('base_heures_sup_10', Math.round(th * 1.10));
+    set('taux_heures_sup_10', _btpData.heures_sup_10);
+    set('base_heures_sup_30', Math.round(th * 1.30));
+    set('taux_heures_sup_30', _btpData.heures_sup_30);
+  }
+
+  recalculer();
+  document.getElementById('modal_btp').style.display = 'none';
+
+  const btn = document.getElementById('btn_semaine_btp');
+  if (btn) { btn.textContent='✅ BTP Appliqué'; btn.style.background='#059669';
+    setTimeout(()=>{ btn.textContent='📊 Semaine BTP'; btn.style.background='#1e40af'; }, 2500); }
+}
+
+// Fermer modal en cliquant en dehors
+document.getElementById('modal_btp')?.addEventListener('click', function(e) {
+  if (e.target === this) this.style.display = 'none';
+});
 </script>
 
+
+<!-- ── Modal BTP ── -->
+<div id="modal_btp" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:1.25rem;padding:1.75rem;width:100%;max-width:520px;margin:1rem;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+      <h2 style="font-size:1rem;font-weight:900;color:#111827">📊 Distribution BTP — semaine</h2>
+      <button onclick="document.getElementById('modal_btp').style.display='none'" style="background:none;border:none;font-size:1.25rem;cursor:pointer;color:#9ca3af">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem;margin-bottom:1rem">
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.3rem">Semaine du</label>
+        <input type="date" id="btp_date_semaine" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .75rem;font-size:.875rem"/>
+      </div>
+      <div style="display:flex;align-items:flex-end">
+        <button onclick="chargerSemaineBTP()" style="width:100%;background:#1e40af;color:white;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">🔄 Charger</button>
+      </div>
+    </div>
+    <div id="btp_loading" style="text-align:center;padding:1.5rem;color:#9ca3af;display:none">Chargement…</div>
+    <div id="btp_no_pointage" style="text-align:center;padding:1.5rem;color:#9ca3af;display:none">
+      <div style="font-size:2rem">📋</div>Aucun pointage cette semaine.
+    </div>
+    <div id="btp_result" style="display:none">
+      <div style="background:#1a2332;color:white;border-radius:.875rem;padding:.75rem 1rem;margin-bottom:.875rem">
+        <div style="font-size:.8rem;font-weight:700" id="btp_semaine_label"></div>
+        <div style="font-size:.75rem;opacity:.7;margin-top:.2rem" id="btp_nb_jours"></div>
+      </div>
+      <div id="btp_jours_detail" style="margin-bottom:.875rem;border:1px solid #f3f4f6;border-radius:.75rem;overflow:hidden;font-size:.8rem"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom.875rem">
+        <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;text-align:center">
+          <div style="font-size:1.25rem;font-weight:900;color:#1e40af" id="btp_h_norm">0h</div>
+          <div style="font-size:.7rem;color:#6b7280">Heures normales (≤40h)</div>
+        </div>
+        <div style="background:#fef3c7;border-radius:.75rem;padding:.75rem;text-align:center">
+          <div style="font-size:1.25rem;font-weight:900;color:#d97706" id="btp_h10">0h</div>
+          <div style="font-size:.7rem;color:#6b7280">+10% (40→44h)</div>
+        </div>
+        <div style="background:#fef3c7;border-radius:.75rem;padding:.75rem;text-align:center">
+          <div style="font-size:1.25rem;font-weight:900;color:#d97706" id="btp_h30">0h</div>
+          <div style="font-size:.7rem;color:#6b7280">+30% (>44h)</div>
+        </div>
+        <div style="background:#fef2f2;border-radius:.75rem;padding:.75rem;text-align:center">
+          <div style="font-size:1.25rem;font-weight:900;color:#dc2626" id="btp_h70">0h</div>
+          <div style="font-size:.7rem;color:#6b7280">+70% (dim/férié)</div>
+        </div>
+      </div>
+      <div id="btp_alerte" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.625rem;margin-top:.625rem;font-size:.8rem;color:#92400e;font-weight:600"></div>
+      <div id="btp_montants" style="display:none;background:#f0f9ff;border:1px solid #bae6fd;border-radius:.75rem;padding:.75rem;margin-top:.625rem;font-size:.8rem;color:#0369a1">
+        <div style="font-weight:700;margin-bottom:.3rem">💰 Estimation :</div>
+        <div id="btp_montants_detail"></div>
+      </div>
+    </div>
+    <div style="display:flex;gap:.75rem;margin-top:1rem">
+      <button onclick="document.getElementById('modal_btp').style.display='none'"
+        style="flex:1;border:1px solid #e5e7eb;color:#374151;padding:.625rem;border-radius:.875rem;font-weight:700;font-size:.875rem;background:white;cursor:pointer">Fermer</button>
+      <button onclick="appliquerDistribBTP()" id="btn_appliquer_btp"
+        style="flex:2;background:#1e40af;color:white;padding:.625rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;display:none">
+        ⬇️ Appliquer dans le bulletin
+      </button>
+    </div>
+  </div>
+</div>
 {% endblock %}
