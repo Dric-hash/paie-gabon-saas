@@ -546,6 +546,8 @@ class Pointage(db.Model):
     absent          = db.Column(db.Boolean, default=False)
     motif_absence   = db.Column(db.String(100))
     observation     = db.Column(db.String(200))
+    # Type de jour : NORMAL | DIMANCHE | FERIE | CHOME_PAYE | CHOME_RECUPERABLE
+    type_jour       = db.Column(db.String(20), default="NORMAL")
     # Horaires entrée/sortie (stockés en STRING "HH:MM" pour simplicité)
     entree_matin    = db.Column(db.String(5))   # ex: "08:00"
     sortie_matin    = db.Column(db.String(5))   # ex: "13:00"
