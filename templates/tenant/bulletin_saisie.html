@@ -124,7 +124,7 @@
             <td style="padding:.3rem .25rem"><input type="number" step="any" name="base_salaire_base" id="base_salaire_base" step="any" min="0" placeholder="0" oninput="calcMontant('salaire_base')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td style="padding:.3rem .25rem"><input type="text" name="taux_salaire_base" id="taux_salaire_base" placeholder="1" oninput="calcMontant('salaire_base')" style="width:100%;border:1px solid #d1d5db;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:center"/></td>
-            <td style="padding:.3rem .25rem"><input type="number" name="salaire_base" id="f_salaire_base" value="0" step="any" min="0" required class="champ-calcul" oninput="recalculer()" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
+            <td style="padding:.3rem .25rem"><input type="number" name="salaire_base" id="f_salaire_base" value="0" step="any" min="0" required class="champ-calcul" oninput="appliquerHSupBTP(parseFloat(this.value)||0)" style="width:100%;border:1px solid #e5e7eb;border-radius:.4rem;padding:.3rem .4rem;font-size:.8rem;text-align:right;font-family:monospace;font-weight:700"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
             <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Sursalaire</td>
@@ -478,6 +478,38 @@
 </form>
 
 <script>
+// ── Constantes et fonctions BTP ─────────────────────────────────────────────
+const H_NORM_MENSUEL  = 173.33;
+const H_SUP_STRUCT_JS = 17.33;   // 4h × 4,333 semaines/mois
+const C10 = 1.10, C30 = 1.30, C40 = 1.40, C70 = 1.70;
+
+function appliquerHSupBTP(salaireBase) {
+  if (!salaireBase || salaireBase <= 0) { recalculer(); return; }
+  const th   = salaireBase / H_NORM_MENSUEL;
+  const th10 = Math.round(th * C10);
+  const th30 = Math.round(th * C30);
+  const mont10 = Math.round(H_SUP_STRUCT_JS * th10);
+  const mont30 = Math.round(H_SUP_STRUCT_JS * th30);
+
+  // Base (taux horaire majoré), Taux (nb heures), Montant
+  const set = (base, taux, montant, prefix) => {
+    const b = document.getElementById('base_' + prefix);
+    const t = document.getElementById('taux_' + prefix);
+    const f = document.getElementById('f_'    + prefix);
+    if (b) b.value = base;
+    if (t) t.value = taux;
+    if (f) f.value = montant;
+  };
+  set(th10, H_SUP_STRUCT_JS, mont10, 'heures_sup_10');
+  set(th30, H_SUP_STRUCT_JS, mont30, 'heures_sup_30');
+
+  // Info taux horaire
+  const el = document.getElementById('info-th');
+  if (el) el.textContent = `Taux horaire : ${Math.round(th)} FCFA/h | +10% : ${th10} FCFA/h (${H_SUP_STRUCT_JS}h) | +30% : ${th30} FCFA/h (${H_SUP_STRUCT_JS}h)`;
+
+  recalculer();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " FCFA";
 let timer;
 let _ptgData = null;
@@ -604,6 +636,7 @@ function chargerContrat(id) {
     .then(data => {
       if(data.salaire_base) {
         document.getElementById("f_salaire_base").value = data.salaire_base;
+        appliquerHSupBTP(parseFloat(data.salaire_base));
         document.getElementById("info_nom").textContent = data.nom || "—";
         document.getElementById("info_poste").textContent = data.poste || "—";
         document.getElementById("info_salaire").textContent = fmt(data.salaire_base) + "/mois";
