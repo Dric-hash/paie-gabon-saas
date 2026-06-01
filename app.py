@@ -1526,6 +1526,38 @@ def bulletin_supprimer(id):
     flash("Bulletin supprimé.", "success")
     return redirect(url_for("bulletins"))
 
+@app.route("/bulletins/<int:id>/pdf")
+@login_required
+def bulletin_pdf(id):
+    """Génère et retourne le bulletin en PDF téléchargeable."""
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        t = b.salarie.tenant
+    else:
+        t = get_tenant()
+        if not t: return redirect(url_for("login"))
+        b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    try:
+        from pdf_bulletin import generer_bulletin_pdf
+        pdf_bytes = generer_bulletin_pdf(b, t)
+        nom_fichier = (
+            f"bulletin_{b.salarie.nom}_{b.salarie.prenom}_{b.periode.annee}_{b.periode.mois:02d}.pdf"
+            .replace(" ", "_")
+        )
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{nom_fichier}"',
+                "Content-Length": str(len(pdf_bytes)),
+            }
+        )
+    except Exception as e:
+        flash(f"Erreur génération PDF : {e}", "error")
+        return redirect(url_for("bulletin_detail", id=id))
+
+
 @app.route("/bulletins/<int:id>/imprimer")
 @login_required
 def bulletin_imprimer(id):
