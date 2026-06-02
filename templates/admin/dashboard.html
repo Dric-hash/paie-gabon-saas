@@ -3,323 +3,327 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Super-Admin — Ameriack I.T. Solutions</title>
+  <title>Tableau de bord exécutif — Ameriack I.T.</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    body { font-family:'Segoe UI',system-ui,sans-serif; }
-    .card { background:white; border-radius:1rem; border:1px solid #e5e7eb; box-shadow:0 1px 3px rgba(0,0,0,.06); }
-    .nav-link { color:rgba(255,255,255,.7); text-decoration:none; font-size:.875rem; transition:color .15s; }
-    .nav-link:hover { color:white; }
-    .nav-link.active { color:white; font-weight:700; }
-    .kpi-card { border-radius:1rem; padding:1.25rem 1.5rem; color:white; }
-    .badge { display:inline-block; font-size:.7rem; font-weight:700; padding:.2rem .6rem; border-radius:9999px; }
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:#0f172a; color:#e2e8f0; }
+    .card  { background:#1e293b; border-radius:1rem; border:1px solid #334155; }
+    .card2 { background:#0f172a; border-radius:.75rem; border:1px solid #1e293b; }
+    .kpi   { background:linear-gradient(135deg,var(--c1),var(--c2)); border-radius:1rem; padding:1.25rem 1.5rem; color:white; }
+    .badge { display:inline-block;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px; }
+    .nav-link { color:rgba(255,255,255,.6);text-decoration:none;font-size:.825rem;padding:.5rem .75rem;border-radius:.5rem;transition:.15s; }
+    .nav-link:hover,.nav-link.active { color:white;background:rgba(255,255,255,.08); }
+    ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:#334155;border-radius:4px; }
+    .score-bar { height:4px;border-radius:2px;background:#334155;overflow:hidden; }
+    .score-fill { height:100%;border-radius:2px;transition:width .4s; }
+    .trend-up { color:#34d399; } .trend-dn { color:#f87171; } .trend-eq { color:#94a3b8; }
   </style>
 </head>
-<body class="bg-gray-50 min-h-screen">
+<body class="min-h-screen">
 
-<!-- ── Topbar ── -->
-<nav class="bg-purple-900 text-white px-6 py-0 flex items-center shadow-lg" style="height:56px">
-  <div class="flex items-center gap-3 mr-8">
-    <span class="text-base font-black tracking-tight">Ameriack I.T.</span>
-    <span class="bg-purple-700 text-purple-200 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+<!-- ── Topbar ────────────────────────────────────────────────────────────── -->
+<nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:0 1.5rem;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:50">
+  <div style="display:flex;align-items:center;gap:.75rem;margin-right:2rem">
+    <div style="width:28px;height:28px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;color:white">A</div>
+    <span style="font-size:.875rem;font-weight:900;color:white">Ameriack I.T.</span>
+    <span style="background:#4c1d95;color:#c4b5fd;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">SUPER-ADMIN</span>
   </div>
-  <div class="flex items-center gap-6 h-full">
-    <a href="/admin"           class="nav-link active h-full flex items-center border-b-2 border-white">Dashboard</a>
-    <a href="/admin/tenants"   class="nav-link h-full flex items-center">Entreprises</a>
-    <a href="/admin/plans"     class="nav-link h-full flex items-center">Plans</a>
-    <a href="/admin/rubriques" class="nav-link h-full flex items-center">Rubriques</a>
-    <a href="/admin/import"    class="nav-link h-full flex items-center">Import Excel</a>
-    <a href="/admin/stats"     class="nav-link h-full flex items-center">Statistiques</a>
+  <div style="display:flex;align-items:center;gap:.25rem">
+    <a href="/admin"           class="nav-link active">🏠 Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
+    <a href="/admin/plans"     class="nav-link">📋 Plans</a>
+    <a href="/admin/rubriques" class="nav-link">⚙️ Rubriques</a>
+    <a href="/admin/import"    class="nav-link">📊 Import</a>
+    <a href="/admin/stats"     class="nav-link">📈 Stats</a>
   </div>
-  <div class="ml-auto flex items-center gap-3">
-    <span class="text-xs text-purple-300">{{ now.strftime('%d/%m/%Y %H:%M') if now else '' }}</span>
-    <a href="/logout" class="bg-purple-700 hover:bg-purple-600 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:1rem">
+    <span style="font-size:.75rem;color:#64748b">{{ now.strftime('%d/%m/%Y %H:%M') }}</span>
+    <a href="/logout" style="background:#7c3aed;color:white;padding:.35rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">Déconnexion</a>
   </div>
 </nav>
 
-<main class="max-w-7xl mx-auto px-6 py-6">
+<main style="max-width:1400px;margin:0 auto;padding:1.5rem">
 
-  <!-- Flash messages -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-  <div class="mb-5 space-y-2">
-    {% for cat, msg in messages %}
-    <div class="px-4 py-3 rounded-xl text-sm font-semibold
-      {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
-      else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
-      else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
-    {% endfor %}
-  </div>
-  {% endif %}
-  {% endwith %}
+  <!-- Flash -->
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
+  <div style="margin-bottom:1rem">{% for cat, msg in messages %}
+    <div style="padding:.75rem 1rem;border-radius:.75rem;font-size:.875rem;font-weight:600;background:{% if cat=='success' %}#064e3b;color:#6ee7b7{% else %}#450a0a;color:#fca5a5{% endif %}">{{ msg }}</div>
+  {% endfor %}</div>{% endif %}{% endwith %}
 
   <!-- ── En-tête ── -->
-  <div class="flex items-center justify-between mb-6">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
     <div>
-      <h1 class="text-2xl font-black text-gray-900">Tableau de bord</h1>
-      <p class="text-gray-500 text-sm mt-0.5">Vue globale en temps réel · {{ nb_tenants }} entreprise(s)</p>
+      <h1 style="font-size:1.5rem;font-weight:900;color:white">Tableau de bord exécutif</h1>
+      <p style="font-size:.8rem;color:#64748b;margin-top:.2rem">Vue consolidée en temps réel · {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
     </div>
-    <a href="/admin/tenants/nouveau" class="bg-purple-900 hover:bg-purple-700 text-white px-4 py-2.5 rounded-xl text-sm font-bold">
-      + Nouvelle entreprise
-    </a>
+    <div style="display:flex;gap:.625rem">
+      <a href="/admin/tenants?statut=ESSAI" style="background:#1e293b;border:1px solid #334155;color:#c4b5fd;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">🧪 {{ nb_essai }} essai(s)</a>
+      <a href="/admin/tenants/nouveau" style="background:linear-gradient(135deg,#7c3aed,#4c1d95);color:white;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">+ Nouvelle entreprise</a>
+    </div>
   </div>
 
-  <!-- ── ALERTE essais urgents ── -->
+  <!-- ── Alerte essais urgents ── -->
   {% if essais_urgents %}
-  <div class="mb-5 bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3">
-    <div class="text-amber-500 text-2xl flex-shrink-0">⚠️</div>
-    <div class="flex-1">
-      <div class="font-bold text-amber-800 text-sm mb-2">
-        {{ essais_urgents|length }} essai(s) expire{{ 'nt' if essais_urgents|length > 1 else '' }} dans moins de 7 jours
-      </div>
-      <div class="flex flex-wrap gap-2">
+  <div style="background:#422006;border:1px solid #a16207;border-radius:1rem;padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;align-items:flex-start;gap:.875rem">
+    <span style="font-size:1.5rem">⚠️</span>
+    <div style="flex:1">
+      <div style="font-weight:700;color:#fbbf24;font-size:.875rem;margin-bottom:.5rem">{{ essais_urgents|length }} essai(s) expire(nt) dans moins de 7 jours</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.5rem">
         {% for t in essais_urgents %}
-        <a href="/admin/tenants/{{ t.id }}"
-           class="bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-lg hover:bg-amber-200 flex items-center gap-1.5">
-          🏢 {{ t.denomination }}
-          {% if t.date_expiration %}
-          <span class="text-amber-600 font-normal">
-            — expire le {{ t.date_expiration.strftime('%d/%m') }}
-          </span>
-          {% endif %}
+        <a href="/admin/tenants/{{ t.id }}" style="background:#451a03;border:1px solid #92400e;color:#fbbf24;font-size:.75rem;font-weight:700;padding:.25rem .625rem;border-radius:.5rem;text-decoration:none">
+          🏢 {{ t.denomination }} {% if t.date_expiration %}— {{ (t.date_expiration - now).days }}j{% endif %}
         </a>
         {% endfor %}
       </div>
     </div>
-    <a href="/admin/tenants?statut=ESSAI" class="text-amber-600 font-bold text-xs hover:underline flex-shrink-0">
-      Voir tous les essais →
-    </a>
   </div>
   {% endif %}
 
-  <!-- ── KPIs ligne 1 ── -->
-  <div class="grid grid-cols-4 gap-4 mb-4">
+  <!-- ══ KPIs LIGNE 1 : Financiers ══ -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem">
 
-    <div class="kpi-card" style="background:linear-gradient(135deg,#6d28d9,#4c1d95)">
-      <div class="text-purple-300 text-xs font-bold uppercase tracking-widest mb-1">Total entreprises</div>
-      <div class="text-4xl font-black mb-0.5">{{ nb_tenants }}</div>
-      <div class="flex items-center gap-3 text-xs text-purple-200 mt-1">
-        <span>✅ {{ nb_actifs }} actives</span>
-        <span>🧪 {{ nb_essai }} essai</span>
-        <span>🔴 {{ nb_suspendus }} suspendues</span>
+    <!-- MRR -->
+    <div class="kpi" style="--c1:#6d28d9;--c2:#4c1d95">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#c4b5fd;margin-bottom:.25rem">MRR — Revenu mensuel récurrent</div>
+      <div style="font-size:1.75rem;font-weight:900;line-height:1">{{ (mrr/1000)|int }}k <span style="font-size:.875rem;font-weight:600;opacity:.7">FCFA</span></div>
+      <div style="font-size:.75rem;color:#a78bfa;margin-top:.375rem">ARR : {{ (arr/1000)|int }}k FCFA · {{ nb_actifs }} client(s) actif(s)</div>
+      <div style="margin-top:.625rem;background:rgba(255,255,255,.1);height:3px;border-radius:2px">
+        <div style="width:{{ [taux_conversion, 100]|min }}%;background:white;height:100%;border-radius:2px"></div>
       </div>
     </div>
 
-    <div class="kpi-card" style="background:linear-gradient(135deg,#059669,#065f46)">
-      <div class="text-emerald-300 text-xs font-bold uppercase tracking-widest mb-1">Revenus / mois</div>
-      <div class="text-3xl font-black mb-0.5">{{ (revenus/1000)|int }} k</div>
-      <div class="text-xs text-emerald-200 mt-1">
-        {{ revenus|int|fcfa }} · clients ACTIFS
-      </div>
+    <!-- ARPU -->
+    <div class="kpi" style="--c1:#059669;--c2:#064e3b">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6ee7b7;margin-bottom:.25rem">ARPU — Revenu moyen / client</div>
+      <div style="font-size:1.75rem;font-weight:900;line-height:1">{{ (arpu/1000)|int }}k <span style="font-size:.875rem;font-weight:600;opacity:.7">FCFA</span></div>
+      <div style="font-size:.75rem;color:#a7f3d0;margin-top:.375rem">Conversion essai→payant : <strong>{{ taux_conversion }}%</strong></div>
     </div>
 
-    <div class="kpi-card" style="background:linear-gradient(135deg,#d97706,#92400e)">
-      <div class="text-amber-300 text-xs font-bold uppercase tracking-widest mb-1">Taux conversion</div>
-      <div class="text-4xl font-black mb-0.5">{{ taux_conversion }}%</div>
-      <div class="text-xs text-amber-200 mt-1">
-        Essai → Payant · {{ nb_actifs }}/{{ nb_tenants }} clients
+    <!-- Croissance -->
+    <div class="kpi" style="--c1:{% if croissance_pct >= 0 %}#d97706{% else %}#dc2626{% endif %};--c2:{% if croissance_pct >= 0 %}#92400e{% else %}#7f1d1d{% endif %}">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.7);margin-bottom:.25rem">Croissance MoM</div>
+      <div style="font-size:1.75rem;font-weight:900;line-height:1">
+        {% if croissance_pct > 0 %}+{% endif %}{{ croissance_pct }}%
       </div>
+      <div style="font-size:.75rem;color:rgba(255,255,255,.7);margin-top:.375rem">{{ inscrits_ce_mois }} nouvelle(s) inscription(s) ce mois</div>
     </div>
 
-    <div class="kpi-card" style="background:linear-gradient(135deg,#1d4ed8,#1e3a8a)">
-      <div class="text-blue-300 text-xs font-bold uppercase tracking-widest mb-1">Activité paie</div>
-      <div class="text-4xl font-black mb-0.5">{{ total_sal }}</div>
-      <div class="text-xs text-blue-200 mt-1">
-        salariés · {{ total_bul }} bulletins émis
-      </div>
+    <!-- Churn -->
+    <div class="kpi" style="--c1:#1d4ed8;--c2:#1e3a8a">
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#93c5fd;margin-bottom:.25rem">Churn rate · Attrition</div>
+      <div style="font-size:1.75rem;font-weight:900;line-height:1">{{ churn_rate }}%</div>
+      <div style="font-size:.75rem;color:#bfdbfe;margin-top:.375rem">{{ nb_suspendus }} suspendu(s) · {{ nb_essai }} en essai</div>
     </div>
 
   </div>
 
-  <!-- ── GRAPHIQUES ── -->
-  <div class="grid grid-cols-3 gap-4 mb-5">
+  <!-- ══ KPIs LIGNE 2 : Activité ══ -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.25rem">
+    {% for icon, label, val, sub, bg in [
+      ('🏢', 'Entreprises totales',  nb_tenants,  nb_actifs|string ~ ' actives',  '#1e293b'),
+      ('👥', 'Salariés gérés',       total_sal,   'sur toutes entreprises',         '#1e293b'),
+      ('📄', 'Bulletins émis',       total_bul,   'depuis le démarrage',            '#1e293b'),
+      ('📍', 'Pointages enregistrés',total_ptg,   'sur toutes entreprises',         '#1e293b'),
+    ] %}
+    <div style="background:{{ bg }};border:1px solid #334155;border-radius:1rem;padding:1rem 1.25rem">
+      <div style="font-size:1.25rem;margin-bottom:.375rem">{{ icon }}</div>
+      <div style="font-size:1.5rem;font-weight:900;color:white">{{ val }}</div>
+      <div style="font-size:.75rem;font-weight:700;color:#94a3b8;margin-top:.15rem">{{ label }}</div>
+      <div style="font-size:.7rem;color:#475569;margin-top:.2rem">{{ sub }}</div>
+    </div>
+    {% endfor %}
+  </div>
 
-    <!-- Revenus 6 mois -->
-    <div class="card p-5 col-span-2">
-      <div class="flex items-center justify-between mb-4">
+  <!-- ══ GRAPHIQUES ══ -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.25rem">
+
+    <!-- Revenus + inscriptions 6 mois -->
+    <div class="card" style="padding:1.25rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
         <div>
-          <h2 class="font-black text-gray-900 text-sm">Évolution des revenus</h2>
-          <p class="text-xs text-gray-400 mt-0.5">6 derniers mois · clients ACTIFS</p>
+          <h2 style="font-size:.9rem;font-weight:900;color:white">Revenus & Nouvelles inscriptions</h2>
+          <p style="font-size:.75rem;color:#64748b;margin-top:.15rem">6 derniers mois — MRR cumulé</p>
         </div>
-        <span class="badge bg-emerald-100 text-emerald-700">FCFA/mois</span>
+        <div style="display:flex;gap:.5rem">
+          <span style="font-size:.7rem;background:#4c1d95;color:#c4b5fd;padding:.2rem .5rem;border-radius:9999px;font-weight:700">Revenus</span>
+          <span style="font-size:.7rem;background:#064e3b;color:#6ee7b7;padding:.2rem .5rem;border-radius:9999px;font-weight:700">Inscriptions</span>
+        </div>
       </div>
-      <div style="height:180px;position:relative">
-        <canvas id="chartRevenus"></canvas>
-      </div>
+      <div style="height:200px;position:relative"><canvas id="chartRevenus"></canvas></div>
     </div>
 
     <!-- Répartition plans -->
-    <div class="card p-5">
-      <div class="mb-4">
-        <h2 class="font-black text-gray-900 text-sm">Répartition par plan</h2>
-        <p class="text-xs text-gray-400 mt-0.5">Clients actifs uniquement</p>
-      </div>
+    <div class="card" style="padding:1.25rem">
+      <h2 style="font-size:.9rem;font-weight:900;color:white;margin-bottom:.25rem">Répartition par plan</h2>
+      <p style="font-size:.75rem;color:#64748b;margin-bottom:.875rem">Clients actifs uniquement</p>
       {% if repartition_plans %}
-      <div style="height:130px;position:relative;margin-bottom:.75rem">
-        <canvas id="chartPlans"></canvas>
-      </div>
-      <div class="space-y-1.5">
+      <div style="height:130px;position:relative;margin-bottom:.875rem"><canvas id="chartPlans"></canvas></div>
+      <div style="display:flex;flex-direction:column;gap:.5rem">
+        {% set colors = ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'] %}
         {% for item in repartition_plans %}
-        <div class="flex items-center justify-between text-xs">
-          <div class="flex items-center gap-2">
-            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-              style="background:{{ ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'][loop.index0 % 5] }}"></div>
-            <span class="font-semibold text-gray-700">{{ item.nom }}</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;font-size:.8rem">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div style="width:8px;height:8px;border-radius:50%;background:{{ colors[loop.index0 % 5] }};flex-shrink:0"></div>
+            <span style="font-weight:600;color:#cbd5e1">{{ item.nom }}</span>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="font-bold text-gray-900">{{ item.nb }} client{{ 's' if item.nb > 1 else '' }}</span>
-            <span class="text-gray-400">{{ (item.prix * item.nb)|int|fcfa }}</span>
+          <div style="display:flex;align-items:center;gap:.625rem">
+            <span style="font-weight:900;color:white">{{ item.nb }}</span>
+            <span style="font-size:.7rem;color:#64748b">{{ ((item.prix * item.nb)/1000)|int }}k</span>
           </div>
         </div>
         {% endfor %}
       </div>
       {% else %}
-      <div class="flex items-center justify-center h-32 text-gray-400 text-sm">Aucun client actif</div>
+      <div style="display:flex;align-items:center;justify-content:center;height:8rem;color:#475569;font-size:.875rem">Aucun client actif</div>
       {% endif %}
     </div>
 
   </div>
 
-  <!-- ── Bulletins 6 mois + Accès rapides ── -->
-  <div class="grid grid-cols-3 gap-4 mb-5">
+  <!-- ══ TABLEAU SANTÉ + TOP ACTIFS ══ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.25rem">
 
-    <!-- Bulletins émis -->
-    <div class="card p-5">
-      <div class="mb-4">
-        <h2 class="font-black text-gray-900 text-sm">Bulletins émis / mois</h2>
-        <p class="text-xs text-gray-400 mt-0.5">6 derniers mois</p>
+    <!-- Top tenants actifs -->
+    <div class="card" style="padding:1.25rem">
+      <h2 style="font-size:.9rem;font-weight:900;color:white;margin-bottom:.25rem">🏆 Top entreprises actives</h2>
+      <p style="font-size:.75rem;color:#64748b;margin-bottom:.875rem">Score d'activité : bulletins + pointages + salariés</p>
+      {% for t in top_tenants %}
+      {% set sc = score_par_tenant.get(t.id, 0) %}
+      <div style="margin-bottom:.875rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.25rem">
+          <div style="display:flex;align-items:center;gap:.5rem">
+            <div style="width:28px;height:28px;background:#312e81;border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:900;color:#a5b4fc;flex-shrink:0">
+              {{ loop.index }}
+            </div>
+            <div>
+              <div style="font-size:.8rem;font-weight:700;color:white">{{ t.denomination[:28] }}</div>
+              <div style="font-size:.7rem;color:#64748b">{{ sal_par_tenant.get(t.id,0) }} salariés · {{ bul_par_tenant.get(t.id,0) }} bulletins</div>
+            </div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:.875rem;font-weight:900;color:{% if sc >= 70 %}#34d399{% elif sc >= 40 %}#fbbf24{% else %}#f87171{% endif %}">{{ sc }}%</div>
+            <div style="font-size:.65rem;color:#64748b">score</div>
+          </div>
+        </div>
+        <div class="score-bar">
+          <div class="score-fill" style="width:{{ sc }}%;background:{% if sc >= 70 %}#34d399{% elif sc >= 40 %}#fbbf24{% else %}#f87171{% endif %}"></div>
+        </div>
       </div>
-      <div style="height:140px;position:relative">
-        <canvas id="chartBulletins"></canvas>
-      </div>
+      {% else %}
+      <div style="text-align:center;padding:2rem;color:#475569">Aucun client actif</div>
+      {% endfor %}
     </div>
 
-    <!-- Accès rapides -->
-    <div class="card p-5 col-span-2">
-      <h2 class="font-black text-gray-900 text-sm mb-4">Accès rapides</h2>
-      <div class="grid grid-cols-3 gap-3">
-        {% for icon, label, href, bg in [
-          ('🏢', 'Toutes les entreprises', '/admin/tenants',   '#7c3aed'),
-          ('📋', 'Plans & tarifs',          '/admin/plans',    '#047857'),
-          ('⚙️', 'Rubriques légales',       '/admin/rubriques','#92400e'),
-          ('📊', 'Import Excel',             '/admin/import',  '#0369a1'),
-          ('📈', 'Statistiques',             '/admin/stats',   '#1d4ed8'),
-          ('🧪', 'Essais en cours',          '/admin/tenants?statut=ESSAI','#b45309'),
-        ] %}
-        <a href="{{ href }}"
-           style="background:{{ bg }};color:white;border-radius:.875rem;padding:.875rem;display:flex;align-items:center;gap:.625rem;text-decoration:none;font-size:.8rem;font-weight:700;"
-           onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
-          <span style="font-size:1.25rem">{{ icon }}</span>
-          <span>{{ label }}</span>
-        </a>
-        {% endfor %}
+    <!-- Bulletins 6 mois -->
+    <div class="card" style="padding:1.25rem">
+      <h2 style="font-size:.9rem;font-weight:900;color:white;margin-bottom:.25rem">📄 Bulletins émis / mois</h2>
+      <p style="font-size:.75rem;color:#64748b;margin-bottom:.875rem">6 derniers mois · toutes entreprises</p>
+      <div style="height:180px;position:relative"><canvas id="chartBulletins"></canvas></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-top:.875rem">
+        <div class="card2" style="padding:.625rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:white">{{ bul_6mois|sum }}</div>
+          <div style="font-size:.65rem;color:#64748b;margin-top:.1rem">Total 6 mois</div>
+        </div>
+        <div class="card2" style="padding:.625rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:white">{{ (bul_6mois|sum / 6)|int }}</div>
+          <div style="font-size:.65rem;color:#64748b;margin-top:.1rem">Moy. mensuelle</div>
+        </div>
+        <div class="card2" style="padding:.625rem;text-align:center">
+          <div style="font-size:1.1rem;font-weight:900;color:white">{{ bul_6mois[-1] if bul_6mois else 0 }}</div>
+          <div style="font-size:.65rem;color:#64748b;margin-top:.1rem">Ce mois</div>
+        </div>
       </div>
     </div>
 
   </div>
 
-  <!-- ── Tableau entreprises ── -->
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+  <!-- ══ TABLEAU TOUTES LES ENTREPRISES ══ -->
+  <div class="card" style="overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;border-bottom:1px solid #1e293b">
       <div>
-        <h2 class="font-black text-gray-900">Dernières entreprises inscrites</h2>
-        <p class="text-xs text-gray-400 mt-0.5">
-          10 sur {{ nb_tenants }} —
-          <a href="/admin/tenants" class="text-purple-600 font-bold hover:underline">voir toutes →</a>
-        </p>
+        <h2 style="font-size:.9rem;font-weight:900;color:white">Toutes les entreprises</h2>
+        <p style="font-size:.75rem;color:#64748b;margin-top:.15rem">{{ nb_tenants }} enregistrée(s) · <a href="/admin/tenants" style="color:#a78bfa;font-weight:700;text-decoration:none">voir tout →</a></p>
       </div>
-      <div class="flex items-center gap-2">
-        <a href="/admin/tenants?statut=SUSPENDU"
-           class="text-xs bg-red-50 text-red-600 font-bold px-3 py-1.5 rounded-lg hover:bg-red-100"
-           style="{{ 'display:none' if nb_suspendus == 0 else '' }}">
-          🔴 {{ nb_suspendus }} suspendue(s)
-        </a>
-        <a href="/admin/tenants" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-xs font-bold">
-          Voir toutes →
-        </a>
+      <div style="display:flex;gap:.5rem">
+        {% if nb_suspendus > 0 %}
+        <a href="/admin/tenants?statut=SUSPENDU" style="background:#450a0a;border:1px solid #7f1d1d;color:#fca5a5;font-size:.75rem;font-weight:700;padding:.35rem .75rem;border-radius:.625rem;text-decoration:none">🔴 {{ nb_suspendus }} suspendue(s)</a>
+        {% endif %}
+        {% if nouveaux_ce_mois %}
+        <span style="background:#1e3a1e;border:1px solid #14532d;color:#86efac;font-size:.75rem;font-weight:700;padding:.35rem .75rem;border-radius:.625rem">🆕 {{ nouveaux_ce_mois|length }} ce mois</span>
+        {% endif %}
       </div>
     </div>
 
-    <table class="w-full text-sm">
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse">
       <thead>
-        <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-          <th class="px-4 py-3 text-left">Entreprise</th>
-          <th class="px-4 py-3 text-left">Plan</th>
-          <th class="px-4 py-3 text-center">Salariés</th>
-          <th class="px-4 py-3 text-center">Bulletins</th>
-          <th class="px-4 py-3 text-center">Statut</th>
-          <th class="px-4 py-3 text-center">Expiration essai</th>
-          <th class="px-4 py-3 text-center">Inscription</th>
-          <th class="px-4 py-3 text-center">Actions</th>
+        <tr style="background:#0f172a;font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em">
+          <th style="padding:.625rem 1rem;text-align:left;font-weight:700">Entreprise</th>
+          <th style="padding:.625rem;text-align:left;font-weight:700">Plan</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Statut</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Salariés</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Bulletins</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Activité</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Expiration</th>
+          <th style="padding:.625rem;text-align:center;font-weight:700">Actions</th>
         </tr>
       </thead>
       <tbody>
-        {% for t in tenants[:10] %}
-        <tr class="border-b border-gray-50 hover:bg-gray-50 {{ 'bg-amber-50' if t.statut=='ESSAI' and t.date_expiration and (t.date_expiration - now).days <= 7 else '' }}">
-          <td class="px-4 py-3">
-            <div class="font-bold text-gray-900">{{ t.denomination }}</div>
-            <div class="text-xs text-gray-400">{{ t.activite or '—' }} · {{ t.ville or '' }}</div>
+        {% for t in tenants[:15] %}
+        {% set sc = score_par_tenant.get(t.id, 0) %}
+        {% set is_urgent = t.statut == 'ESSAI' and t.date_expiration and (t.date_expiration - now).days <= 7 %}
+        <tr style="border-bottom:1px solid #1e293b;{% if is_urgent %}background:#1c1208;{% elif loop.index0 % 2 == 0 %}background:#0f172a;{% endif %}">
+          <td style="padding:.75rem 1rem">
+            <div style="font-weight:700;font-size:.875rem;color:white">{{ t.denomination }}</div>
+            <div style="font-size:.7rem;color:#64748b;margin-top:.1rem">{{ t.activite or '—' }} · {{ t.ville or 'Libreville' }}</div>
           </td>
-          <td class="px-4 py-3">
-            <span class="badge bg-purple-100 text-purple-800">
-              {{ t.plan.nom if t.plan else '—' }}
-            </span>
+          <td style="padding:.75rem .625rem">
+            <span style="font-size:.75rem;font-weight:700;padding:.2rem .5rem;border-radius:9999px;background:#312e81;color:#c4b5fd">{{ t.plan.nom if t.plan else '—' }}</span>
           </td>
-          <td class="px-4 py-3 text-center font-bold">{{ t.nb_salaries_actifs }}</td>
-          <td class="px-4 py-3 text-center text-gray-600 font-semibold">
-            {{ bulletins_par_tenant.get(t.id, 0) }}
-          </td>
-          <td class="px-4 py-3 text-center">
-            {% set sc = {
-              'ACTIF':               'bg-emerald-100 text-emerald-800',
-              'ESSAI':               'bg-amber-100 text-amber-800',
-              'SUSPENDU':            'bg-red-100 text-red-700',
-              'PAIEMENT_EN_ATTENTE': 'bg-blue-100 text-blue-800',
-            } %}
-            <span class="badge {{ sc.get(t.statut,'bg-gray-100 text-gray-600') }}">
+          <td style="padding:.75rem .625rem;text-align:center">
+            {% set sbg = {'ACTIF':'#064e3b','ESSAI':'#422006','SUSPENDU':'#450a0a','PAIEMENT_EN_ATTENTE':'#1e3a8a'} %}
+            {% set stx = {'ACTIF':'#6ee7b7','ESSAI':'#fbbf24','SUSPENDU':'#fca5a5','PAIEMENT_EN_ATTENTE':'#93c5fd'} %}
+            <span style="font-size:.7rem;font-weight:700;padding:.2rem .5rem;border-radius:9999px;background:{{ sbg.get(t.statut,'#1e293b') }};color:{{ stx.get(t.statut,'#94a3b8') }}">
               {{ t.statut.replace('_',' ') }}
             </span>
           </td>
-          <td class="px-4 py-3 text-center text-xs">
-            {% if t.statut == 'ESSAI' and t.date_expiration %}
+          <td style="text-align:center;font-weight:900;color:white;font-size:.875rem">{{ sal_par_tenant.get(t.id,0) }}</td>
+          <td style="text-align:center;color:#94a3b8;font-size:.875rem">{{ bul_par_tenant.get(t.id,0) }}</td>
+          <td style="padding:.75rem .625rem;text-align:center">
+            <div style="display:flex;align-items:center;gap:.375rem;justify-content:center">
+              <div class="score-bar" style="width:50px">
+                <div class="score-fill" style="width:{{ sc }}%;background:{% if sc >= 70 %}#34d399{% elif sc >= 40 %}#fbbf24{% else %}#ef4444{% endif %}"></div>
+              </div>
+              <span style="font-size:.75rem;font-weight:700;color:{% if sc >= 70 %}#34d399{% elif sc >= 40 %}#fbbf24{% else %}#ef4444{% endif %}">{{ sc }}%</span>
+            </div>
+          </td>
+          <td style="text-align:center;font-size:.75rem">
+            {% if t.date_expiration %}
               {% set jours = (t.date_expiration - now).days %}
-              <span class="font-bold {{ 'text-red-600' if jours <= 3 else 'text-amber-600' if jours <= 7 else 'text-gray-500' }}">
+              <span style="font-weight:700;color:{% if jours <= 3 %}#f87171{% elif jours <= 7 %}#fbbf24{% else %}#64748b{% endif %}">
                 {{ t.date_expiration.strftime('%d/%m/%Y') }}
-                <br><span class="text-xs font-normal">({{ jours }}j restant{{ 's' if jours > 1 else '' }})</span>
+                {% if t.statut == 'ESSAI' %}<br><span style="font-size:.65rem;font-weight:600">({{ jours }}j)</span>{% endif %}
               </span>
-            {% else %}
-              <span class="text-gray-300">—</span>
-            {% endif %}
+            {% else %}<span style="color:#334155">—</span>{% endif %}
           </td>
-          <td class="px-4 py-3 text-center text-gray-400 text-xs">
-            {{ t.date_inscription.strftime('%d/%m/%Y') if t.date_inscription else '—' }}
-          </td>
-          <td class="px-4 py-3 text-center">
-            <div class="flex items-center justify-center gap-2">
-              <a href="/admin/tenants/{{ t.id }}"
-                 class="text-purple-600 font-bold text-xs hover:underline">Gérer</a>
-              <span class="text-gray-200">|</span>
-              <a href="/admin/tenants/{{ t.id }}/impersonate"
-                 class="text-amber-600 font-bold text-xs hover:underline">Accéder</a>
+          <td style="text-align:center;padding:.75rem">
+            <div style="display:flex;align-items:center;justify-content:center;gap:.375rem">
+              <a href="/admin/tenants/{{ t.id }}" style="font-size:.75rem;font-weight:700;color:#a78bfa;text-decoration:none;background:#1e1b4b;padding:.2rem .5rem;border-radius:.375rem">Gérer</a>
+              <a href="/admin/tenants/{{ t.id }}/impersonate" style="font-size:.75rem;font-weight:700;color:#fbbf24;text-decoration:none;background:#1c1a09;padding:.2rem .5rem;border-radius:.375rem">Accéder</a>
             </div>
           </td>
         </tr>
         {% else %}
-        <tr>
-          <td colspan="8" class="text-center py-10 text-gray-400 text-sm">
-            Aucune entreprise enregistrée
-          </td>
-        </tr>
+        <tr><td colspan="8" style="text-align:center;padding:3rem;color:#475569">Aucune entreprise enregistrée</td></tr>
         {% endfor %}
       </tbody>
     </table>
+    </div>
 
-    {% if nb_tenants > 10 %}
-    <div class="px-5 py-3 border-t border-gray-100 text-center">
-      <a href="/admin/tenants" class="text-purple-600 font-bold text-sm hover:underline">
-        Voir les {{ nb_tenants - 10 }} autres entreprises →
-      </a>
+    {% if nb_tenants > 15 %}
+    <div style="padding:.875rem;border-top:1px solid #1e293b;text-align:center">
+      <a href="/admin/tenants" style="color:#a78bfa;font-size:.875rem;font-weight:700;text-decoration:none">Voir les {{ nb_tenants - 15 }} autres entreprises →</a>
     </div>
     {% endif %}
   </div>
@@ -327,30 +331,46 @@
 </main>
 
 <script>
-const MOIS = {{ mois_labels | tojson }};
-const REV  = {{ revenus_6mois | tojson }};
-const BUL  = {{ bul_6mois | tojson }};
-const PLANS_LABELS = {{ repartition_plans | map(attribute='nom') | list | tojson }};
-const PLANS_NB     = {{ repartition_plans | map(attribute='nb')  | list | tojson }};
-
+const MOIS   = {{ mois_labels | tojson }};
+const REV    = {{ revenus_6mois | tojson }};
+const INSC   = {{ inscrits_6mois | tojson }};
+const BUL    = {{ bul_6mois | tojson }};
+const PL_LBL = {{ repartition_plans | map(attribute='nom')  | list | tojson }};
+const PL_NB  = {{ repartition_plans | map(attribute='nb')   | list | tojson }};
 const COLORS = ['#7c3aed','#059669','#d97706','#1d4ed8','#dc2626'];
 
-Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+Chart.defaults.color = '#64748b';
+Chart.defaults.font.family = "'Segoe UI',system-ui,sans-serif";
 Chart.defaults.font.size   = 11;
-Chart.defaults.color       = '#9ca3af';
 
-// ── Graphique revenus ──────────────────────────────────────────────────────
+// ── Revenus + inscriptions ─────────────────────────────────────────────────
 new Chart(document.getElementById('chartRevenus'), {
   type: 'bar',
   data: {
     labels: MOIS,
-    datasets: [{
-      label: 'Revenus FCFA',
-      data: REV,
-      backgroundColor: REV.map((v, i) => i === REV.length - 1 ? '#6d28d9' : '#ede9fe'),
-      borderRadius: 6,
-      borderSkipped: false,
-    }]
+    datasets: [
+      {
+        label: 'Revenus FCFA',
+        data: REV,
+        backgroundColor: REV.map((v,i) => i===REV.length-1 ? '#7c3aed' : '#4c1d95'),
+        borderRadius: 5,
+        borderSkipped: false,
+        yAxisID: 'y',
+      },
+      {
+        label: 'Inscriptions',
+        data: INSC,
+        type: 'line',
+        borderColor: '#34d399',
+        backgroundColor: 'rgba(52,211,153,.1)',
+        borderWidth: 2,
+        pointBackgroundColor: '#34d399',
+        pointRadius: 4,
+        fill: true,
+        tension: 0.4,
+        yAxisID: 'y2',
+      }
+    ]
   },
   options: {
     responsive: true, maintainAspectRatio: false,
@@ -358,38 +378,34 @@ new Chart(document.getElementById('chartRevenus'), {
       legend: { display: false },
       tooltip: {
         callbacks: {
-          label: ctx => ' ' + new Intl.NumberFormat('fr-FR').format(ctx.raw) + ' FCFA'
+          label: ctx => ctx.dataset.label === 'Revenus FCFA'
+            ? ' ' + new Intl.NumberFormat('fr-FR').format(ctx.raw) + ' FCFA'
+            : ' ' + ctx.raw + ' inscription(s)'
         }
       }
     },
     scales: {
-      x: { grid: { display: false }, border: { display: false } },
-      y: {
-        grid: { color: '#f3f4f6' },
-        border: { display: false, dash: [4,4] },
-        ticks: {
-          callback: v => v >= 1000000
-            ? (v/1000000).toFixed(1) + 'M'
-            : v >= 1000 ? (v/1000).toFixed(0) + 'k' : v
-        }
-      }
+      y:  { grid: { color: '#1e293b' }, border: { display:false },
+            ticks: { callback: v => v>=1000000 ? (v/1000000).toFixed(1)+'M' : v>=1000 ? (v/1000).toFixed(0)+'k' : v } },
+      y2: { position: 'right', grid: { display:false }, border: { display:false },
+            ticks: { precision:0 } },
+      x:  { grid: { display:false }, border: { display:false } }
     }
   }
 });
 
-// ── Graphique bulletins ────────────────────────────────────────────────────
+// ── Bulletins ──────────────────────────────────────────────────────────────
 new Chart(document.getElementById('chartBulletins'), {
   type: 'line',
   data: {
     labels: MOIS,
     datasets: [{
-      label: 'Bulletins',
       data: BUL,
-      borderColor: '#1d4ed8',
-      backgroundColor: 'rgba(29,78,216,.08)',
-      borderWidth: 2,
-      pointBackgroundColor: '#1d4ed8',
-      pointRadius: 4,
+      borderColor: '#3b82f6',
+      backgroundColor: 'rgba(59,130,246,.1)',
+      borderWidth: 2.5,
+      pointBackgroundColor: '#3b82f6',
+      pointRadius: 5,
       fill: true,
       tension: 0.4,
     }]
@@ -398,40 +414,29 @@ new Chart(document.getElementById('chartBulletins'), {
     responsive: true, maintainAspectRatio: false,
     plugins: { legend: { display: false } },
     scales: {
-      x: { grid: { display: false }, border: { display: false } },
-      y: {
-        grid: { color: '#f3f4f6' },
-        border: { display: false },
-        ticks: { precision: 0 }
-      }
+      x: { grid: { display:false }, border: { display:false } },
+      y: { grid: { color:'#1e293b' }, border: { display:false }, ticks: { precision:0 } }
     }
   }
 });
 
-// ── Graphique plans ────────────────────────────────────────────────────────
-if (PLANS_LABELS.length > 0) {
+// ── Plans doughnut ─────────────────────────────────────────────────────────
+if (PL_LBL.length > 0) {
   new Chart(document.getElementById('chartPlans'), {
     type: 'doughnut',
     data: {
-      labels: PLANS_LABELS,
-      datasets: [{
-        data: PLANS_NB,
-        backgroundColor: COLORS.slice(0, PLANS_LABELS.length),
-        borderWidth: 0,
-        hoverOffset: 4,
-      }]
+      labels: PL_LBL,
+      datasets: [{ data: PL_NB, backgroundColor: COLORS.slice(0, PL_LBL.length), borderWidth:0, hoverOffset:4 }]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
-      cutout: '65%',
+      responsive: true, maintainAspectRatio: false, cutout:'65%',
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} client${ctx.raw > 1 ? 's' : ''}` } }
+        tooltip: { callbacks: { label: ctx => ` ${ctx.raw} client${ctx.raw>1?'s':''}` } }
       }
     }
   });
 }
 </script>
-
 </body>
 </html>
