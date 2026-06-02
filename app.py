@@ -1205,6 +1205,213 @@ def salaries():
         q=q, statut=statut, tenant=t,
         pagination_base=_base + _sep)
 
+
+@app.route("/salaries/import", methods=["GET","POST"])
+@login_required
+def salaries_import():
+    """Import en masse de salariés depuis un fichier Excel."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    if request.method == "GET":
+        categories = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+        return render_template("tenant/salaries_import.html",
+            tenant=t, categories=categories)
+
+    # ── POST : traitement du fichier ─────────────────────────────────────────
+    fichier = request.files.get("fichier")
+    if not fichier or not fichier.filename.endswith((".xlsx", ".xls")):
+        flash("❌ Fichier invalide. Utilisez le modèle Excel fourni (.xlsx).", "error")
+        return redirect(url_for("salaries_import"))
+
+    mode = request.form.get("mode", "ignorer")  # ignorer | ecraser
+
+    import openpyxl
+    from datetime import date as date_type
+    import re
+
+    def parse_date(val):
+        if not val: return None
+        if isinstance(val, (date_type, datetime)): return val if isinstance(val, date_type) else val.date()
+        s = str(val).strip()
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"):
+            try: return datetime.strptime(s, fmt).date()
+            except: pass
+        return None
+
+    def clean(val): return str(val).strip() if val not in (None, "") else None
+
+    try:
+        wb = openpyxl.load_workbook(fichier, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        flash(f"❌ Erreur lecture fichier : {e}", "error")
+        return redirect(url_for("salaries_import"))
+
+    # Trouver la ligne d'en-tête (ligne avec "MATRICULE")
+    header_row = None
+    for row_idx in range(1, 10):
+        row_vals = [str(ws.cell(row_idx, c).value or "").upper().strip() for c in range(1, 20)]
+        if "MATRICULE" in row_vals:
+            header_row = row_idx
+            break
+
+    if not header_row:
+        flash("❌ Entête non trouvée. Utilisez le modèle Excel fourni.", "error")
+        return redirect(url_for("salaries_import"))
+
+    # Mapper les colonnes
+    headers = {}
+    for col in range(1, ws.max_column + 1):
+        val = str(ws.cell(header_row, col).value or "").upper().strip()
+        if val: headers[val] = col
+
+    required = ["MATRICULE", "NOM", "PRENOM", "EMPLOI", "DATE_EMBAUCHE"]
+    for req in required:
+        if req not in headers:
+            flash(f"❌ Colonne obligatoire manquante : {req}", "error")
+            return redirect(url_for("salaries_import"))
+
+    # Charger les catégories du tenant
+    cats = {c.code.upper(): c for c in CategorieEmploi.query.filter_by(tenant_id=t.id).all()}
+
+    # ── Vérifier quota ────────────────────────────────────────────────────────
+    nb_existants = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    quota = t.quota_employes_info
+
+    # Traiter les lignes de données
+    nb_crees = nb_maj = nb_erreurs = nb_ignores = 0
+    erreurs   = []
+    avertissements = []
+
+    for row_idx in range(header_row + 1, ws.max_row + 1):
+        def get(col_name):
+            c = headers.get(col_name)
+            return ws.cell(row_idx, c).value if c else None
+
+        matricule = clean(get("MATRICULE"))
+        if not matricule: continue  # ligne vide
+
+        nom    = clean(get("NOM"))
+        prenom = clean(get("PRENOM"))
+        emploi = clean(get("EMPLOI"))
+        date_e = parse_date(get("DATE_EMBAUCHE"))
+
+        # Validation champs obligatoires
+        if not all([nom, prenom, emploi, date_e]):
+            erreurs.append(f"Ligne {row_idx} ({matricule}) : champs obligatoires manquants")
+            nb_erreurs += 1
+            continue
+
+        # Vérifier si matricule existe
+        existant = Salarie.query.filter_by(tenant_id=t.id, matricule=matricule).first()
+
+        if existant and mode == "ignorer":
+            nb_ignores += 1
+            continue
+
+        # Récupérer catégorie
+        cat_code = clean(get("CATEGORIE"))
+        cat = cats.get(cat_code.upper()) if cat_code else None
+
+        # Salaire de base → créer/maj contrat
+        salaire_raw = get("SALAIRE_BASE")
+        salaire_base = None
+        if salaire_raw:
+            try: salaire_base = float(str(salaire_raw).replace(" ","").replace(",","."))
+            except: pass
+
+        # Quota check pour nouvelles créations
+        if not existant and quota.get("max"):
+            if nb_existants + nb_crees >= quota["max"]:
+                erreurs.append(f"Quota atteint ({quota['max']} employés). Import arrêté à la ligne {row_idx}.")
+                break
+
+        data = dict(
+            tenant_id              = t.id,
+            matricule              = matricule.upper(),
+            nom                    = nom.upper(),
+            prenom                 = prenom,
+            emploi                 = emploi.upper(),
+            date_embauche          = date_e,
+            categorie_id           = cat.id if cat else None,
+            telephone              = clean(get("TELEPHONE")),
+            sexe                   = clean(get("SEXE")),
+            date_naissance         = parse_date(get("DATE_NAISSANCE")),
+            situation_matrimoniale = clean(get("SITUATION_MAT")),
+            nationalite            = clean(get("NATIONALITE")) or "GABONAISE",
+            numero_cnss            = clean(get("NUMERO_CNSS")),
+            numero_cnamgs          = clean(get("NUMERO_CNAMGS")),
+            email                  = clean(get("EMAIL")),
+            adresse                = clean(get("ADRESSE")),
+            statut                 = "ACTIF",
+        )
+        try: data["nb_enfants"]   = int(float(str(get("NB_ENFANTS") or 0)))
+        except: data["nb_enfants"] = 0
+        try: data["nombre_parts"] = float(str(get("NOMBRE_PARTS") or 1).replace(",","."))
+        except: data["nombre_parts"] = 1
+
+        try:
+            if existant:
+                for k, v in data.items():
+                    if v is not None: setattr(existant, k, v)
+                s_obj = existant
+                nb_maj += 1
+            else:
+                s_obj = Salarie(**data)
+                db.session.add(s_obj)
+                db.session.flush()
+                nb_crees += 1
+
+            # Créer/maj contrat si salaire fourni
+            if salaire_base and salaire_base > 0:
+                contrat = next((c for c in (s_obj.contrats if s_obj.id else [])), None)
+                if not contrat:
+                    contrat = Contrat(tenant_id=t.id, salarie_id=s_obj.id,
+                                      date_debut=date_e, actif=True)
+                    db.session.add(contrat)
+                contrat.salaire_base = salaire_base
+                contrat.type_contrat = "CDI"
+                contrat.actif        = True
+
+        except Exception as e:
+            db.session.rollback()
+            erreurs.append(f"Ligne {row_idx} ({matricule}) : {str(e)[:80]}")
+            nb_erreurs += 1
+            continue
+
+    db.session.commit()
+    _cache_delete(f"{t.id}:")  # Invalider cache
+
+    # Message résumé
+    msg_parts = []
+    if nb_crees:   msg_parts.append(f"✅ {nb_crees} salarié(s) créé(s)")
+    if nb_maj:     msg_parts.append(f"🔄 {nb_maj} mis à jour")
+    if nb_ignores: msg_parts.append(f"⏭️ {nb_ignores} ignoré(s) (déjà existants)")
+    if nb_erreurs: msg_parts.append(f"❌ {nb_erreurs} erreur(s)")
+    flash(" · ".join(msg_parts) or "Aucune donnée importée.", "success" if not nb_erreurs else "error")
+
+    for err in erreurs[:5]:
+        flash(f"⚠️ {err}", "error")
+
+    return redirect(url_for("salaries"))
+
+
+@app.route("/salaries/import/modele")
+@login_required
+def salaries_import_modele():
+    """Télécharger le modèle Excel vierge."""
+    import os
+    modele_path = os.path.join(os.path.dirname(__file__), "modele_import_salaries.xlsx")
+    if os.path.exists(modele_path):
+        from flask import send_file
+        return send_file(modele_path, as_attachment=True,
+                         download_name="modele_import_salaries.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    flash("Modèle non disponible.", "error")
+    return redirect(url_for("salaries_import"))
+
 @app.route("/salaries/nouveau", methods=["GET","POST"])
 @login_required
 def salarie_nouveau():
