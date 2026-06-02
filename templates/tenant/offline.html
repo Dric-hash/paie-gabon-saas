@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+  <title>Hors connexion — PaieGabon</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:white;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}
+    .card{background:#1e293b;border:1px solid #334155;border-radius:1.5rem;padding:2rem;max-width:380px;width:100%;text-align:center}
+    .icon{font-size:3.5rem;margin-bottom:1.25rem}
+    h1{font-size:1.4rem;font-weight:900;margin-bottom:.625rem}
+    p{font-size:.875rem;color:#94a3b8;line-height:1.6;margin-bottom:1.5rem}
+    .links{display:flex;flex-direction:column;gap:.625rem}
+    a{display:flex;align-items:center;gap:.75rem;background:#1a2332;border:1px solid #334155;color:white;padding:.875rem 1rem;border-radius:.875rem;text-decoration:none;font-weight:600;font-size:.875rem;transition:.15s}
+    a:hover{background:#334155}
+    a .emoji{font-size:1.1rem;flex-shrink:0}
+    .status{display:inline-flex;align-items:center;gap:.375rem;background:#422006;color:#fbbf24;border-radius:9999px;padding:.25rem .75rem;font-size:.75rem;font-weight:700;margin-bottom:1.5rem}
+    .dot{width:8px;height:8px;background:#ef4444;border-radius:50%;animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+    .retry-btn{width:100%;background:linear-gradient(135deg,#6d28d9,#4c1d95);color:white;border:none;padding:.875rem;border-radius:.875rem;font-weight:700;font-size:.875rem;cursor:pointer;margin-bottom:.625rem}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">📶</div>
+    <div class="status"><div class="dot"></div> Hors connexion</div>
+    <h1>Pas de connexion Internet</h1>
+    <p>Vous pouvez accéder aux pages visitées récemment. La synchronisation reprendra automatiquement dès le retour du réseau.</p>
+
+    <button class="retry-btn" onclick="verifierConnexion()">🔄 Réessayer</button>
+
+    <div class="links">
+      <a href="/dashboard">
+        <span class="emoji">🏠</span>
+        <div><div>Tableau de bord</div><div style="font-size:.75rem;color:#64748b">Dernière version en cache</div></div>
+      </a>
+      <a href="/pointage/individuel">
+        <span class="emoji">📋</span>
+        <div><div>Pointage individuel</div><div style="font-size:.75rem;color:#64748b">Pointer sans connexion</div></div>
+      </a>
+      <a href="/journaliers">
+        <span class="emoji">🦺</span>
+        <div><div>Journaliers</div><div style="font-size:.75rem;color:#64748b">Liste en cache</div></div>
+      </a>
+      <a href="/salaries">
+        <span class="emoji">👥</span>
+        <div><div>Salariés</div><div style="font-size:.75rem;color:#64748b">Liste en cache</div></div>
+      </a>
+    </div>
+  </div>
+
+  <script>
+    // Vérifier la connexion et rediriger si rétablie
+    function verifierConnexion() {
+      fetch('/dashboard', { method: 'HEAD', cache: 'no-store' })
+        .then(() => window.location.href = '/dashboard')
+        .catch(() => {
+          const btn = document.querySelector('.retry-btn');
+          btn.textContent = '❌ Toujours hors ligne — Réessayer';
+          setTimeout(() => { btn.textContent = '🔄 Réessayer'; }, 2000);
+        });
+    }
+
+    // Redirection automatique quand la connexion revient
+    window.addEventListener('online', () => {
+      window.location.href = document.referrer || '/dashboard';
+    });
+  </script>
+</body>
+</html>
