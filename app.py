@@ -15,6 +15,47 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CACHE EN MÉMOIRE — KPIs Dashboard (TTL configurable par type de données)
+# Clé : f"{tenant_id}:{nom_kpi}" → valeur + timestamp d'expiration
+# Zéro dépendance externe, thread-safe avec le GIL Python
+# ══════════════════════════════════════════════════════════════════════════════
+import threading as _threading
+_cache_store = {}
+_cache_lock  = _threading.Lock()
+
+def _cache_get(key: str):
+    """Retourne la valeur si non expirée, sinon None."""
+    import time
+    with _cache_lock:
+        entry = _cache_store.get(key)
+        if entry and time.time() < entry["exp"]:
+            return entry["val"]
+        if entry:
+            del _cache_store[key]
+    return None
+
+def _cache_set(key: str, value, ttl_seconds: int = 300):
+    """Stocker une valeur avec TTL en secondes."""
+    import time
+    with _cache_lock:
+        _cache_store[key] = {"val": value, "exp": time.time() + ttl_seconds}
+
+def _cache_delete(key_prefix: str):
+    """Invalider toutes les clés commençant par le préfixe (ex: tenant_id)."""
+    with _cache_lock:
+        to_del = [k for k in _cache_store if k.startswith(key_prefix)]
+        for k in to_del:
+            del _cache_store[k]
+
+# TTL par type de données (secondes)
+TTL_KPIS_DASH   = 300   # KPIs emploi + bulletins : 5 min
+TTL_EVOLUTION   = 600   # Courbes 6 mois : 10 min (ça ne change pas souvent)
+TTL_CATS_STATS  = 600   # Répartition par catégorie : 10 min
+TTL_TOP_SAL     = 300   # Top 5 salariés : 5 min
+TTL_ALERTES     = 120   # Alertes : 2 min (sensibles)
+
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
 _db_url = os.environ.get("DATABASE_URL", "sqlite:///saas_paie.db")
@@ -852,19 +893,30 @@ def dashboard():
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("login"))
     now=datetime.now()
-    from sqlalchemy import func
-    _sal_q = db.session.query(
-        func.sum(db.cast(Salarie.statut == "ACTIF",   db.Integer)).label("actifs"),
-        func.sum(db.cast(Salarie.statut == "INACTIF", db.Integer)).label("inactifs"),
-        func.count().label("total"),
-    ).filter(Salarie.tenant_id == t.id).one()
-    nb_actifs         = int(_sal_q.actifs   or 0)
-    nb_inactifs       = int(_sal_q.inactifs or 0)
-    nb_total          = int(_sal_q.total    or 0)
-    nb_journaliers    = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+
+    # ── KPIs emploi (cache TTL=5min) ─────────────────────────────────────────
+    _ck_kpis = f"{t.id}:kpis_emploi"
+    kpis_cached = _cache_get(_ck_kpis)
+    if kpis_cached:
+        nb_actifs, nb_inactifs, nb_total, nb_journaliers, nb_new_mois = kpis_cached
+    else:
+        from sqlalchemy import func
+        _sal_q = db.session.query(
+            func.sum(db.cast(Salarie.statut == "ACTIF",   db.Integer)).label("actifs"),
+            func.sum(db.cast(Salarie.statut == "INACTIF", db.Integer)).label("inactifs"),
+            func.count().label("total"),
+        ).filter(Salarie.tenant_id == t.id).one()
+        nb_actifs   = int(_sal_q.actifs   or 0)
+        nb_inactifs = int(_sal_q.inactifs or 0)
+        nb_total    = int(_sal_q.total    or 0)
+        nb_journaliers = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+        debut_mois  = datetime(now.year, now.month, 1).date()
+        nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id,
+                                           Salarie.date_embauche>=debut_mois).count()
+        _cache_set(_ck_kpis, (nb_actifs, nb_inactifs, nb_total, nb_journaliers, nb_new_mois),
+                   TTL_KPIS_DASH)
     nb_total_employes = nb_actifs + nb_journaliers
     debut_mois  = datetime(now.year, now.month, 1).date()
-    nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id, Salarie.date_embauche>=debut_mois).count()
     periode = PeriodePaie.query.filter_by(tenant_id=t.id, annee=now.year, mois=now.month).first()
     masse={}; nb_v=nb_b=nb_p=0
     if periode:
@@ -873,28 +925,41 @@ def dashboard():
         nb_v = sum(1 for b in buls if b.statut=="VALIDÉ")
         nb_p = sum(1 for b in buls if b.statut=="PAYÉ")
         nb_b = sum(1 for b in buls if b.statut=="BROUILLON")
-    evolution = []
-    for i in range(5, -1, -1):
-        m = now.month - i; y = now.year
-        while m <= 0: m += 12; y -= 1
-        p = PeriodePaie.query.filter_by(tenant_id=t.id, annee=y, mois=m).first()
+    _ck_evo = f"{t.id}:evolution_{now.year}_{now.month}"
+    evolution = _cache_get(_ck_evo)
+    if evolution is None:
+        evolution = []
         mois_noms = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
-        if p:
-            buls_p = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=p.id).all()
-            total_net = sum(float(b.net_a_payer or 0) for b in buls_p)
-            total_brut = sum(float(b.salaire_brut or 0) for b in buls_p)
-            total_charges = sum(float(b.cnss_patronale or 0)+float(b.cnamgs_patronale or 0)+float(b.fnh or 0)+float(b.cfp or 0) for b in buls_p)
-        else:
-            total_net=total_brut=total_charges=0; buls_p=[]
-        evolution.append({"mois":mois_noms[m],"annee":y,"brut":round(total_brut),"net":round(total_net),"charges":round(total_charges),"nb_bulletins":len(buls_p)})
+        for i in range(5, -1, -1):
+            m = now.month - i; y = now.year
+            while m <= 0: m += 12; y -= 1
+            p = PeriodePaie.query.filter_by(tenant_id=t.id, annee=y, mois=m).first()
+            if p:
+                buls_p = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=p.id).all()
+                total_net    = sum(float(b.net_a_payer    or 0) for b in buls_p)
+                total_brut   = sum(float(b.salaire_brut   or 0) for b in buls_p)
+                total_charges= sum(float(b.cnss_patronale or 0)+float(b.cnamgs_patronale or 0)
+                                   +float(b.fnh or 0)+float(b.cfp or 0) for b in buls_p)
+            else:
+                total_net=total_brut=total_charges=0; buls_p=[]
+            evolution.append({"mois":mois_noms[m],"annee":y,"brut":round(total_brut),
+                              "net":round(total_net),"charges":round(total_charges),
+                              "nb_bulletins":len(buls_p)})
+        _cache_set(_ck_evo, evolution, TTL_EVOLUTION)
     top_salaries = []
     if periode:
         top_salaries = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
     from sqlalchemy import func
-    cats_stats = db.session.query(CategorieEmploi.code, CategorieEmploi.libelle, func.count(Salarie.id).label("nb"))\
-        .join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
-        .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
-        .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+    _ck_cats = f"{t.id}:cats_stats"
+    cats_stats = _cache_get(_ck_cats)
+    if cats_stats is None:
+        cats_stats = db.session.query(
+            CategorieEmploi.code, CategorieEmploi.libelle,
+            func.count(Salarie.id).label("nb")
+        ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
+         .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
+         .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+        _cache_set(_ck_cats, cats_stats, TTL_CATS_STATS)
     derniers = BulletinPaie.query.filter_by(tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(6).all()
     # ══════════════════════════════════════════════════════════════════════════
     # ALERTES INTELLIGENTES
@@ -3552,6 +3617,16 @@ def api_pointage_mois(id):
         "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_40+heures_sup_70, 2),
         "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
     })
+
+@app.route("/api/cache/clear", methods=["POST"])
+@login_required
+def api_cache_clear():
+    """Vider le cache du dashboard (bouton rafraîchir)."""
+    t = get_tenant()
+    if not t: return jsonify({"ok": False})
+    _cache_delete(f"{t.id}:")
+    return jsonify({"ok": True, "msg": "Cache vidé"})
+
 
 @app.route("/api/semaine-btp")
 @login_required
