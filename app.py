@@ -1206,6 +1206,108 @@ def salaries():
         pagination_base=_base + _sep)
 
 
+
+@app.route("/simulateur")
+@login_required
+def simulateur_paie():
+    """Simulateur de paie interactif."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
+    return render_template("tenant/simulateur.html", tenant=t, salaries=salaries_list)
+
+
+@app.route("/api/simuler-paie", methods=["POST"])
+@login_required
+def api_simuler_paie():
+    """API JSON : simuler un bulletin de paie complet sans le sauvegarder."""
+    t = get_tenant()
+    if not t: return jsonify({"erreur": "non connecté"})
+    from calculs_paie import calculer_bulletin, calculer_heures_sup_btp
+    try:
+        d = request.get_json(force=True) or {}
+        # Accepter aussi le form-data
+        if not d:
+            d = {k: request.form.get(k) for k in request.form}
+
+        def flt(key, default=0):
+            try: return float(str(d.get(key) or default).replace(",",".") or default)
+            except: return float(default)
+
+        # Calcul des heures sup si mode BTP demandé
+        mode_btp = d.get("mode_btp") == "1"
+        sal_base = flt("salaire_base")
+
+        if mode_btp and sal_base > 0:
+            from calculs_paie import calculer_heures_sup_btp
+            btp = calculer_heures_sup_btp(sal_base,
+                h10=flt("h10") or None, h30=flt("h30") or None,
+                h40=flt("h40"), h70=flt("h70"))
+            d["heures_sup_10"] = btp["montant_10"]
+            d["heures_sup_30"] = btp["montant_30"]
+            d["heures_sup_40"] = btp["montant_40"]
+            d["heures_sup_70"] = btp["montant_70"]
+
+        # Nombre de parts IRPP
+        sal_id = d.get("salarie_id")
+        nb_parts = 1.0
+        if sal_id:
+            s = Salarie.query.filter_by(id=int(sal_id), tenant_id=t.id).first()
+            if s: nb_parts = float(s.nombre_parts or 1)
+        nb_parts = flt("nb_parts") or nb_parts
+
+        result = calculer_bulletin(d, nb_parts=nb_parts)
+
+        # Enrichir avec détails BTP
+        from calculs_paie import calculer_taux_horaire, H_NORMALES_MENSUEL
+        if sal_base > 0:
+            th = calculer_taux_horaire(sal_base)
+            result["taux_horaire"]     = round(th, 2)
+            result["h_normales_mensuel"] = H_NORMALES_MENSUEL
+
+        # Ajouter libellés pour l'affichage
+        result["gains_detail"] = [
+            {"label": "Salaire de base",          "montant": result["salaire_base"]},
+            {"label": "H.sup +10%",               "montant": result["heures_sup_10"]},
+            {"label": "H.sup +30%",               "montant": result["heures_sup_30"]},
+            {"label": "H.sup +40% (nuit/dim.)",   "montant": result["heures_sup_40"]},
+            {"label": "H.sup +70% (fériés)",      "montant": result["heures_sup_70"]},
+            {"label": "Sursalaire",               "montant": result["sursalaire"]},
+            {"label": "Prime de transport",       "montant": result["prime_transport"]},
+            {"label": "Prime de responsabilité",  "montant": result["prime_responsabilite"]},
+            {"label": "Indemnité logement",       "montant": result["indem_logement"]},
+            {"label": "Prime d'ancienneté",      "montant": result["prime_anciennete"]},
+            {"label": "Autres primes",            "montant": sum([
+                result["prime_caisse"], result["carburant"],
+                result["prime_rendement"], result["prime_qualite"],
+                result["prime_performance"], result["prime_assiduité"],
+            ])},
+        ]
+        result["gains_detail"] = [g for g in result["gains_detail"] if g["montant"] > 0]
+
+        result["retenues_detail"] = [
+            {"label": f"CNSS salarié (5% / base {int(result['base_cnss']):,} FCFA)", "montant": result["cnss_salarie"]},
+            {"label": f"CNAMGS salarié (2% / base {int(result['base_cnamgs']):,} FCFA)", "montant": result["cnamgs_salarie"]},
+            {"label": f"TCS (5% / base {int(result['base_tcs']):,} FCFA)",             "montant": result["tcs"]},
+            {"label": f"IRPP ({nb_parts} part(s))",                                    "montant": result["irpp"]},
+            {"label": "Acompte",                                                        "montant": result["acompte"]},
+            {"label": "Retenue absences",                                               "montant": result["absences"]},
+        ]
+        result["retenues_detail"] = [r for r in result["retenues_detail"] if r["montant"] > 0]
+
+        result["charges_pat_detail"] = [
+            {"label": "CNSS patronal (18%)",     "montant": result["cnss_patronale"]},
+            {"label": "CNAMGS patronal (4.1%)",  "montant": result["cnamgs_patronale"]},
+            {"label": "FNH (3%)",                "montant": result["fnh"]},
+            {"label": "CFP (0.5%)",              "montant": result["cfp"]},
+        ]
+
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        return jsonify({"erreur": str(e), "trace": traceback.format_exc()[-300:]})
+
 @app.route("/salaries/import", methods=["GET","POST"])
 @login_required
 def salaries_import():
