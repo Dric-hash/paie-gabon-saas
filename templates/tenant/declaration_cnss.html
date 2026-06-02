@@ -1,0 +1,204 @@
+{% extends "tenant/base.html" %}
+{% block title %}Déclaration CNSS — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">📋 Déclaration CNSS mensuelle</h1>
+    <p class="text-gray-500 text-sm mt-1">Récapitulatif des cotisations sociales à verser à la CNSS et CNAMGS</p>
+  </div>
+  {% if periode and bulletins %}
+  <div style="display:flex;gap:.625rem;flex-wrap:wrap">
+    <a href="/declaration-cnss/export-excel?periode_id={{ periode.id }}"
+       style="display:flex;align-items:center;gap:.5rem;background:#059669;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      📥 Export Excel
+    </a>
+    <button onclick="window.print()"
+       style="display:flex;align-items:center;gap:.5rem;background:#1a2332;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+      🖨️ Imprimer
+    </button>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Sélecteur de période -->
+<div class="card p-5 mb-5">
+  <form method="GET" style="display:flex;align-items:center;gap:.875rem;flex-wrap:wrap">
+    <label style="font-size:.8rem;font-weight:700;color:#6b7280">Période :</label>
+    <select name="periode_id" onchange="this.form.submit()"
+      style="border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.5rem .875rem;font-size:.875rem;min-width:200px">
+      {% for p in periodes %}
+      <option value="{{ p.id }}" {% if periode and p.id == periode.id %}selected{% endif %}>
+        {{ p.libelle_complet }} — {{ p.statut }}
+      </option>
+      {% endfor %}
+    </select>
+    {% if not periodes %}
+    <span style="font-size:.875rem;color:#9ca3af">Aucune période disponible</span>
+    {% endif %}
+  </form>
+</div>
+
+{% if periode and bulletins %}
+
+<!-- Infos employeur -->
+<div class="card p-5 mb-5" style="background:linear-gradient(135deg,#1a2332,#374151);color:white">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
+    <div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.6;margin-bottom:.375rem">Employeur</div>
+      <div style="font-size:.9rem;font-weight:900">{{ tenant.denomination }}</div>
+      <div style="font-size:.75rem;opacity:.7;margin-top:.2rem">{{ tenant.adresse or '' }} {{ tenant.ville or 'Libreville' }}</div>
+    </div>
+    <div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.6;margin-bottom:.375rem">Identifiants</div>
+      <div style="font-size:.8rem">N°CNSS : <strong>{{ tenant.numero_cnss or '—' }}</strong></div>
+      <div style="font-size:.8rem">NIF : <strong>{{ tenant.nif or '—' }}</strong></div>
+    </div>
+    <div>
+      <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.6;margin-bottom:.375rem">Période déclarée</div>
+      <div style="font-size:1.1rem;font-weight:900">{{ periode.libelle_complet }}</div>
+      <div style="font-size:.75rem;opacity:.7;margin-top:.2rem">{{ stats.nb_salaries }} salarié(s) déclaré(s)</div>
+    </div>
+  </div>
+</div>
+
+<!-- KPIs synthèse -->
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.875rem;margin-bottom:1.5rem">
+  {% for label, val, color, bg in [
+    ("Masse brute",           stats.total_brut,       "#1e40af", "#eff6ff"),
+    ("Total CNSS à verser",   stats.total_cnss,        "#065f46", "#f0fdf4"),
+    ("Total CNAMGS à verser", stats.total_cnamgs,      "#92400e", "#fffbeb"),
+    ("TOTAL À VERSER",        stats.total_a_verser,    "#1a2332", "#f8fafc"),
+  ] %}
+  <div style="background:{{ bg }};border:1px solid {{ color }}22;border-radius:1rem;padding:1rem 1.25rem">
+    <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:{{ color }};opacity:.8;margin-bottom:.375rem">{{ label }}</div>
+    <div style="font-size:1.25rem;font-weight:900;color:{{ color }}">{{ val|int|fcfa }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Tableau récapitulatif -->
+<div class="card overflow-hidden mb-5">
+  <div style="padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:.9rem;font-weight:900;color:#111827">Détail par salarié</h2>
+    <span style="font-size:.8rem;color:#6b7280">{{ bulletins|length }} bulletin(s)</span>
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+    <thead>
+      <tr style="background:#0f172a;color:white;font-size:.7rem;text-transform:uppercase;letter-spacing:.03em">
+        <th style="padding:.625rem .875rem;text-align:left;font-weight:700;white-space:nowrap">Salarié</th>
+        <th style="padding:.625rem;text-align:center;font-weight:700">N° CNSS</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">Brut</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">Base CNSS</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">CNSS Sal. 5%</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">CNSS Pat. 18%</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">CNAMGS Sal. 2%</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">CNAMGS Pat. 4.1%</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">FNH 3%</th>
+        <th style="padding:.625rem;text-align:right;font-weight:700;white-space:nowrap">Total à verser</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in bulletins %}
+      {% set total_b = (b.cnss_salarie|float) + (b.cnss_patronale|float) + (b.cnamgs_salarie|float) + (b.cnamgs_patronale|float) + (b.fnh|float) %}
+      <tr style="border-bottom:1px solid #f3f4f6;{% if loop.index0 % 2 == 0 %}background:#fafafa;{% endif %}">
+        <td style="padding:.625rem .875rem">
+          <div style="font-weight:700;color:#111827">{{ b.salarie.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ b.salarie.matricule }} · {{ b.salarie.emploi or '—' }}</div>
+        </td>
+        <td style="padding:.5rem;text-align:center;font-family:monospace;font-size:.75rem;color:#6b7280">{{ b.salarie.numero_cnss or '—' }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:600">{{ b.salaire_brut|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#6b7280">{{ b.base_cnss|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#1e40af;font-weight:600">{{ b.cnss_salarie|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#dc2626;font-weight:600">{{ b.cnss_patronale|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#1e40af">{{ b.cnamgs_salarie|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#dc2626">{{ b.cnamgs_patronale|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;color:#6b7280">{{ b.fnh|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:900;color:#1a2332">{{ total_b|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <!-- Ligne totaux -->
+    <tfoot>
+      <tr style="background:#1a2332;color:white;font-weight:700">
+        <td style="padding:.75rem .875rem" colspan="2">TOTAL ({{ bulletins|length }} salariés)</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_brut|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_base_cnss|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_cnss_sal|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_cnss_pat|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_cnamgs_sal|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_cnamgs_pat|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace">{{ stats.total_fnh|int|fcfa }}</td>
+        <td style="padding:.75rem;text-align:right;font-family:monospace;font-size:.9rem">{{ stats.total_a_verser|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  </div>
+</div>
+
+<!-- Récapitulatif à verser -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
+  <!-- CNSS -->
+  <div class="card p-5">
+    <h3 style="font-size:.875rem;font-weight:900;color:#111827;margin-bottom:1rem">🏦 CNSS — Montants à verser</h3>
+    {% for label, val, color in [
+      ("Part salariale (5%)",   stats.total_cnss_sal, "#1e40af"),
+      ("Part patronale (18%)",  stats.total_cnss_pat, "#dc2626"),
+    ] %}
+    <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6;font-size:.875rem">
+      <span style="color:#6b7280">{{ label }}</span>
+      <span style="font-weight:700;color:{{ color }};font-family:monospace">{{ val|int|fcfa }}</span>
+    </div>
+    {% endfor %}
+    <div style="display:flex;justify-content:space-between;padding:.625rem 0;font-size:.9rem">
+      <span style="font-weight:900;color:#111827">Total CNSS</span>
+      <span style="font-weight:900;color:#065f46;font-family:monospace">{{ stats.total_cnss|int|fcfa }}</span>
+    </div>
+  </div>
+
+  <!-- CNAMGS + FNH + CFP -->
+  <div class="card p-5">
+    <h3 style="font-size:.875rem;font-weight:900;color:#111827;margin-bottom:1rem">🏥 CNAMGS + FNH + CFP</h3>
+    {% for label, val, color in [
+      ("CNAMGS salariale (2%)",      stats.total_cnamgs_sal, "#1e40af"),
+      ("CNAMGS patronale (4.1%)",    stats.total_cnamgs_pat, "#dc2626"),
+      ("FNH (3%)",                   stats.total_fnh,         "#d97706"),
+      ("CFP (0.5%)",                 stats.total_cfp,         "#6b7280"),
+    ] %}
+    <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6;font-size:.875rem">
+      <span style="color:#6b7280">{{ label }}</span>
+      <span style="font-weight:700;color:{{ color }};font-family:monospace">{{ val|int|fcfa }}</span>
+    </div>
+    {% endfor %}
+    <div style="display:flex;justify-content:space-between;padding:.625rem 0;font-size:.9rem">
+      <span style="font-weight:900;color:#111827">Sous-total</span>
+      <span style="font-weight:900;color:#92400e;font-family:monospace">{{ (stats.total_cnamgs + stats.total_fnh + stats.total_cfp)|int|fcfa }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Encadré TOTAL FINAL -->
+<div style="margin-top:1.25rem;background:linear-gradient(135deg,#1a2332,#374151);border-radius:1.25rem;padding:1.5rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem">
+  <div>
+    <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:rgba(255,255,255,.6);margin-bottom:.375rem">
+      MONTANT TOTAL À VERSER — {{ periode.libelle_complet }}
+    </div>
+    <div style="font-size:.75rem;color:rgba(255,255,255,.5)">CNSS + CNAMGS + FNH + CFP · {{ stats.nb_salaries }} salarié(s)</div>
+  </div>
+  <div style="font-size:2rem;font-weight:900;color:white;font-family:monospace">
+    {{ stats.total_a_verser|int|fcfa }}
+  </div>
+</div>
+
+{% elif periode %}
+<div class="card" style="text-align:center;padding:4rem;color:#9ca3af">
+  <div style="font-size:3rem;margin-bottom:.75rem">📋</div>
+  <p style="font-weight:700;color:#374151;margin-bottom:.5rem">Aucun bulletin pour cette période</p>
+  <p style="font-size:.875rem">Saisissez les bulletins de paie pour générer la déclaration CNSS.</p>
+  <a href="/bulletins/saisie" class="btn-primary" style="display:inline-block;margin-top:1rem;text-decoration:none">Saisir un bulletin</a>
+</div>
+{% endif %}
+
+{% endblock %}
