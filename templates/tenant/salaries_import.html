@@ -1,0 +1,193 @@
+{% extends "tenant/base.html" %}
+{% block title %}Import salariés — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <div>
+    <div style="display:flex;align-items:center;gap:.75rem">
+      <h1 class="text-2xl font-black">📥 Import salariés en masse</h1>
+      <a href="/salaries" style="font-size:.75rem;font-weight:700;background:#f3f4f6;color:#374151;padding:.375rem .75rem;border-radius:.625rem;text-decoration:none">← Retour</a>
+    </div>
+    <p class="text-gray-500 text-sm mt-1">Chargez plusieurs salariés en une seule opération depuis un fichier Excel</p>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+
+  <!-- ══ FORMULAIRE D'IMPORT ══ -->
+  <div class="card p-6">
+    <h2 style="font-size:.9rem;font-weight:900;color:#111827;margin-bottom:1.25rem">📤 Charger le fichier Excel</h2>
+
+    <form method="POST" action="/salaries/import" enctype="multipart/form-data" id="form-import">
+
+      <!-- Zone de dépôt -->
+      <div id="drop-zone"
+        style="border:2px dashed #e5e7eb;border-radius:1rem;padding:2.5rem;text-align:center;cursor:pointer;transition:.2s;margin-bottom:1.25rem"
+        onclick="document.getElementById('fichier').click()"
+        ondragover="event.preventDefault();this.style.borderColor='#1a2332';this.style.background='#f0f9ff'"
+        ondragleave="this.style.borderColor='#e5e7eb';this.style.background=''"
+        ondrop="dropFichier(event)">
+        <div style="font-size:2.5rem;margin-bottom:.75rem">📊</div>
+        <div style="font-size:.9rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+          Glissez-déposez votre fichier Excel ici
+        </div>
+        <div style="font-size:.8rem;color:#9ca3af">ou cliquez pour sélectionner</div>
+        <div id="file-name" style="margin-top:.75rem;font-size:.8rem;color:#1e40af;font-weight:600;display:none"></div>
+        <input type="file" id="fichier" name="fichier" accept=".xlsx,.xls"
+          style="display:none" onchange="onFichierChange(this)"/>
+      </div>
+
+      <!-- Options -->
+      <div style="margin-bottom:1.25rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.625rem">
+          Si le matricule existe déjà
+        </label>
+        <div style="display:flex;gap:.75rem">
+          <label style="flex:1;cursor:pointer">
+            <input type="radio" name="mode" value="ignorer" checked style="display:none" class="radio-mode">
+            <div class="mode-btn" data-val="ignorer"
+              style="padding:.75rem;border:2px solid #1a2332;border-radius:.875rem;text-align:center;background:#eff6ff">
+              <div style="font-size:1rem;margin-bottom:.25rem">⏭️</div>
+              <div style="font-size:.8rem;font-weight:700;color:#1e40af">Ignorer</div>
+              <div style="font-size:.7rem;color:#6b7280;margin-top:.15rem">Conserver l'existant</div>
+            </div>
+          </label>
+          <label style="flex:1;cursor:pointer">
+            <input type="radio" name="mode" value="ecraser" style="display:none" class="radio-mode">
+            <div class="mode-btn" data-val="ecraser"
+              style="padding:.75rem;border:2px solid #e5e7eb;border-radius:.875rem;text-align:center;background:#f9fafb">
+              <div style="font-size:1rem;margin-bottom:.25rem">🔄</div>
+              <div style="font-size:.8rem;font-weight:700;color:#374151">Mettre à jour</div>
+              <div style="font-size:.7rem;color:#6b7280;margin-top:.15rem">Écraser les données</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Bouton -->
+      <button type="submit" id="btn-import"
+        style="width:100%;background:#1a2332;color:white;padding:.875rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
+        <span>📥</span><span>Lancer l'import</span>
+      </button>
+    </form>
+  </div>
+
+  <!-- ══ PANNEAU DROIT : Infos + Modèle ══ -->
+  <div style="display:flex;flex-direction:column;gap:1rem">
+
+    <!-- Télécharger le modèle -->
+    <div class="card p-5">
+      <h2 style="font-size:.875rem;font-weight:900;color:#111827;margin-bottom:.75rem">📋 Modèle Excel à utiliser</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-bottom:1rem;line-height:1.5">
+        Téléchargez ce fichier, remplissez-le avec vos salariés et importez-le.
+        Le fichier contient les colonnes pré-formatées et un guide d'utilisation.
+      </p>
+      <a href="/salaries/import/modele"
+        style="display:flex;align-items:center;justify-content:center;gap:.625rem;background:linear-gradient(135deg,#059669,#047857);color:white;padding:.75rem 1.25rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none;text-align:center">
+        ⬇️ Télécharger le modèle Excel
+      </a>
+    </div>
+
+    <!-- Colonnes obligatoires -->
+    <div class="card p-5">
+      <h2 style="font-size:.875rem;font-weight:900;color:#111827;margin-bottom:.75rem">📌 Colonnes obligatoires</h2>
+      <div style="display:flex;flex-direction:column;gap:.375rem">
+        {% for col, desc in [
+          ('MATRICULE',     'Identifiant unique — ex: BTP-001'),
+          ('NOM',           'Nom de famille en MAJUSCULES'),
+          ('PRENOM',        'Prénom du salarié'),
+          ('EMPLOI',        'Poste / Fonction'),
+          ('DATE_EMBAUCHE', 'Format JJ/MM/AAAA — ex: 01/05/2026'),
+        ] %}
+        <div style="display:flex;align-items:flex-start;gap:.5rem;font-size:.8rem">
+          <span style="background:#fee2e2;color:#dc2626;font-weight:700;padding:.1rem .4rem;border-radius:.375rem;flex-shrink:0;font-size:.7rem">REQ</span>
+          <div>
+            <span style="font-weight:700;color:#111827">{{ col }}</span>
+            <span style="color:#9ca3af"> — {{ desc }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <div style="margin-top:.875rem;padding-top:.875rem;border-top:1px solid #f3f4f6">
+        <h3 style="font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.5rem">✅ Colonnes optionnelles</h3>
+        <div style="font-size:.75rem;color:#9ca3af;line-height:1.8">
+          CATEGORIE · SALAIRE_BASE · TELEPHONE · SEXE · DATE_NAISSANCE<br>
+          SITUATION_MAT · NB_ENFANTS · NOMBRE_PARTS · NUMERO_CNSS<br>
+          NUMERO_CNAMGS · NATIONALITE · EMAIL · ADRESSE
+        </div>
+      </div>
+    </div>
+
+    <!-- Limites et conseils -->
+    <div class="card p-5" style="background:#fffbeb;border-color:#fcd34d">
+      <h2 style="font-size:.875rem;font-weight:900;color:#92400e;margin-bottom:.75rem">⚠️ Bon à savoir</h2>
+      <ul style="font-size:.8rem;color:#78350f;line-height:1.8;padding-left:1rem;list-style:disc">
+        <li>Maximum <strong>500 salariés</strong> par import</li>
+        <li>Les lignes avec MATRICULE vide sont ignorées</li>
+        <li>Quota plan : <strong>{{ tenant.quota_employes_info.max or '∞' }} employés</strong></li>
+        <li>Les catégories doivent exister dans votre compte (C1 à C7)</li>
+        <li>Si SALAIRE_BASE est fourni, un contrat CDI est créé automatiquement</li>
+        <li>Fichier accepté : <strong>.xlsx uniquement</strong></li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// ── Sélection et drag & drop ──────────────────────────────────────────────
+function onFichierChange(input) {
+  const fn = input.files[0]?.name;
+  if (!fn) return;
+  const el = document.getElementById('file-name');
+  el.textContent = '📄 ' + fn;
+  el.style.display = '';
+  const dz = document.getElementById('drop-zone');
+  dz.style.borderColor = '#059669';
+  dz.style.background  = '#f0fdf4';
+}
+function dropFichier(e) {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  const input = document.getElementById('fichier');
+  const dt = new DataTransfer();
+  dt.items.add(file);
+  input.files = dt.files;
+  onFichierChange(input);
+  const dz = document.getElementById('drop-zone');
+  dz.style.borderColor = '#e5e7eb';
+  dz.style.background  = '';
+}
+
+// ── Boutons mode ignorer/écraser ──────────────────────────────────────────
+document.querySelectorAll('.radio-mode').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      const selected = btn.dataset.val === radio.value;
+      btn.style.borderColor = selected ? '#1a2332' : '#e5e7eb';
+      btn.style.background  = selected ? '#eff6ff' : '#f9fafb';
+      btn.querySelector('div:nth-child(2)').style.color = selected ? '#1e40af' : '#374151';
+    });
+  });
+  // Lier le clic sur le div au radio
+  const btn = document.querySelector(`.mode-btn[data-val="${radio.value}"]`);
+  if (btn) btn.addEventListener('click', () => { radio.checked = true; radio.dispatchEvent(new Event('change')); });
+});
+
+// ── Anti double-soumission ────────────────────────────────────────────────
+let _importSoumis = false;
+document.getElementById('form-import').addEventListener('submit', function(e) {
+  const f = document.getElementById('fichier');
+  if (!f.files.length) { e.preventDefault(); alert('Sélectionnez un fichier Excel.'); return; }
+  if (_importSoumis) { e.preventDefault(); return; }
+  _importSoumis = true;
+  const btn = document.getElementById('btn-import');
+  btn.innerHTML = '<span>⏳</span><span>Import en cours…</span>';
+  btn.disabled = true; btn.style.opacity = '.7';
+});
+</script>
+{% endblock %}
