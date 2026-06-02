@@ -4749,328 +4749,300 @@ def rapport_mensuel_site_export():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# DÉCLARATION CNSS MENSUELLE
+# DÉCLARATIONS SOCIALES & FISCALES
 # ══════════════════════════════════════════════════════════════════════════════
 
 @app.route("/declaration-cnss")
 @login_required
 def declaration_cnss():
-    """Page de déclaration CNSS mensuelle."""
+    """Déclarations sociales : CNSS/CNAMGS (trimestrielles) + CFP/FNH/TCS/IRPP (mensuelles)."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
 
-    periodes  = PeriodePaie.query.filter_by(tenant_id=t.id)        .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
-    pid       = request.args.get("periode_id", type=int)
-    periode   = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first() if pid else                 (periodes[0] if periodes else None)
+    periodes = PeriodePaie.query.filter_by(tenant_id=t.id)        .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
 
-    bulletins = []
-    stats     = {}
+    # Période sélectionnée
+    pid     = request.args.get("periode_id", type=int)
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first() if pid else               (periodes[0] if periodes else None)
+
+    # Mode : mensuel (CFP/FNH/TCS/IRPP) ou trimestriel (CNSS/CNAMGS)
+    mode    = request.args.get("mode", "mensuel")  # mensuel | trimestriel
+
+    bulletins_mois = []
+    bulletins_trim = []
+    stats_mensuel  = {}
+    stats_trim     = {}
+
     if periode:
-        bulletins = BulletinPaie.query.filter_by(
+        def s(buls, field): return round(sum(float(getattr(b, field) or 0) for b in buls), 2)
+
+        # ── Bulletins du mois sélectionné (CFP, FNH, TCS, IRPP) ─────────────
+        bulletins_mois = BulletinPaie.query.filter_by(
             tenant_id=t.id, periode_id=periode.id
         ).options(joinedload(BulletinPaie.salarie)).all()
 
-        def s(v): return float(v or 0)
-        stats = {
-            "nb_salaries":       len(bulletins),
-            "total_brut":        sum(s(b.salaire_brut)      for b in bulletins),
-            "total_base_cnss":   sum(s(b.base_cnss)         for b in bulletins),
-            "total_cnss_sal":    sum(s(b.cnss_salarie)       for b in bulletins),
-            "total_cnss_pat":    sum(s(b.cnss_patronale)     for b in bulletins),
-            "total_base_cnamgs": sum(s(b.base_cnamgs)        for b in bulletins),
-            "total_cnamgs_sal":  sum(s(b.cnamgs_salarie)     for b in bulletins),
-            "total_cnamgs_pat":  sum(s(b.cnamgs_patronale)   for b in bulletins),
-            "total_fnh":         sum(s(b.fnh)                for b in bulletins),
-            "total_cfp":         sum(s(b.cfp)                for b in bulletins),
+        stats_mensuel = {
+            "nb":           len(bulletins_mois),
+            "total_brut":   s(bulletins_mois, "salaire_brut"),
+            "total_cfp":    s(bulletins_mois, "cfp"),
+            "total_fnh":    s(bulletins_mois, "fnh"),
+            "total_tcs":    s(bulletins_mois, "tcs"),
+            "total_irpp":   s(bulletins_mois, "irpp"),
         }
-        stats["total_cnss"]   = stats["total_cnss_sal"]  + stats["total_cnss_pat"]
-        stats["total_cnamgs"] = stats["total_cnamgs_sal"] + stats["total_cnamgs_pat"]
-        stats["total_charges_pat"] = (stats["total_cnss_pat"] + stats["total_cnamgs_pat"]
-                                     + stats["total_fnh"] + stats["total_cfp"])
-        stats["total_a_verser"] = (stats["total_cnss_sal"]  + stats["total_cnss_pat"]
-                                 + stats["total_cnamgs_sal"] + stats["total_cnamgs_pat"]
-                                 + stats["total_fnh"] + stats["total_cfp"])
+        stats_mensuel["total_mensuel"] = (stats_mensuel["total_cfp"]  +
+                                          stats_mensuel["total_fnh"]  +
+                                          stats_mensuel["total_tcs"]  +
+                                          stats_mensuel["total_irpp"])
+
+        # ── Bulletins du trimestre (CNSS/CNAMGS) ─────────────────────────────
+        # Trimestre : T1=Jan-Mar, T2=Avr-Jun, T3=Jul-Sep, T4=Oct-Dec
+        mois = periode.mois
+        trim_debut = ((mois - 1) // 3) * 3 + 1   # 1, 4, 7, 10
+        trim_fin   = trim_debut + 2                # 3, 6, 9, 12
+        trim_num   = (mois - 1) // 3 + 1          # 1, 2, 3, 4
+        trim_label = f"T{trim_num} {periode.annee} ({['Jan-Mar','Avr-Jun','Jul-Sep','Oct-Déc'][trim_num-1]})"
+
+        periodes_trim = PeriodePaie.query.filter_by(
+            tenant_id=t.id, annee=periode.annee
+        ).filter(
+            PeriodePaie.mois >= trim_debut,
+            PeriodePaie.mois <= trim_fin
+        ).all()
+        ids_trim = [p.id for p in periodes_trim]
+
+        bulletins_trim = BulletinPaie.query.filter(
+            BulletinPaie.tenant_id == t.id,
+            BulletinPaie.periode_id.in_(ids_trim)
+        ).options(joinedload(BulletinPaie.salarie),
+                  joinedload(BulletinPaie.periode)).all()
+
+        # Regrouper par salarié pour le trimestre
+        from collections import defaultdict
+        sal_trim = defaultdict(lambda: {
+            "salarie": None, "brut": 0, "base_cnss": 0,
+            "cnss_sal": 0, "cnss_pat": 0,
+            "base_cnamgs": 0, "cnamgs_sal": 0, "cnamgs_pat": 0,
+            "mois_list": []
+        })
+        for b in bulletins_trim:
+            k = b.salarie_id
+            sal_trim[k]["salarie"]    = b.salarie
+            sal_trim[k]["brut"]      += float(b.salaire_brut   or 0)
+            sal_trim[k]["base_cnss"] += float(b.base_cnss      or 0)
+            sal_trim[k]["cnss_sal"]  += float(b.cnss_salarie   or 0)
+            sal_trim[k]["cnss_pat"]  += float(b.cnss_patronale or 0)
+            sal_trim[k]["base_cnamgs"]+= float(b.base_cnamgs   or 0)
+            sal_trim[k]["cnamgs_sal"]+= float(b.cnamgs_salarie  or 0)
+            sal_trim[k]["cnamgs_pat"]+= float(b.cnamgs_patronale or 0)
+            sal_trim[k]["mois_list"].append(b.periode.mois if b.periode else 0)
+
+        lignes_trim = sorted(sal_trim.values(), key=lambda x: x["salarie"].nom if x["salarie"] else "")
+
+        stats_trim = {
+            "trim_label":    trim_label,
+            "trim_num":      trim_num,
+            "nb":            len(lignes_trim),
+            "mois_couverts": sorted(set(
+                m for lg in lignes_trim for m in lg["mois_list"]
+            )),
+            "total_brut":    sum(lg["brut"]       for lg in lignes_trim),
+            "total_cnss_sal":sum(lg["cnss_sal"]   for lg in lignes_trim),
+            "total_cnss_pat":sum(lg["cnss_pat"]   for lg in lignes_trim),
+            "total_cnamgs_sal":sum(lg["cnamgs_sal"]  for lg in lignes_trim),
+            "total_cnamgs_pat":sum(lg["cnamgs_pat"]  for lg in lignes_trim),
+        }
+        stats_trim["total_cnss"]     = stats_trim["total_cnss_sal"]   + stats_trim["total_cnss_pat"]
+        stats_trim["total_cnamgs"]   = stats_trim["total_cnamgs_sal"] + stats_trim["total_cnamgs_pat"]
+        stats_trim["total_a_verser"] = stats_trim["total_cnss"] + stats_trim["total_cnamgs"]
+
+    else:
+        lignes_trim = []
+
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
 
     return render_template("tenant/declaration_cnss.html",
-        tenant=t, periodes=periodes, periode=periode,
-        bulletins=bulletins, stats=stats)
+        tenant=t, periodes=periodes, periode=periode, mode=mode,
+        bulletins_mois=bulletins_mois, stats_mensuel=stats_mensuel,
+        lignes_trim=lignes_trim, stats_trim=stats_trim,
+        MOIS_FR=MOIS_FR)
 
 
 @app.route("/declaration-cnss/export-excel")
 @login_required
 def declaration_cnss_excel():
-    """Exporter la déclaration CNSS en Excel."""
+    """Export Excel déclarations : onglet sélectionné (mensuel ou trimestriel)."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
 
     pid     = request.args.get("periode_id", type=int)
+    mode    = request.args.get("mode", "mensuel")
     periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
-    buls    = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)        .options(joinedload(BulletinPaie.salarie)).all()
 
-    import openpyxl
+    import openpyxl, io
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-    import io
+    from collections import defaultdict
 
-    wb = openpyxl.Workbook()
+    wb  = openpyxl.Workbook()
+    H   = PatternFill("solid", fgColor="1a2332")
+    HF  = Font(bold=True, color="FFFFFF", size=10)
+    SF  = PatternFill("solid", fgColor="EFF6FF")
+    TF  = PatternFill("solid", fgColor="DBEAFE")
+    YF  = PatternFill("solid", fgColor="FFFBEB")
+    BD  = Border(left=Side(style='thin',color='E5E7EB'),
+                 right=Side(style='thin',color='E5E7EB'),
+                 top=Side(style='thin',color='E5E7EB'),
+                 bottom=Side(style='thin',color='E5E7EB'))
+    CTR = Alignment(horizontal='center', vertical='center')
+    RGT = Alignment(horizontal='right',  vertical='center')
+    LFT = Alignment(horizontal='left',   vertical='center')
+    FMT = '#,##0'
 
-    # ── Feuille 1 : CNSS ──────────────────────────────────────────────────
-    ws = wb.active
-    ws.title = f"CNSS {periode.libelle_complet}"
+    def h(ws,r,c,v,w=None):
+        cell=ws.cell(r,c,v); cell.font=HF; cell.fill=H
+        cell.alignment=CTR; cell.border=BD
+        if w: ws.column_dimensions[get_column_letter(c)].width=w
+    def d(ws,r,c,v,fmt=None,bold=False,al='left',fill=None):
+        cell=ws.cell(r,c,v)
+        if bold:  cell.font=Font(bold=True)
+        if fill:  cell.fill=fill
+        if fmt:   cell.number_format=fmt
+        cell.alignment=CTR if al=='center' else (RGT if al=='right' else LFT)
+        cell.border=BD
+        return cell
 
-    H_FILL  = PatternFill("solid", fgColor="1a2332")
-    H_FONT  = Font(bold=True, color="FFFFFF", size=10)
-    S_FILL  = PatternFill("solid", fgColor="EFF6FF")
-    TOT_FILL= PatternFill("solid", fgColor="DBEAFE")
-    BORDER  = Border(
-        left=Side(style='thin', color='E5E7EB'),
-        right=Side(style='thin', color='E5E7EB'),
-        top=Side(style='thin', color='E5E7EB'),
-        bottom=Side(style='thin', color='E5E7EB'),
-    )
-    BOLD    = Font(bold=True)
-    CENTER  = Alignment(horizontal='center', vertical='center')
-    RIGHT   = Alignment(horizontal='right',  vertical='center')
-    LEFT    = Alignment(horizontal='left',   vertical='center')
+    buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)        .options(joinedload(BulletinPaie.salarie)).all()
 
-    def hdr(ws, row, col, val, width=None):
-        c = ws.cell(row=row, column=col, value=val)
-        c.font = H_FONT; c.fill = H_FILL
-        c.alignment = CENTER; c.border = BORDER
-        if width: ws.column_dimensions[get_column_letter(col)].width = width
-        return c
+    def s(buls_,field): return sum(float(getattr(b,field) or 0) for b in buls_)
 
-    def cell(ws, row, col, val, fmt=None, bold=False, align='left', fill=None):
-        c = ws.cell(row=row, column=col, value=val)
-        if bold:  c.font = Font(bold=True)
-        if fill:  c.fill = fill
-        if fmt:   c.number_format = fmt
-        c.alignment = CENTER if align=='center' else (RIGHT if align=='right' else LEFT)
-        c.border = BORDER
-        return c
+    if mode == "mensuel":
+        # ── Feuille MENSUELLE : CFP / FNH / TCS / IRPP ───────────────────
+        ws = wb.active; ws.title = f"Mensuel {periode.libelle_complet}"
+        ws.merge_cells('A1:H1')
+        ws['A1'] = f"DÉCLARATION MENSUELLE — {periode.libelle_complet.upper()} — {t.denomination.upper()}"
+        ws['A1'].font=Font(bold=True,size=12,color="1a2332")
+        ws['A1'].fill=SF; ws['A1'].alignment=CTR
+        ws.row_dimensions[1].height=26
 
-    # ── En-tête document ──────────────────────────────────────────────────
-    ws.merge_cells('A1:L1')
-    ws['A1'] = f"DÉCLARATION DE COTISATIONS CNSS — {periode.libelle_complet.upper()}"
-    ws['A1'].font = Font(bold=True, size=13, color="1a2332")
-    ws['A1'].fill = PatternFill("solid", fgColor="EFF6FF")
-    ws['A1'].alignment = Alignment(horizontal='center')
-    ws.row_dimensions[1].height = 28
+        ws.merge_cells('A2:H2')
+        ws['A2'] = f"N°CNSS : {t.numero_cnss or '—'}  |  NIF : {t.nif or '—'}  |  {t.adresse or ''} {t.ville or 'Libreville'}"
+        ws['A2'].font=Font(size=9,italic=True); ws.row_dimensions[2].height=16
 
-    ws.merge_cells('A2:L2')
-    ws['A2'] = (f"Employeur : {t.denomination.upper()}   |   "
-                f"N°CNSS Employeur : {t.numero_cnss or '—'}   |   "
-                f"NIF : {t.nif or '—'}   |   "
-                f"Adresse : {t.adresse or '—'}, {t.ville or 'Libreville'}")
-    ws['A2'].font = Font(size=9, italic=True)
-    ws['A2'].fill = PatternFill("solid", fgColor="F9FAFB")
-    ws['A2'].alignment = Alignment(horizontal='left')
-    ws.row_dimensions[2].height = 18
+        cols=[("N°",4),("MATRICULE",13),("NOM & PRÉNOM",28),
+              ("SALAIRE BRUT",15),("BASE TCS",14),("TCS 5%",12),
+              ("IRPP",12),("CFP 0.5%",12),("FNH 3%",12),("TOTAL MENSUEL",15)]
+        for ci,(l,w) in enumerate(cols,1): h(ws,3,ci,l,w)
+        ws.row_dimensions[3].height=20
 
-    ws.row_dimensions[3].height = 6  # espace
+        for i,b in enumerate(buls,1):
+            r=i+3; bg=SF if i%2==0 else None
+            total_m=(float(b.tcs or 0)+float(b.irpp or 0)+float(b.cfp or 0)+float(b.fnh or 0))
+            d(ws,r,1,i,al='center',fill=bg)
+            d(ws,r,2,b.salarie.matricule or '',al='center',fill=bg)
+            d(ws,r,3,b.salarie.nom_complet,fill=bg)
+            d(ws,r,4,float(b.salaire_brut or 0),FMT,fill=bg,al='right')
+            d(ws,r,5,float(b.base_tcs or 0),FMT,fill=bg,al='right')
+            d(ws,r,6,float(b.tcs or 0),FMT,fill=bg,al='right')
+            d(ws,r,7,float(b.irpp or 0),FMT,fill=bg,al='right')
+            d(ws,r,8,float(b.cfp or 0),FMT,fill=bg,al='right')
+            d(ws,r,9,float(b.fnh or 0),FMT,fill=bg,al='right')
+            d(ws,r,10,total_m,FMT,bold=True,fill=bg,al='right')
+            ws.row_dimensions[r].height=18
 
-    # ── En-tête colonnes ──────────────────────────────────────────────────
-    cols = [
-        ("N°",              5),  ("MATRICULE",      12), ("NOM & PRÉNOM",       28),
-        ("N° CNSS",        14),  ("SALAIRE BRUT",   16), ("BASE CNSS",          16),
-        ("CNSS SAL. 5%",   14),  ("CNSS PAT. 18%",  14), ("BASE CNAMGS",        14),
-        ("CNAMGS SAL. 2%", 14),  ("CNAMGS PAT.4.1%",14), ("FNH 3%",             12),
-    ]
-    for col_idx, (label, width) in enumerate(cols, 1):
-        hdr(ws, 4, col_idx, label, width)
-    ws.row_dimensions[4].height = 22
+        rt=len(buls)+4
+        for ci,val in enumerate([f"TOTAL ({len(buls)})","",'',s(buls,'salaire_brut'),
+                                  s(buls,'base_tcs'),s(buls,'tcs'),s(buls,'irpp'),
+                                  s(buls,'cfp'),s(buls,'fnh'),
+                                  s(buls,'tcs')+s(buls,'irpp')+s(buls,'cfp')+s(buls,'fnh')],1):
+            d(ws,rt,ci,val,FMT if isinstance(val,float) else None,bold=True,fill=TF,
+              al='right' if isinstance(val,float) else 'center')
+        ws.row_dimensions[rt].height=22
 
-    # ── Données ───────────────────────────────────────────────────────────
-    fmt_num = '#,##0'
-    row = 5
-    for i, b in enumerate(buls, 1):
-        sal = b.salarie
-        bg  = S_FILL if i % 2 == 0 else None
-        cell(ws, row, 1,  i,                                    align='center', fill=bg)
-        cell(ws, row, 2,  sal.matricule or '',                  align='center', fill=bg)
-        cell(ws, row, 3,  sal.nom_complet,                      fill=bg)
-        cell(ws, row, 4,  sal.numero_cnss or '',                align='center', fill=bg)
-        cell(ws, row, 5,  float(b.salaire_brut  or 0),         fmt_num, fill=bg, align='right')
-        cell(ws, row, 6,  float(b.base_cnss     or 0),         fmt_num, fill=bg, align='right')
-        cell(ws, row, 7,  float(b.cnss_salarie  or 0),         fmt_num, fill=bg, align='right')
-        cell(ws, row, 8,  float(b.cnss_patronale or 0),        fmt_num, fill=bg, align='right')
-        cell(ws, row, 9,  float(b.base_cnamgs   or 0),         fmt_num, fill=bg, align='right')
-        cell(ws, row, 10, float(b.cnamgs_salarie or 0),        fmt_num, fill=bg, align='right')
-        cell(ws, row, 11, float(b.cnamgs_patronale or 0),      fmt_num, fill=bg, align='right')
-        cell(ws, row, 12, float(b.fnh or 0),                   fmt_num, fill=bg, align='right')
-        ws.row_dimensions[row].height = 18
-        row += 1
+    else:
+        # ── Feuille TRIMESTRIELLE : CNSS / CNAMGS ────────────────────────
+        mois=periode.mois; trim_num=(mois-1)//3+1
+        trim_debut=((mois-1)//3)*3+1; trim_fin=trim_debut+2
+        MOIS_FR=["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+        trim_label=f"T{trim_num} {periode.annee}"
 
-    # ── Ligne totaux ──────────────────────────────────────────────────────
-    def s(field): return sum(float(getattr(b, field) or 0) for b in buls)
-    cell(ws, row, 1,  "TOTAL", bold=True, align='center', fill=TOT_FILL)
-    cell(ws, row, 2,  f"{len(buls)} salarié(s)", bold=True, fill=TOT_FILL)
-    cell(ws, row, 3,  "", fill=TOT_FILL)
-    cell(ws, row, 4,  "", fill=TOT_FILL)
-    cell(ws, row, 5,  s("salaire_brut"),   fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 6,  s("base_cnss"),      fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 7,  s("cnss_salarie"),   fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 8,  s("cnss_patronale"), fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 9,  s("base_cnamgs"),    fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 10, s("cnamgs_salarie"), fmt_num, bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 11, s("cnamgs_patronale"),fmt_num,bold=True, fill=TOT_FILL, align='right')
-    cell(ws, row, 12, s("fnh"),            fmt_num, bold=True, fill=TOT_FILL, align='right')
-    ws.row_dimensions[row].height = 22
-    row += 2
+        periodes_trim=PeriodePaie.query.filter_by(tenant_id=t.id,annee=periode.annee)            .filter(PeriodePaie.mois>=trim_debut,PeriodePaie.mois<=trim_fin).all()
+        ids_trim=[p.id for p in periodes_trim]
+        buls_trim=BulletinPaie.query.filter(
+            BulletinPaie.tenant_id==t.id,
+            BulletinPaie.periode_id.in_(ids_trim)
+        ).options(joinedload(BulletinPaie.salarie)).all()
 
-    # ── Récapitulatif à verser ────────────────────────────────────────────
-    ws.merge_cells(f'A{row}:C{row}')
-    ws[f'A{row}'] = "RÉCAPITULATIF DES MONTANTS À VERSER"
-    ws[f'A{row}'].font = Font(bold=True, size=11, color="1a2332")
-    ws[f'A{row}'].fill = PatternFill("solid", fgColor="EFF6FF")
-    ws.row_dimensions[row].height = 22
-    row += 1
+        sal_data=defaultdict(lambda:{"salarie":None,"brut":0,"base_cnss":0,
+            "cnss_sal":0,"cnss_pat":0,"base_cnamgs":0,"cnamgs_sal":0,"cnamgs_pat":0})
+        for b in buls_trim:
+            k=b.salarie_id; sal_data[k]["salarie"]=b.salarie
+            sal_data[k]["brut"]      +=float(b.salaire_brut    or 0)
+            sal_data[k]["base_cnss"] +=float(b.base_cnss       or 0)
+            sal_data[k]["cnss_sal"]  +=float(b.cnss_salarie    or 0)
+            sal_data[k]["cnss_pat"]  +=float(b.cnss_patronale  or 0)
+            sal_data[k]["base_cnamgs"]+=float(b.base_cnamgs    or 0)
+            sal_data[k]["cnamgs_sal"]+=float(b.cnamgs_salarie   or 0)
+            sal_data[k]["cnamgs_pat"]+=float(b.cnamgs_patronale or 0)
+        lignes=sorted(sal_data.values(),key=lambda x:x["salarie"].nom if x["salarie"] else "")
 
-    recap = [
-        ("CNSS — Part salariale (5%)",        s("cnss_salarie")),
-        ("CNSS — Part patronale (18%)",        s("cnss_patronale")),
-        ("CNAMGS — Part salariale (2%)",       s("cnamgs_salarie")),
-        ("CNAMGS — Part patronale (4.1%)",     s("cnamgs_patronale")),
-        ("FNH — Fonds National de l'Habitat (3%)", s("fnh")),
-        ("CFP — Contribution Formation Professionnelle (0.5%)", s("cfp")),
-    ]
-    total_versement = 0
-    for label, montant in recap:
-        ws.merge_cells(f'A{row}:C{row}')
-        ws[f'A{row}'] = label
-        ws[f'A{row}'].border = BORDER
-        ws[f'D{row}'] = montant
-        ws[f'D{row}'].number_format = '#,##0'
-        ws[f'D{row}'].font = Font(bold=True)
-        ws[f'D{row}'].alignment = RIGHT
-        ws[f'D{row}'].border = BORDER
-        ws[f'E{row}'] = "FCFA"
-        ws[f'E{row}'].border = BORDER
-        ws.row_dimensions[row].height = 18
-        total_versement += montant
-        row += 1
+        ws=wb.active; ws.title=f"CNSS-CNAMGS {trim_label}"
+        ws.merge_cells('A1:K1')
+        ws['A1']=f"DÉCLARATION TRIMESTRIELLE CNSS/CNAMGS — {trim_label} — {t.denomination.upper()}"
+        ws['A1'].font=Font(bold=True,size=12,color="1a2332")
+        ws['A1'].fill=YF; ws['A1'].alignment=CTR
+        ws.row_dimensions[1].height=26
 
-    # Total à verser
-    ws.merge_cells(f'A{row}:C{row}')
-    ws[f'A{row}'] = "TOTAL À VERSER À LA CNSS/CNAMGS"
-    ws[f'A{row}'].font = Font(bold=True, size=12, color="1a2332")
-    ws[f'A{row}'].fill = PatternFill("solid", fgColor="DBEAFE")
-    ws[f'A{row}'].border = BORDER
-    ws[f'D{row}'] = total_versement
-    ws[f'D{row}'].number_format = '#,##0'
-    ws[f'D{row}'].font = Font(bold=True, size=12, color="1e40af")
-    ws[f'D{row}'].fill = PatternFill("solid", fgColor="DBEAFE")
-    ws[f'D{row}'].alignment = RIGHT
-    ws[f'D{row}'].border = BORDER
-    ws[f'E{row}'] = "FCFA"
-    ws[f'E{row}'].fill = PatternFill("solid", fgColor="DBEAFE")
-    ws[f'E{row}'].border = BORDER
-    ws.row_dimensions[row].height = 26
-    row += 2
+        periodes_couverts=[MOIS_FR[m] for m in sorted(set(p.mois for p in periodes_trim))]
+        ws.merge_cells('A2:K2')
+        ws['A2']=(f"Mois couverts : {', '.join(periodes_couverts)}  |  "
+                  f"N°CNSS : {t.numero_cnss or '—'}  |  NIF : {t.nif or '—'}")
+        ws['A2'].font=Font(size=9,italic=True); ws.row_dimensions[2].height=16
 
-    # Signatures
-    ws.merge_cells(f'A{row}:C{row}')
-    ws[f'A{row}'] = "Signature du Responsable RH"
-    ws.merge_cells(f'E{row}:G{row}')
-    ws[f'E{row}'] = "Cachet & Signature Employeur"
-    for c in [f'A{row}', f'E{row}']:
-        ws[c].font = Font(italic=True, size=9)
-        ws[c].alignment = Alignment(horizontal='center')
-    ws.row_dimensions[row].height = 50
+        cols=[("N°",4),("MATRICULE",13),("NOM & PRÉNOM",28),("N°CNSS",13),
+              ("BRUT TRIM.",15),("BASE CNSS",14),("CNSS SAL.5%",13),("CNSS PAT.18%",13),
+              ("BASE CNAMGS",13),("CNAMGS SAL.2%",13),("CNAMGS PAT.4.1%",14),("TOTAL TRIM.",14)]
+        for ci,(l,w) in enumerate(cols,1): h(ws,3,ci,l,w)
 
-    # ── Feuille 2 : Récap CNAMGS ──────────────────────────────────────────
-    ws2 = wb.create_sheet(f"CNAMGS {periode.libelle_complet}")
-    ws2.merge_cells('A1:H1')
-    ws2['A1'] = f"DÉCLARATION CNAMGS — {periode.libelle_complet.upper()} — {t.denomination.upper()}"
-    ws2['A1'].font = Font(bold=True, size=12, color="1a2332")
-    ws2['A1'].fill = PatternFill("solid", fgColor="F0FDF4")
-    ws2['A1'].alignment = Alignment(horizontal='center')
-    ws2.row_dimensions[1].height = 24
+        for i,lg in enumerate(lignes,1):
+            r=i+3; bg=YF if i%2==0 else None
+            total_t=lg["cnss_sal"]+lg["cnss_pat"]+lg["cnamgs_sal"]+lg["cnamgs_pat"]
+            d(ws,r,1,i,al='center',fill=bg)
+            d(ws,r,2,(lg["salarie"].matricule or '') if lg["salarie"] else '',al='center',fill=bg)
+            d(ws,r,3,lg["salarie"].nom_complet if lg["salarie"] else '',fill=bg)
+            d(ws,r,4,(lg["salarie"].numero_cnss or '') if lg["salarie"] else '',al='center',fill=bg)
+            d(ws,r,5,lg["brut"],FMT,fill=bg,al='right')
+            d(ws,r,6,lg["base_cnss"],FMT,fill=bg,al='right')
+            d(ws,r,7,lg["cnss_sal"],FMT,fill=bg,al='right')
+            d(ws,r,8,lg["cnss_pat"],FMT,fill=bg,al='right')
+            d(ws,r,9,lg["base_cnamgs"],FMT,fill=bg,al='right')
+            d(ws,r,10,lg["cnamgs_sal"],FMT,fill=bg,al='right')
+            d(ws,r,11,lg["cnamgs_pat"],FMT,fill=bg,al='right')
+            d(ws,r,12,total_t,FMT,bold=True,fill=bg,al='right')
+            ws.row_dimensions[r].height=18
 
-    cols2 = [("N°",5),("NOM & PRÉNOM",28),("N° CNAMGS",14),
-             ("BASE CNAMGS",14),("PART SAL. 2%",13),("PART PAT. 4.1%",13),
-             ("ASSUJETTTI",11),("TOTAL",13)]
-    for ci, (l, w) in enumerate(cols2, 1):
-        hdr(ws2, 2, ci, l, w)
+        rt=len(lignes)+4
+        tot_vals=["TOTAL","","",f"{len(lignes)} sal.",
+                  sum(l["brut"] for l in lignes),
+                  sum(l["base_cnss"] for l in lignes),
+                  sum(l["cnss_sal"] for l in lignes),
+                  sum(l["cnss_pat"] for l in lignes),
+                  sum(l["base_cnamgs"] for l in lignes),
+                  sum(l["cnamgs_sal"] for l in lignes),
+                  sum(l["cnamgs_pat"] for l in lignes),
+                  sum(l["cnss_sal"]+l["cnss_pat"]+l["cnamgs_sal"]+l["cnamgs_pat"] for l in lignes)]
+        for ci,val in enumerate(tot_vals,1):
+            d(ws,rt,ci,val,FMT if isinstance(val,float) else None,bold=True,fill=TF,
+              al='right' if isinstance(val,float) else 'center')
 
-    for i, b in enumerate(buls, 1):
-        r2 = i + 2
-        sal = b.salarie
-        bg2 = S_FILL if i % 2 == 0 else None
-        cell(ws2, r2, 1, i, align='center', fill=bg2)
-        cell(ws2, r2, 2, sal.nom_complet, fill=bg2)
-        cell(ws2, r2, 3, sal.numero_cnamgs or '', align='center', fill=bg2)
-        cell(ws2, r2, 4, float(b.base_cnamgs or 0),    fmt_num, fill=bg2, align='right')
-        cell(ws2, r2, 5, float(b.cnamgs_salarie or 0), fmt_num, fill=bg2, align='right')
-        cell(ws2, r2, 6, float(b.cnamgs_patronale or 0),fmt_num,fill=bg2, align='right')
-        cell(ws2, r2, 7, "OUI" if sal.assujetti_cnamgs else "NON", align='center', fill=bg2)
-        total_cnamgs = float(b.cnamgs_salarie or 0) + float(b.cnamgs_patronale or 0)
-        cell(ws2, r2, 8, total_cnamgs, fmt_num, bold=True, fill=bg2, align='right')
-        ws2.row_dimensions[r2].height = 18
-
-    # ── Feuille 3 : Récap synthèse ────────────────────────────────────────
-    ws3 = wb.create_sheet("Synthèse")
-    ws3.merge_cells('A1:D1')
-    ws3['A1'] = f"SYNTHÈSE — {periode.libelle_complet.upper()}"
-    ws3['A1'].font = Font(bold=True, size=13)
-    ws3['A1'].fill = PatternFill("solid", fgColor="1a2332")
-    ws3['A1'].font = Font(bold=True, size=13, color="FFFFFF")
-    ws3['A1'].alignment = Alignment(horizontal='center')
-
-    synthese = [
-        ("Nombre de salariés déclarés",  len(buls),           ""),
-        ("Masse salariale brute totale",  s("salaire_brut"),   "FCFA"),
-        ("", "", ""),
-        ("CNSS salariale (5%)",          s("cnss_salarie"),    "FCFA"),
-        ("CNSS patronale (18%)",         s("cnss_patronale"),  "FCFA"),
-        ("Total CNSS",       s("cnss_salarie")+s("cnss_patronale"), "FCFA"),
-        ("", "", ""),
-        ("CNAMGS salariale (2%)",        s("cnamgs_salarie"),  "FCFA"),
-        ("CNAMGS patronale (4.1%)",      s("cnamgs_patronale"),"FCFA"),
-        ("Total CNAMGS", s("cnamgs_salarie")+s("cnamgs_patronale"),"FCFA"),
-        ("", "", ""),
-        ("FNH (3%)",                     s("fnh"),             "FCFA"),
-        ("CFP (0.5%)",                   s("cfp"),             "FCFA"),
-        ("", "", ""),
-        ("TOTAL À VERSER", s("cnss_salarie")+s("cnss_patronale")+
-                           s("cnamgs_salarie")+s("cnamgs_patronale")+
-                           s("fnh")+s("cfp"), "FCFA"),
-    ]
-    for ri, (label, val, unit) in enumerate(synthese, 2):
-        if not label:
-            ws3.row_dimensions[ri].height = 8
-            continue
-        is_total = "TOTAL" in label
-        bg3 = PatternFill("solid", fgColor="DBEAFE" if is_total else ("F9FAFB" if ri%2==0 else "FFFFFF"))
-        c1 = ws3.cell(row=ri, column=1, value=label)
-        c1.font = Font(bold=is_total, size=10)
-        c1.fill = bg3; c1.border = BORDER
-        c2 = ws3.cell(row=ri, column=2, value=val if isinstance(val, str) else val)
-        if isinstance(val, float): c2.number_format = '#,##0'
-        c2.font = Font(bold=is_total, size=10, color="1e40af" if is_total else "111827")
-        c2.fill = bg3; c2.border = BORDER
-        c2.alignment = RIGHT
-        c3 = ws3.cell(row=ri, column=3, value=unit)
-        c3.fill = bg3; c3.border = BORDER
-        ws3.row_dimensions[ri].height = 20
-
-    ws3.column_dimensions['A'].width = 38
-    ws3.column_dimensions['B'].width = 18
-    ws3.column_dimensions['C'].width = 8
-
-    # ── Export ────────────────────────────────────────────────────────────
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
     from flask import Response
-    nom = f"declaration_cnss_{t.denomination.replace(' ','_')}_{periode.annee}_{periode.mois:02d}.xlsx"
-    return Response(
-        buf.read(),
+    nom=(f"declaration_{'mensuelle' if mode=='mensuel' else 'trimestrielle'}_"
+         f"{t.denomination.replace(' ','_')}_{periode.annee}_{periode.mois:02d}.xlsx")
+    return Response(buf.read(),
         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{nom}"'}
-    )
+        headers={"Content-Disposition":f'attachment; filename="{nom}"'})
 
 # ══════════════════════════════════════════════════════════════════════════════
 # RECHERCHE GLOBALE
