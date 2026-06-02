@@ -27,6 +27,11 @@
     <a href="/journaliers" class="hover:text-slate-200">Journaliers</a>
     <a href="/parametres" class="hover:text-slate-200">⚙️</a>
     <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+    <button onclick="viderCache()" id="btn-cache"
+      title="Rafraîchir les données du tableau de bord"
+      style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.5rem;font-size:.7rem;font-weight:600;cursor:pointer">
+      🔄 Rafraîchir
+    </button>
   </div>
 </nav>
 <!-- Barre de recherche sous le nav du dashboard -->
@@ -364,6 +369,16 @@ document.addEventListener('keydown', e => {
   if ((e.ctrlKey||e.metaKey) && e.key==='k') { e.preventDefault(); const i=document.getElementById('dash-search'); if(i){i.focus();i.select();} }
   if (e.key==='Escape') { const d=document.getElementById('dash-dropdown'); if(d) d.style.display='none'; }
 });
+</script>
+<script>
+function viderCache() {
+  const btn = document.getElementById('btn-cache');
+  if (btn) { btn.textContent='⏳'; btn.disabled=true; }
+  fetch('/api/cache/clear', {method:'POST'})
+    .then(r => r.json())
+    .then(() => window.location.reload())
+    .catch(() => window.location.reload());
+}
 </script>
 </body>
 </html>
