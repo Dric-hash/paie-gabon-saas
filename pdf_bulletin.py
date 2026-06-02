@@ -94,8 +94,9 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
     # ══════════════════════════════════════════════════════════════════════════
     addr_lines = [t.denomination]
     if t.adresse:        addr_lines.append(t.adresse)
+    if t.ville:          addr_lines.append(t.ville)
     if t.telephone:      addr_lines.append(f"Tél : {t.telephone}")
-    if t.email:          addr_lines.append(t.email)
+    if t.nif:            addr_lines.append(f"NIF : {t.nif}")
     if t.numero_cnss:    addr_lines.append(f"N° CNSS : {t.numero_cnss}")
 
     header_data = [[
@@ -122,8 +123,10 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
 
     # Infos entreprise sur une ligne
     info_ent = " | ".join(filter(None, [
-        t.adresse or "", t.telephone or "", t.email or "",
-        f"N°CNSS {t.numero_cnss}" if t.numero_cnss else ""
+        t.adresse or "", t.ville or "", t.telephone or "",
+        f"NIF : {t.nif}" if t.nif else "",
+        f"N°CNSS {t.numero_cnss}" if t.numero_cnss else "",
+        f"N°CNAMGS {t.numero_cnamgs}" if t.numero_cnamgs else "",
     ]))
     if info_ent.strip(" |"):
         elements.append(Paragraph(info_ent, s_company))
