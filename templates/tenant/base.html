@@ -54,7 +54,11 @@
       <a href="/salaries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'salari' in ep else 'text-white/80 hover:bg-white/10' }}">
         👥 <span>Salariés</span>
       </a>
-      <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
+      <a href="/simulateur"
+          class="{{ 'bg-white/10 text-white' if request.endpoint == 'simulateur_paie' else 'text-white/70 hover:text-white hover:bg-white/5' }} flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all">
+          <span>🧮</span> Simulateur
+        </a>
+        <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
         📄 <span>Saisie bulletin</span>
       </a>
       <a href="/bulletins" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletins' else 'text-white/80 hover:bg-white/10' }}">
