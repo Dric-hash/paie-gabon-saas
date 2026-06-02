@@ -427,85 +427,129 @@ def confirmer_changement_email(token):
 @super_admin_required
 def admin_dashboard():
     from datetime import timedelta
-    tenants      = Tenant.query.order_by(Tenant.date_inscription.desc()).all()
-    total_sal    = db.session.query(db.func.count(Salarie.id)).scalar() or 0
-    total_bul    = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
+    now     = datetime.utcnow()
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+
+    # ── Tous les tenants (base de tout) ─────────────────────────────────────
+    tenants      = Tenant.query.options(joinedload(Tenant.plan)).order_by(Tenant.date_inscription.desc()).all()
     nb_tenants   = len(tenants)
-    nb_actifs    = sum(1 for t in tenants if t.statut=="ACTIF")
-    nb_essai     = sum(1 for t in tenants if t.statut=="ESSAI")
-    nb_suspendus = sum(1 for t in tenants if t.statut=="SUSPENDU")
-    revenus      = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut=="ACTIF")
+    nb_actifs    = sum(1 for t in tenants if t.statut == "ACTIF")
+    nb_essai     = sum(1 for t in tenants if t.statut == "ESSAI")
+    nb_suspendus = sum(1 for t in tenants if t.statut == "SUSPENDU")
 
-    # ── KPI conversion essai → payant ───────────────────────────────────────
-    # Tous les tenants qui ont été ou sont en ACTIF (ont converti)
-    nb_convertis  = sum(1 for t in tenants if t.statut == "ACTIF")
-    # Tous les tenants inscrits (ACTIF + ESSAI + SUSPENDU)
-    nb_inscrits_total = len(tenants)
-    taux_conversion = round((nb_convertis / nb_inscrits_total * 100) if nb_inscrits_total else 0)
+    # ── MRR / ARR ────────────────────────────────────────────────────────────
+    mrr = sum((float(t.plan.prix_mensuel) if t.plan else 0) for t in tenants if t.statut == "ACTIF")
+    arr = round(mrr * 12)
 
-    # ── Essais qui expirent dans 7 jours ────────────────────────────────────
-    now = datetime.utcnow()
+    # ── Croissance MoM (mois en cours vs mois précédent) ────────────────────
+    debut_mois_c = datetime(now.year, now.month, 1)
+    debut_mois_p = (debut_mois_c.replace(day=1) - timedelta(days=1)).replace(day=1)
+    inscrits_ce_mois  = sum(1 for t in tenants if t.date_inscription and t.date_inscription >= debut_mois_c)
+    inscrits_mois_prec= sum(1 for t in tenants if t.date_inscription and debut_mois_p <= t.date_inscription < debut_mois_c)
+    croissance_pct    = round(((inscrits_ce_mois - inscrits_mois_prec) / max(inscrits_mois_prec, 1)) * 100)
+
+    # ── Churn rate (suspendus / total actifs + suspendus) ────────────────────
+    churn_rate = round(nb_suspendus / max(nb_actifs + nb_suspendus, 1) * 100, 1)
+
+    # ── ARPU (revenu moyen par client actif) ─────────────────────────────────
+    arpu = round(mrr / max(nb_actifs, 1))
+
+    # ── Taux conversion ──────────────────────────────────────────────────────
+    taux_conversion = round((nb_actifs / max(nb_tenants, 1)) * 100)
+
+    # ── Essais urgents (< 7 jours) ───────────────────────────────────────────
     essais_urgents = [
         t for t in tenants
         if t.statut == "ESSAI" and t.date_expiration and t.date_expiration <= now + timedelta(days=7)
     ]
 
-    # ── Revenus simulés sur 6 mois glissants (basé sur inscriptions ACTIF) ──
-    # On simule l'évolution : pour chaque mois des 6 derniers mois,
-    # on compte les tenants ACTIF inscrits avant la fin de ce mois
-    revenus_6mois = []
-    mois_labels   = []
-    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+    # ── Activité totale ──────────────────────────────────────────────────────
+    total_sal = db.session.query(db.func.count(Salarie.id)).scalar() or 0
+    total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
+    total_ptg = db.session.query(db.func.count(Pointage.id)).scalar() or 0
+
+    # ── Score d'activité par tenant (bulletins + pointages ce mois) ─────────
+    sal_par_tenant     = {}
+    bul_par_tenant     = {}
+    score_par_tenant   = {}
+    for t in tenants:
+        nb_s = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+        nb_b = BulletinPaie.query.filter_by(tenant_id=t.id).count()
+        nb_b_mois = BulletinPaie.query.join(PeriodePaie).filter(
+            PeriodePaie.tenant_id == t.id,
+            PeriodePaie.annee == now.year, PeriodePaie.mois == now.month
+        ).count()
+        nb_p_mois = Pointage.query.filter_by(tenant_id=t.id).filter(
+            Pointage.date_pointage >= debut_mois_c.date()
+        ).count()
+        sal_par_tenant[t.id]   = nb_s
+        bul_par_tenant[t.id]   = nb_b
+        # Score 0-100 : bulletins ce mois (50%) + pointages ce mois (30%) + salariés (20%)
+        score = min(100, int(
+            min(nb_b_mois / max(nb_s, 1) * 50, 50) +
+            min(nb_p_mois / max(nb_s * 20, 1) * 30, 30) +
+            min(nb_s / 10 * 20, 20)
+        ))
+        score_par_tenant[t.id] = score
+
+    # ── Revenus 6 mois glissants + nb inscriptions ───────────────────────────
+    revenus_6mois     = []
+    inscrits_6mois    = []
+    bul_6mois         = []
+    mois_labels       = []
     for i in range(5, -1, -1):
-        # Date de fin du mois i mois avant maintenant
-        d = now - timedelta(days=i*30)
-        label = f"{MOIS_FR[d.month]} {str(d.year)[2:]}"
-        mois_labels.append(label)
+        d     = now - timedelta(days=i * 30)
+        debut = datetime(d.year, d.month, 1)
+        fin   = (debut + timedelta(days=32)).replace(day=1)
+        mois_labels.append(f"{MOIS_FR[d.month]} {str(d.year)[2:]}")
         rev = sum(
             (float(t.plan.prix_mensuel) if t.plan else 0)
             for t in tenants
-            if t.statut == "ACTIF" and t.date_inscription and t.date_inscription <= d
+            if t.statut == "ACTIF" and t.date_inscription and t.date_inscription <= fin
         )
         revenus_6mois.append(int(rev))
-
-    # ── Répartition par plan ─────────────────────────────────────────────────
-    plans_tous = Plan.query.filter_by(actif=True).all()
-    repartition_plans = []
-    for p in plans_tous:
-        nb = sum(1 for t in tenants if t.plan_id == p.id and t.statut == "ACTIF")
-        if nb > 0:
-            repartition_plans.append({"nom": p.nom, "nb": nb, "prix": float(p.prix_mensuel)})
-
-    # ── Bulletins par mois (6 derniers) ──────────────────────────────────────
-    bul_6mois   = []
-    bul_labels  = []
-    for i in range(5, -1, -1):
-        d = now - timedelta(days=i*30)
-        label = f"{MOIS_FR[d.month]} {str(d.year)[2:]}"
-        bul_labels.append(label)
+        inscrits_6mois.append(sum(
+            1 for t in tenants if t.date_inscription and debut <= t.date_inscription < fin
+        ))
         nb_bul = BulletinPaie.query.join(PeriodePaie).filter(
-            PeriodePaie.annee == d.year,
-            PeriodePaie.mois  == d.month
+            PeriodePaie.annee == d.year, PeriodePaie.mois == d.month
         ).count()
         bul_6mois.append(nb_bul)
 
-    # ── Bulletins par tenant (pour le tableau) — calculé en Python ──────────
-    # Évite TypeError: 'int' + 'InstrumentedList' dans Jinja2
-    bulletins_par_tenant = {}
-    for t in tenants:
-        nb = BulletinPaie.query.filter_by(tenant_id=t.id).count()
-        bulletins_par_tenant[t.id] = nb
+    # ── Répartition par plan ─────────────────────────────────────────────────
+    plans_tous = Plan.query.filter_by(actif=True).all()
+    repartition_plans = [
+        {"nom": p.nom, "nb": sum(1 for t in tenants if t.plan_id == p.id and t.statut == "ACTIF"),
+         "prix": float(p.prix_mensuel)}
+        for p in plans_tous
+        if sum(1 for t in tenants if t.plan_id == p.id and t.statut == "ACTIF") > 0
+    ]
+
+    # ── Top tenants les plus actifs ───────────────────────────────────────────
+    top_tenants = sorted(
+        [t for t in tenants if t.statut == "ACTIF"],
+        key=lambda t: score_par_tenant.get(t.id, 0),
+        reverse=True
+    )[:5]
+
+    # ── Nouvelles inscriptions ce mois ───────────────────────────────────────
+    nouveaux_ce_mois = [t for t in tenants if t.date_inscription and t.date_inscription >= debut_mois_c]
 
     return render_template("admin/dashboard.html",
         tenants=tenants, nb_tenants=nb_tenants,
         nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
-        total_sal=total_sal, total_bul=total_bul, revenus=revenus,
+        mrr=mrr, arr=arr, arpu=arpu, churn_rate=churn_rate,
+        croissance_pct=croissance_pct, inscrits_ce_mois=inscrits_ce_mois,
         taux_conversion=taux_conversion,
+        total_sal=total_sal, total_bul=total_bul, total_ptg=total_ptg,
         essais_urgents=essais_urgents,
-        revenus_6mois=revenus_6mois, mois_labels=mois_labels,
-        repartition_plans=repartition_plans,
-        bul_6mois=bul_6mois, bul_labels=bul_labels,
-        bulletins_par_tenant=bulletins_par_tenant,
+        revenus_6mois=revenus_6mois, inscrits_6mois=inscrits_6mois,
+        mois_labels=mois_labels, repartition_plans=repartition_plans,
+        bul_6mois=bul_6mois, bul_labels=mois_labels,
+        sal_par_tenant=sal_par_tenant, bul_par_tenant=bul_par_tenant,
+        score_par_tenant=score_par_tenant, top_tenants=top_tenants,
+        nouveaux_ce_mois=nouveaux_ce_mois,
+        bulletins_par_tenant=bul_par_tenant,
         now=now)
 
 @app.route("/admin/tenants")
