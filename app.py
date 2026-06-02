@@ -2,6 +2,7 @@
 app.py — SaaS Paie Gabon — Multi-tenant
 """
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, session
+from sqlalchemy.orm import joinedload
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from datetime import datetime, date, timedelta
 from functools import wraps
@@ -851,9 +852,15 @@ def dashboard():
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("login"))
     now=datetime.now()
-    nb_actifs         = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-    nb_inactifs       = Salarie.query.filter_by(tenant_id=t.id, statut="INACTIF").count()
-    nb_total          = Salarie.query.filter_by(tenant_id=t.id).count()
+    from sqlalchemy import func
+    _sal_q = db.session.query(
+        func.sum(db.cast(Salarie.statut == "ACTIF",   db.Integer)).label("actifs"),
+        func.sum(db.cast(Salarie.statut == "INACTIF", db.Integer)).label("inactifs"),
+        func.count().label("total"),
+    ).filter(Salarie.tenant_id == t.id).one()
+    nb_actifs         = int(_sal_q.actifs   or 0)
+    nb_inactifs       = int(_sal_q.inactifs or 0)
+    nb_total          = int(_sal_q.total    or 0)
     nb_journaliers    = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
     nb_total_employes = nb_actifs + nb_journaliers
     debut_mois  = datetime(now.year, now.month, 1).date()
@@ -1078,6 +1085,7 @@ def salaries():
     query  = Salarie.query.filter_by(tenant_id=t.id)
     if q:      query = query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"), Salarie.prenom.ilike(f"%{q}%"), Salarie.matricule.ilike(f"%{q}%")))
     if statut: query = query.filter_by(statut=statut)
+    query = query.options(joinedload(Salarie.categorie))
     pagination = query.order_by(Salarie.nom).paginate(page=page, per_page=25, error_out=False)
     _args  = {k: v for k, v in request.args.items() if k != 'page'}
     _base  = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
@@ -1289,7 +1297,10 @@ def bulletins():
 
     if pid:
         ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
-        q  = BulletinPaie.query.filter_by(periode_id=pid, tenant_id=t.id)
+        q = BulletinPaie.query.options(
+            joinedload(BulletinPaie.salarie),
+            joinedload(BulletinPaie.periode),
+        ).filter_by(tenant_id=t.id, periode_id=pid)
         if sf:
             q = q.filter_by(statut=sf)
 
@@ -2398,6 +2409,7 @@ def journaliers_paie():
     total_en_attente = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "EN_ATTENTE")
     total_paye       = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "PAYÉ")
     nb_en_attente    = sum(1 for f in feuilles_tous if f.statut == "EN_ATTENTE")
+    q_feuilles = q_feuilles.options(joinedload(FeuillePaieJournalier.journalier))
     pagination_f     = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).paginate(page=page_f, per_page=25, error_out=False)
     feuilles         = pagination_f.items
 
