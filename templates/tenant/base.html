@@ -2,8 +2,23 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>{% block title %}PaieGabon{% endblock %}</title>
+
+  <!-- ── PWA Méta-tags ─────────────────────────────────────────────────── -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#1a2332" id="meta-theme-color"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="PaieGabon"/>
+  <meta name="application-name" content="PaieGabon"/>
+  <meta name="description" content="Gestion de paie pour entreprises au Gabon"/>
+  <!-- Icônes Apple -->
+  <link rel="apple-touch-icon" href="/static/icons/icon-152.png"/>
+  <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png"/>
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png"/>
   <script>
     // Anti-flash : appliquer dark mode avant rendu
     if (localStorage.getItem('paie_dark_mode') === '1') {
@@ -122,6 +137,10 @@
       <a href="/sites" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='sites' else 'text-white/80 hover:bg-white/10' }}">
         🏗️ <span>Sites</span>
       </a>
+      <a href="/declaration-cnss"
+        class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_cnss' else 'text-white/80 hover:bg-white/10' }}">
+        📋 <span>Décl. CNSS</span>
+      </a>
       <a href="/rapports/mensuel-site" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all {{ 'bg-white text-slate-900' if ep=='rapport' else 'text-white/80 hover:bg-white/10' }}">
         📊 <span>Rapports</span>
       </a>
@@ -172,6 +191,17 @@
       </div>
     </div>
 
+    <!-- Bouton Installer PWA (caché par défaut, affiché si installable) -->
+    <div id="btn-install-app"
+      onclick="installApp()"
+      style="display:none;margin:.5rem .75rem;background:linear-gradient(135deg,#6d28d9,#4c1d95);border-radius:.875rem;padding:.625rem .875rem;cursor:pointer;align-items:center;gap:.625rem">
+      <span style="font-size:1rem">📱</span>
+      <div>
+        <div style="font-size:.75rem;font-weight:700;color:white">Installer l'application</div>
+        <div style="font-size:.65rem;color:rgba(255,255,255,.6)">Accès rapide sur votre téléphone</div>
+      </div>
+    </div>
+
     <!-- Bandeau essai -->
     {% if tenant and tenant.statut == 'ESSAI' %}
     <div class="mx-3 mb-3 bg-amber-500/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 text-center font-semibold">
@@ -204,6 +234,63 @@
 {% block scripts %}{% endblock %}
 
 <script>
+// ── PWA — Enregistrement Service Worker ──────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js', { scope: '/' })
+      .then(reg => {
+        console.log('[PWA] SW enregistré', reg.scope);
+        // Vérifier les mises à jour
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showUpdateBanner();
+            }
+          });
+        });
+      })
+      .catch(err => console.log('[PWA] SW erreur:', err));
+  });
+}
+
+// ── Bannière mise à jour disponible ──────────────────────────────────────────
+function showUpdateBanner() {
+  const banner = document.createElement('div');
+  banner.id = 'pwa-update-banner';
+  banner.style.cssText = 'position:fixed;bottom:1rem;left:50%;transform:translateX(-50%);z-index:9999;background:#1a2332;color:white;padding:.75rem 1.25rem;border-radius:.875rem;font-size:.8rem;font-weight:700;display:flex;align-items:center;gap:.75rem;box-shadow:0 8px 24px rgba(0,0,0,.3)';
+  banner.innerHTML = '<span>🔄 Mise à jour disponible</span><button onclick="window.location.reload()" style="background:#6d28d9;color:white;border:none;padding:.35rem .75rem;border-radius:.5rem;cursor:pointer;font-weight:700">Actualiser</button><button onclick="this.parentElement.remove()" style="background:transparent;color:rgba(255,255,255,.5);border:none;cursor:pointer;font-size:1rem">✕</button>';
+  document.body.appendChild(banner);
+  setTimeout(() => banner.remove(), 8000);
+}
+
+// ── Install prompt (bouton Installer) ────────────────────────────────────────
+let _deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _deferredInstall = e;
+  const btn = document.getElementById('btn-install-app');
+  if (btn) { btn.style.display = 'flex'; }
+});
+
+function installApp() {
+  if (!_deferredInstall) return;
+  _deferredInstall.prompt();
+  _deferredInstall.userChoice.then(result => {
+    if (result.outcome === 'accepted') {
+      const btn = document.getElementById('btn-install-app');
+      if (btn) btn.style.display = 'none';
+    }
+    _deferredInstall = null;
+  });
+}
+
+window.addEventListener('appinstalled', () => {
+  const btn = document.getElementById('btn-install-app');
+  if (btn) btn.style.display = 'none';
+  console.log('[PWA] Application installée');
+});
+
 // ── Dark Mode ─────────────────────────────────────────────────────────────────
 (function() {
   // Appliquer immédiatement pour éviter le flash
