@@ -1,0 +1,387 @@
+{% extends "tenant/base.html" %}
+{% block title %}Simulateur de paie — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">🧮 Simulateur de paie</h1>
+    <p class="text-gray-500 text-sm mt-1">Calculez un bulletin instantanément sans le sauvegarder — résultats en temps réel</p>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    <button onclick="resetFormulaire()" style="background:#f3f4f6;color:#374151;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">🔄 Réinitialiser</button>
+    <button onclick="window.print()" style="background:#1a2332;color:white;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">🖨️ Imprimer</button>
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start" id="sim-grid">
+
+  <!-- ══ PANNEAU SAISIE ══ -->
+  <div>
+
+    <!-- Sélecteur salarié -->
+    <div class="card p-5 mb-4">
+      <h2 style="font-size:.825rem;font-weight:900;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.875rem">👤 Salarié (optionnel)</h2>
+      <select id="sel_salarie" onchange="chargerSalarie(this.value)"
+        style="width:100%;border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.625rem .875rem;font-size:.875rem;color:#111827">
+        <option value="">— Simuler sans salarié ou saisir manuellement —</option>
+        {% for s in salaries %}
+        <option value="{{ s.id }}"
+          data-nom="{{ s.nom_complet }}"
+          data-emploi="{{ s.emploi or '' }}"
+          data-parts="{{ s.nombre_parts or 1 }}">
+          {{ s.nom_complet }} — {{ s.emploi or '—' }} ({{ s.matricule }})
+        </option>
+        {% endfor %}
+      </select>
+      <div id="info-salarie" style="display:none;margin-top:.625rem;padding:.5rem .875rem;background:#eff6ff;border-radius:.625rem;font-size:.8rem;color:#1e40af;font-weight:600"></div>
+    </div>
+
+    <!-- Salaire & heures sup -->
+    <div class="card p-5 mb-4">
+      <h2 style="font-size:.825rem;font-weight:900;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.875rem">💼 Rémunération de base</h2>
+
+      <div style="margin-bottom:.875rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Salaire de base (FCFA)</label>
+        <input type="number" id="salaire_base" value="0" min="0" step="1000"
+          style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem;font-size:1.1rem;font-weight:700;text-align:right;font-family:monospace"
+          oninput="onSalaireChange(); simuler()"
+          onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"/>
+        <div id="info-th" style="margin-top:.375rem;font-size:.75rem;color:#6b7280;font-style:italic"></div>
+      </div>
+
+      <!-- Mode BTP -->
+      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;padding:.625rem .875rem;background:#fffbeb;border-radius:.875rem;border:1px solid #fcd34d">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;flex:1">
+          <input type="checkbox" id="mode_btp" onchange="toggleModeBTP(); simuler()"
+            style="width:16px;height:16px;accent-color:#d97706"/>
+          <div>
+            <div style="font-size:.8rem;font-weight:700;color:#92400e">⚙️ Régime BTP (48h/semaine)</div>
+            <div style="font-size:.7rem;color:#a16207">Ajoute automatiquement 17,33h×+10% et 17,33h×+30%</div>
+          </div>
+        </label>
+      </div>
+
+      <!-- Heures supplémentaires -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem">
+        {% for fid, label, col in [
+          ('h10','H.sup +10% (heures)','#d97706'),
+          ('h30','H.sup +30% (heures)','#d97706'),
+          ('h40','H.sup +40% nuit (h)','#7c3aed'),
+          ('h70','H.sup +70% fériés (h)','#dc2626'),
+        ] %}
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">{{ label }}</label>
+          <input type="number" id="{{ fid }}" value="0" min="0" step="0.5"
+            style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.5rem .625rem;font-size:.875rem;text-align:center;font-family:monospace"
+            oninput="simuler()"
+            onfocus="this.style.borderColor='{{ col }}'" onblur="this.style.borderColor='#e5e7eb'"/>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Primes et indemnités -->
+    <div class="card p-5 mb-4">
+      <h2 style="font-size:.825rem;font-weight:900;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.875rem">🎁 Primes & Indemnités</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem">
+        {% for fid, label in [
+          ('prime_transport','Prime transport'),
+          ('prime_responsabilite','Prime responsabilité'),
+          ('indem_logement','Indem. logement'),
+          ('prime_anciennete','Prime ancienneté'),
+          ('prime_rendement','Prime rendement'),
+          ('prime_qualite','Prime qualité'),
+          ('sursalaire','Sursalaire'),
+          ('carburant','Carburant'),
+        ] %}
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">{{ label }}</label>
+          <input type="number" id="{{ fid }}" value="0" min="0" step="100"
+            style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.5rem .625rem;font-size:.8rem;text-align:right;font-family:monospace"
+            oninput="simuler()"
+            onfocus="this.style.borderColor='#059669'" onblur="this.style.borderColor='#e5e7eb'"/>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- Déductions -->
+    <div class="card p-5">
+      <h2 style="font-size:.825rem;font-weight:900;color:#374151;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.875rem">➖ Déductions</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.625rem">
+        {% for fid, label in [
+          ('absences','Retenue absences'),
+          ('acompte','Acompte'),
+          ('nb_parts','Nb parts IRPP'),
+        ] %}
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">{{ label }}</label>
+          <input type="number" id="{{ fid }}" value="{{ '1' if fid == 'nb_parts' else '0' }}" min="0" step="{{ '0.5' if fid == 'nb_parts' else '100' }}"
+            style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.5rem .625rem;font-size:.8rem;text-align:center;font-family:monospace"
+            oninput="simuler()"
+            onfocus="this.style.borderColor='#dc2626'" onblur="this.style.borderColor='#e5e7eb'"/>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══ PANNEAU RÉSULTATS ══ -->
+  <div id="panneau-resultats" style="position:sticky;top:80px">
+
+    <!-- Placeholder -->
+    <div id="placeholder-result" class="card" style="text-align:center;padding:4rem;color:#9ca3af">
+      <div style="font-size:3rem;margin-bottom:.75rem">🧮</div>
+      <p style="font-weight:700;color:#374151;margin-bottom:.375rem">Saisissez un salaire de base</p>
+      <p style="font-size:.875rem">Les résultats s'affichent en temps réel</p>
+    </div>
+
+    <!-- Résultat réel -->
+    <div id="result-panel" style="display:none">
+
+      <!-- NET À PAYER — hero card -->
+      <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1rem;text-align:center">
+        <div style="font-size:.8rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;opacity:.7;margin-bottom:.5rem">NET À PAYER</div>
+        <div id="r-net" style="font-size:2.5rem;font-weight:900;line-height:1">0 FCFA</div>
+        <div id="r-brut-sub" style="font-size:.8rem;opacity:.6;margin-top:.375rem">Brut : 0 FCFA</div>
+      </div>
+
+      <!-- KPIs rapides -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin-bottom:1rem">
+        {% for rid, label, color in [
+          ('r-brut','Salaire brut','#1e40af'),
+          ('r-cotisations','Cotisations sal.','#dc2626'),
+          ('r-charges-pat','Charges patron.','#d97706'),
+        ] %}
+        <div style="background:white;border:1px solid #e5e7eb;border-radius:.875rem;padding:.75rem;text-align:center">
+          <div id="{{ rid }}" style="font-size:1rem;font-weight:900;color:{{ color }}">0</div>
+          <div style="font-size:.65rem;color:#9ca3af;margin-top:.15rem;font-weight:600">{{ label }}</div>
+        </div>
+        {% endfor %}
+      </div>
+
+      <!-- Tableau détaillé -->
+      <div class="card overflow-hidden" style="margin-bottom:1rem">
+        <!-- Gains -->
+        <div style="background:#f0fdf4;padding:.5rem .875rem;font-size:.7rem;font-weight:700;color:#065f46;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #e5e7eb">
+          ✅ Gains
+        </div>
+        <div id="gains-tbody"></div>
+
+        <!-- Retenues -->
+        <div style="background:#fef2f2;padding:.5rem .875rem;font-size:.7rem;font-weight:700;color:#991b1b;text-transform:uppercase;letter-spacing:.05em;border-top:1px solid #e5e7eb;border-bottom:1px solid #e5e7eb">
+          ➖ Retenues salariales
+        </div>
+        <div id="retenues-tbody"></div>
+
+        <!-- Net encadré -->
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.75rem .875rem;background:#f8fafc;border-top:2px solid #1a2332">
+          <span style="font-size:.875rem;font-weight:900;color:#1a2332">NET À PAYER</span>
+          <span id="r-net2" style="font-size:1.1rem;font-weight:900;color:#1a2332">0 FCFA</span>
+        </div>
+      </div>
+
+      <!-- Charges patronales -->
+      <div class="card overflow-hidden mb-4">
+        <div style="background:#fffbeb;padding:.5rem .875rem;font-size:.7rem;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">
+          🏭 Charges patronales
+        </div>
+        <div id="charges-tbody"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:.625rem .875rem;background:#f9fafb;border-top:1px solid #e5e7eb">
+          <span style="font-size:.8rem;font-weight:700;color:#374151">Coût total employeur</span>
+          <span id="r-cout-total" style="font-size:.9rem;font-weight:900;color:#374151">0 FCFA</span>
+        </div>
+      </div>
+
+      <!-- Bouton créer bulletin -->
+      <a id="btn-creer-bulletin" href="/bulletins/saisie"
+        style="display:flex;align-items:center;justify-content:center;gap:.5rem;background:#1a2332;color:white;padding:.875rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none;text-align:center">
+        📝 Créer ce bulletin
+      </a>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const H_NORM  = 173.33;
+const H_STRUCT= 17.33;
+const C10=1.10, C30=1.30;
+
+const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n||0)) + ' FCFA';
+const fmtN= n => new Intl.NumberFormat('fr-FR').format(Math.round(n||0));
+
+let _simTimeout = null;
+
+// ── Charger les données d'un salarié ─────────────────────────────────────────
+function chargerSalarie(id) {
+  const sel  = document.getElementById('sel_salarie');
+  const opt  = sel.options[sel.selectedIndex];
+  const info = document.getElementById('info-salarie');
+  if (!id) { info.style.display='none'; return; }
+  info.style.display = '';
+  info.textContent = `${opt.dataset.nom} — ${opt.dataset.emploi}`;
+  document.getElementById('nb_parts').value = opt.dataset.parts || 1;
+
+  // Charger le contrat via API
+  fetch(`/api/salarie/${id}/contrat`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.salaire_base) {
+        document.getElementById('salaire_base').value = Math.round(d.salaire_base);
+        onSalaireChange();
+      }
+      simuler();
+    }).catch(simuler);
+}
+
+// ── Recalculer le taux horaire affiché ───────────────────────────────────────
+function onSalaireChange() {
+  const sb = parseFloat(document.getElementById('salaire_base').value||0);
+  const el = document.getElementById('info-th');
+  if (sb > 0) {
+    const th = sb / H_NORM;
+    el.textContent = `TH : ${Math.round(th)} FCFA/h | +10% : ${Math.round(th*C10)} FCFA/h | +30% : ${Math.round(th*C30)} FCFA/h`;
+  } else {
+    el.textContent = '';
+  }
+  if (document.getElementById('mode_btp').checked) appliquerBTP();
+}
+
+// ── Mode BTP : remplir les heures structurelles ───────────────────────────────
+function appliquerBTP() {
+  const sb = parseFloat(document.getElementById('salaire_base').value||0);
+  if (!sb) return;
+  document.getElementById('h10').value = H_STRUCT;
+  document.getElementById('h30').value = H_STRUCT;
+}
+
+function toggleModeBTP() {
+  const checked = document.getElementById('mode_btp').checked;
+  ['h10','h30'].forEach(id => {
+    const el = document.getElementById(id);
+    el.readOnly = checked;
+    el.style.background = checked ? '#f9fafb' : '';
+    el.style.color = checked ? '#9ca3af' : '';
+  });
+  if (checked) appliquerBTP();
+  else { document.getElementById('h10').value=0; document.getElementById('h30').value=0; }
+}
+
+// ── Simuler ───────────────────────────────────────────────────────────────────
+function simuler() {
+  clearTimeout(_simTimeout);
+  _simTimeout = setTimeout(_doSimuler, 250);  // debounce 250ms
+}
+
+function _doSimuler() {
+  const sb = parseFloat(document.getElementById('salaire_base').value||0);
+  if (sb <= 0) {
+    document.getElementById('placeholder-result').style.display='';
+    document.getElementById('result-panel').style.display='none';
+    return;
+  }
+
+  const ids = ['salaire_base','h10','h30','h40','h70',
+    'prime_transport','prime_responsabilite','indem_logement','prime_anciennete',
+    'prime_rendement','prime_qualite','sursalaire','carburant','absences','acompte','nb_parts'];
+
+  const payload = {mode_btp: document.getElementById('mode_btp').checked ? '1' : '0'};
+  ids.forEach(id => { payload[id] = parseFloat(document.getElementById(id)?.value||0)||0; });
+  payload.salarie_id = document.getElementById('sel_salarie').value || null;
+
+  fetch('/api/simuler-paie', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(payload)
+  }).then(r => r.json()).then(afficherResultat);
+}
+
+function afficherResultat(d) {
+  if (d.erreur) { console.error(d.erreur); return; }
+
+  document.getElementById('placeholder-result').style.display = 'none';
+  document.getElementById('result-panel').style.display = '';
+
+  // Hero
+  document.getElementById('r-net').textContent      = fmt(d.net_a_payer);
+  document.getElementById('r-brut-sub').textContent = `Brut : ${fmt(d.salaire_brut)}`;
+  document.getElementById('r-net2').textContent     = fmt(d.net_a_payer);
+
+  // KPIs
+  const totCot = (d.cnss_salarie||0)+(d.cnamgs_salarie||0)+(d.tcs||0)+(d.irpp||0);
+  document.getElementById('r-brut').textContent        = fmtN(d.salaire_brut) + ' F';
+  document.getElementById('r-cotisations').textContent  = fmtN(totCot) + ' F';
+  document.getElementById('r-charges-pat').textContent  = fmtN(d._charges_patronales_total||0) + ' F';
+
+  // Tableau gains
+  const gainsEl = document.getElementById('gains-tbody');
+  gainsEl.innerHTML = (d.gains_detail||[]).map(g =>
+    `<div style="display:flex;justify-content:space-between;padding:.4rem .875rem;border-bottom:1px solid #f9fafb;font-size:.8rem">
+      <span style="color:#374151">${g.label}</span>
+      <span style="font-weight:700;color:#065f46;font-family:monospace">${fmt(g.montant)}</span>
+    </div>`
+  ).join('');
+
+  // Tableau retenues
+  const retEl = document.getElementById('retenues-tbody');
+  retEl.innerHTML = (d.retenues_detail||[]).map(r =>
+    `<div style="display:flex;justify-content:space-between;padding:.4rem .875rem;border-bottom:1px solid #f9fafb;font-size:.8rem">
+      <span style="color:#374151">${r.label}</span>
+      <span style="font-weight:700;color:#dc2626;font-family:monospace">- ${fmt(r.montant)}</span>
+    </div>`
+  ).join('');
+
+  // Charges patronales
+  const charEl = document.getElementById('charges-tbody');
+  charEl.innerHTML = (d.charges_pat_detail||[]).map(c =>
+    `<div style="display:flex;justify-content:space-between;padding:.4rem .875rem;border-bottom:1px solid #f9fafb;font-size:.8rem">
+      <span style="color:#374151">${c.label}</span>
+      <span style="font-weight:700;color:#d97706;font-family:monospace">${fmt(c.montant)}</span>
+    </div>`
+  ).join('');
+
+  const coutTotal = (d.salaire_brut||0)+(d._charges_patronales_total||0);
+  document.getElementById('r-cout-total').textContent = fmt(coutTotal);
+
+  // TH info
+  if (d.taux_horaire) {
+    document.getElementById('info-th').textContent =
+      `TH : ${Math.round(d.taux_horaire)} FCFA/h | +10% : ${Math.round(d.taux_horaire*1.10)} FCFA/h | +30% : ${Math.round(d.taux_horaire*1.30)} FCFA/h`;
+  }
+}
+
+// ── Réinitialiser ─────────────────────────────────────────────────────────────
+function resetFormulaire() {
+  document.getElementById('sel_salarie').value = '';
+  document.getElementById('info-salarie').style.display = 'none';
+  document.getElementById('mode_btp').checked = false;
+  ['h10','h30'].forEach(id => {
+    const el=document.getElementById(id); el.readOnly=false; el.style.background=''; el.style.color='';
+  });
+  const zeros = ['salaire_base','h10','h30','h40','h70','prime_transport','prime_responsabilite',
+    'indem_logement','prime_anciennete','prime_rendement','prime_qualite','sursalaire','carburant','absences','acompte'];
+  zeros.forEach(id => { const el=document.getElementById(id); if(el) el.value=0; });
+  document.getElementById('nb_parts').value = 1;
+  document.getElementById('info-th').textContent = '';
+  document.getElementById('placeholder-result').style.display = '';
+  document.getElementById('result-panel').style.display = 'none';
+}
+
+// Calculer dès le chargement si URL contient un salaire
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('salaire')) {
+  document.getElementById('salaire_base').value = urlParams.get('salaire');
+  onSalaireChange(); simuler();
+}
+
+// Print style
+const style = document.createElement('style');
+style.textContent = '@media print { .card:first-child, #panneau-resultats > .card:first-child { display:none!important; } #sim-grid { grid-template-columns:1fr; } #panneau-resultats { position:static; } }';
+document.head.appendChild(style);
+</script>
+{% endblock %}
