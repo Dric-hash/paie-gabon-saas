@@ -5978,7 +5978,7 @@ def export_sage_journal(periode_id):
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
@@ -6015,7 +6015,7 @@ def export_sage_livre(periode_id):
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
@@ -6052,7 +6052,7 @@ def export_sage_les_deux(periode_id):
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
