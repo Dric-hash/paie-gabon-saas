@@ -3399,23 +3399,133 @@ def conges():
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    now = datetime.now()
+    now   = datetime.now()
     annee = request.args.get("annee", now.year, type=int)
-    q = request.args.get("q", "")
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    q     = request.args.get("q", "")
+
+    # ── Calcul du solde — Code du Travail gabonais ───────────────────────────
+    # Art. 213 : 2 j/mois pour ≥ 18 ans | 2,5 j/mois pour < 18 ans
+    # Allocation = max(Σ bruts 12 mois, dernier brut×12) / 288 × jours acquis
+    # Exclusion : prime de transport (Art. 213 al. 3)
+
+    def age_au_31_dec(salarie, annee_ref):
+        """Âge du salarié au 31 décembre de l'année de référence."""
+        if not salarie.date_naissance:
+            return 99  # inconnu → adulte par défaut
+        return annee_ref - salarie.date_naissance.year - (
+            1 if salarie.date_naissance.replace(year=annee_ref) > datetime(annee_ref,12,31).date() else 0
+        )
+
+    def taux_conge(salarie, annee_ref):
+        """2.5 j/mois si < 18 ans, sinon 2 j/mois."""
+        return 2.5 if age_au_31_dec(salarie, annee_ref) < 18 else 2.0
+
+    def calculer_solde_auto(salarie, annee_ref):
+        """Jours acquis proratisés selon le taux applicable."""
+        tx = taux_conge(salarie, annee_ref)
+        if not salarie.date_embauche:
+            return round(12 * tx, 1)
+        emb         = salarie.date_embauche
+        debut_annee = datetime(annee_ref, 1, 1).date()
+        fin_annee   = datetime(annee_ref, 12, 31).date()
+        debut_acq   = max(emb, debut_annee)
+        fin_acq     = min(datetime.now().date(), fin_annee)
+        if fin_acq < debut_acq:
+            return 0.0
+        mois_trav = min(round((fin_acq - debut_acq).days / 30.44, 1), 12)
+        return round(mois_trav * tx, 1)
+
+    def calculer_allocation_conge(salarie, jours_acquis, annee_ref):
+        """
+        Allocation congés = max(Σbruts12mois, dernierBrut×12) / 288 × jours_acquis
+        Prime de transport exclue de la base (Art. 213 al. 3).
+        """
+        if jours_acquis <= 0:
+            return 0.0, 0.0
+        # Bulletins des 12 derniers mois
+        from datetime import timedelta
+        limite = datetime(annee_ref, 12, 31).date()
+        debut  = (datetime(annee_ref, 12, 31) - timedelta(days=365)).date()
+        buls   = BulletinPaie.query.filter(
+            BulletinPaie.tenant_id  == salarie.tenant_id,
+            BulletinPaie.salarie_id == salarie.id,
+        ).join(PeriodePaie).filter(
+            PeriodePaie.annee >= debut.year,
+        ).order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).limit(12).all()
+
+        if not buls:
+            # Pas de bulletins → estimer depuis le contrat actif
+            contrat = next((c for c in salarie.contrats if c.actif), None)
+            if not contrat: return 0.0, 0.0
+            last_brut = float(contrat.salaire_base or 0)
+            somme_12  = last_brut * 12
+        else:
+            # Exclure prime_transport de chaque bulletin
+            somme_12  = sum(
+                float(b.salaire_brut or 0) - float(b.prime_transport or 0)
+                for b in buls
+            )
+            last_brut = float(buls[0].salaire_brut or 0) - float(buls[0].prime_transport or 0)
+
+        # Prendre le plus favorable
+        base_methode1 = somme_12  / 288        # Σ 12 mois / 288
+        base_methode2 = (last_brut * 12) / 288 # dernier × 12 / 288
+        base          = max(base_methode1, base_methode2)
+        allocation    = round(base * jours_acquis, 0)
+        return round(base, 2), allocation
+
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
+
     soldes = []
     for s in salaries_list:
-        if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower(): continue
-        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=s.id, annee=annee).first()
-        mois_anc = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
-        jours_auto = round(min(mois_anc,12)*2.0,1)
-        soldes.append({"salarie":s,"conge":conge,
-            "jours_acquis":float(conge.jours_acquis) if conge else jours_auto,
-            "jours_pris":float(conge.jours_pris) if conge else 0,
-            "jours_restants":(float(conge.jours_acquis)-float(conge.jours_pris)) if conge else jours_auto})
-    demandes = Conge.query.filter_by(tenant_id=t.id).filter(Conge.statut.in_(["DEMANDÉ","APPROUVÉ"])).order_by(Conge.date_depart).all()
-    return render_template("tenant/conges.html", tenant=t, soldes=soldes, demandes=demandes,
-        annee=annee, now=now, q=q, salaries=salaries_list)
+        if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower():
+            continue
+        solde_db = Conge.query.filter_by(
+            tenant_id=t.id, salarie_id=s.id, annee=annee
+        ).filter(Conge.date_depart == None).first()
+
+        jours_auto = calculer_solde_auto(s, annee)
+
+        if solde_db:
+            acquis    = float(solde_db.jours_acquis or jours_auto)
+            pris      = float(solde_db.jours_pris   or 0)
+        else:
+            acquis    = jours_auto
+            pris      = sum(
+                float(c.jours_pris or 0)
+                for c in Conge.query.filter_by(
+                    tenant_id=t.id, salarie_id=s.id, annee=annee, statut="APPROUVÉ"
+                ).all()
+            )
+
+        taux_j    = taux_conge(s, annee)
+        base_all, allocation = calculer_allocation_conge(s, acquis, annee)
+        soldes.append({
+            "salarie":        s,
+            "solde_db":       solde_db,
+            "jours_auto":     jours_auto,
+            "jours_acquis":   acquis,
+            "jours_pris":     pris,
+            "jours_restants": round(acquis - pris, 1),
+            "alerte":         (acquis - pris) < 5,
+            "taux_j":         taux_j,
+            "base_allocation":base_all,
+            "allocation":     allocation,
+            "mineur":         taux_j == 2.5,
+        })
+
+    # Demandes (avec date_depart renseignée)
+    demandes = Conge.query.filter_by(tenant_id=t.id)        .filter(Conge.date_depart.isnot(None))        .options(joinedload(Conge.salarie))        .order_by(Conge.date_depart.desc()).all()
+
+    annees_dispo = sorted(set(
+        [now.year, now.year-1, now.year+1]
+        + [c.annee for c in Conge.query.filter_by(tenant_id=t.id).all()]
+    ), reverse=True)
+
+    return render_template("tenant/conges.html",
+        tenant=t, soldes=soldes, demandes=demandes,
+        annee=annee, annees_dispo=annees_dispo, now=now, q=q,
+        salaries=salaries_list)
 
 @app.route("/conges/nouveau", methods=["GET","POST"])
 @login_required
@@ -3438,11 +3548,48 @@ def conge_nouveau():
             conge = Conge(tenant_id=t.id, salarie_id=salarie_id, annee=annee,
                 jours_acquis=round(min(mois,12)*2.0,1), jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
             db.session.add(conge)
-        conge.date_depart=date_dep; conge.date_retour=date_ret; conge.type_conge=type_c; conge.statut="DEMANDÉ"
+        conge.date_depart  = date_dep
+        conge.date_retour  = date_ret
+        conge.type_conge   = type_c
+        conge.statut       = "DEMANDÉ"
+        conge.jours_pris   = float(conge.jours_pris or 0)  # ne pas écraser les jours déjà pris
         db.session.commit()
-        flash(f"Demande de congé enregistrée ({jours} jours).", "success")
+        flash(f"✅ Demande de congé enregistrée ({jours} jour(s)).", "success")
         return redirect(url_for("conges"))
     return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+
+@app.route("/conges/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def conge_modifier(id):
+    """Modifier une demande de congé existante."""
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+
+    if request.method == "POST":
+        old_jours = (c.date_retour - c.date_depart).days + 1 if c.date_depart and c.date_retour else 0
+        date_dep  = _parse_date(request.form.get("date_depart"))
+        date_ret  = _parse_date(request.form.get("date_retour"))
+        type_c    = request.form.get("type_conge", "ANNUEL")
+        new_jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
+
+        # Si congé APPROUVÉ → ajuster les jours_pris
+        if c.statut == "APPROUVÉ":
+            c.jours_pris = max(0, float(c.jours_pris or 0) - old_jours + new_jours)
+
+        c.date_depart = date_dep
+        c.date_retour = date_ret
+        c.type_conge  = type_c
+        c.statut      = request.form.get("statut", c.statut)
+        db.session.commit()
+        flash(f"✅ Congé modifié ({new_jours} jour(s)).", "success")
+        return redirect(url_for("conges"))
+
+    return render_template("tenant/conge_form.html",
+        tenant=t, salaries=salaries_list,
+        conge=c, now=datetime.now(), mode="modifier")
+
 
 @app.route("/conges/<int:id>/approuver", methods=["POST"])
 @login_required
@@ -3451,9 +3598,22 @@ def conge_approuver(id):
     if not t: return redirect(url_for("login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     if c.date_depart and c.date_retour:
-        c.jours_pris = float(c.jours_pris or 0) + (c.date_retour-c.date_depart).days + 1
-    c.statut = "APPROUVÉ"; db.session.commit()
-    flash(f"Congé de {c.salarie.nom_complet} approuvé.", "success")
+        jours = (c.date_retour - c.date_depart).days + 1
+        # Mettre à jour le solde de l'année
+        solde = Conge.query.filter_by(
+            tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee
+        ).filter(Conge.date_depart == None).first()
+        if not solde:
+            s = Salarie.query.get(c.salarie_id)
+            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
+            solde = Conge(tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee,
+                          jours_acquis=round(min(mois,12)*2.5, 1), jours_pris=0)
+            db.session.add(solde)
+        solde.jours_pris = float(solde.jours_pris or 0) + jours
+        c.jours_pris     = float(c.jours_pris or 0) + jours
+    c.statut = "APPROUVÉ"
+    db.session.commit()
+    flash(f"✅ Congé de {c.salarie.nom_complet} approuvé.", "success")
     return redirect(url_for("conges"))
 
 @app.route("/conges/<int:id>/refuser", methods=["POST"])
