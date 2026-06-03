@@ -2,189 +2,266 @@
 {% block title %}Congés — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
-<div class="flex items-center justify-between mb-6">
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
-    <h1 class="text-2xl font-black text-gray-900">Gestion des Congés</h1>
-    <p class="text-gray-500 text-sm mt-1">Réglementation gabonaise — 2 jours/mois travaillé (24 jours/an)</p>
+    <h1 class="text-2xl font-black">🏖️ Gestion des congés</h1>
+    <p class="text-gray-500 text-sm mt-1" style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <span style="background:#eff6ff;color:#1e40af;font-weight:700;padding:.15rem .5rem;border-radius:9999px;font-size:.73rem">
+        ≥ 18 ans → 2 j/mois · 24 j/an
+      </span>
+      <span style="background:#f3e8ff;color:#7c3aed;font-weight:700;padding:.15rem .5rem;border-radius:9999px;font-size:.73rem">
+        &lt; 18 ans → 2,5 j/mois · 30 j/an
+      </span>
+      <span style="background:#fef3c7;color:#92400e;font-weight:700;padding:.15rem .5rem;border-radius:9999px;font-size:.73rem">
+        Allocation = max(Σ12 bruts, dernier×12) / 288 × jours acquis
+      </span>
+    </p>
   </div>
-  <div style="display:flex;gap:.75rem">
-    <form method="GET" style="display:flex;gap:.5rem">
-      <select name="annee" onchange="this.form.submit()" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .75rem;font-size:.875rem">
-        {% for y in range(now.year, now.year-3, -1) %}
-        <option value="{{ y }}" {% if y==annee %}selected{% endif %}>{{ y }}</option>
-        {% endfor %}
-      </select>
-    </form>
-    <a href="/conges/nouveau" class="btn-primary">+ Nouvelle demande</a>
-  </div>
+  <a href="/conges/nouveau" class="btn-primary">+ Nouvelle demande</a>
 </div>
 
-<!-- KPIs congés -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
-  {% set total_acquis = soldes|sum(attribute='jours_acquis') %}
-  {% set total_pris = soldes|sum(attribute='jours_pris') %}
-  {% set total_restants = soldes|sum(attribute='jours_restants') %}
-  {% set nb_en_cours = demandes|selectattr('statut','equalto','APPROUVÉ')|list|length %}
-
-  <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.25rem;color:white;text-align:center">
-    <div style="font-size:2rem;font-weight:900">{{ total_acquis|int }}</div>
-    <div style="font-size:.875rem;opacity:.8;font-weight:600">Jours acquis</div>
-    <div style="font-size:.75rem;opacity:.5">{{ soldes|length }} salariés</div>
-  </div>
-  <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);border-radius:1rem;padding:1.25rem;color:white;text-align:center">
-    <div style="font-size:2rem;font-weight:900">{{ total_pris|int }}</div>
-    <div style="font-size:.875rem;opacity:.8;font-weight:600">Jours pris</div>
-    <div style="font-size:.75rem;opacity:.5">cette année</div>
-  </div>
-  <div style="background:linear-gradient(135deg,#059669,#047857);border-radius:1rem;padding:1.25rem;color:white;text-align:center">
-    <div style="font-size:2rem;font-weight:900">{{ total_restants|int }}</div>
-    <div style="font-size:.875rem;opacity:.8;font-weight:600">Jours restants</div>
-    <div style="font-size:.75rem;opacity:.5">à prendre</div>
-  </div>
-  <div style="background:linear-gradient(135deg,#d97706,#b45309);border-radius:1rem;padding:1.25rem;color:white;text-align:center">
-    <div style="font-size:2rem;font-weight:900">{{ nb_en_cours }}</div>
-    <div style="font-size:.875rem;opacity:.8;font-weight:600">En cours</div>
-    <div style="font-size:.75rem;opacity:.5">congés approuvés</div>
-  </div>
+<!-- Filtres -->
+<div class="card p-4 mb-5">
+  <form method="GET" style="display:flex;align-items:center;gap:.875rem;flex-wrap:wrap">
+    <select name="annee" onchange="this.form.submit()"
+      style="border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.5rem .875rem;font-size:.875rem">
+      {% for a in annees_dispo %}
+      <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+    <input name="q" value="{{ q }}" placeholder="🔍 Rechercher un salarié…"
+      style="flex:1;min-width:200px;border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.5rem .875rem;font-size:.875rem"/>
+    <button type="submit" class="btn-primary" style="padding:.5rem 1.25rem">Filtrer</button>
+    {% if q %}
+    <a href="/conges?annee={{ annee }}" class="btn-secondary" style="padding:.5rem .875rem;text-decoration:none">✕ Effacer</a>
+    {% endif %}
+  </form>
 </div>
 
-<div style="display:grid;grid-template-columns:2fr 1fr;gap:1.5rem">
-
-  <!-- Soldes par salarié -->
-  <div class="card overflow-hidden">
-    <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Soldes {{ annee }}</h2>
-      <form method="GET" style="display:flex;gap:.5rem">
-        <input type="hidden" name="annee" value="{{ annee }}"/>
-        <input type="text" name="q" value="{{ q }}" placeholder="🔍 Rechercher..."
-          style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.375rem .75rem;font-size:.8rem"/>
-        <button type="submit" style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">Ok</button>
-      </form>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Salarié</th>
-          <th style="text-align:center">Acquis</th>
-          <th style="text-align:center">Pris</th>
-          <th style="text-align:center">Restant</th>
-          <th style="text-align:center">Solde</th>
-          <th style="text-align:center">Action</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for s in soldes %}
-        <tr>
-          <td>
-            <div style="display:flex;align-items:center;gap:.75rem">
-              <div style="width:2rem;height:2rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.7rem;font-weight:900;flex-shrink:0">
-                {{ s.salarie.nom[0] }}{{ s.salarie.prenom[0] }}
-              </div>
-              <div>
-                <div style="font-weight:700;font-size:.875rem">{{ s.salarie.nom }} {{ s.salarie.prenom }}</div>
-                <div style="font-size:.75rem;color:#9ca3af">{{ s.salarie.emploi or '—' }}</div>
-              </div>
-            </div>
-          </td>
-          <td style="text-align:center;font-weight:700">{{ s.jours_acquis|int }}j</td>
-          <td style="text-align:center;color:#dc2626;font-weight:700">{{ s.jours_pris|int }}j</td>
-          <td style="text-align:center;font-weight:900;color:{% if s.jours_restants > 10 %}#059669{% elif s.jours_restants > 0 %}#d97706{% else %}#dc2626{% endif %}">
-            {{ s.jours_restants|int }}j
-          </td>
-          <td style="text-align:center">
-            <!-- Barre visuelle -->
-            <div style="background:#f3f4f6;border-radius:9999px;height:.5rem;width:80px;margin:0 auto;overflow:hidden">
-              <div style="background:{% if s.jours_restants > 10 %}#059669{% elif s.jours_restants > 0 %}#d97706{% else %}#dc2626{% endif %};height:100%;border-radius:9999px;width:{{ [(s.jours_pris / s.jours_acquis * 100)|int, 100]|min if s.jours_acquis > 0 else 0 }}%"></div>
-            </div>
-          </td>
-          <td style="text-align:center">
-            <a href="/conges/nouveau?salarie_id={{ s.salarie.id }}"
-               style="font-size:.75rem;color:#1a2332;font-weight:700;text-decoration:none;background:#f3f4f6;padding:.25rem .5rem;border-radius:.375rem">
-              + Congé
-            </a>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" style="text-align:center;padding:2rem;color:#9ca3af">Aucun salarié trouvé</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<!-- ══ SOLDES PAR SALARIÉ ══ -->
+<div class="card overflow-hidden mb-6">
+  <div style="padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:.9rem;font-weight:900;color:#111827">📊 Soldes de congés {{ annee }}</h2>
+    <span style="font-size:.75rem;color:#9ca3af">{{ soldes|length }} salarié(s)</span>
   </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#1a2332;color:white;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">
+        <th style="padding:.625rem 1rem;text-align:left;font-weight:700">Salarié</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">Taux</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">Jours acquis</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">Jours pris</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">Solde restant</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700;white-space:nowrap">Base journalière</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700;white-space:nowrap">Allocation congés</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in soldes %}
+      {% set pct = ((row.jours_pris / row.jours_acquis) * 100)|int if row.jours_acquis > 0 else 0 %}
+      <tr style="border-bottom:1px solid #f3f4f6;{% if loop.index0%2==0 %}background:#fafafa{% endif %}">
 
-  <!-- Demandes en cours -->
-  <div style="display:flex;flex-direction:column;gap:1rem">
-    <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Demandes en attente</h2>
-      {% set demandes_attente = demandes|selectattr('statut','equalto','DEMANDÉ')|list %}
-      {% if demandes_attente %}
-      <div style="display:flex;flex-direction:column;gap:.75rem">
-        {% for d in demandes_attente %}
-        <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:.75rem;padding:.75rem">
-          <div style="font-weight:700;font-size:.875rem">{{ d.salarie.nom_complet }}</div>
-          <div style="font-size:.75rem;color:#6b7280;margin:.25rem 0">
-            {{ d.date_depart|date_fr }} → {{ d.date_retour|date_fr }}
-            {% if d.date_depart and d.date_retour %}
-            ({{ (d.date_retour - d.date_depart).days + 1 }} jours)
+        <!-- Salarié -->
+        <td style="padding:.625rem 1rem">
+          <div style="font-weight:700;color:#111827">{{ row.salarie.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af;margin-top:.1rem">
+            {{ row.salarie.matricule }}
+            {% if row.salarie.date_embauche %}
+            · {{ ((now.date() - row.salarie.date_embauche).days / 30.44)|int }} mois
             {% endif %}
           </div>
-          <div style="font-size:.75rem;color:#6b7280;margin-bottom:.5rem">
-            Type : {{ d.type_conge }}
-          </div>
-          <div style="display:flex;gap:.5rem">
-            <form method="POST" action="/conges/{{ d.id }}/approuver" style="flex:1">
-              <button type="submit" style="width:100%;background:#059669;color:white;padding:.375rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">✅ Approuver</button>
-            </form>
-            <form method="POST" action="/conges/{{ d.id }}/refuser" style="flex:1">
-              <button type="submit" style="width:100%;background:#dc2626;color:white;padding:.375rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">❌ Refuser</button>
-            </form>
-          </div>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div style="text-align:center;padding:1.5rem;color:#9ca3af;font-size:.875rem">
-        <div style="font-size:2rem;margin-bottom:.5rem">🏖️</div>
-        Aucune demande en attente
-      </div>
-      {% endif %}
-    </div>
+        </td>
 
-    <!-- Congés approuvés -->
-    <div class="card p-5">
-      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Congés approuvés</h2>
-      {% set demandes_ok = demandes|selectattr('statut','equalto','APPROUVÉ')|list %}
-      {% if demandes_ok %}
-      <div style="display:flex;flex-direction:column;gap:.5rem">
-        {% for d in demandes_ok %}
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;padding:.75rem;display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-weight:700;font-size:.8rem">{{ d.salarie.nom_complet }}</div>
-            <div style="font-size:.7rem;color:#6b7280">{{ d.date_depart|date_fr }} → {{ d.date_retour|date_fr }}</div>
-          </div>
-          <form method="POST" action="/conges/{{ d.id }}/supprimer"
-            onsubmit="return confirm('Supprimer ce congé ?')">
-            <button type="submit" style="background:transparent;border:none;cursor:pointer;color:#9ca3af;font-size:1rem">🗑️</button>
-          </form>
-        </div>
-        {% endfor %}
-      </div>
-      {% else %}
-      <div style="text-align:center;padding:1rem;color:#9ca3af;font-size:.8rem">Aucun congé approuvé</div>
-      {% endif %}
-    </div>
+        <!-- Taux applicable -->
+        <td style="padding:.5rem;text-align:center">
+          {% if row.mineur %}
+          <span style="font-size:.72rem;font-weight:700;background:#f3e8ff;color:#7c3aed;padding:.2rem .5rem;border-radius:9999px">
+            2,5 j/mois<br><span style="font-size:.65rem;font-weight:400">&lt; 18 ans</span>
+          </span>
+          {% else %}
+          <span style="font-size:.72rem;font-weight:700;background:#eff6ff;color:#1e40af;padding:.2rem .5rem;border-radius:9999px">
+            2 j/mois<br><span style="font-size:.65rem;font-weight:400">≥ 18 ans</span>
+          </span>
+          {% endif %}
+        </td>
 
-    <!-- Info réglementation -->
-    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:1rem">
-      <div style="font-size:.75rem;font-weight:700;color:#1e40af;margin-bottom:.5rem">📋 Réglementation Gabon</div>
-      <div style="font-size:.75rem;color:#1e40af;display:flex;flex-direction:column;gap:.25rem">
-        <div>✓ 2 jours/mois travaillé</div>
-        <div>✓ 24 jours ouvrables/an max</div>
-        <div>✓ Congé maternité : 14 semaines</div>
-        <div>✓ Report possible sur N+1</div>
-        <div>✓ Indemnité = 1/10 du salaire annuel</div>
-      </div>
-    </div>
+        <!-- Jours acquis -->
+        <td style="padding:.5rem;text-align:center">
+          <span style="font-size:1rem;font-weight:900;color:#1e40af">{{ row.jours_acquis }}</span>
+          <span style="font-size:.7rem;color:#9ca3af"> j</span>
+          {% if row.jours_acquis == row.jours_auto %}
+          <div style="font-size:.62rem;background:#eff6ff;color:#1e40af;padding:.1rem .3rem;border-radius:4px;margin-top:.15rem;display:inline-block">auto</div>
+          {% endif %}
+        </td>
+
+        <!-- Jours pris -->
+        <td style="padding:.5rem;text-align:center">
+          <span style="font-size:.9rem;font-weight:700;
+            color:{% if row.jours_pris > 0 %}#d97706{% else %}#9ca3af{% endif %}">
+            {{ row.jours_pris }}
+          </span>
+          <span style="font-size:.7rem;color:#9ca3af"> j</span>
+          <!-- Barre de progression -->
+          <div style="background:#e5e7eb;border-radius:9999px;height:4px;margin-top:.25rem;overflow:hidden">
+            <div style="height:100%;border-radius:9999px;width:{{ [pct,100]|min }}%;
+              background:{% if pct >= 80 %}#dc2626{% elif pct >= 50 %}#d97706{% else %}#059669{% endif %}">
+            </div>
+          </div>
+        </td>
+
+        <!-- Solde restant -->
+        <td style="padding:.5rem;text-align:center">
+          <span style="font-size:1.1rem;font-weight:900;
+            color:{% if row.jours_restants <= 0 %}#dc2626{% elif row.jours_restants < 5 %}#d97706{% else %}#059669{% endif %}">
+            {{ row.jours_restants }}
+          </span>
+          <span style="font-size:.7rem;color:#9ca3af"> j</span>
+          {% if row.alerte %}
+          <span title="Solde faible" style="font-size:.7rem;margin-left:.2rem">⚠️</span>
+          {% endif %}
+        </td>
+
+        <!-- Base journalière -->
+        <td style="padding:.5rem;text-align:right">
+          {% if row.base_allocation > 0 %}
+          <span style="font-size:.85rem;font-weight:700;color:#374151;font-family:monospace">
+            {{ row.base_allocation|int|fcfa }}
+          </span>
+          <div style="font-size:.65rem;color:#9ca3af">/ jour</div>
+          {% else %}
+          <span style="color:#d1d5db;font-size:.8rem">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Allocation congés -->
+        <td style="padding:.5rem;text-align:right">
+          {% if row.allocation > 0 %}
+          <span style="font-size:.9rem;font-weight:900;color:#059669;font-family:monospace">
+            {{ row.allocation|int|fcfa }}
+          </span>
+          <div style="font-size:.65rem;color:#9ca3af">{{ row.jours_acquis }} j × base</div>
+          {% else %}
+          <span style="color:#d1d5db;font-size:.8rem">—</span>
+          {% endif %}
+        </td>
+
+        <!-- Actions -->
+        <td style="padding:.5rem;text-align:center">
+          <a href="/conges/nouveau?salarie_id={{ row.salarie.id }}"
+             style="font-size:.72rem;font-weight:700;color:#1e40af;text-decoration:none;background:#eff6ff;padding:.25rem .625rem;border-radius:.5rem;white-space:nowrap">
+             + Demande
+          </a>
+        </td>
+
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="text-align:center;padding:3rem;color:#9ca3af">
+        Aucun salarié trouvé
+      </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
   </div>
+</div>
+
+<!-- ══ TOUTES LES DEMANDES ══ -->
+<div class="card overflow-hidden">
+  <div style="padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between">
+    <h2 style="font-size:.9rem;font-weight:900;color:#111827">📋 Demandes de congés</h2>
+    <span style="font-size:.75rem;color:#9ca3af">{{ demandes|length }} demande(s)</span>
+  </div>
+
+  {% if demandes %}
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:#f9fafb;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em;color:#6b7280">
+        <th style="padding:.625rem 1rem;text-align:left;font-weight:700">Salarié</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Type</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Du</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Au</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Durée</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Statut</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in demandes %}
+      {% set jours = ((c.date_retour - c.date_depart).days + 1) if c.date_depart and c.date_retour else 0 %}
+      <tr style="border-bottom:1px solid #f3f4f6;{% if loop.index0%2==0 %}background:#fafafa{% endif %}">
+        <td style="padding:.5rem .875rem">
+          <div style="font-weight:700;color:#111827">{{ c.salarie.nom_complet }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ c.annee }}</div>
+        </td>
+        <td style="padding:.5rem;text-align:center">
+          <span style="font-size:.72rem;font-weight:700;background:#f3f4f6;color:#374151;padding:.2rem .5rem;border-radius:9999px">
+            {{ c.type_conge or 'ANNUEL' }}
+          </span>
+        </td>
+        <td style="padding:.5rem;text-align:center;font-size:.875rem;color:#374151">
+          {{ c.date_depart.strftime('%d/%m/%Y') if c.date_depart else '—' }}
+        </td>
+        <td style="padding:.5rem;text-align:center;font-size:.875rem;color:#374151">
+          {{ c.date_retour.strftime('%d/%m/%Y') if c.date_retour else '—' }}
+        </td>
+        <td style="padding:.5rem;text-align:center">
+          <span style="font-size:.9rem;font-weight:900;color:#1e40af">{{ jours }}</span>
+          <span style="font-size:.7rem;color:#9ca3af"> j</span>
+        </td>
+        <td style="padding:.5rem;text-align:center">
+          {% set sbg = {'DEMANDÉ':'#fef3c7','APPROUVÉ':'#d1fae5','REFUSÉ':'#fee2e2'} %}
+          {% set stx = {'DEMANDÉ':'#92400e','APPROUVÉ':'#065f46','REFUSÉ':'#991b1b'} %}
+          <span style="font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;
+            background:{{ sbg.get(c.statut,'#f3f4f6') }};color:{{ stx.get(c.statut,'#374151') }}">
+            {{ c.statut }}
+          </span>
+        </td>
+        <td style="padding:.5rem;text-align:center">
+          <div style="display:flex;align-items:center;justify-content:center;gap:.3rem;flex-wrap:wrap">
+            {% if c.statut != 'REFUSÉ' %}
+            <a href="/conges/{{ c.id }}/modifier"
+               style="font-size:.72rem;font-weight:700;color:#1e40af;text-decoration:none;background:#eff6ff;padding:.2rem .5rem;border-radius:.5rem">
+               ✏️ Modifier
+            </a>
+            {% endif %}
+            {% if c.statut == 'DEMANDÉ' %}
+            <form method="POST" action="/conges/{{ c.id }}/approuver" style="display:inline">
+              <button type="submit"
+                style="font-size:.72rem;font-weight:700;color:#065f46;background:#d1fae5;border:none;padding:.2rem .5rem;border-radius:.5rem;cursor:pointer">
+                ✅
+              </button>
+            </form>
+            <form method="POST" action="/conges/{{ c.id }}/refuser" style="display:inline">
+              <button type="submit"
+                style="font-size:.72rem;font-weight:700;color:#991b1b;background:#fee2e2;border:none;padding:.2rem .5rem;border-radius:.5rem;cursor:pointer">
+                ❌
+              </button>
+            </form>
+            {% endif %}
+            <form method="POST" action="/conges/{{ c.id }}/supprimer" style="display:inline"
+              onsubmit="return confirm('Supprimer cette demande ?')">
+              <button type="submit"
+                style="font-size:.72rem;color:#9ca3af;background:#f3f4f6;border:none;padding:.2rem .4rem;border-radius:.5rem;cursor:pointer">
+                🗑️
+              </button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">🏖️</div>
+    <p style="font-weight:700;color:#374151;margin-bottom:.375rem">Aucune demande de congé</p>
+    <p style="font-size:.875rem">Utilisez le bouton "+ Nouvelle demande".</p>
+  </div>
+  {% endif %}
 </div>
 
 {% endblock %}
