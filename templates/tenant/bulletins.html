@@ -97,6 +97,7 @@
   {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
   <input type="hidden" name="bulletin_ids" id="inp-ids" value="">
   <input type="hidden" name="action_lot"   id="inp-action" value="valider">
+  <input type="hidden" name="tout_valider" id="inp-tout-valider" value="0">
 
 <div class="card overflow-hidden">
 
@@ -118,6 +119,10 @@
       <button type="button" onclick="soumettreLot('valider')" id="btn-valider-sel"
         style="background:#059669;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
         ✅ Valider la sélection (<span id="cpt-brouillons">0</span>)
+      </button>
+      <button type="button" onclick="soumettreLot('annuler_validation')" id="btn-annuler-sel"
+        style="background:#fef3c7;color:#92400e;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
+        ↩️ Annuler validation (<span id="cpt-valides-sel">0</span>)
       </button>
       <button type="button" onclick="soumettreLot('payer')" id="btn-payer-sel"
         style="background:#2563eb;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
@@ -167,11 +172,29 @@
         });
       </script>
       {% set nb_brouillons_total = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
+      {% set nb_valides_total = bulletins|selectattr('statut','in',['VALIDÉ','VALIDE'])|list|length %}
       {% if nb_brouillons_total > 0 %}
       <button type="button"
-        onclick="if(confirm('Valider TOUS les {{ nb_brouillons_total }} brouillon(s) ?')) { document.getElementById('inp-ids').value=''; document.getElementById('inp-action').value='valider'; document.getElementById('form-lot').submit(); }"
+        onclick="if(confirm('Valider TOUS les {{ nb_brouillons_total }} brouillon(s) de cette période ?')) {
+          document.getElementById('inp-ids').value='';
+          document.getElementById('inp-action').value='valider';
+          document.getElementById('inp-tout-valider').value='1';
+          document.getElementById('form-lot').submit();
+        }"
         style="background:#d1fae5;color:#065f46;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
         ✅ Tout valider ({{ nb_brouillons_total }})
+      </button>
+      {% endif %}
+      {% if nb_valides_total > 0 %}
+      <button type="button"
+        onclick="if(confirm('Remettre en brouillon les {{ nb_valides_total }} bulletin(s) validé(s) ?\n\nCette action permet de les corriger avant un nouvel export.')) {
+          document.getElementById('inp-ids').value='';
+          document.getElementById('inp-action').value='annuler_validation';
+          document.getElementById('inp-tout-valider').value='1';
+          document.getElementById('form-lot').submit();
+        }"
+        style="background:#fef3c7;color:#92400e;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+        ↩️ Annuler validation ({{ nb_valides_total }})
       </button>
       {% endif %}
     </div>
@@ -391,15 +414,17 @@ function onCbChange() {
 
   // Compter brouillons et validés cochés
   const nBrouillons = checked.filter(c => c.dataset.statut === 'BROUILLON').length;
-  const nValides    = checked.filter(c => c.dataset.statut === 'VALIDÉ').length;
+  const nValides    = checked.filter(c => c.dataset.statut === 'VALIDÉ' || c.dataset.statut === 'VALIDE').length;
 
   // Boutons actions dans l'en-tête
-  const btnVal = document.getElementById('btn-valider-sel');
-  const btnPay = document.getElementById('btn-payer-sel');
-  const btnSup = document.getElementById('btn-suppr-sel');
-  if (btnVal) { btnVal.style.display = nBrouillons > 0 ? '' : 'none'; document.getElementById('cpt-brouillons').textContent = nBrouillons; }
-  if (btnPay) { btnPay.style.display = nValides > 0    ? '' : 'none'; document.getElementById('cpt-valides').textContent   = nValides; }
-  if (btnSup) { btnSup.style.display = nBrouillons > 0 ? '' : 'none'; }
+  const btnVal    = document.getElementById('btn-valider-sel');
+  const btnAnnul  = document.getElementById('btn-annuler-sel');
+  const btnPay    = document.getElementById('btn-payer-sel');
+  const btnSup    = document.getElementById('btn-suppr-sel');
+  if (btnVal)   { btnVal.style.display   = nBrouillons > 0 ? '' : 'none'; document.getElementById('cpt-brouillons').textContent = nBrouillons; }
+  if (btnAnnul) { btnAnnul.style.display = nValides > 0    ? '' : 'none'; document.getElementById('cpt-valides-sel').textContent = nValides; }
+  if (btnPay)   { btnPay.style.display   = nValides > 0    ? '' : 'none'; document.getElementById('cpt-valides').textContent    = nValides; }
+  if (btnSup)   { btnSup.style.display   = nBrouillons > 0 ? '' : 'none'; }
 
   // Barre flottante
   const barre = document.getElementById('barre-flottante');
@@ -440,12 +465,18 @@ function soumettreLot(action) {
   const checked = getChecked();
   if (checked.length === 0) { alert('Cochez au moins un bulletin.'); return; }
 
-  const labels = { valider: 'valider', payer: 'marquer payé', supprimer_brouillons: 'supprimer' };
+  const labels = {
+    valider: 'valider',
+    annuler_validation: 'remettre en brouillon',
+    payer: 'marquer payé',
+    supprimer_brouillons: 'supprimer'
+  };
   const n = checked.length;
-  if (!confirm(`Confirmer : ${labels[action]} ${n} bulletin(s) ?`)) return;
+  if (!confirm(`Confirmer : ${labels[action] || action} ${n} bulletin(s) ?`)) return;
 
-  document.getElementById('inp-ids').value    = checked.map(c => c.dataset.id).join(',');
-  document.getElementById('inp-action').value = action;
+  document.getElementById('inp-ids').value         = checked.map(c => c.dataset.id).join(',');
+  document.getElementById('inp-action').value      = action;
+  document.getElementById('inp-tout-valider').value = '0';
 
   // Anti double-soumission
   document.querySelectorAll('#form-lot button[type="button"]').forEach(b => b.disabled = true);

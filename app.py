@@ -1879,15 +1879,25 @@ def bulletins_valider_lot():
 
     pid      = request.form.get("periode_id", type=int)
     site_id  = request.form.get("site_id",    type=int)
-    action   = request.form.get("action_lot", "valider")      # valider | payer | supprimer_brouillons
-    ids_str  = request.form.get("bulletin_ids", "")           # IDs cochés séparés par virgule
+    action   = request.form.get("action_lot", "valider")
+    ids_str  = request.form.get("bulletin_ids", "")
     ids_sel  = [int(x) for x in ids_str.split(",") if x.strip().isdigit()]
 
     if not pid:
         flash("Période manquante.", "error")
         return redirect(url_for("bulletins"))
 
-    # Si IDs explicites → utiliser la sélection ; sinon → tous les brouillons
+    # ── CORRECTION BUG : si aucun ID sélectionné + action valider → refuser ──
+    # Avant : ids_sel vide → validait TOUS les bulletins de la période
+    # Maintenant : ids_sel vide → uniquement pour les actions "tout valider" explicites
+    if not ids_sel and action == "valider":
+        # Vérifier que c'est bien une demande "tout valider" (bouton dédié)
+        tout_valider = request.form.get("tout_valider", "0")
+        if tout_valider != "1":
+            flash("Aucun bulletin sélectionné. Cochez des bulletins ou utilisez 'Tout valider'.", "warning")
+            return redirect(f"/bulletins?periode_id={pid}" + (f"&site_id={site_id}" if site_id else ""))
+
+    # Charger les bulletins ciblés
     if ids_sel:
         buls = BulletinPaie.query.filter(
             BulletinPaie.id.in_(ids_sel),
@@ -1915,9 +1925,23 @@ def bulletins_valider_lot():
             nb += 1
         msg = f"✅ {nb} bulletin(s) validé(s)."
 
+    elif action == "annuler_validation":
+        # ── NOUVEAU : annuler la validation → repasser en BROUILLON ──────────
+        for b in buls:
+            if b.statut not in ("VALIDÉ", "VALIDE"): continue
+            b.statut          = "BROUILLON"
+            b.date_validation = None
+            # Remettre les acomptes déduits en attente
+            for a in Acompte.query.filter_by(
+                tenant_id=t.id, salarie_id=b.salarie_id,
+                mois=b.periode.mois, annee=b.periode.annee, statut="DEDUIT").all():
+                a.statut = "EN_ATTENTE"
+            nb += 1
+        msg = f"↩️ {nb} bulletin(s) remis en brouillon."
+
     elif action == "payer":
         for b in buls:
-            if b.statut not in ("VALIDÉ", "BROUILLON"): continue
+            if b.statut not in ("VALIDÉ", "VALIDE", "BROUILLON"): continue
             b.statut = "PAYÉ"
             nb += 1
         msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
@@ -1933,6 +1957,7 @@ def bulletins_valider_lot():
         return redirect(f"/bulletins?periode_id={pid}")
 
     db.session.commit()
+    _cache_delete(f"{t.id}:")
     flash(msg, "success")
     redir = f"/bulletins?periode_id={pid}"
     if site_id: redir += f"&site_id={site_id}"
