@@ -134,6 +134,38 @@
          style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
         📥 Export Excel
       </a>
+
+      <!-- Export Sage 100 -->
+      <div style="position:relative;display:inline-block" id="menu-sage-wrap">
+        <button onclick="document.getElementById('menu-sage').classList.toggle('hidden')"
+          style="background:#7c3aed;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+          📊 Export Sage 100 ▾
+        </button>
+        <div id="menu-sage" class="hidden"
+          style="position:absolute;top:110%;left:0;background:white;border:1px solid #e5e7eb;border-radius:.75rem;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:220px;z-index:100;padding:.5rem 0">
+          <a href="/export/sage/journal/{{ periode_sel.id }}"
+            style="display:block;padding:.6rem 1rem;font-size:.8rem;color:#1a2332;text-decoration:none;hover:background:#f9fafb">
+            📄 Journal de paie (.txt)
+            <span style="display:block;font-size:.68rem;color:#6b7280">Import direct Sage 100</span>
+          </a>
+          <a href="/export/sage/livre/{{ periode_sel.id }}"
+            style="display:block;padding:.6rem 1rem;font-size:.8rem;color:#1a2332;text-decoration:none;border-top:1px solid #f3f4f6">
+            📋 Livre de paie (.csv)
+            <span style="display:block;font-size:.68rem;color:#6b7280">Détail par salarié, compatible Excel</span>
+          </a>
+          <a href="/export/sage/les-deux/{{ periode_sel.id }}"
+            style="display:block;padding:.6rem 1rem;font-size:.8rem;color:#7c3aed;font-weight:700;text-decoration:none;border-top:1px solid #f3f4f6">
+            📦 Les deux (.zip)
+            <span style="display:block;font-size:.68rem;color:#6b7280">Journal + Livre en une archive</span>
+          </a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          if (!document.getElementById("menu-sage-wrap").contains(e.target))
+            document.getElementById("menu-sage").classList.add("hidden");
+        });
+      </script>
       {% set nb_brouillons_total = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
       {% if nb_brouillons_total > 0 %}
       <button type="button"

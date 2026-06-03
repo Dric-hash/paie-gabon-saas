@@ -1,0 +1,151 @@
+{% extends "tenant/base.html" %}
+{% block title %}Paiement en cours — {{ tenant.denomination }}{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:3rem auto;text-align:center;padding:0 1rem">
+
+  <!-- Icône animée -->
+  <div id="icone-zone" style="margin-bottom:1.5rem">
+    <div id="icone-attente" style="font-size:4rem;animation:pulse 1.5s ease-in-out infinite">📱</div>
+    <div id="icone-succes"  style="font-size:4rem;display:none">✅</div>
+    <div id="icone-echec"   style="font-size:4rem;display:none">❌</div>
+  </div>
+
+  <!-- Titre -->
+  <h1 id="titre" style="font-size:1.5rem;font-weight:900;color:#1a2332;margin-bottom:.75rem">
+    En attente de confirmation
+  </h1>
+
+  <!-- Message principal -->
+  <div id="message" style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;color:#065f46;font-size:.9rem;line-height:1.6">
+    Une demande de paiement a été envoyée sur le numéro<br/>
+    <strong style="font-size:1.1rem">{{ paiement.telephone }}</strong><br/><br/>
+    Ouvrez Airtel Money sur votre téléphone et validez le paiement de<br/>
+    <strong style="font-size:1.2rem">{{ (paiement.montant|float)|int|fcfa }}</strong>
+  </div>
+
+  <!-- Barre de progression / timer -->
+  <div id="zone-attente">
+    <div style="background:#e5e7eb;border-radius:9999px;height:6px;margin-bottom:.75rem;overflow:hidden">
+      <div id="barre" style="height:100%;background:#10b981;width:100%;transition:width .5s linear;border-radius:9999px"></div>
+    </div>
+    <p id="timer-txt" style="font-size:.8rem;color:#6b7280">
+      Vérification automatique dans <span id="compte-rebours">5</span>s
+    </p>
+  </div>
+
+  <!-- Message de résultat (caché au départ) -->
+  <div id="zone-resultat" style="display:none;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;font-size:.9rem"></div>
+
+  <!-- Boutons -->
+  <div style="display:flex;flex-direction:column;gap:.75rem">
+    <a id="btn-retour" href="/paiement"
+       style="display:block;padding:.75rem 1.5rem;background:#f3f4f6;color:#374151;border-radius:.75rem;text-decoration:none;font-weight:700;font-size:.875rem">
+      ← Changer de numéro
+    </a>
+    <a id="btn-dashboard" href="/dashboard"
+       style="display:none;padding:.75rem 1.5rem;background:#10b981;color:white;border-radius:.75rem;text-decoration:none;font-weight:700;font-size:.875rem">
+      Accéder au tableau de bord →
+    </a>
+  </div>
+
+  <!-- Référence transaction -->
+  <p style="font-size:.7rem;color:#9ca3af;margin-top:2rem">
+    Référence : {{ paiement.reference_interne }}
+  </p>
+</div>
+
+<style>
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+</style>
+
+<script>
+const REFERENCE  = "{{ paiement.reference_interne }}";
+const MAX_ESSAIS = 24;   // 24 × 5s = 2 minutes
+const INTERVALLE = 5000; // 5 secondes
+
+let essais   = 0;
+let termine  = false;
+let timerCpt = null;
+let timerPoll = null;
+
+function compteRebours() {
+  let s = 5;
+  document.getElementById("compte-rebours").textContent = s;
+  timerCpt = setInterval(() => {
+    s--;
+    const el = document.getElementById("compte-rebours");
+    if (el) el.textContent = s;
+    const barre = document.getElementById("barre");
+    if (barre) barre.style.width = (s / 5 * 100) + "%";
+    if (s <= 0) clearInterval(timerCpt);
+  }, 1000);
+}
+
+function verifier() {
+  if (termine) return;
+  essais++;
+  clearInterval(timerCpt);
+
+  fetch("/paiement/airtel/statut/" + REFERENCE)
+    .then(r => r.json())
+    .then(data => {
+      if (data.statut === "SUCCES") {
+        afficherSucces(data.message);
+      } else if (data.statut === "ECHEC" || data.statut === "EXPIRE") {
+        afficherEchec(data.message);
+      } else if (essais >= MAX_ESSAIS) {
+        afficherEchec("Délai dépassé. Vérifiez votre téléphone et revenez sur cette page.");
+      } else {
+        compteRebours();
+        timerPoll = setTimeout(verifier, INTERVALLE);
+      }
+    })
+    .catch(() => {
+      if (essais < MAX_ESSAIS) {
+        compteRebours();
+        timerPoll = setTimeout(verifier, INTERVALLE);
+      }
+    });
+}
+
+function afficherSucces(msg) {
+  termine = true;
+  clearTimeout(timerPoll);
+  document.getElementById("icone-attente").style.display = "none";
+  document.getElementById("icone-succes").style.display  = "block";
+  document.getElementById("titre").textContent = "Paiement confirmé !";
+  document.getElementById("message").style.display = "none";
+  document.getElementById("zone-attente").style.display = "none";
+  const r = document.getElementById("zone-resultat");
+  r.style.display    = "block";
+  r.style.background = "#f0fdf4";
+  r.style.border     = "1px solid #bbf7d0";
+  r.style.color      = "#065f46";
+  r.textContent      = msg || "Votre abonnement a été activé avec succès.";
+  document.getElementById("btn-retour").style.display    = "none";
+  document.getElementById("btn-dashboard").style.display = "block";
+  setTimeout(() => window.location.href = "/dashboard", 3000);
+}
+
+function afficherEchec(msg) {
+  termine = true;
+  clearTimeout(timerPoll);
+  document.getElementById("icone-attente").style.display = "none";
+  document.getElementById("icone-echec").style.display   = "block";
+  document.getElementById("titre").textContent = "Paiement non confirmé";
+  document.getElementById("message").style.display = "none";
+  document.getElementById("zone-attente").style.display = "none";
+  const r = document.getElementById("zone-resultat");
+  r.style.display    = "block";
+  r.style.background = "#fef2f2";
+  r.style.border     = "1px solid #fecaca";
+  r.style.color      = "#991b1b";
+  r.textContent      = msg || "Le paiement a échoué ou a été annulé.";
+}
+
+// Démarrer après 5s
+compteRebours();
+timerPoll = setTimeout(verifier, INTERVALLE);
+</script>
+{% endblock %}

@@ -605,3 +605,63 @@ class FeuillePaieJournalier(db.Model):
         for k in ["total_heures","taux_horaire","montant_brut"]:
             if d[k] is not None: d[k] = float(d[k])
         return d
+
+
+class Paiement(db.Model):
+    """
+    Historique de tous les paiements d'abonnement.
+    Un enregistrement par tentative (succès ou échec).
+    """
+    __tablename__ = "paiements"
+
+    id               = db.Column(db.Integer, primary_key=True)
+    tenant_id        = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+
+    # Moyen de paiement
+    moyen            = db.Column(db.String(30), nullable=False)
+    # AIRTEL_MONEY | MOOV_MONEY | CINETPAY | STRIPE | MANUEL
+
+    # Montant et durée
+    montant          = db.Column(db.Numeric(15, 2), nullable=False)
+    duree_mois       = db.Column(db.Integer, default=1)
+    plan_id          = db.Column(db.Integer, db.ForeignKey("plans.id"), nullable=True)
+
+    # Références
+    reference_interne = db.Column(db.String(100), unique=True, nullable=False)
+    # Identifiant côté opérateur (transaction_id Airtel, charge_id Stripe…)
+    reference_externe = db.Column(db.String(200))
+
+    # Numéro de téléphone utilisé (Mobile Money)
+    telephone        = db.Column(db.String(30))
+
+    # Statut du paiement
+    statut           = db.Column(db.String(20), default="EN_ATTENTE")
+    # EN_ATTENTE | SUCCES | ECHEC | EXPIRE | REMBOURSE
+
+    # Dates
+    date_creation    = db.Column(db.DateTime, default=datetime.utcnow)
+    date_confirmation = db.Column(db.DateTime)
+
+    # Données brutes de la réponse opérateur (JSON)
+    reponse_raw      = db.Column(db.Text)
+
+    # Notes admin
+    notes            = db.Column(db.Text)
+
+    # Relations
+    tenant = db.relationship("Tenant", backref="paiements")
+    plan   = db.relationship("Plan")
+
+    __table_args__ = (
+        db.Index("idx_paiements_tenant", "tenant_id", "date_creation"),
+        db.Index("idx_paiements_statut", "statut"),
+    )
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for k in ["date_creation", "date_confirmation"]:
+            if d[k]:
+                d[k] = str(d[k])
+        if d["montant"] is not None:
+            d["montant"] = float(d["montant"])
+        return d

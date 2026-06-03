@@ -24,97 +24,111 @@
 
 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem">
 
-  <!-- Option 1 : Mobile Money -->
+  <!-- Option 1 : Airtel Money (STK Push automatique) -->
   <div class="card p-5">
     <div style="text-align:center;margin-bottom:1rem">
       <div style="font-size:2.5rem;margin-bottom:.5rem">📱</div>
-      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Mobile Money</h2>
-      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Airtel Money · Moov Money</p>
+      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Airtel Money</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Paiement automatique sur votre téléphone</p>
     </div>
     <div style="background:#f0fdf4;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
-      <div style="font-size:.75rem;font-weight:700;color:#065f46;margin-bottom:.5rem">Numéros de paiement :</div>
-      <div style="font-size:.875rem;font-weight:900;color:#1a2332;margin-bottom:.25rem">
-        📲 Airtel Money : <span style="font-family:monospace">+241 07 XX XX XX</span>
+      <div style="font-size:.75rem;font-weight:700;color:#065f46;margin-bottom:.4rem">Comment ça marche :</div>
+      <div style="font-size:.78rem;color:#374151;line-height:1.7">
+        1. Entrez votre numéro Airtel Money<br/>
+        2. Cliquez "Payer maintenant"<br/>
+        3. Une notification arrive sur votre téléphone<br/>
+        4. Validez avec votre code PIN Airtel Money
       </div>
-      <div style="font-size:.875rem;font-weight:900;color:#1a2332">
-        📲 Moov Money : <span style="font-family:monospace">+241 06 XX XX XX</span>
-      </div>
-      <div style="font-size:.7rem;color:#6b7280;margin-top:.5rem">Au nom de : <strong>PaieGabon SARL</strong></div>
     </div>
-    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
-      1. Envoyez le montant au numéro ci-dessus<br/>
-      2. Notez votre référence de transaction<br/>
-      3. Remplissez le formulaire ci-dessous
-    </div>
-    <form method="POST" action="/paiement/confirmer" class="space-y-3">
+    <form method="POST" action="/paiement/airtel/initier" class="space-y-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <input type="hidden" name="mode" value="MOBILE_MONEY"/>
       <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Opérateur</label>
-        <select name="operateur" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          <option>Airtel Money</option>
-          <option>Moov Money</option>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Numéro Airtel Money *</label>
+        <input type="tel" name="telephone" required placeholder="Ex: 07 12 34 56"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.9rem;box-sizing:border-box;font-weight:700"/>
+        <p style="font-size:.68rem;color:#9ca3af;margin-top:.25rem">Format : 07 XX XX XX (Gabon)</p>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Plan</label>
+        <select name="plan_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          {% for plan in plans %}
+          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
+            {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
+          </option>
+          {% endfor %}
         </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">N° de transaction *</label>
-        <input type="text" name="reference" required placeholder="Ex: TXN123456789"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Votre numéro de téléphone *</label>
-        <input type="tel" name="telephone" required placeholder="Ex: 07 XX XX XX"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
       </div>
       <div>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
-        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+        <select name="duree" id="duree-airtel" onchange="majMontantAirtel()"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
           <option value="1">1 mois</option>
-          <option value="3">3 mois (−5%)</option>
-          <option value="6">6 mois (−10%)</option>
-          <option value="12">12 mois (−15%)</option>
+          <option value="3">3 mois</option>
+          <option value="6">6 mois</option>
+          <option value="12">12 mois</option>
         </select>
       </div>
-      <button type="submit" style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
-        ✅ Confirmer le paiement
+      <div style="background:#ecfdf5;border-radius:.5rem;padding:.6rem;text-align:center">
+        <span style="font-size:.75rem;color:#065f46">Montant à payer : </span>
+        <strong id="montant-airtel" style="color:#059669">
+          {{ (tenant.plan.prix_mensuel|float)|int|fcfa if tenant.plan else '—' }}
+        </strong>
+      </div>
+      <button type="submit"
+        style="width:100%;background:#059669;color:white;padding:.75rem;border-radius:.75rem;font-weight:900;font-size:.875rem;border:none;cursor:pointer;letter-spacing:.02em">
+        Payer maintenant via Airtel Money →
       </button>
     </form>
   </div>
 
-  <!-- Option 2 : Carte bancaire -->
+  <!-- Option 2 : CinetPay (Mobile Money + Carte bancaire) -->
   <div class="card p-5">
     <div style="text-align:center;margin-bottom:1rem">
-      <div style="font-size:2.5rem;margin-bottom:.5rem">💳</div>
-      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">Carte bancaire</h2>
-      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Visa · Mastercard</p>
+      <div style="font-size:2.5rem;margin-bottom:.5rem">🌍</div>
+      <h2 style="font-size:1rem;font-weight:900;color:#1a2332">CinetPay</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Airtel · Moov · Visa · Mastercard</p>
     </div>
-    <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem;text-align:center">
-      <div style="font-size:.75rem;color:#1e40af;font-weight:700">Paiement sécurisé</div>
-      <div style="font-size:.7rem;color:#6b7280;margin-top:.25rem">Chiffrement SSL 256 bits</div>
+    <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
+      <div style="font-size:.75rem;font-weight:700;color:#1e40af;margin-bottom:.4rem">Tous les modes de paiement :</div>
+      <div style="font-size:.78rem;color:#374151;line-height:1.7">
+        📱 Airtel Money Gabon<br/>
+        📱 Moov Money Gabon<br/>
+        💳 Carte Visa / Mastercard<br/>
+      </div>
+      <div style="font-size:.68rem;color:#6b7280;margin-top:.4rem">Vous choisissez sur la page de paiement sécurisée.</div>
     </div>
-    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
-      1. Cliquez sur "Payer par carte"<br/>
-      2. Saisissez les infos de votre carte<br/>
-      3. Confirmation automatique
-    </div>
-    <form method="POST" action="/paiement/confirmer" class="space-y-3">
+    <form method="POST" action="/paiement/cinetpay/initier" class="space-y-3">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <input type="hidden" name="mode" value="CARTE"/>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Plan</label>
+        <select name="plan_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          {% for plan in plans %}
+          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
+            {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
+          </option>
+          {% endfor %}
+        </select>
+      </div>
       <div>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
         <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
           <option value="1">1 mois</option>
-          <option value="3">3 mois (−5%)</option>
-          <option value="6">6 mois (−10%)</option>
-          <option value="12">12 mois (−15%)</option>
+          <option value="3">3 mois</option>
+          <option value="6">6 mois</option>
+          <option value="12">12 mois</option>
         </select>
       </div>
-      <div style="background:#fef3c7;border-radius:.5rem;padding:.5rem;font-size:.7rem;color:#92400e">
-        ⚠️ Intégration Stripe en cours. Contactez-nous pour activer cette option.
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Mode</label>
+        <select name="canaux" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+          <option value="ALL">Tous (Mobile Money + Carte)</option>
+          <option value="MOBILE_MONEY">Mobile Money uniquement</option>
+          <option value="CREDIT_CARD">Carte bancaire uniquement</option>
+        </select>
       </div>
-      <input type="hidden" name="reference" value="CARTE-PENDING"/>
-      <button type="submit" style="width:100%;background:#2563eb;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
-        💳 Payer par carte
+      <button type="submit"
+        style="width:100%;background:#2563eb;color:white;padding:.75rem;border-radius:.75rem;font-weight:900;font-size:.875rem;border:none;cursor:pointer">
+        Payer via CinetPay →
       </button>
     </form>
   </div>

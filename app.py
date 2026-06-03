@@ -12,7 +12,7 @@ import io, os, secrets as sec, threading
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
-                    Site, AffectationSite)
+                    Site, AffectationSite, Paiement)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
 from flask_wtf.csrf import CSRFProtect
@@ -2235,25 +2235,709 @@ def paiement():
     t = get_tenant()
     if not t: return redirect(url_for("login"))
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
-    return render_template("tenant/paiement.html", tenant=t, plans=plans)
+    historique = Paiement.query.filter_by(tenant_id=t.id)\
+        .order_by(Paiement.date_creation.desc()).limit(10).all()
+    return render_template("tenant/paiement.html", tenant=t, plans=plans,
+                           historique=historique)
+
+
+# ── Airtel Money — Initiation ──────────────────────────────────────────────────
+@app.route("/paiement/airtel/initier", methods=["POST"])
+@login_required
+def paiement_airtel_initier():
+    """
+    Lance une demande de paiement STK Push Airtel Money.
+    Le client reçoit une notification USSD sur son téléphone.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    telephone  = request.form.get("telephone", "").strip()
+    duree      = int(request.form.get("duree", 1) or 1)
+    plan_id    = request.form.get("plan_id", type=int) or (t.plan_id)
+
+    plan = Plan.query.get(plan_id) if plan_id else t.plan
+    if not plan:
+        flash("Plan introuvable.", "error")
+        return redirect(url_for("paiement"))
+
+    if not telephone:
+        flash("Veuillez saisir votre numéro Airtel Money.", "error")
+        return redirect(url_for("paiement"))
+
+    montant = float(plan.prix_mensuel) * duree
+
+    # Générer une référence unique
+    import uuid
+    reference = f"AM-{t.id}-{uuid.uuid4().hex[:10].upper()}"
+
+    # Enregistrer la tentative en base
+    p = Paiement(
+        tenant_id=t.id,
+        moyen="AIRTEL_MONEY",
+        montant=montant,
+        duree_mois=duree,
+        plan_id=plan.id,
+        reference_interne=reference,
+        telephone=telephone,
+        statut="EN_ATTENTE",
+    )
+    db.session.add(p)
+    db.session.commit()
+
+    # Appeler l'API Airtel
+    try:
+        from airtel_money import initier_paiement, AirtelConfigError
+        resultat = initier_paiement(
+            reference=reference,
+            telephone=telephone,
+            montant=montant,
+            description=f"Abonnement PaieGabon {plan.nom} — {duree} mois",
+        )
+        p.reference_externe = resultat.get("transaction_id")
+        import json
+        p.reponse_raw = json.dumps(resultat.get("raw", {}))
+
+        if resultat["success"]:
+            db.session.commit()
+            logger.info(f"[Paiement] Airtel initié — ref={reference} tenant={t.id}")
+            flash(
+                f"Demande de paiement envoyée sur le {telephone}. "
+                "Validez sur votre téléphone dans les 2 minutes.",
+                "success"
+            )
+            return redirect(url_for("paiement_airtel_attente", reference=reference))
+        else:
+            p.statut = "ECHEC"
+            p.notes  = resultat["message"]
+            db.session.commit()
+            flash(f"Échec : {resultat['message']}", "error")
+            return redirect(url_for("paiement"))
+
+    except Exception as e:
+        p.statut = "ECHEC"
+        p.notes  = str(e)
+        db.session.commit()
+        logger.error(f"[Paiement] Erreur Airtel : {e}")
+        flash(f"Erreur de connexion Airtel Money. Réessayez ou contactez le support.", "error")
+        return redirect(url_for("paiement"))
+
+
+# ── Airtel Money — Page d'attente ──────────────────────────────────────────────
+@app.route("/paiement/airtel/attente/<reference>")
+@login_required
+def paiement_airtel_attente(reference):
+    """
+    Page d'attente affichée après l'initiation.
+    Fait un polling automatique toutes les 5 secondes via AJAX.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    p = Paiement.query.filter_by(
+        reference_interne=reference, tenant_id=t.id
+    ).first_or_404()
+    return render_template("tenant/paiement_attente.html", paiement=p, tenant=t)
+
+
+# ── Airtel Money — Vérification statut (AJAX polling) ─────────────────────────
+@app.route("/paiement/airtel/statut/<reference>")
+@login_required
+def paiement_airtel_statut(reference):
+    """
+    Endpoint JSON pour le polling côté client.
+    Retourne le statut actuel de la transaction.
+    """
+    t = get_tenant()
+    if not t: return jsonify({"statut": "ERREUR", "message": "Non connecté"}), 401
+
+    p = Paiement.query.filter_by(
+        reference_interne=reference, tenant_id=t.id
+    ).first_or_404()
+
+    # Si déjà confirmé en base, retourner directement
+    if p.statut == "SUCCES":
+        return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+    if p.statut == "ECHEC":
+        return jsonify({"statut": "ECHEC", "message": p.notes or "Paiement refusé."})
+    if p.statut == "EXPIRE":
+        return jsonify({"statut": "EXPIRE", "message": "Délai dépassé. Recommencez."})
+
+    # Interroger l'API Airtel si on a un transaction_id
+    if p.reference_externe:
+        try:
+            from airtel_money import verifier_statut
+            r = verifier_statut(p.reference_externe)
+            if r["statut"] == "SUCCESS":
+                _activer_abonnement(p)
+                return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+            elif r["statut"] in ("FAILED", "EXPIRED"):
+                p.statut = "ECHEC" if r["statut"] == "FAILED" else "EXPIRE"
+                p.notes  = r.get("message", "")
+                db.session.commit()
+                return jsonify({"statut": p.statut, "message": p.notes})
+        except Exception as e:
+            logger.warning(f"[Paiement] Polling Airtel erreur : {e}")
+
+    return jsonify({"statut": "EN_ATTENTE", "message": "En attente de confirmation…"})
+
+
+# ── Airtel Money — Webhook (callback automatique d'Airtel) ────────────────────
+@app.route("/webhook/airtel", methods=["POST"])
+@csrf.exempt  # Les webhooks externes ne peuvent pas envoyer de token CSRF
+def webhook_airtel():
+    """
+    Reçoit les notifications automatiques d'Airtel après paiement du client.
+    Airtel appelle cette URL avec le résultat de la transaction.
+    """
+    from airtel_money import valider_signature_webhook
+    import json
+
+    payload_bytes = request.get_data()
+    signature     = request.headers.get("X-Airtel-Signature", "")
+
+    # Vérifier la signature si configurée
+    if not valider_signature_webhook(payload_bytes, signature):
+        logger.warning("[Webhook Airtel] Signature invalide — requête ignorée.")
+        return jsonify({"status": "SIGNATURE_INVALIDE"}), 401
+
+    try:
+        data = request.get_json(force=True) or {}
+        logger.info(f"[Webhook Airtel] Reçu : {data}")
+
+        # Extraire les infos de la transaction
+        txn   = data.get("transaction", {}) or data.get("data", {}).get("transaction", {})
+        ref   = txn.get("id") or txn.get("reference") or data.get("reference", "")
+        statut_api = (txn.get("status") or data.get("status", {}).get("code", "")).upper()
+
+        if not ref:
+            logger.warning("[Webhook Airtel] Référence manquante dans le payload.")
+            return jsonify({"status": "REF_MANQUANTE"}), 400
+
+        # Retrouver le paiement
+        p = Paiement.query.filter(
+            (Paiement.reference_interne == ref) |
+            (Paiement.reference_externe == ref)
+        ).first()
+
+        if not p:
+            logger.warning(f"[Webhook Airtel] Paiement introuvable pour ref={ref}")
+            return jsonify({"status": "INTROUVABLE"}), 404
+
+        if p.statut == "SUCCES":
+            # Idempotence — déjà traité
+            return jsonify({"status": "DEJA_TRAITE"}), 200
+
+        p.reponse_raw = json.dumps(data)
+
+        if statut_api in ("TS", "SUCCESS", "200"):
+            _activer_abonnement(p)
+            logger.info(f"[Webhook Airtel] Succès — ref={ref} tenant={p.tenant_id}")
+        else:
+            p.statut = "ECHEC"
+            p.notes  = f"Code Airtel : {statut_api}"
+            db.session.commit()
+            logger.info(f"[Webhook Airtel] Échec — ref={ref} code={statut_api}")
+
+        return jsonify({"status": "OK"}), 200
+
+    except Exception as e:
+        logger.error(f"[Webhook Airtel] Erreur traitement : {e}")
+        db.session.rollback()
+        return jsonify({"status": "ERREUR_INTERNE"}), 500
+
+
+# ── Helper : activer l'abonnement après paiement confirmé ─────────────────────
+def _activer_abonnement(paiement: "Paiement"):
+    """
+    Appelé après confirmation d'un paiement (webhook ou polling).
+    Met à jour le tenant : statut ACTIF, date_expiration prolongée.
+    Envoie un email de confirmation.
+    """
+    from datetime import timezone
+    p = paiement
+    p.statut           = "SUCCES"
+    p.date_confirmation = datetime.utcnow()
+
+    t = p.tenant
+    now = datetime.utcnow()
+
+    # Prolonger depuis aujourd'hui ou depuis la date d'expiration si future
+    base = t.date_expiration if (t.date_expiration and t.date_expiration > now) else now
+    t.date_expiration = base + timedelta(days=30 * p.duree_mois)
+    t.statut = "ACTIF"
+
+    if p.plan_id:
+        t.plan_id = p.plan_id
+
+    db.session.commit()
+    _cache_delete(f"{t.id}:")  # invalider le cache dashboard
+
+    logger.info(
+        f"[Abonnement] Tenant {t.id} activé jusqu'au "
+        f"{t.date_expiration.strftime('%d/%m/%Y')} — "
+        f"{p.duree_mois} mois via {p.moyen}"
+    )
+
+    # Email de confirmation
+    try:
+        msg = Message(
+            subject=f"Abonnement PaieGabon activé — {t.denomination}",
+            recipients=[u.email for u in t.utilisateurs if u.role == "TENANT_ADMIN" and u.email],
+            body=(
+                f"Bonjour,\n\n"
+                f"Votre paiement de {float(p.montant):,.0f} FCFA a été confirmé.\n"
+                f"Abonnement actif jusqu'au : {t.date_expiration.strftime('%d/%m/%Y')}\n"
+                f"Référence : {p.reference_interne}\n\n"
+                f"Merci de votre confiance.\n"
+                f"L'équipe PaieGabon"
+            ),
+        )
+        send_email_async(msg)
+    except Exception as e:
+        logger.warning(f"[Abonnement] Email de confirmation non envoyé : {e}")
+
 
 @app.route("/paiement/confirmer", methods=["POST"])
 @login_required
 def paiement_confirmer():
+    """Route de compatibilité — paiement manuel (admin valide manuellement)."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    mode = request.form.get("mode", "")
+    mode      = request.form.get("mode", "MANUEL")
     reference = request.form.get("reference", "").strip()
-    duree = int(request.form.get("duree", 1) or 1)
-    if not reference: flash("Veuillez indiquer une reference.", "error"); return redirect(url_for("paiement"))
-    t.notes = f"PAIEMENT {mode} - Ref: {reference} - {duree} mois - {datetime.now().strftime('%d/%m/%Y')}"
+    duree     = int(request.form.get("duree", 1) or 1)
+    if not reference:
+        flash("Veuillez indiquer une référence de transaction.", "error")
+        return redirect(url_for("paiement"))
+    import uuid
+    ref_interne = f"MAN-{t.id}-{uuid.uuid4().hex[:8].upper()}"
+    p = Paiement(
+        tenant_id=t.id, moyen="MANUEL", montant=float(t.plan.prix_mensuel) * duree if t.plan else 0,
+        duree_mois=duree, plan_id=t.plan_id, reference_interne=ref_interne,
+        reference_externe=reference, statut="EN_ATTENTE",
+        notes=f"Paiement manuel déclaré par {current_user.email}",
+    )
+    db.session.add(p)
     t.statut = "PAIEMENT_EN_ATTENTE"
     db.session.commit()
-    flash(f"Paiement {mode} ref {reference} enregistre. Activation sous 48h.", "success")
+    flash(f"Paiement {mode} (réf. {reference}) enregistré. Activation sous 48h après vérification.", "success")
     return redirect(url_for("parametres"))
 
-# ── Paramètres ────────────────────────────────────────────────────────────────
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CINETPAY — Paiement multi-opérateurs (Airtel, Moov, Visa, Mastercard)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/paiement/cinetpay/initier", methods=["POST"])
+@login_required
+def paiement_cinetpay_initier():
+    """
+    Initie un paiement CinetPay.
+    Crée une session et redirige le client vers la page de paiement CinetPay
+    où il choisit son moyen : Airtel Money, Moov Money ou carte bancaire.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    duree   = int(request.form.get("duree", 1) or 1)
+    plan_id = request.form.get("plan_id", type=int) or t.plan_id
+    plan    = Plan.query.get(plan_id) if plan_id else t.plan
+
+    if not plan:
+        flash("Plan introuvable.", "error")
+        return redirect(url_for("paiement"))
+
+    montant = float(plan.prix_mensuel) * duree
+
+    import uuid
+    reference = f"CP-{t.id}-{uuid.uuid4().hex[:10].upper()}"
+
+    # Récupérer l'admin du tenant pour pré-remplir les infos client
+    admin = Utilisateur.query.filter_by(tenant_id=t.id, role="TENANT_ADMIN").first()
+    nom_client   = admin.nom_complet if admin else t.denomination
+    email_client = admin.email if admin else ""
+
+    # Enregistrer la tentative
+    p = Paiement(
+        tenant_id=t.id,
+        moyen="CINETPAY",
+        montant=montant,
+        duree_mois=duree,
+        plan_id=plan.id,
+        reference_interne=reference,
+        statut="EN_ATTENTE",
+    )
+    db.session.add(p)
+    db.session.commit()
+
+    try:
+        from cinetpay import initier_paiement, CinetPayConfigError
+        resultat = initier_paiement(
+            reference=reference,
+            montant=montant,
+            description=f"PaieGabon {plan.nom} — {duree} mois — {t.denomination}",
+            nom_client=nom_client,
+            email_client=email_client,
+        )
+
+        import json
+        p.reponse_raw = json.dumps(resultat.get("raw", {}))
+
+        if resultat["success"]:
+            p.reference_externe = resultat.get("payment_token", "")
+            db.session.commit()
+            logger.info(f"[CinetPay] Session créée — ref={reference} tenant={t.id}")
+            # Rediriger directement vers la page CinetPay
+            return redirect(resultat["payment_url"])
+        else:
+            p.statut = "ECHEC"
+            p.notes  = resultat["message"]
+            db.session.commit()
+            flash(f"Erreur CinetPay : {resultat['message']}", "error")
+            return redirect(url_for("paiement"))
+
+    except Exception as e:
+        p.statut = "ECHEC"
+        p.notes  = str(e)
+        db.session.commit()
+        logger.error(f"[CinetPay] Erreur initiation : {e}")
+        flash("Erreur de connexion CinetPay. Réessayez ou contactez le support.", "error")
+        return redirect(url_for("paiement"))
+
+
+@app.route("/paiement/cinetpay/retour")
+@login_required
+def paiement_cinetpay_retour():
+    """
+    Page de retour après la page de paiement CinetPay.
+    CinetPay redirige ici après que le client ait terminé (succès ou annulation).
+    On affiche un message d'attente pendant que le webhook confirme.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    transaction_id = request.args.get("transaction_id", "")
+    # Chercher le paiement par référence interne ou externe
+    p = None
+    if transaction_id:
+        p = Paiement.query.filter(
+            (Paiement.reference_interne == transaction_id) |
+            (Paiement.reference_externe == transaction_id),
+            Paiement.tenant_id == t.id
+        ).first()
+
+    # Vérification immédiate du statut
+    if p and p.statut == "EN_ATTENTE" and (p.reference_interne or p.reference_externe):
+        try:
+            from cinetpay import verifier_statut
+            ref = p.reference_interne
+            r   = verifier_statut(ref)
+            if r["statut"] == "ACCEPTED":
+                _activer_abonnement(p)
+                flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+                return redirect(url_for("dashboard"))
+            elif r["statut"] in ("REFUSED", "CANCELLED"):
+                p.statut = "ECHEC"
+                p.notes  = r.get("message", "Paiement refusé ou annulé.")
+                db.session.commit()
+        except Exception as e:
+            logger.warning(f"[CinetPay] Vérification retour échouée : {e}")
+
+    if p and p.statut == "SUCCES":
+        flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+        return redirect(url_for("dashboard"))
+
+    # Afficher la page d'attente (le webhook va confirmer dans quelques secondes)
+    return render_template("tenant/paiement_cinetpay_retour.html",
+                           paiement=p, tenant=t,
+                           transaction_id=transaction_id)
+
+
+@app.route("/paiement/cinetpay/statut/<reference>")
+@login_required
+def paiement_cinetpay_statut(reference):
+    """Endpoint JSON pour le polling côté client sur la page de retour."""
+    t = get_tenant()
+    if not t: return jsonify({"statut": "ERREUR"}), 401
+
+    p = Paiement.query.filter(
+        (Paiement.reference_interne == reference),
+        Paiement.tenant_id == t.id
+    ).first_or_404()
+
+    if p.statut == "SUCCES":
+        return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+    if p.statut == "ECHEC":
+        return jsonify({"statut": "ECHEC", "message": p.notes or "Paiement refusé."})
+
+    # Vérification active
+    try:
+        from cinetpay import verifier_statut
+        r = verifier_statut(reference)
+        if r["statut"] == "ACCEPTED":
+            _activer_abonnement(p)
+            return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+        elif r["statut"] in ("REFUSED", "CANCELLED"):
+            p.statut = "ECHEC"
+            p.notes  = r.get("message", "")
+            db.session.commit()
+            return jsonify({"statut": "ECHEC", "message": p.notes})
+    except Exception as e:
+        logger.warning(f"[CinetPay] Polling statut erreur : {e}")
+
+    return jsonify({"statut": "EN_ATTENTE", "message": "Vérification en cours…"})
+
+
+@app.route("/webhook/cinetpay", methods=["POST"])
+@csrf.exempt
+def webhook_cinetpay():
+    """
+    Reçoit les notifications automatiques de CinetPay.
+    Appelé par CinetPay dès que le paiement est confirmé ou refusé.
+    """
+    import json
+    try:
+        data = request.get_json(force=True) or request.form.to_dict()
+        logger.info(f"[Webhook CinetPay] Reçu : {data}")
+
+        from cinetpay import valider_webhook
+        if not valider_webhook(data):
+            return jsonify({"status": "SITE_ID_INVALIDE"}), 401
+
+        # Extraire la référence de transaction
+        ref = (data.get("cpm_trans_id") or data.get("transaction_id")
+               or data.get("metadata", ""))
+        statut_api = (data.get("cpm_result") or data.get("status") or "").upper()
+
+        if not ref:
+            logger.warning("[Webhook CinetPay] Référence manquante.")
+            return jsonify({"status": "REF_MANQUANTE"}), 400
+
+        p = Paiement.query.filter_by(reference_interne=ref).first()
+        if not p:
+            # Essayer avec reference_externe
+            token = data.get("cpm_payment_config") or data.get("payment_token", "")
+            p = Paiement.query.filter_by(reference_externe=token).first() if token else None
+
+        if not p:
+            logger.warning(f"[Webhook CinetPay] Paiement introuvable ref={ref}")
+            return jsonify({"status": "INTROUVABLE"}), 404
+
+        if p.statut == "SUCCES":
+            return jsonify({"status": "DEJA_TRAITE"}), 200
+
+        p.reponse_raw = json.dumps(data)
+
+        # "00" = succès chez CinetPay
+        if statut_api in ("00", "ACCEPTED", "SUCCESS"):
+            _activer_abonnement(p)
+            logger.info(f"[Webhook CinetPay] Succès — ref={ref} tenant={p.tenant_id}")
+        else:
+            p.statut = "ECHEC"
+            p.notes  = f"Code CinetPay : {statut_api}"
+            db.session.commit()
+            logger.info(f"[Webhook CinetPay] Échec — ref={ref} code={statut_api}")
+
+        return jsonify({"status": "OK"}), 200
+
+    except Exception as e:
+        logger.error(f"[Webhook CinetPay] Erreur : {e}")
+        db.session.rollback()
+        return jsonify({"status": "ERREUR_INTERNE"}), 500
+# CINETPAY — Paiement par page de checkout (Mobile Money + Carte bancaire)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/paiement/cinetpay/initier", methods=["POST"])
+@login_required
+def paiement_cinetpay_initier():
+    """
+    Crée une session CinetPay et redirige le client vers la page de paiement.
+    Le client choisit son mode (Airtel Money, Moov Money, ou carte bancaire).
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    duree   = int(request.form.get("duree", 1) or 1)
+    plan_id = request.form.get("plan_id", type=int) or t.plan_id
+    canaux  = request.form.get("canaux", "ALL")  # ALL | MOBILE_MONEY | CREDIT_CARD
+
+    plan = Plan.query.get(plan_id) if plan_id else t.plan
+    if not plan:
+        flash("Plan introuvable.", "error")
+        return redirect(url_for("paiement"))
+
+    montant = float(plan.prix_mensuel) * duree
+
+    # Récupérer les infos de l'admin du tenant pour CinetPay
+    admin = Utilisateur.query.filter_by(
+        tenant_id=t.id, role="TENANT_ADMIN", actif=True
+    ).first() or current_user
+
+    import uuid
+    reference = f"CP-{t.id}-{uuid.uuid4().hex[:10].upper()}"
+
+    # Enregistrer la tentative
+    p = Paiement(
+        tenant_id=t.id,
+        moyen="CINETPAY",
+        montant=montant,
+        duree_mois=duree,
+        plan_id=plan.id,
+        reference_interne=reference,
+        statut="EN_ATTENTE",
+    )
+    db.session.add(p)
+    db.session.commit()
+
+    try:
+        from cinetpay import initier_paiement as cp_initier
+        resultat = cp_initier(
+            reference=reference,
+            montant=montant,
+            tenant_id=t.id,
+            client_nom=(admin.nom or t.denomination[:30]),
+            client_prenom=(admin.prenom or "Client"),
+            client_email=(admin.email or ""),
+            client_telephone=(t.telephone or "0700000000"),
+            description=f"Abonnement PaieGabon {plan.nom} — {duree} mois",
+            canaux=canaux,
+        )
+
+        import json
+        p.payment_token    = None
+        p.reponse_raw      = json.dumps(resultat.get("raw", {}))
+
+        if resultat["success"]:
+            p.reference_externe = resultat.get("payment_token", "")
+            db.session.commit()
+            logger.info(f"[CinetPay] Redirection client ref={reference} tenant={t.id}")
+            return redirect(resultat["payment_url"])
+        else:
+            p.statut = "ECHEC"
+            p.notes  = resultat["message"]
+            db.session.commit()
+            flash(f"Erreur CinetPay : {resultat['message']}", "error")
+            return redirect(url_for("paiement"))
+
+    except Exception as e:
+        p.statut = "ECHEC"
+        p.notes  = str(e)
+        db.session.commit()
+        logger.error(f"[CinetPay] Erreur initiation : {e}")
+        flash("Erreur de connexion CinetPay. Réessayez ou contactez le support.", "error")
+        return redirect(url_for("paiement"))
+
+
+@app.route("/paiement/cinetpay/retour/<reference>")
+@login_required
+def paiement_cinetpay_retour(reference):
+    """
+    Page de retour après le paiement CinetPay (return_url).
+    Le client arrive ici après avoir payé (ou annulé) sur la page CinetPay.
+    On vérifie le statut via l'API et on affiche le résultat.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    p = Paiement.query.filter_by(
+        reference_interne=reference, tenant_id=t.id
+    ).first_or_404()
+
+    # Si déjà traité par le webhook, afficher directement
+    if p.statut == "SUCCES":
+        flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+        return redirect(url_for("dashboard"))
+
+    # Sinon vérifier auprès de CinetPay
+    try:
+        from cinetpay import verifier_paiement
+        r = verifier_paiement(reference)
+        import json
+        p.reponse_raw = json.dumps(r.get("raw", {}))
+
+        if r["success"]:
+            _activer_abonnement(p)
+            flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+            return redirect(url_for("dashboard"))
+        elif r["statut"] == "PENDING":
+            flash("Paiement en cours de traitement. Vous recevrez une confirmation par email.", "info")
+        else:
+            p.statut = "ECHEC"
+            p.notes  = r.get("message", "")
+            db.session.commit()
+            flash(f"Paiement non confirmé : {r['message']}", "error")
+    except Exception as e:
+        logger.error(f"[CinetPay] Erreur vérification retour {reference} : {e}")
+        flash("Impossible de vérifier le paiement. Contactez le support si vous avez été débité.", "warning")
+
+    return redirect(url_for("paiement"))
+
+
+@app.route("/webhook/cinetpay", methods=["GET", "POST"])
+@csrf.exempt  # Webhook externe — pas de token CSRF
+def webhook_cinetpay():
+    """
+    Reçoit les notifications automatiques de CinetPay (notify_url).
+    CinetPay envoie un POST avec cpm_trans_id après chaque changement de statut.
+    Doit retourner HTTP 200 OK rapidement.
+    """
+    import json
+
+    # CinetPay fait un GET pour vérifier la disponibilité de l'URL
+    if request.method == "GET":
+        return "OK", 200
+
+    try:
+        # CinetPay envoie cpm_trans_id en POST form-data
+        transaction_id = (
+            request.form.get("cpm_trans_id")
+            or request.form.get("transaction_id")
+            or (request.get_json(silent=True) or {}).get("cpm_trans_id")
+            or (request.get_json(silent=True) or {}).get("transaction_id", "")
+        )
+
+        if not transaction_id:
+            logger.warning("[Webhook CinetPay] transaction_id manquant")
+            return "transaction_id manquant", 400
+
+        logger.info(f"[Webhook CinetPay] Notification reçue — ref={transaction_id}")
+
+        p = Paiement.query.filter_by(reference_interne=transaction_id).first()
+        if not p:
+            logger.warning(f"[Webhook CinetPay] Paiement introuvable ref={transaction_id}")
+            return "Introuvable", 404
+
+        if p.statut == "SUCCES":
+            return "OK", 200  # Idempotence
+
+        # Vérifier le vrai statut via l'API CinetPay
+        from cinetpay import verifier_paiement
+        r = verifier_paiement(transaction_id)
+        p.reponse_raw = json.dumps(r.get("raw", {}))
+
+        if r["success"]:
+            _activer_abonnement(p)
+            logger.info(f"[Webhook CinetPay] Succès — ref={transaction_id} tenant={p.tenant_id}")
+        elif r["statut"] in ("REFUSED", "CANCELLED"):
+            p.statut = "ECHEC"
+            p.notes  = r.get("message", "")
+            db.session.commit()
+            logger.info(f"[Webhook CinetPay] Refusé — ref={transaction_id}")
+        # PENDING : on ne fait rien, CinetPay rappellera
+
+        return "OK", 200
+
+    except Exception as e:
+        logger.error(f"[Webhook CinetPay] Erreur : {e}")
+        db.session.rollback()
+        return "Erreur interne", 500
 @app.route("/parametres")
 @tenant_required
 def parametres():
@@ -5444,6 +6128,135 @@ def declaration_cnss():
         MOIS_FR=MOIS_FR)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# EXPORT COMPTABLE SAGE 100
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/export/sage/journal/<int:periode_id>")
+@tenant_required
+def export_sage_journal(periode_id):
+    """
+    Export du journal de paie mensuel au format Sage 100 (.txt).
+    Importable dans Sage 100 Comptabilité via Fichier → Importer → Journal.
+    Seuls les bulletins VALIDE sont inclus.
+    """
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant l'export.", "warning")
+        return redirect(url_for("bulletins"))
+
+    try:
+        from export_comptable import generer_journal_paie, ExportVide
+        contenu = generer_journal_paie(bulletins, periode, t)
+        nom_fichier = f"journal_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.txt"
+        logger.info(f"[Export Sage] Journal paie — tenant={t.id} période={periode.libelle_complet}")
+        return send_file(
+            io.BytesIO(contenu),
+            mimetype="text/plain",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur journal : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("bulletins"))
+
+
+@app.route("/export/sage/livre/<int:periode_id>")
+@tenant_required
+def export_sage_livre(periode_id):
+    """
+    Export du livre de paie détaillé par salarié au format CSV (.csv).
+    Compatible Excel et importable dans Sage 100.
+    Seuls les bulletins VALIDE sont inclus.
+    """
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant l'export.", "warning")
+        return redirect(url_for("bulletins"))
+
+    try:
+        from export_comptable import generer_livre_paie, ExportVide
+        contenu = generer_livre_paie(bulletins, periode, t)
+        nom_fichier = f"livre_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.csv"
+        logger.info(f"[Export Sage] Livre paie — tenant={t.id} période={periode.libelle_complet}")
+        return send_file(
+            io.BytesIO(contenu),
+            mimetype="text/csv; charset=utf-8",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur livre : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("bulletins"))
+
+
+@app.route("/export/sage/les-deux/<int:periode_id>")
+@tenant_required
+def export_sage_les_deux(periode_id):
+    """
+    Export des deux fichiers (journal + livre) dans une archive ZIP.
+    Pratique pour envoyer tout au comptable en une fois.
+    """
+    import zipfile
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter_by(periode_id=periode_id, tenant_id=t.id, statut="VALIDE")
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période.", "warning")
+        return redirect(url_for("bulletins"))
+
+    try:
+        from export_comptable import generer_journal_paie, generer_livre_paie
+        journal = generer_journal_paie(bulletins, periode, t)
+        livre   = generer_livre_paie(bulletins, periode, t)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                f"journal_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.txt",
+                journal
+            )
+            zf.writestr(
+                f"livre_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.csv",
+                livre
+            )
+        zip_buffer.seek(0)
+
+        nom_zip = f"export_sage_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.zip"
+        logger.info(f"[Export Sage] ZIP généré — tenant={t.id}")
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=nom_zip,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur ZIP : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("bulletins"))
+
+
 @app.route("/declaration-cnss/export-excel")
 @login_required
 def declaration_cnss_excel():
@@ -5673,7 +6486,7 @@ def forbidden(e): return render_template("auth/403.html"),403
 
 # ── Init DB ───────────────────────────────────────────────────────────────────
 def init_db():
-    db.create_all()
+    db.create_all()  # Crée toutes les tables dont paiements (nouveau)
     if not Plan.query.first():
         for code,nom,prix,ms,mu,desc in [
             ("STARTER","Starter",15000,10,1,"10 salariés max, 1 utilisateur"),

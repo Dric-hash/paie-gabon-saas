@@ -1,0 +1,91 @@
+{% extends "tenant/base.html" %}
+{% block title %}Paiement en cours — {{ tenant.denomination }}{% endblock %}
+
+{% block content %}
+<div style="max-width:480px;margin:3rem auto;text-align:center;padding:0 1rem">
+
+  <div style="margin-bottom:1.5rem">
+    <div id="icone-attente" style="font-size:4rem;animation:pulse 1.5s ease-in-out infinite">⏳</div>
+    <div id="icone-succes"  style="font-size:4rem;display:none">✅</div>
+    <div id="icone-echec"   style="font-size:4rem;display:none">❌</div>
+  </div>
+
+  <h1 id="titre" style="font-size:1.5rem;font-weight:900;color:#1a2332;margin-bottom:.75rem">
+    Vérification du paiement…
+  </h1>
+
+  <div id="message-attente" style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;color:#1e40af;font-size:.9rem;line-height:1.6">
+    Votre paiement est en cours de vérification.<br/>
+    Cela prend généralement moins de 30 secondes.<br/><br/>
+    <strong>Ne fermez pas cette page.</strong>
+  </div>
+
+  <div id="zone-resultat" style="display:none;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;font-size:.9rem"></div>
+
+  <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem;margin-bottom:1.5rem;font-size:.78rem;color:#6b7280">
+    Référence : <strong>{{ paiement.reference_interne if paiement else transaction_id }}</strong>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:.75rem">
+    <a href="/paiement" id="btn-retour"
+       style="display:block;padding:.75rem;background:#f3f4f6;color:#374151;border-radius:.75rem;text-decoration:none;font-weight:700;font-size:.875rem">
+      ← Retour aux moyens de paiement
+    </a>
+    <a href="/dashboard" id="btn-dashboard"
+       style="display:none;padding:.75rem;background:#10b981;color:white;border-radius:.75rem;text-decoration:none;font-weight:900;font-size:.875rem">
+      Accéder au tableau de bord →
+    </a>
+  </div>
+</div>
+
+<style>
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
+</style>
+
+<script>
+const REFERENCE  = "{{ (paiement.reference_interne if paiement else transaction_id)|default('') }}";
+const MAX_ESSAIS = 18;   // 18 × 5s = 90 secondes
+const INTERVALLE = 5000;
+let essais = 0, termine = false;
+
+function verifier() {
+  if (termine || !REFERENCE) return;
+  essais++;
+  fetch("/paiement/cinetpay/statut/" + REFERENCE)
+    .then(r => r.json())
+    .then(data => {
+      if (data.statut === "SUCCES") {
+        termine = true;
+        document.getElementById("icone-attente").style.display = "none";
+        document.getElementById("icone-succes").style.display  = "block";
+        document.getElementById("titre").textContent = "Paiement confirmé !";
+        document.getElementById("message-attente").style.display = "none";
+        const r = document.getElementById("zone-resultat");
+        r.style.cssText = "display:block;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;color:#065f46;font-size:.9rem";
+        r.textContent = data.message || "Votre abonnement est activé.";
+        document.getElementById("btn-retour").style.display    = "none";
+        document.getElementById("btn-dashboard").style.display = "block";
+        setTimeout(() => window.location.href = "/dashboard", 2500);
+      } else if (data.statut === "ECHEC") {
+        termine = true;
+        document.getElementById("icone-attente").style.display = "none";
+        document.getElementById("icone-echec").style.display   = "block";
+        document.getElementById("titre").textContent = "Paiement non confirmé";
+        document.getElementById("message-attente").style.display = "none";
+        const r = document.getElementById("zone-resultat");
+        r.style.cssText = "display:block;background:#fef2f2;border:1px solid #fecaca;border-radius:1rem;padding:1.25rem;margin-bottom:1.5rem;color:#991b1b;font-size:.9rem";
+        r.textContent = data.message || "Le paiement a échoué ou été annulé.";
+      } else if (essais < MAX_ESSAIS) {
+        setTimeout(verifier, INTERVALLE);
+      } else {
+        document.getElementById("titre").textContent = "Vérification en cours…";
+        document.getElementById("message-attente").innerHTML =
+          "La confirmation prend plus de temps que prévu.<br/>Vérifiez votre espace client ou contactez le support.";
+      }
+    })
+    .catch(() => { if (essais < MAX_ESSAIS) setTimeout(verifier, INTERVALLE); });
+}
+
+setTimeout(verifier, 3000);
+</script>
+{% endblock %}
