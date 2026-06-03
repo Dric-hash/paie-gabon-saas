@@ -6181,6 +6181,171 @@ def declaration_cnss_excel():
             headers={"Content-Disposition": f'attachment; filename="{nom_zip}"'})
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# DÉCLARATION CNSS/CNAMGS — Export CSV portail électronique
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/declaration-cnss/export-csv")
+@login_required
+def declaration_cnss_csv():
+    """
+    Export CSV uploadable directement sur le portail CNSS Gabon (cnss.ga)
+    et CNAMGS. Génère une archive ZIP avec les deux fichiers CSV.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+
+    pid     = request.args.get("periode_id", type=int)
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+
+    # ── Calculer le trimestre ──────────────────────────────────────────────
+    from declaration_cnss import calculer_trimestre, generer_csv_cnss, generer_csv_cnamgs
+    trim_num, trim_debut, trim_fin, trim_label = calculer_trimestre(periode.mois)
+
+    periodes_trim = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=periode.annee
+    ).filter(
+        PeriodePaie.mois >= trim_debut,
+        PeriodePaie.mois <= trim_fin
+    ).all()
+
+    if not periodes_trim:
+        flash("Aucune période trouvée pour ce trimestre.", "warning")
+        return redirect(url_for("declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+    buls_trim = BulletinPaie.query.filter(
+        BulletinPaie.tenant_id == t.id,
+        BulletinPaie.periode_id.in_([p.id for p in periodes_trim])
+    ).options(
+        joinedload(BulletinPaie.salarie),
+        joinedload(BulletinPaie.periode)
+    ).all()
+
+    if not buls_trim:
+        flash("Aucun bulletin pour ce trimestre. Saisissez et validez les bulletins d'abord.", "warning")
+        return redirect(url_for("declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+    # ── Regrouper par salarié ──────────────────────────────────────────────
+    from collections import defaultdict
+    sal_map = defaultdict(lambda: {
+        "nom_complet": "", "matricule": "", "numero_cnss": "",
+        "numero_cnamgs": "", "date_embauche": "",
+        "m1_base_cnss": 0, "m2_base_cnss": 0, "m3_base_cnss": 0,
+        "m1_base_cnamgs": 0, "m2_base_cnamgs": 0, "m3_base_cnamgs": 0,
+    })
+
+    for b in buls_trim:
+        k   = b.salarie_id
+        sal = b.salarie
+        sal_map[k]["nom_complet"]   = sal.nom_complet
+        sal_map[k]["matricule"]     = sal.matricule or ""
+        sal_map[k]["numero_cnss"]   = sal.numero_cnss or ""
+        sal_map[k]["numero_cnamgs"] = sal.numero_cnamgs or ""
+        if sal.date_embauche:
+            sal_map[k]["date_embauche"] = sal.date_embauche.strftime("%d/%m/%Y")
+        m = b.periode.mois if b.periode else 0
+        if m == trim_debut:
+            sal_map[k]["m1_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m1_base_cnamgs"] = float(b.base_cnamgs or 0)
+        elif m == trim_debut + 1:
+            sal_map[k]["m2_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m2_base_cnamgs"] = float(b.base_cnamgs or 0)
+        elif m == trim_fin:
+            sal_map[k]["m3_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m3_base_cnamgs"] = float(b.base_cnamgs or 0)
+
+    sal_data = list(sal_map.values())
+
+    # ── Générer les deux CSV ───────────────────────────────────────────────
+    try:
+        csv_cnss   = generer_csv_cnss(sal_data, periode, t, trim_debut, trim_fin)
+        csv_cnamgs = generer_csv_cnamgs(sal_data, periode, t, trim_debut, trim_fin)
+
+        import zipfile
+        zip_buf  = io.BytesIO()
+        nom_base = (t.sigle or t.denomination[:15]).replace(" ", "_")
+        trim_str = f"T{trim_num}_{periode.annee}"
+
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"CNSS_{nom_base}_{trim_str}.csv",   csv_cnss)
+            zf.writestr(f"CNAMGS_{nom_base}_{trim_str}.csv", csv_cnamgs)
+            # Ajouter un fichier README avec les instructions d'upload
+            zf.writestr(
+                "INSTRUCTIONS_UPLOAD.txt",
+                _instructions_upload(t, trim_label, periode.annee, len(sal_data))
+            )
+        zip_buf.seek(0)
+
+        nom_zip = f"declarations_CNSS_CNAMGS_{nom_base}_{trim_str}.zip"
+        logger.info(f"[CNSS CSV] Export {trim_str} — {len(sal_data)} salariés — tenant={t.id}")
+
+        return send_file(
+            zip_buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=nom_zip,
+        )
+
+    except Exception as e:
+        logger.error(f"[CNSS CSV] Erreur export : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+
+def _instructions_upload(tenant, trim_label, annee, nb_salaries) -> str:
+    """Génère un fichier texte d'instructions pour l'upload sur les portails."""
+    return f"""
+INSTRUCTIONS D'UPLOAD — DÉCLARATIONS TRIMESTRIELLES
+====================================================
+Entreprise : {tenant.denomination}
+NIF        : {tenant.nif or "—"}
+Trimestre  : {trim_label} {annee}
+Salariés   : {nb_salaries}
+Généré le  : {datetime.now().strftime("%d/%m/%Y à %H:%M")}
+
+
+FICHIER CNSS : CNSS_*.csv
+─────────────────────────
+1. Connectez-vous sur https://cnss.ga
+2. Allez dans : Mon Espace → Déclarations → Nouvelle déclaration
+3. Choisissez : Déclaration trimestrielle de salaires
+4. Cliquez sur "Importer un fichier"
+5. Sélectionnez le fichier CNSS_*.csv
+6. Vérifiez les montants affichés
+7. Validez et téléchargez le reçu
+
+
+FICHIER CNAMGS : CNAMGS_*.csv
+──────────────────────────────
+1. Connectez-vous sur le portail CNAMGS
+2. Allez dans : Déclarations → Déclaration trimestrielle
+3. Importez le fichier CNAMGS_*.csv
+4. Vérifiez et validez
+
+
+MONTANTS À VERSER (rappel) :
+────────────────────────────
+CNSS  : cotisations salariales (5%) + patronales (18%) = 23% de la base
+CNAMGS: cotisations salariales (1,5%) + patronales (6%) = 7,5% de la base
+
+Date limite de dépôt : dernier jour du mois suivant la fin du trimestre
+  T1 (Jan-Mar) → 30 Avril
+  T2 (Avr-Jun) → 31 Juillet
+  T3 (Jul-Sep) → 31 Octobre
+  T4 (Oct-Déc) → 31 Janvier
+
+
+IMPORTANT :
+──────────
+- Utilisez le fichier CSV, pas le fichier Excel, pour l'upload portail
+- Le fichier Excel (généré séparément) est pour vos archives papier
+- Gardez le reçu de dépôt comme justificatif
+
+En cas de problème : support@paiegalon.com
+""".strip()
+
+
 @app.route("/recherche")
 @login_required
 def recherche_globale():

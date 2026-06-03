@@ -15,8 +15,14 @@
   <div style="display:flex;gap:.625rem;flex-wrap:wrap">
     <a href="/declaration-cnss/export-excel?periode_id={{ periode.id }}&mode={{ mode }}"
        style="display:flex;align-items:center;gap:.5rem;background:#059669;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none">
-      📥 Export Excel
+      📥 Export Excel (archives)
     </a>
+    {% if mode == 'trimestriel' %}
+    <a href="/declaration-cnss/export-csv?periode_id={{ periode.id }}"
+       style="display:flex;align-items:center;gap:.5rem;background:#7c3aed;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      📤 Export CSV portail CNSS/CNAMGS
+    </a>
+    {% endif %}
     <button onclick="window.print()"
        style="display:flex;align-items:center;gap:.5rem;background:#1a2332;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
       🖨️ Imprimer
