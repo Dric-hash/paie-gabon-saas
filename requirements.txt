@@ -9,5 +9,6 @@ openpyxl==3.1.2
 python-dotenv==1.0.0
 gunicorn==21.2.0
 psycopg2-binary==2.9.9
-
 reportlab==4.4.10
+# Cache partagé multi-workers (optionnel — désactivé si REDIS_URL non définie)
+redis==5.0.1

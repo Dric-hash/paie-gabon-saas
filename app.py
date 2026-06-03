@@ -15,40 +15,63 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Site, AffectationSite)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
+from flask_wtf.csrf import CSRFProtect
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# CACHE EN MÉMOIRE — KPIs Dashboard (TTL configurable par type de données)
-# Clé : f"{tenant_id}:{nom_kpi}" → valeur + timestamp d'expiration
-# Zéro dépendance externe, thread-safe avec le GIL Python
+# CACHE — KPIs Dashboard
+# Utilise Redis si REDIS_URL est définie, sinon désactivé (no-op).
+# Le cache en mémoire (dict Python) était incompatible avec --workers >1 :
+# chaque worker Gunicorn a sa propre copie, les invalidations ne se propagent pas.
 # ══════════════════════════════════════════════════════════════════════════════
-import threading as _threading
-_cache_store = {}
-_cache_lock  = _threading.Lock()
+_redis_client = None
+_REDIS_URL = os.environ.get("REDIS_URL", "")
+if _REDIS_URL:
+    try:
+        import redis as _redis_lib
+        _redis_client = _redis_lib.from_url(_REDIS_URL, decode_responses=True,
+                                             socket_connect_timeout=2,
+                                             socket_timeout=2)
+        _redis_client.ping()
+        print(f"[CACHE] Redis connecté.")
+    except Exception as _e:
+        print(f"[CACHE] Connexion Redis échouée ({_e}). Cache désactivé.")
+        _redis_client = None
+else:
+    print("[CACHE] REDIS_URL non définie. Cache dashboard désactivé (données fraîches à chaque requête).")
+
+import json as _json
 
 def _cache_get(key: str):
-    """Retourne la valeur si non expirée, sinon None."""
-    import time
-    with _cache_lock:
-        entry = _cache_store.get(key)
-        if entry and time.time() < entry["exp"]:
-            return entry["val"]
-        if entry:
-            del _cache_store[key]
-    return None
+    if not _redis_client:
+        return None
+    try:
+        raw = _redis_client.get(key)
+        return _json.loads(raw) if raw else None
+    except Exception:
+        return None
 
 def _cache_set(key: str, value, ttl_seconds: int = 300):
-    """Stocker une valeur avec TTL en secondes."""
-    import time
-    with _cache_lock:
-        _cache_store[key] = {"val": value, "exp": time.time() + ttl_seconds}
+    if not _redis_client:
+        return
+    try:
+        _redis_client.setex(key, ttl_seconds, _json.dumps(value, default=str))
+    except Exception:
+        pass
 
 def _cache_delete(key_prefix: str):
-    """Invalider toutes les clés commençant par le préfixe (ex: tenant_id)."""
-    with _cache_lock:
-        to_del = [k for k in _cache_store if k.startswith(key_prefix)]
-        for k in to_del:
-            del _cache_store[k]
+    if not _redis_client:
+        return
+    try:
+        cursor = 0
+        while True:
+            cursor, keys = _redis_client.scan(cursor, match=f"{key_prefix}*", count=100)
+            if keys:
+                _redis_client.delete(*keys)
+            if cursor == 0:
+                break
+    except Exception:
+        pass
 
 # TTL par type de données (secondes)
 TTL_KPIS_DASH   = 300   # KPIs emploi + bulletins : 5 min
@@ -58,7 +81,20 @@ TTL_TOP_SAL     = 300   # Top 5 salariés : 5 min
 TTL_ALERTES     = 120   # Alertes : 2 min (sensibles)
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY","saas-paie-gabon-2026")
+_secret = os.environ.get("SECRET_KEY", "")
+if not _secret:
+    import sys
+    if os.environ.get("FLASK_ENV") == "production" or os.environ.get("RAILWAY_ENVIRONMENT"):
+        print("ERREUR CRITIQUE : la variable d'environnement SECRET_KEY n'est pas définie. "
+              "Démarrage interrompu.", file=sys.stderr)
+        sys.exit(1)
+    else:
+        # Dev/test uniquement — génère une clé aléatoire à chaque redémarrage
+        # (les sessions ne survivent pas aux redémarrages, c'est voulu en dev)
+        _secret = sec.token_hex(32)
+        print("[DEV] SECRET_KEY non définie — clé temporaire générée. "
+              "Définissez SECRET_KEY en production.", file=sys.stderr)
+app.config["SECRET_KEY"] = _secret
 _db_url = os.environ.get("DATABASE_URL", "sqlite:///saas_paie.db")
 if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql://", 1)
@@ -117,6 +153,21 @@ def gerer_session_inactivite():
 
 
 mail = Mail(app)
+csrf = CSRFProtect(app)
+
+# ── Logging structuré ─────────────────────────────────────────────────────────
+import logging, sys as _sys
+_log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    stream=_sys.stdout,
+    level=getattr(logging, _log_level, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S",
+)
+logger = logging.getLogger("paiegalon")
+# Réduire le bruit de SQLAlchemy en production
+if os.environ.get("SQLALCHEMY_ECHO") != "1":
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
 login_manager = LoginManager(app)
 login_manager.login_view = "login"
@@ -201,11 +252,38 @@ def login():
         email = request.form.get("email","").strip().lower()
         pw    = request.form.get("password","")
         user  = Utilisateur.query.filter_by(email=email, actif=True).first()
-        if user and user.check_password(pw):
-            login_user(user)
-            user.derniere_connexion = datetime.utcnow()
-            db.session.commit()
-            return redirect(url_for("index"))
+
+        # ── Protection anti-brute-force ───────────────────────────────────────
+        now = datetime.utcnow()
+        MAX_ECHECS   = int(os.environ.get("LOGIN_MAX_ECHECS",   "5"))
+        BLOCAGE_MIN  = int(os.environ.get("LOGIN_BLOCAGE_MIN",  "15"))
+
+        if user:
+            # Vérifier si le compte est bloqué
+            if user.compte_bloque_jusqu and now < user.compte_bloque_jusqu:
+                reste = int((user.compte_bloque_jusqu - now).total_seconds() / 60) + 1
+                flash(f"Compte temporairement bloqué. Réessayez dans {reste} min.", "error")
+                return render_template("auth/login.html")
+
+            if user.check_password(pw):
+                # Succès : réinitialiser les compteurs
+                user.nb_echecs_connexion = 0
+                user.compte_bloque_jusqu = None
+                user.derniere_connexion  = now
+                db.session.commit()
+                login_user(user)
+                return redirect(url_for("index"))
+            else:
+                # Échec : incrémenter et éventuellement bloquer
+                user.nb_echecs_connexion = (user.nb_echecs_connexion or 0) + 1
+                if user.nb_echecs_connexion >= MAX_ECHECS:
+                    user.compte_bloque_jusqu = now + timedelta(minutes=BLOCAGE_MIN)
+                    user.nb_echecs_connexion = 0
+                    db.session.commit()
+                    flash(f"Trop de tentatives. Compte bloqué {BLOCAGE_MIN} minutes.", "error")
+                    return render_template("auth/login.html")
+                db.session.commit()
+
         flash("Email ou mot de passe incorrect.","error")
     return render_template("auth/login.html")
 
@@ -2198,10 +2276,35 @@ def parametres_logo():
         if len(file_data) > 1_000_000:
             flash("Fichier trop volumineux. Maximum 1 Mo.", "error")
             return redirect(url_for("parametres"))
-        ext = logo_file.filename.rsplit(".", 1)[-1].lower()
-        mime = "image/svg+xml" if ext == "svg" else f"image/{ext}"
+
+        # ── Validation de l'extension ─────────────────────────────────────────
+        ext = logo_file.filename.rsplit(".", 1)[-1].lower() if "." in logo_file.filename else ""
+        EXTENSIONS_AUTORISEES = {"png", "jpg", "jpeg", "gif", "webp"}
+        if ext not in EXTENSIONS_AUTORISEES:
+            flash("Format non autorisé. Utilisez PNG, JPG, JPEG, GIF ou WEBP (pas SVG).", "error")
+            return redirect(url_for("parametres"))
+
+        # ── Validation du MIME réel (magic bytes) — pas seulement l'extension ─
+        MAGIC = {
+            b"\x89PNG":   "image/png",
+            b"\xff\xd8\xff": "image/jpeg",
+            b"GIF8":      "image/gif",
+            b"RIFF":      None,  # WebP — vérification complémentaire ci-dessous
+        }
+        detected_mime = None
+        for magic, mime in MAGIC.items():
+            if file_data[:len(magic)] == magic:
+                if magic == b"RIFF" and file_data[8:12] == b"WEBP":
+                    detected_mime = "image/webp"
+                else:
+                    detected_mime = mime
+                break
+        if not detected_mime:
+            flash("Le contenu du fichier ne correspond pas à une image valide.", "error")
+            return redirect(url_for("parametres"))
+
         b64 = base64.b64encode(file_data).decode("utf-8")
-        logo_data = f"data:{mime};base64,{b64}"
+        logo_data = f"data:{detected_mime};base64,{b64}"
         try:
             db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
             db.session.commit(); db.session.expire(t)
@@ -5583,20 +5686,36 @@ def init_db():
             ("CFP","Contribution Formation Professionnelle","COTISATION",None,0.005,None),
         ]: db.session.add(RubriquePaie(code=code,libelle=lib,type=typ,taux_salarie=ts,taux_patronal=tp,plafond_mensuel=plaf))
     if not Utilisateur.query.filter_by(role="SUPER_ADMIN").first():
-        sa=Utilisateur(nom="ADMIN",prenom="Super",email="superadmin@paiegalon.com",role="SUPER_ADMIN",actif=True)
-        sa.set_password("Admin2026!"); db.session.add(sa)
+        # En production, définir SUPER_ADMIN_EMAIL + SUPER_ADMIN_PASSWORD
+        sa_email = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@paiegalon.com")
+        sa_password = os.environ.get("SUPER_ADMIN_PASSWORD", "")
+        if not sa_password:
+            sa_password = sec.token_urlsafe(16)
+            print(f"[INIT] Mot de passe super admin généré automatiquement : {sa_password}")
+            print(f"[INIT] Email : {sa_email}  — Changez-le via l'interface admin.")
+        sa = Utilisateur(nom="ADMIN", prenom="Super", email=sa_email, role="SUPER_ADMIN", actif=True)
+        sa.set_password(sa_password)
+        db.session.add(sa)
     if not Tenant.query.first():
         db.session.flush()
-        plan=Plan.query.filter_by(code="PRO").first()
-        t=Tenant(slug="demo",denomination="ENTREPRISE DEMO",sigle="DEMO",activite="À RENSEIGNER",
-                 nif="",ville="Libreville",pays="Gabon",
-                 plan_id=plan.id if plan else None,statut="ACTIF")
-        t.token_api=sec.token_hex(32)
+        plan = Plan.query.filter_by(code="PRO").first()
+        t = Tenant(slug="demo", denomination="ENTREPRISE DEMO", sigle="DEMO", activite="À RENSEIGNER",
+                   nif="", ville="Libreville", pays="Gabon",
+                   plan_id=plan.id if plan else None, statut="ACTIF")
+        t.token_api = sec.token_hex(32)
         db.session.add(t); db.session.flush()
-        for code,lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
-            db.session.add(CategorieEmploi(tenant_id=t.id,code=code,libelle=lib))
-        u=Utilisateur(nom="DEMO",prenom="Responsable",email="demo@paiegalon.ga",role="TENANT_ADMIN",tenant_id=t.id,actif=True)
-        u.set_password("Demo2026!"); db.session.add(u)
+        for code, lib in [("C1","Ouvriers"),("C2","Techniciens"),("C3","Conducteurs"),("C4","Cadres")]:
+            db.session.add(CategorieEmploi(tenant_id=t.id, code=code, libelle=lib))
+        demo_email    = os.environ.get("DEMO_EMAIL",    "demo@paiegalon.ga")
+        demo_password = os.environ.get("DEMO_PASSWORD", "")
+        if not demo_password:
+            demo_password = sec.token_urlsafe(16)
+            print(f"[INIT] Mot de passe compte démo généré : {demo_password}")
+            print(f"[INIT] Email démo : {demo_email}")
+        u = Utilisateur(nom="DEMO", prenom="Responsable", email=demo_email,
+                        role="TENANT_ADMIN", tenant_id=t.id, actif=True)
+        u.set_password(demo_password)
+        db.session.add(u)
     db.session.commit()
     print("Base initialisée.\n  Super-admin: superadmin@paiegalon.com / Admin2026!\n  Compte démo: demo@paiegalon.ga / Demo2026!")
 

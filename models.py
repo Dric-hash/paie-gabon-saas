@@ -267,7 +267,11 @@ class Salarie(db.Model):
 
     bulletins = db.relationship("BulletinPaie", backref="salarie", lazy=True)
     contrats  = db.relationship("Contrat", backref="salarie", lazy=True)
-    __table_args__ = (db.UniqueConstraint("tenant_id","matricule"),)
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id","matricule"),
+        db.Index("idx_salaries_tenant_statut", "tenant_id", "statut"),
+        db.Index("idx_salaries_tenant_embauche", "tenant_id", "date_embauche"),
+    )
 
     @property
     def nom_complet(self): return f"{self.nom} {self.prenom}"
@@ -432,7 +436,11 @@ class BulletinPaie(db.Model):
     statut                = db.Column(db.String(20), default="BROUILLON")
     date_creation         = db.Column(db.DateTime, default=datetime.utcnow)
     date_validation       = db.Column(db.DateTime)
-    __table_args__ = (db.UniqueConstraint("tenant_id","salarie_id","periode_id"),)
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id","salarie_id","periode_id"),
+        db.Index("idx_bulletins_tenant_periode", "tenant_id", "periode_id"),
+        db.Index("idx_bulletins_tenant_statut",  "tenant_id", "statut"),
+    )
 
     def to_dict(self):
         d = {}
@@ -561,6 +569,8 @@ class Pointage(db.Model):
     __table_args__ = (
         db.UniqueConstraint("tenant_id","date_pointage","salarie_id"),
         db.UniqueConstraint("tenant_id","date_pointage","journalier_id"),
+        db.Index("idx_pointages_tenant_date", "tenant_id", "date_pointage"),
+        db.Index("idx_pointages_salarie",     "salarie_id", "date_pointage"),
     )
     @property
     def total_heures(self): return float(self.heures_normales or 0) + float(self.heures_sup or 0)
