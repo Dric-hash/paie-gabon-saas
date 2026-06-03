@@ -229,12 +229,14 @@
             {% endif %}
             {% if c.statut == 'DEMANDÉ' %}
             <form method="POST" action="/conges/{{ c.id }}/approuver" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit"
                 style="font-size:.72rem;font-weight:700;color:#065f46;background:#d1fae5;border:none;padding:.2rem .5rem;border-radius:.5rem;cursor:pointer">
                 ✅
               </button>
             </form>
             <form method="POST" action="/conges/{{ c.id }}/refuser" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit"
                 style="font-size:.72rem;font-weight:700;color:#991b1b;background:#fee2e2;border:none;padding:.2rem .5rem;border-radius:.5rem;cursor:pointer">
                 ❌
@@ -243,6 +245,7 @@
             {% endif %}
             <form method="POST" action="/conges/{{ c.id }}/supprimer" style="display:inline"
               onsubmit="return confirm('Supprimer cette demande ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit"
                 style="font-size:.72rem;color:#9ca3af;background:#f3f4f6;border:none;padding:.2rem .4rem;border-radius:.5rem;cursor:pointer">
                 🗑️

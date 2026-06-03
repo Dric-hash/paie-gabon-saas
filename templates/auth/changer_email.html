@@ -35,6 +35,7 @@
     </div>
 
     <form method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.5rem">
           Nouvel email *

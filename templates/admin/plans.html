@@ -190,6 +190,7 @@
           </td>
           <td class="px-5 py-4 text-center">
             <form method="POST" action="/admin/plans/{{ p.id }}/toggle" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <label class="toggle" title="{{ 'Désactiver' if p.actif else 'Activer' }} ce plan">
                 <input type="checkbox" {{ 'checked' if p.actif else '' }}
                   onchange="this.closest('form').submit()">
@@ -206,6 +207,7 @@
               {% if st.nb_total == 0 %}
               <form method="POST" action="/admin/plans/{{ p.id }}/supprimer" style="display:inline"
                 onsubmit="return confirm('Supprimer le plan {{ p.nom }} ? Cette action est irréversible.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button type="submit"
                   class="text-xs bg-red-50 text-red-600 font-bold px-2.5 py-1.5 rounded-lg hover:bg-red-100">
                   🗑️
@@ -298,6 +300,7 @@
       <button onclick="fermerModal('modal-creer')" class="text-gray-400 hover:text-gray-600 text-xl font-black">×</button>
     </div>
     <form method="POST" action="/admin/plans" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div class="grid grid-cols-2 gap-4">
         <div>
           <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Code *</label>
@@ -359,6 +362,7 @@
     </div>
     <p id="mod-code-label" class="text-xs text-gray-400 mb-5">CODE</p>
     <form method="POST" id="form-modifier" action="" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1.5">Nom *</label>
         <input type="text" name="nom" id="mod-nom" required

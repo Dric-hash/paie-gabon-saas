@@ -44,6 +44,7 @@
     {% if current_user.is_tenant_admin %}
     <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="margin:0"
       onsubmit="return confirm('⚠️ Supprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données (bulletins brouillon, contrats, pointages, acomptes, congés) seront effacées.\n\nCette action est IRRÉVERSIBLE.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <button type="submit"
         style="background:#dc2626;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
         🗑️ Supprimer
@@ -201,6 +202,7 @@
         </a>
         <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="flex:1;margin:0"
           onsubmit="return confirm('⚠️ ATTENTION\n\nSupprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données seront effacées.\nCette action est IRRÉVERSIBLE.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button type="submit"
             style="width:100%;background:#dc2626;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
             🗑️ Supprimer définitivement

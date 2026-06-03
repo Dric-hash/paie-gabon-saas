@@ -27,6 +27,7 @@
   </div>
 
   <form method="POST" class="bg-white rounded-3xl shadow-2xl p-8 space-y-5">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="plan_id" id="plan_id_field"/>
     <h2 class="text-xl font-black text-gray-900 mb-2">Informations entreprise</h2>
     <div class="grid grid-cols-2 gap-4">

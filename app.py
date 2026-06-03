@@ -154,6 +154,9 @@ def gerer_session_inactivite():
 
 mail = Mail(app)
 csrf = CSRFProtect(app)
+# Accepter le token CSRF aussi via le header HTTP (pour les appels fetch/AJAX)
+app.config["WTF_CSRF_CHECK_DEFAULT"] = True
+app.config["WTF_CSRF_TIME_LIMIT"]    = 3600  # 1h
 
 # ── Logging structuré ─────────────────────────────────────────────────────────
 import logging, sys as _sys

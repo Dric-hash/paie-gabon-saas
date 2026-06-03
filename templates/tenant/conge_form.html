@@ -21,6 +21,7 @@
 <div style="max-width:560px">
   <div class="card p-6">
     <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
       <!-- Salarié (lecture seule en modification) -->
       <div style="margin-bottom:1rem">

@@ -10,6 +10,7 @@
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
   <div class="card p-6">
     <form method="POST" action="/utilisateurs/nouveau" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Nom *</label>

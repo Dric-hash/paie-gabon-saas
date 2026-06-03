@@ -19,6 +19,7 @@
     <h2 style="font-size:.9rem;font-weight:900;color:#111827;margin-bottom:1.25rem">📤 Charger le fichier Excel</h2>
 
     <form method="POST" action="/salaries/import" enctype="multipart/form-data" id="form-import">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
       <!-- Zone de dépôt -->
       <div id="drop-zone"

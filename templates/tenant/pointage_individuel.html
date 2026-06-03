@@ -148,6 +148,7 @@
 
   <!-- Formulaire -->
   <form method="POST" action="/pointage/individuel" id="form-ptg-indiv">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="worker_type" value="{{ type_w }}">
     <input type="hidden" name="worker_id"   value="{{ worker.id }}">
     <input type="hidden" name="date_pointage" value="{{ date_sel.strftime('%Y-%m-%d') }}">
@@ -383,6 +384,7 @@
         {% if pt_existant %}
         <form method="POST" action="/pointage/supprimer/{{ pt_existant.id }}" style="display:inline"
           onsubmit="return confirm('Supprimer ce pointage ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <input type="hidden" name="next_url"
             value="/pointage/individuel?date={{ date_sel.strftime('%Y-%m-%d') }}&type={{ type_w }}&id={{ worker.id }}">
           <button type="submit"
@@ -524,6 +526,7 @@
             </a>
             <form method="POST" action="/pointage/supprimer/{{ p.id }}" style="display:inline"
               onsubmit="return confirm('Supprimer ce pointage ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <input type="hidden" name="next_url"
                 value="/pointage/individuel?date={{ date_sel.strftime('%Y-%m-%d') }}&type={{ type_w }}&id={{ worker.id }}">
               <button type="submit"

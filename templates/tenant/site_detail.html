@@ -283,6 +283,7 @@
 
   {% if salaries_site or journaliers_site %}
   <form method="POST" action="/sites/{{ site.id }}/pointage-rapide" id="form-ptg-rapide">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="date_pointage" value="{{ date_ptg }}">
 
     <!-- Boutons rapides -->
@@ -613,6 +614,7 @@
         Affecter des travailleurs
       </h2>
       <form method="POST" action="/sites/{{ site.id }}/affecter">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div style="margin-bottom:1rem">
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
             Date d'affectation
@@ -693,6 +695,7 @@
     <h3 style="font-weight:900;font-size:1rem;margin-bottom:.25rem">🔄 Permuter un travailleur</h3>
     <p style="font-size:.8rem;color:#6b7280;margin-bottom:1.25rem" id="permut-nom">—</p>
     <form method="POST" action="/sites/permuter">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="affectation_id" id="permut-aff-id">
       <div style="margin-bottom:1rem">
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Site de destination *</label>
@@ -732,6 +735,7 @@
     <h3 style="font-weight:900;font-size:1rem;margin-bottom:.25rem">✕ Retirer du site</h3>
     <p style="font-size:.8rem;color:#6b7280;margin-bottom:1.25rem" id="retrait-nom">—</p>
     <form method="POST" id="form-retrait" action="">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div style="margin-bottom:1.25rem">
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Motif</label>
         <input type="text" name="motif" placeholder="Ex: Fin de mission, départ de chantier..."

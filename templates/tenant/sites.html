@@ -94,6 +94,7 @@
           ✏️
         </a>
         <form method="POST" action="/sites/{{ s.id }}/toggle" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button title="{{ 'Désactiver' if s.actif else 'Activer' }}"
             style="background:#f3f4f6;color:#374151;padding:.625rem .75rem;border-radius:.75rem;font-weight:700;font-size:.75rem;border:none;cursor:pointer">
             {{ '🔴' if s.actif else '✅' }}

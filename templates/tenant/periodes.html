@@ -13,6 +13,7 @@
 <div class="card p-5 mb-6">
   <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Ouvrir une nouvelle période</h2>
   <form method="POST" action="/periodes/nouvelle" style="display:flex;gap:.75rem;align-items:flex-end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <div>
       <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Mois</label>
       <select name="mois" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
@@ -56,6 +57,7 @@
         <td style="text-align:center">
           {% if p.statut == 'OUVERT' %}
           <form method="POST" action="/periodes/{{ p.id }}/cloturer" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button type="submit"
               style="font-size:.75rem;background:#dc2626;color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer"
               onclick="return confirm('Clôturer cette période ?')">

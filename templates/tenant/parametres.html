@@ -28,6 +28,7 @@
     <div class="card p-6">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Informations générales</h2>
       <form method="POST" action="/parametres/societe" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         {% macro fi(label, name, val, placeholder='') %}
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.375rem">{{ label }}</label>
@@ -50,6 +51,7 @@
       <div class="card p-6">
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Identifiants fiscaux & sociaux</h2>
         <form method="POST" action="/parametres/societe" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           {% macro fi2(label, name, val, placeholder='') %}
           <div>
             <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
@@ -79,6 +81,7 @@
       <div class="card p-6">
         <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Coordonnées</h2>
         <form method="POST" action="/parametres/societe" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           {% macro fi3(label, name, val, placeholder='') %}
           <div>
             <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}</label>
@@ -124,6 +127,7 @@
           <div style="font-size:.75rem;color:#9ca3af;margin-top:.5rem">Logo actuel</div>
         </div>
         <form method="POST" action="/parametres/logo/supprimer" style="margin-bottom:1rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button type="submit" style="width:100%;background:#fee2e2;color:#dc2626;padding:.5rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:1px solid #fca5a5;cursor:pointer"
             onclick="return confirm('Supprimer le logo ?')">
             🗑️ Supprimer le logo
@@ -137,6 +141,7 @@
         {% endif %}
         <!-- Formulaire upload -->
         <form method="POST" action="/parametres/logo" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
             {{ 'Changer' if tenant.logo_url else 'Uploader' }} le logo
           </label>
@@ -256,6 +261,7 @@
       <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">🖨️ Modèle d'impression des bulletins</h2>
       <p style="font-size:.8rem;color:#6b7280;margin-bottom:1.25rem">Choisissez la mise en page des bulletins. S'applique immédiatement à tous les bulletins.</p>
       <form method="POST" action="/parametres/modele-bulletin">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem">
           {% for nom, titre, desc, gradient in [
             ('classique',   'Classique',   'Mise en page traditionnelle, compatible tous supports', 'background:#1a2332'),
@@ -395,6 +401,7 @@
         Ajouter un utilisateur{% if max_u %} ({{ nb_u }}/{{ max_u }}){% endif %}
       </h2>
       <form method="POST" action="/utilisateurs/nouveau" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         {% macro fu(label, name, type='text', required=True, placeholder='') %}
         <div>
           <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">{{ label }}{% if required %} *{% endif %}</label>
@@ -604,6 +611,7 @@
         <p style="font-size:.8rem;color:#9ca3af;margin-bottom:1.25rem">Sélectionnez le plan souhaité — l'équipe vous contacte pour valider.</p>
 
         <form method="POST" action="/parametres/demande-changement-plan" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <!-- Cartes plans -->
           <div style="display:flex;flex-direction:column;gap:.625rem">
             {% for p in plans_dispo %}
@@ -674,6 +682,7 @@
         </p>
         <form method="POST" action="/parametres/annuler-abonnement"
           onsubmit="return confirm('Confirmer la demande de résiliation ? Votre accès reste actif jusqu'à fin de période.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <div style="margin-bottom:.625rem">
             <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Motif (obligatoire)</label>
             <input type="text" name="motif" required placeholder="Ex: Changement de logiciel, fin d'activité..."

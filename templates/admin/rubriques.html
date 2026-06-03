@@ -33,6 +33,7 @@
   </div>
 </main><div style="position:fixed;bottom:1rem;right:1rem">
   <form method="POST" action="/admin/update-taux">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <button type="submit" style="background:#059669;color:white;padding:.75rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.2)"
       onclick="return confirm('Mettre à jour CNSS 5%/18%, FNH 3% dans la base de données ?')">
       🔄 Mettre à jour les taux

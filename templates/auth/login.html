@@ -30,6 +30,7 @@
     <h2 class="text-xl font-black text-gray-900 mb-6">Connexion</h2>
 
     <form method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Email</label>
         <input type="email" name="email" required autofocus

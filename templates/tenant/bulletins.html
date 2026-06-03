@@ -92,6 +92,7 @@
 <!-- ── Formulaire avec cases à cocher ─────────────────────────────────────── -->
 {% if bulletins %}
 <form id="form-lot" method="POST" action="/bulletins/valider-lot">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
   <input type="hidden" name="periode_id" value="{{ periode_sel.id }}">
   {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
   <input type="hidden" name="bulletin_ids" id="inp-ids" value="">
@@ -218,6 +219,7 @@
             {% if b.statut == 'BROUILLON' %}
             <span style="color:#e5e7eb">|</span>
             <form method="POST" action="/bulletins/{{ b.id }}/valider" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit" title="Valider ce bulletin"
                 style="font-size:.75rem;color:#d97706;font-weight:700;background:none;border:none;cursor:pointer">✅</button>
             </form>

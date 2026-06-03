@@ -32,6 +32,7 @@
     </div>
 
     <form method="POST" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="token" value="{{ token }}">
       <div>
         <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nouveau mot de passe</label>

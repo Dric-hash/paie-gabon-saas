@@ -47,6 +47,7 @@
       3. Remplissez le formulaire ci-dessous
     </div>
     <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="mode" value="MOBILE_MONEY"/>
       <div>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Opérateur</label>
@@ -97,6 +98,7 @@
       3. Confirmation automatique
     </div>
     <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="mode" value="CARTE"/>
       <div>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
@@ -140,6 +142,7 @@
       3. Activation sous 24-48h ouvrables
     </div>
     <form method="POST" action="/paiement/confirmer" class="space-y-3">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="mode" value="VIREMENT"/>
       <div>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">N° de virement / référence *</label>

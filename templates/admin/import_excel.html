@@ -57,6 +57,7 @@
     <h2 class="text-lg font-black text-gray-900 mb-5">Configurer l'import</h2>
 
     <form method="POST" enctype="multipart/form-data" class="space-y-5">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 
       <!-- Entreprise cible -->
       <div>

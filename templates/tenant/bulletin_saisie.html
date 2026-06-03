@@ -11,6 +11,7 @@
 </div>
 
 <form method="POST" action="/bulletins/saisie" id="formBulletin">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
 <div style="display:grid;grid-template-columns:1fr 360px;gap:1.5rem">
 
   <div style="display:flex;flex-direction:column;gap:1rem">

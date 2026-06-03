@@ -70,6 +70,7 @@
     ⚙️ Générer les feuilles de paie{% if site_filtre %} — {{ site_filtre.nom }}{% endif %}
   </h2>
   <form method="POST" action="/journaliers/paie/generer" id="form-generer">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
 
     <!-- Période -->
@@ -204,6 +205,7 @@
       {% if ids_attente %}
       <form method="POST" action="/journaliers/paie/payer-selection" style="display:inline"
         onsubmit="return confirm('Confirmer le paiement de {{ ids_attente|length }} feuille(s) — {{ total_en_attente|int|fcfa }} ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <input type="hidden" name="feuille_ids" value="{{ ids_attente|join(',') }}">
         {% if site_filtre %}<input type="hidden" name="site_id" value="{{ site_filtre.id }}">{% endif %}
         <button type="submit"
@@ -265,6 +267,7 @@
           <div style="display:flex;gap:.375rem;justify-content:center;align-items:center">
             {% if f.statut == 'EN_ATTENTE' %}
             <form method="POST" action="/journaliers/paie/{{ f.id }}/payer" style="display:inline">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit" title="Marquer payé"
                 style="background:#d1fae5;color:#065f46;border:none;padding:.3rem .625rem;border-radius:.5rem;font-size:.75rem;font-weight:700;cursor:pointer">
                 💰 Payer
@@ -276,12 +279,14 @@
             {% endif %}
             <form method="POST" action="/journaliers/paie/{{ f.id }}/supprimer" style="display:inline"
               onsubmit="return confirm('Supprimer cette feuille ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit" style="background:#fee2e2;color:#dc2626;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">🗑️</button>
             </form>
           </div>
           <!-- Formulaire modification (masqué) -->
           <div id="edit_{{ f.id }}" style="display:none;margin-top:.5rem">
             <form method="POST" action="/journaliers/paie/{{ f.id }}/modifier">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <input type="number" name="montant_brut" value="{{ f.montant_brut|int }}" step="any"
                 style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right">
               <button type="submit" style="background:#2563eb;color:white;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">✓</button>
