@@ -13,11 +13,12 @@ import hmac
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
-                    Site, AffectationSite, Paiement, OAuthClient)
+                    Site, AffectationSite, Paiement, OAuthClient, AuditLog)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
 from flask_wtf.csrf import CSRFProtect
 from i18n import get_translations, detect_language, set_language, SUPPORTED_LANGUAGES, is_rtl
+from audit import log_action, get_audit_logs
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -340,6 +341,10 @@ def login():
                 user.nb_echecs_connexion = 0
                 user.compte_bloque_jusqu = None
                 user.derniere_connexion  = now
+                db.session.commit()
+                log_action("LOGIN", "utilisateur", user.id,
+                           f"Connexion de {user.nom_complet} ({user.role_label})",
+                           user_id=user.id, tenant_id=user.tenant_id)
                 db.session.commit()
                 login_user(user)
                 return redirect(url_for("index"))
@@ -1784,6 +1789,11 @@ def salarie_nouveau():
         db.session.add(s)
         sb=float(request.form.get("salaire_base") or 0)
         if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
+        db.session.flush()
+        log_action("CREATE", "salarie", s.id,
+                   f"Nouveau salarié : {s.nom_complet} (matricule {s.matricule})",
+                   apres={"nom": s.nom, "prenom": s.prenom, "matricule": s.matricule,
+                          "emploi": s.emploi, "salaire_base": sb})
         db.session.commit(); flash(f"Salarié {s.nom_complet} créé.","success")
         return redirect(url_for("salarie_detail",id=s.id))
     sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
@@ -2041,6 +2051,8 @@ def bulletins_valider_lot():
                 a.statut = "DEDUIT"
             nb += 1
         msg = f"✅ {nb} bulletin(s) validé(s)."
+        log_action("VALIDATE", "bulletin", pid,
+                   f"Validation de {nb} bulletin(s) — période {pid}")
 
     elif action == "annuler_validation":
         # ── NOUVEAU : annuler la validation → repasser en BROUILLON ──────────
@@ -2055,6 +2067,8 @@ def bulletins_valider_lot():
                 a.statut = "EN_ATTENTE"
             nb += 1
         msg = f"↩️ {nb} bulletin(s) remis en brouillon."
+        log_action("CANCEL", "bulletin", pid,
+                   f"Annulation validation de {nb} bulletin(s) — période {pid}")
 
     elif action == "payer":
         for b in buls:
@@ -2062,12 +2076,16 @@ def bulletins_valider_lot():
             b.statut = "PAYÉ"
             nb += 1
         msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
+        log_action("PAY", "bulletin", pid,
+                   f"{nb} bulletin(s) marqué(s) payé(s) — période {pid}")
 
     elif action == "supprimer_brouillons":
         for b in buls:
             if b.statut != "BROUILLON": continue
             db.session.delete(b); nb += 1
         msg = f"🗑️ {nb} brouillon(s) supprimé(s)."
+        log_action("DELETE", "bulletin", pid,
+                   f"Suppression de {nb} brouillon(s) — période {pid}")
 
     else:
         flash("Action inconnue.", "error")
@@ -3011,6 +3029,90 @@ def changer_langue(lang):
             db.session.commit()
     # Rediriger vers la page précédente
     return redirect(request.referrer or url_for("dashboard"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUDIT TRAIL — Journal des actions
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/audit")
+@tenant_required
+def audit_trail():
+    """
+    Page du journal d'audit — visible par l'admin du tenant.
+    Affiche qui a fait quoi et quand.
+    """
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("dashboard"))
+
+    page      = request.args.get("page", 1, type=int)
+    action    = request.args.get("action", "")
+    entite    = request.args.get("entite", "")
+    user_id   = request.args.get("user_id", type=int)
+    per_page  = 50
+
+    logs, total = get_audit_logs(
+        tenant_id  = t.id,
+        limit      = per_page,
+        offset     = (page - 1) * per_page,
+        action     = action or None,
+        entite     = entite or None,
+        user_id    = user_id or None,
+    )
+
+    # Liste des utilisateurs pour le filtre
+    users = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).order_by(Utilisateur.nom).all()
+
+    import math
+    nb_pages = math.ceil(total / per_page) if total else 1
+
+    return render_template("tenant/audit_trail.html",
+        tenant=t, logs=logs, total=total,
+        page=page, nb_pages=nb_pages, per_page=per_page,
+        action_filtre=action, entite_filtre=entite, user_filtre=user_id,
+        users=users,
+        ACTIONS=["CREATE","UPDATE","DELETE","VALIDATE","CANCEL","PAY",
+                 "LOGIN","LOGOUT","EXPORT","IMPORT"],
+        ENTITES=["salarie","bulletin","conge","acompte","periode",
+                 "utilisateur","parametres","paiement"],
+    )
+
+
+@app.route("/audit/export")
+@tenant_required
+def audit_export():
+    """Export CSV du journal d'audit."""
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("audit_trail"))
+
+    logs, _ = get_audit_logs(tenant_id=t.id, limit=5000)
+
+    import csv, io as _io
+    output = _io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["Date","Utilisateur","Rôle","Action","Objet","ID","Description","IP"])
+    for l in logs:
+        writer.writerow([
+            l.date_action.strftime("%d/%m/%Y %H:%M:%S") if l.date_action else "",
+            l.user.nom_complet if l.user else "Système",
+            l.user.role_label  if l.user else "—",
+            l.action, l.entite or "", l.entite_id or "",
+            l.description or "", l.ip_address or "",
+        ])
+
+    log_action("EXPORT", "audit", None, "Export CSV journal d'audit")
+    db.session.commit()
+
+    return send_file(
+        io.BytesIO(("\ufeff" + output.getvalue()).encode("utf-8")),
+        mimetype="text/csv; charset=utf-8",
+        as_attachment=True,
+        download_name=f"audit_{t.sigle or t.id}_{datetime.now().strftime('%Y%m%d')}.csv",
+    )
 
 
 @app.route("/parametres/demande-changement-plan", methods=["POST"])
@@ -6135,6 +6237,9 @@ def export_sage_journal(periode_id):
         contenu = generer_journal_paie(bulletins, periode, t)
         nom_fichier = f"journal_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.txt"
         logger.info(f"[Export Sage] Journal paie — tenant={t.id} période={periode.libelle_complet}")
+        log_action("EXPORT", "bulletin", periode_id,
+                   f"Export Sage Journal de paie — {periode.libelle_complet} ({len(bulletins)} bulletins)")
+        db.session.commit()
         return send_file(
             io.BytesIO(contenu),
             mimetype="text/plain",
@@ -7118,7 +7223,7 @@ def forbidden(e): return render_template("auth/403.html"),403
 
 # ── Init DB ───────────────────────────────────────────────────────────────────
 def init_db():
-    db.create_all()  # Crée toutes les tables dont paiements (nouveau)
+    db.create_all()  # Crée toutes les tables : paiements, oauth_clients, audit_logs, etc.
     if not Plan.query.first():
         for code,nom,prix,ms,mu,desc in [
             ("STARTER","Starter",15000,10,1,"10 salariés max, 1 utilisateur"),

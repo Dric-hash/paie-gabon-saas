@@ -1,0 +1,214 @@
+{% extends "tenant/base.html" %}
+{% block title %}Journal d'audit — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">🔍 Journal d'audit</h1>
+    <p style="color:#6b7280;font-size:.875rem;margin:.25rem 0 0">
+      {{ total }} action(s) enregistrée(s)
+    </p>
+  </div>
+  <a href="/audit/export"
+    style="background:#1a2332;color:white;padding:.625rem 1.25rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">
+    📥 Exporter CSV
+  </a>
+</div>
+
+<!-- Filtres -->
+<div class="card p-4" style="margin-bottom:1.25rem">
+  <form method="GET" action="/audit" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Action</label>
+      <select name="action" style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem">
+        <option value="">Toutes</option>
+        {% for a in ACTIONS %}
+        <option value="{{ a }}" {{ 'selected' if action_filtre == a }}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Objet</label>
+      <select name="entite" style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem">
+        <option value="">Tous</option>
+        {% for e in ENTITES %}
+        <option value="{{ e }}" {{ 'selected' if entite_filtre == e }}>{{ e }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Utilisateur</label>
+      <select name="user_id" style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem">
+        <option value="">Tous</option>
+        {% for u in users %}
+        <option value="{{ u.id }}" {{ 'selected' if user_filtre == u.id }}>{{ u.nom_complet }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit"
+      style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+      Filtrer
+    </button>
+    {% if action_filtre or entite_filtre or user_filtre %}
+    <a href="/audit" style="font-size:.78rem;color:#6b7280;text-decoration:none;padding:.375rem .5rem">
+      ✕ Réinitialiser
+    </a>
+    {% endif %}
+  </form>
+</div>
+
+<!-- Tableau des logs -->
+<div class="card" style="overflow:hidden">
+  {% if logs %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+          <th style="text-align:left;padding:.625rem 1rem;font-weight:700;color:#374151;white-space:nowrap">Date & heure</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Utilisateur</th>
+          <th style="text-align:center;padding:.625rem .75rem;font-weight:700;color:#374151">Action</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Objet</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Description</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">IP</th>
+          <th style="text-align:center;padding:.625rem .75rem;font-weight:700;color:#374151">Détails</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        {% set action_colors = {
+          'CREATE':   ('bg:#d1fae5','color:#065f46'),
+          'UPDATE':   ('bg:#dbeafe','color:#1e40af'),
+          'DELETE':   ('bg:#fee2e2','color:#991b1b'),
+          'VALIDATE': ('bg:#d1fae5','color:#065f46'),
+          'CANCEL':   ('bg:#fef3c7','color:#92400e'),
+          'PAY':      ('bg:#dbeafe','color:#1e40af'),
+          'LOGIN':    ('bg:#f3f4f6','color:#374151'),
+          'LOGOUT':   ('bg:#f3f4f6','color:#374151'),
+          'EXPORT':   ('bg:#ede9fe','color:#6d28d9'),
+          'IMPORT':   ('bg:#ede9fe','color:#6d28d9'),
+        } %}
+        {% set badge_bg = {
+          'CREATE': '#d1fae5', 'UPDATE': '#dbeafe', 'DELETE': '#fee2e2',
+          'VALIDATE': '#d1fae5', 'CANCEL': '#fef3c7', 'PAY': '#dbeafe',
+          'LOGIN': '#f3f4f6', 'LOGOUT': '#f3f4f6',
+          'EXPORT': '#ede9fe', 'IMPORT': '#ede9fe',
+        } %}
+        {% set badge_color = {
+          'CREATE': '#065f46', 'UPDATE': '#1e40af', 'DELETE': '#991b1b',
+          'VALIDATE': '#065f46', 'CANCEL': '#92400e', 'PAY': '#1e40af',
+          'LOGIN': '#374151', 'LOGOUT': '#374151',
+          'EXPORT': '#6d28d9', 'IMPORT': '#6d28d9',
+        } %}
+        <tr style="border-bottom:1px solid #f3f4f6;{% if loop.index is odd %}background:white{% else %}background:#fafafa{% endif %}">
+          <td style="padding:.5rem 1rem;white-space:nowrap;color:#374151;font-family:monospace;font-size:.75rem">
+            {{ log.date_action.strftime('%d/%m/%Y') if log.date_action else '—' }}<br>
+            <span style="color:#9ca3af">{{ log.date_action.strftime('%H:%M:%S') if log.date_action else '' }}</span>
+          </td>
+          <td style="padding:.5rem .75rem">
+            {% if log.user %}
+            <div style="font-weight:600">{{ log.user.nom_complet }}</div>
+            <div style="font-size:.7rem;color:#9ca3af">{{ log.user.role_label }}</div>
+            {% else %}
+            <span style="color:#9ca3af;font-style:italic">Système</span>
+            {% endif %}
+          </td>
+          <td style="padding:.5rem .75rem;text-align:center">
+            <span style="padding:.15rem .6rem;border-radius:9999px;font-size:.7rem;font-weight:700;
+              background:{{ badge_bg.get(log.action, '#f3f4f6') }};
+              color:{{ badge_color.get(log.action, '#374151') }}">
+              {{ log.action }}
+            </span>
+          </td>
+          <td style="padding:.5rem .75rem">
+            {% if log.entite %}
+            <span style="font-size:.75rem;background:#f3f4f6;padding:.15rem .5rem;border-radius:.25rem;color:#374151">
+              {{ log.entite }}{% if log.entite_id %} #{{ log.entite_id }}{% endif %}
+            </span>
+            {% else %}—{% endif %}
+          </td>
+          <td style="padding:.5rem .75rem;color:#374151;max-width:300px">
+            {{ log.description or '—' }}
+          </td>
+          <td style="padding:.5rem .75rem;font-family:monospace;font-size:.72rem;color:#9ca3af">
+            {{ log.ip_address or '—' }}
+          </td>
+          <td style="padding:.5rem .75rem;text-align:center">
+            {% if log.avant or log.apres %}
+            <button type="button"
+              onclick="toggleDetails({{ loop.index }})"
+              style="background:#f3f4f6;border:none;padding:.2rem .5rem;border-radius:.375rem;font-size:.7rem;cursor:pointer;color:#374151">
+              👁 Voir
+            </button>
+            <div id="details-{{ loop.index }}" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+              background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;z-index:1000;
+              max-width:500px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.15)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+                <strong>Détails de l'action</strong>
+                <button onclick="toggleDetails({{ loop.index }})"
+                  style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#6b7280">✕</button>
+              </div>
+              {% if log.avant %}
+              <div style="margin-bottom:.5rem">
+                <div style="font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">AVANT</div>
+                <pre style="background:#fef2f2;padding:.5rem;border-radius:.5rem;font-size:.72rem;overflow-x:auto;white-space:pre-wrap">{{ log.avant }}</pre>
+              </div>
+              {% endif %}
+              {% if log.apres %}
+              <div>
+                <div style="font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">APRÈS</div>
+                <pre style="background:#f0fdf4;padding:.5rem;border-radius:.5rem;font-size:.72rem;overflow-x:auto;white-space:pre-wrap">{{ log.apres }}</pre>
+              </div>
+              {% endif %}
+            </div>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  {% if nb_pages > 1 %}
+  <div style="display:flex;justify-content:center;gap:.5rem;padding:1rem;border-top:1px solid #f3f4f6">
+    {% if page > 1 %}
+    <a href="?page={{ page-1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}"
+      style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">
+      ← Précédent
+    </a>
+    {% endif %}
+    <span style="padding:.375rem .75rem;font-size:.8rem;color:#6b7280">
+      Page {{ page }} / {{ nb_pages }}
+    </span>
+    {% if page < nb_pages %}
+    <a href="?page={{ page+1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}"
+      style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">
+      Suivant →
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:3rem;margin-bottom:.75rem">📋</div>
+    <p style="font-size:.9rem;margin:0">Aucune action enregistrée pour le moment.</p>
+    <p style="font-size:.8rem;margin:.25rem 0 0">Les actions apparaîtront ici au fur et à mesure.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function toggleDetails(n) {
+  const el = document.getElementById('details-' + n);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+// Fermer en cliquant ailleurs
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('[id^=details-]') && !e.target.closest('button[onclick^=toggleDetails]')) {
+    document.querySelectorAll('[id^=details-]').forEach(el => el.style.display = 'none');
+  }
+});
+</script>
+
+{% endblock %}

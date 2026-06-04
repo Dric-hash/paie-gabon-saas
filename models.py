@@ -785,3 +785,62 @@ class OAuthClient(db.Model):
         db.Index("idx_oauth_client_id", "client_id"),
         db.Index("idx_oauth_tenant", "tenant_id"),
     )
+
+
+class AuditLog(db.Model):
+    """
+    Journal d'audit — enregistre toutes les actions importantes.
+    Qui a fait quoi, quand, sur quel objet, depuis quelle IP.
+    """
+    __tablename__ = "audit_logs"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+    user_id      = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"), nullable=True)
+
+    # Action effectuée
+    action       = db.Column(db.String(50),  nullable=False)
+    # CREATE | UPDATE | DELETE | VALIDATE | CANCEL | LOGIN | LOGOUT | EXPORT | IMPORT
+
+    # Type d'objet concerné
+    entite       = db.Column(db.String(50))
+    # salarie | bulletin | conge | acompte | periode | utilisateur | parametres | paiement
+
+    # ID de l'objet concerné (null si action globale)
+    entite_id    = db.Column(db.Integer)
+
+    # Description lisible
+    description  = db.Column(db.String(500))
+
+    # Données avant/après modification (JSON)
+    avant        = db.Column(db.Text)  # état avant (pour UPDATE/DELETE)
+    apres        = db.Column(db.Text)  # état après (pour CREATE/UPDATE)
+
+    # Contexte technique
+    ip_address   = db.Column(db.String(45))
+    user_agent   = db.Column(db.String(300))
+    date_action  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relations
+    tenant = db.relationship("Tenant",      foreign_keys=[tenant_id])
+    user   = db.relationship("Utilisateur", foreign_keys=[user_id])
+
+    __table_args__ = (
+        db.Index("idx_audit_tenant_date",  "tenant_id", "date_action"),
+        db.Index("idx_audit_user",         "user_id",   "date_action"),
+        db.Index("idx_audit_entite",       "entite",    "entite_id"),
+        db.Index("idx_audit_action",       "action"),
+    )
+
+    def to_dict(self):
+        return {
+            "id":          self.id,
+            "action":      self.action,
+            "entite":      self.entite,
+            "entite_id":   self.entite_id,
+            "description": self.description,
+            "user":        self.user.nom_complet if self.user else "Système",
+            "user_role":   self.user.role_label  if self.user else "—",
+            "ip_address":  self.ip_address,
+            "date_action": self.date_action.strftime("%d/%m/%Y %H:%M:%S") if self.date_action else "—",
+        }
