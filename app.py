@@ -6348,11 +6348,9 @@ def export_sage_les_deux(periode_id):
 @tenant_required
 def rapport_pdf(periode_id):
     """
-    Génère et télécharge le rapport PDF mensuel complet :
-      - Page de garde
-      - Résumé direction (KPIs + évolution 6 mois)
-      - Tableau détail par salarié
-      - Récapitulatif charges à verser
+    Génère le rapport PDF mensuel complet organisé par site :
+      - Salariés + journaliers regroupés par site
+      - Récapitulatif global et charges à verser
     """
     t = get_tenant()
     if not current_user.can_export and not current_user.is_tenant_admin:
@@ -6360,6 +6358,8 @@ def rapport_pdf(periode_id):
         return redirect(url_for("bulletins"))
 
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+
+    # ── Bulletins salariés validés ────────────────────────────────────────────
     bulletins = (BulletinPaie.query
         .filter(BulletinPaie.periode_id == periode_id,
                 BulletinPaie.tenant_id  == t.id,
@@ -6367,25 +6367,40 @@ def rapport_pdf(periode_id):
         .options(joinedload(BulletinPaie.salarie))
         .join(Salarie).order_by(Salarie.nom).all())
 
-    if not bulletins:
-        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant de générer le rapport.", "warning")
+    # ── Feuilles de paie journaliers du même mois ─────────────────────────────
+    from datetime import date as _date
+    debut_mois = _date(periode.annee, periode.mois, 1)
+    import calendar
+    dernier_jour = calendar.monthrange(periode.annee, periode.mois)[1]
+    fin_mois = _date(periode.annee, periode.mois, dernier_jour)
+
+    feuilles = (FeuillePaieJournalier.query
+        .filter_by(tenant_id=t.id)
+        .filter(FeuillePaieJournalier.date_debut >= debut_mois,
+                FeuillePaieJournalier.date_fin   <= fin_mois)
+        .options(joinedload(FeuillePaieJournalier.journalier))
+        .all())
+
+    if not bulletins and not feuilles:
+        flash("Aucun bulletin ni feuille de paie pour cette période.", "warning")
         return redirect(url_for("bulletins"))
 
-    # Récupérer l'évolution des 6 derniers mois pour le graphique
-    from datetime import timedelta
+    # ── Sites et affectations ─────────────────────────────────────────────────
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    affectations = AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all()
+
+    # ── Évolution 6 mois ──────────────────────────────────────────────────────
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
     evolution = []
     for i in range(5, -1, -1):
-        d     = date.today().replace(day=1)
-        mois  = (d.month - i - 1) % 12 + 1
-        annee = d.year - ((i + d.month - 1) // 12)
+        mois  = (periode.mois - i - 1) % 12 + 1
+        annee = periode.annee - ((i + 12 - periode.mois) // 12) if i >= periode.mois else periode.annee
         buls_m = BulletinPaie.query.join(PeriodePaie).filter(
             BulletinPaie.tenant_id == t.id,
-            PeriodePaie.mois == mois,
-            PeriodePaie.annee == annee,
+            PeriodePaie.mois == mois, PeriodePaie.annee == annee,
         ).all()
         evolution.append({
-            "mois":  ["","Jan","Fév","Mar","Avr","Mai","Jun",
-                      "Jul","Aoû","Sep","Oct","Nov","Déc"][mois],
+            "mois":  MOIS_FR[mois],
             "annee": annee,
             "brut":  sum(float(b.salaire_brut or 0) for b in buls_m),
             "net":   sum(float(b.net_a_payer  or 0) for b in buls_m),
@@ -6393,13 +6408,22 @@ def rapport_pdf(periode_id):
 
     try:
         from rapport_pdf import generer_rapport_mensuel
-        pdf_bytes = generer_rapport_mensuel(bulletins, periode, t, evolution)
+        pdf_bytes = generer_rapport_mensuel(
+            bulletins            = bulletins,
+            periode              = periode,
+            tenant               = t,
+            feuilles_journaliers = feuilles,
+            sites                = sites,
+            affectations         = affectations,
+            evolution            = evolution,
+        )
 
         nom_fichier = f"rapport_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.pdf"
         log_action("EXPORT", "rapport", periode_id,
-                   f"Rapport PDF mensuel — {periode.libelle_complet} ({len(bulletins)} bulletins)")
+                   f"Rapport PDF — {periode.libelle_complet} — "
+                   f"{len(bulletins)} salariés, {len(feuilles)} journaliers, "
+                   f"{len(sites)} sites")
         db.session.commit()
-
         logger.info(f"[Rapport PDF] Généré — tenant={t.id} période={periode.libelle_complet}")
         return send_file(
             io.BytesIO(pdf_bytes),

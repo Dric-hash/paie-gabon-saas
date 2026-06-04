@@ -1,565 +1,585 @@
 """
 rapport_pdf.py — Rapport mensuel de paie PDF pour PaieGabon
 ============================================================
-Génère un rapport PDF professionnel en 3 sections :
+Génère un rapport PDF professionnel organisé PAR SITE :
 
-  1. PAGE DE GARDE     — logo, période, infos entreprise
-  2. RÉSUMÉ DIRECTION  — KPIs, masse salariale, graphiques ASCII, alertes
-  3. TABLEAU DE PAIE   — détail par salarié (brut, cotisations, net)
-  4. RÉCAPITULATIF     — totaux CNSS/CNAMGS/TCS/IRPP à verser
-
-Utilise ReportLab (déjà dans requirements.txt).
+  1. PAGE DE GARDE
+  2. RÉSUMÉ GLOBAL   — KPIs consolidés (salariés + journaliers)
+  3. PAR SITE        — une section par site avec :
+                         • Tableau des salariés (bulletins)
+                         • Tableau des journaliers (feuilles de paie)
+                         • Sous-totaux du site
+  4. SANS SITE       — salariés/journaliers sans affectation
+  5. RÉCAPITULATIF   — charges à verser (CNSS/CNAMGS/TCS/IRPP/FNH/CFP)
 """
 
 import io
 from datetime import datetime, date
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units    import mm
-from reportlab.lib.colors   import HexColor, black, white, Color
+from reportlab.lib.colors   import HexColor, black, white
 from reportlab.lib.styles   import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.enums    import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.platypus     import (SimpleDocTemplate, Paragraph, Spacer,
-                                    Table, TableStyle, HRFlowable,
-                                    PageBreak, KeepTogether)
-from reportlab.pdfbase      import pdfmetrics
+                                    Table, TableStyle, HRFlowable, PageBreak)
 
-# ── Palette de couleurs PaieGabon ─────────────────────────────────────────────
-C_DARK    = HexColor("#1a2332")   # bleu marine (marque)
-C_GREEN   = HexColor("#059669")   # vert validation
-C_RED     = HexColor("#dc2626")   # rouge alerte
-C_BLUE    = HexColor("#2563eb")   # bleu accent
-C_ORANGE  = HexColor("#f59e0b")   # orange avertissement
-C_GRAY    = HexColor("#6b7280")   # gris texte secondaire
-C_LGRAY   = HexColor("#f3f4f6")   # gris fond
-C_BORDER  = HexColor("#e5e7eb")   # gris bordure
-C_WHITE   = white
-C_BLACK   = black
+# ── Palette ───────────────────────────────────────────────────────────────────
+C_DARK   = HexColor("#1a2332")
+C_GREEN  = HexColor("#059669")
+C_RED    = HexColor("#dc2626")
+C_BLUE   = HexColor("#2563eb")
+C_ORANGE = HexColor("#f59e0b")
+C_PURPLE = HexColor("#7c3aed")
+C_GRAY   = HexColor("#6b7280")
+C_LGRAY  = HexColor("#f3f4f6")
+C_BORDER = HexColor("#e5e7eb")
 
-# ── Styles de paragraphe ──────────────────────────────────────────────────────
-def _styles():
-    s = getSampleStyleSheet()
-    return {
-        "h1":      ParagraphStyle("h1",      fontSize=22, fontName="Helvetica-Bold",
-                                  textColor=C_DARK,  spaceAfter=4*mm),
-        "h2":      ParagraphStyle("h2",      fontSize=14, fontName="Helvetica-Bold",
-                                  textColor=C_DARK,  spaceBefore=6*mm, spaceAfter=3*mm),
-        "h3":      ParagraphStyle("h3",      fontSize=11, fontName="Helvetica-Bold",
-                                  textColor=C_DARK,  spaceBefore=4*mm, spaceAfter=2*mm),
-        "body":    ParagraphStyle("body",    fontSize=9,  fontName="Helvetica",
-                                  textColor=C_DARK,  leading=14),
-        "small":   ParagraphStyle("small",   fontSize=8,  fontName="Helvetica",
-                                  textColor=C_GRAY,  leading=12),
-        "center":  ParagraphStyle("center",  fontSize=9,  fontName="Helvetica",
-                                  alignment=TA_CENTER),
-        "bold":    ParagraphStyle("bold",    fontSize=9,  fontName="Helvetica-Bold",
-                                  textColor=C_DARK),
-        "green":   ParagraphStyle("green",   fontSize=9,  fontName="Helvetica-Bold",
-                                  textColor=C_GREEN),
-        "red":     ParagraphStyle("red",     fontSize=9,  fontName="Helvetica-Bold",
-                                  textColor=C_RED),
-        "cover_title": ParagraphStyle("cover_title", fontSize=32, fontName="Helvetica-Bold",
-                                       textColor=C_WHITE, alignment=TA_CENTER),
-        "cover_sub":   ParagraphStyle("cover_sub",   fontSize=14, fontName="Helvetica",
-                                       textColor=C_WHITE, alignment=TA_CENTER),
+
+def _s(name, **kw):
+    base = {
+        "h1":    dict(fontSize=20, fontName="Helvetica-Bold", textColor=C_DARK,  spaceAfter=3*mm),
+        "h2":    dict(fontSize=13, fontName="Helvetica-Bold", textColor=C_DARK,  spaceBefore=5*mm, spaceAfter=2*mm),
+        "h3":    dict(fontSize=10, fontName="Helvetica-Bold", textColor=C_DARK,  spaceBefore=3*mm, spaceAfter=1.5*mm),
+        "body":  dict(fontSize=8,  fontName="Helvetica",      textColor=C_DARK,  leading=12),
+        "small": dict(fontSize=7,  fontName="Helvetica",      textColor=C_GRAY,  leading=11),
+        "bold":  dict(fontSize=8,  fontName="Helvetica-Bold", textColor=C_DARK),
+        "green": dict(fontSize=8,  fontName="Helvetica-Bold", textColor=C_GREEN),
+        "red":   dict(fontSize=8,  fontName="Helvetica-Bold", textColor=C_RED),
+        "blue":  dict(fontSize=8,  fontName="Helvetica-Bold", textColor=C_BLUE),
+        "center":dict(fontSize=8,  fontName="Helvetica",      alignment=TA_CENTER),
+        "white": dict(fontSize=8,  fontName="Helvetica-Bold", textColor=white),
+        "cover": dict(fontSize=28, fontName="Helvetica-Bold", textColor=white,   alignment=TA_CENTER),
+        "cover2":dict(fontSize=13, fontName="Helvetica",      textColor=white,   alignment=TA_CENTER),
     }
+    cfg = {**base.get(name, {}), **kw}
+    return ParagraphStyle(name, **cfg)
 
 
-def _fcfa(v) -> str:
-    """Formate un montant en FCFA avec séparateurs de milliers."""
-    try:
-        return f"{int(round(float(v or 0))):,}".replace(",", " ") + " FCFA"
-    except Exception:
-        return "0 FCFA"
+def _fcfa(v):
+    try: return f"{int(round(float(v or 0))):,}".replace(",", " ") + " F"
+    except: return "0 F"
 
+def _pct(part, total):
+    try: return f"{part/total*100:.1f}%" if total else "—"
+    except: return "—"
 
-def _pct(part, total) -> str:
-    try:
-        return f"{part / total * 100:.1f}%" if total else "—"
-    except Exception:
-        return "—"
+def _bar(v, mx, w=18):
+    if not mx: return "─"*w
+    f = int(v/mx*w)
+    return "█"*f + "░"*(w-f)
 
-
-def _bar(value, max_value, width=20) -> str:
-    """Barre de progression ASCII pour les rapports."""
-    if not max_value:
-        return "─" * width
-    filled = int(value / max_value * width)
-    return "█" * filled + "░" * (width - filled)
+def _th(cells, widths):
+    """Génère une ligne d'en-tête de tableau sombre."""
+    row = [Paragraph(c, _s("white")) for c in cells]
+    t = Table([row], colWidths=widths)
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0,0),(-1,-1), C_DARK),
+        ("PADDING",    (0,0),(-1,-1), 2*mm),
+        ("FONTSIZE",   (0,0),(-1,-1), 7),
+        ("ALIGN",      (2,0),(-1,-1), "RIGHT"),
+    ]))
+    return t
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # FONCTION PRINCIPALE
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def generer_rapport_mensuel(bulletins, periode, tenant, evolution=None) -> bytes:
+def generer_rapport_mensuel(bulletins, periode, tenant,
+                             feuilles_journaliers=None,
+                             sites=None, affectations=None,
+                             evolution=None) -> bytes:
     """
-    Génère le rapport mensuel PDF complet.
-
     Args:
-        bulletins  : liste de BulletinPaie de la période (statut VALIDÉ)
-        periode    : PeriodePaie
-        tenant     : Tenant
-        evolution  : liste de dicts {mois, annee, brut, net} pour le graphique
-                     (optionnel — 6 derniers mois)
-
-    Returns:
-        bytes du PDF
+        bulletins            : liste BulletinPaie validés
+        periode              : PeriodePaie
+        tenant               : Tenant
+        feuilles_journaliers : liste FeuillePaieJournalier du mois
+        sites                : liste Site actifs du tenant
+        affectations         : liste AffectationSite actives
+        evolution            : 6 mois [{mois, annee, brut, net}]
     """
-    buf  = io.BytesIO()
-    doc  = SimpleDocTemplate(
+    feuilles_journaliers = feuilles_journaliers or []
+    sites                = sites or []
+    affectations         = affectations or []
+    evolution            = evolution or []
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
         buf, pagesize=A4,
-        leftMargin=15*mm, rightMargin=15*mm,
-        topMargin=15*mm,  bottomMargin=15*mm,
+        leftMargin=12*mm, rightMargin=12*mm,
+        topMargin=12*mm,  bottomMargin=12*mm,
         title=f"Rapport paie {periode.libelle_complet} — {tenant.denomination}",
         author="PaieGabon SaaS",
     )
 
-    S = _styles()
+    # ── Construire les mappings site → salariés / journaliers ────────────────
+    # salarie_id → site
+    sal_site = {}
+    for a in affectations:
+        if a.salarie_id:
+            sal_site[a.salarie_id] = a.site
+    # journalier_id → site (via affectation ou via feuille.journalier.site_id)
+    jour_site = {}
+    for a in affectations:
+        if a.journalier_id:
+            jour_site[a.journalier_id] = a.site
+
+    # Grouper bulletins par site
+    bulletins_par_site = {}  # site_id (ou None) → liste bulletins
+    for b in bulletins:
+        site = sal_site.get(b.salarie_id)
+        key  = site.id if site else None
+        bulletins_par_site.setdefault(key, {"site": site, "buls": [], "feuilles": []})
+        bulletins_par_site[key]["buls"].append(b)
+
+    # Grouper feuilles journaliers par site
+    for f in feuilles_journaliers:
+        site = jour_site.get(f.journalier_id)
+        # Essayer aussi via journalier.site_id si disponible
+        if not site and hasattr(f, "journalier") and f.journalier:
+            j = f.journalier
+            if hasattr(j, "site_id") and j.site_id:
+                site = next((s for s in sites if s.id == j.site_id), None)
+        key = site.id if site else None
+        if key not in bulletins_par_site:
+            bulletins_par_site[key] = {"site": site, "buls": [], "feuilles": []}
+        bulletins_par_site[key]["feuilles"].append(f)
+
+    # Totaux globaux
+    from calculs_paie import calculer_masse_salariale
+    masse      = calculer_masse_salariale(bulletins) if bulletins else {}
+    total_jour = sum(float(f.montant_brut or 0) for f in feuilles_journaliers)
+    nb_jour    = len(feuilles_journaliers)
+
     story = []
 
-    # ── Calculer les totaux ───────────────────────────────────────────────────
-    from calculs_paie import calculer_masse_salariale
-    masse = calculer_masse_salariale(bulletins) if bulletins else {}
-
-    total_brut      = masse.get("total_brut",       0)
-    total_net       = masse.get("total_net",         0)
-    total_cnss_sal  = masse.get("total_cnss_sal",    0)
-    total_cnss_pat  = masse.get("total_cnss_pat",    0)
-    total_cnamgs_sal= masse.get("total_cnamgs_sal",  0)
-    total_cnamgs_pat= masse.get("total_cnamgs_pat",  0)
-    total_tcs       = masse.get("total_tcs",         0)
-    total_irpp      = masse.get("total_irpp",        0)
-    total_fnh       = masse.get("total_fnh",         0)
-    total_cfp       = masse.get("total_cfp",         0)
-    total_charges   = masse.get("total_charges_pat", 0)
-    cout_employeur  = total_brut + total_charges
-    nb_bul          = len(bulletins)
-
-    # ══════════════════════════════════════════════════════════════════════════
-    # SECTION 1 — PAGE DE GARDE
-    # ══════════════════════════════════════════════════════════════════════════
-    story += _page_garde(tenant, periode, nb_bul, S)
+    # ── 1. PAGE DE GARDE ─────────────────────────────────────────────────────
+    story += _page_garde(tenant, periode, len(bulletins), nb_jour, sites, masse, total_jour)
     story.append(PageBreak())
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # SECTION 2 — RÉSUMÉ DIRECTION (KPIs)
-    # ══════════════════════════════════════════════════════════════════════════
-    story += _section_direction(
-        periode, tenant, masse, bulletins, evolution, S
+    # ── 2. RÉSUMÉ GLOBAL ─────────────────────────────────────────────────────
+    story += _section_resume(periode, masse, bulletins, feuilles_journaliers, evolution, sites)
+    story.append(PageBreak())
+
+    # ── 3. SECTIONS PAR SITE ─────────────────────────────────────────────────
+    # Trier : sites avec nom en premier, None en dernier
+    keys_tries = sorted(
+        bulletins_par_site.keys(),
+        key=lambda k: (k is None, (bulletins_par_site[k]["site"].nom if k is not None and bulletins_par_site[k]["site"] else ""))
     )
-    story.append(PageBreak())
+    for key in keys_tries:
+        grp  = bulletins_par_site[key]
+        site = grp["site"]
+        buls = grp["buls"]
+        feus = grp["feuilles"]
+        story += _section_site(site, buls, feus, masse, total_jour)
+        story.append(PageBreak())
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # SECTION 3 — TABLEAU DÉTAIL PAR SALARIÉ
-    # ══════════════════════════════════════════════════════════════════════════
-    story += _section_detail_salaries(bulletins, periode, S)
-    story.append(PageBreak())
+    # ── 4. RÉCAPITULATIF CHARGES ─────────────────────────────────────────────
+    story += _section_recap(masse, total_jour, periode, tenant)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # SECTION 4 — RÉCAPITULATIF CHARGES À VERSER
-    # ══════════════════════════════════════════════════════════════════════════
-    story += _section_recap_charges(masse, periode, tenant, S)
-
-    # ── Pied de page global ───────────────────────────────────────────────────
-    story.append(Spacer(1, 8*mm))
+    # Pied de page
+    story.append(Spacer(1, 5*mm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=C_BORDER))
     story.append(Spacer(1, 2*mm))
     story.append(Paragraph(
-        f"Rapport généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')} par PaieGabon SaaS — "
+        f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')} par PaieGabon SaaS — "
         f"Document confidentiel — {tenant.denomination}",
-        S["small"]
+        _s("small")
     ))
 
     doc.build(story)
     return buf.getvalue()
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 1 — PAGE DE GARDE
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# PAGE DE GARDE
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _page_garde(tenant, periode, nb_bul, S):
-    elements = []
-
-    # Bandeau coloré supérieur (simulé avec un tableau)
-    bandeau = Table(
-        [[Paragraph(f"RAPPORT MENSUEL DE PAIE", S["cover_title"]),
-          Paragraph(f"{periode.libelle_complet} {periode.annee}", S["cover_sub"])]],
-        colWidths=["60%", "40%"],
+def _page_garde(tenant, periode, nb_sal, nb_jour, sites, masse, total_jour):
+    e = []
+    # Bandeau
+    bg = Table(
+        [[Paragraph("RAPPORT MENSUEL DE PAIE", _s("cover")),
+          Paragraph(f"{periode.libelle_complet} {periode.annee}", _s("cover2"))]],
+        colWidths=["60%","40%"]
     )
-    bandeau.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), C_DARK),
-        ("PADDING",    (0,0), (-1,-1), 8*mm),
-        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
-        ("ROWHEIGHT",  (0,0), (-1,-1), 35*mm),
+    bg.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), C_DARK),
+        ("PADDING",   (0,0),(-1,-1), 7*mm),
+        ("ROWHEIGHT", (0,0),(-1,-1), 30*mm),
+        ("VALIGN",    (0,0),(-1,-1), "MIDDLE"),
     ]))
-    elements.append(bandeau)
-    elements.append(Spacer(1, 10*mm))
+    e.append(bg)
+    e.append(Spacer(1, 8*mm))
 
     # Infos entreprise
     infos = [
-        ["Entreprise",  tenant.denomination],
-        ["Sigle",       tenant.sigle or "—"],
-        ["NIF",         tenant.nif  or "—"],
-        ["N° CNSS",     getattr(tenant, "numero_cnss",   None) or "—"],
-        ["N° CNAMGS",   getattr(tenant, "numero_cnamgs", None) or "—"],
-        ["Ville",       tenant.ville or "Gabon"],
-        ["Période",     f"{periode.libelle_complet} {periode.annee}"],
-        ["Bulletins",   f"{nb_bul} bulletin(s) validé(s)"],
-        ["Généré le",   datetime.now().strftime("%d/%m/%Y à %H:%M")],
+        ("Entreprise",  tenant.denomination),
+        ("Sigle",       tenant.sigle or "—"),
+        ("NIF",         tenant.nif   or "—"),
+        ("N° CNSS",     getattr(tenant,"numero_cnss",  None) or "—"),
+        ("N° CNAMGS",   getattr(tenant,"numero_cnamgs",None) or "—"),
+        ("Ville",       tenant.ville or "Gabon"),
+        ("Période",     f"{periode.libelle_complet} {periode.annee}"),
+        ("Salariés (bulletins validés)", f"{nb_sal}"),
+        ("Journaliers (feuilles de paie)", f"{nb_jour}"),
+        ("Nombre de sites", f"{len(sites)}"),
+        ("Généré le",   datetime.now().strftime("%d/%m/%Y %H:%M")),
     ]
     t = Table(
-        [[Paragraph(k, S["bold"]), Paragraph(str(v), S["body"])] for k, v in infos],
-        colWidths=[50*mm, 120*mm],
+        [[Paragraph(k, _s("bold")), Paragraph(str(v), _s("body"))] for k,v in infos],
+        colWidths=[55*mm, 110*mm]
     )
     t.setStyle(TableStyle([
-        ("ROWBACKGROUNDS", (0,0), (-1,-1), [C_LGRAY, C_WHITE]),
-        ("PADDING",        (0,0), (-1,-1), 3*mm),
-        ("LINEBELOW",      (0,0), (-1,-1), 0.3, C_BORDER),
-        ("FONTSIZE",       (0,0), (-1,-1), 9),
+        ("ROWBACKGROUNDS",(0,0),(-1,-1),[C_LGRAY, white]),
+        ("PADDING",       (0,0),(-1,-1), 2.5*mm),
+        ("LINEBELOW",     (0,0),(-1,-1), 0.3, C_BORDER),
     ]))
-    elements.append(t)
-    elements.append(Spacer(1, 8*mm))
+    e.append(t)
+    e.append(Spacer(1, 6*mm))
 
-    # Badge "CONFIDENTIEL"
-    badge = Table(
-        [[Paragraph("🔒  DOCUMENT CONFIDENTIEL — USAGE INTERNE", S["center"])]],
-        colWidths=["100%"],
-    )
-    badge.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), HexColor("#fef3c7")),
-        ("TEXTCOLOR",  (0,0), (-1,-1), HexColor("#92400e")),
-        ("PADDING",    (0,0), (-1,-1), 4*mm),
-        ("FONTNAME",   (0,0), (-1,-1), "Helvetica-Bold"),
-        ("FONTSIZE",   (0,0), (-1,-1), 9),
+    # Badge confidentiel
+    bc = Table([[Paragraph("🔒  DOCUMENT CONFIDENTIEL — USAGE INTERNE", _s("center", textColor=HexColor("#92400e")))]])
+    bc.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), HexColor("#fef3c7")),
+        ("PADDING",   (0,0),(-1,-1), 3.5*mm),
     ]))
-    elements.append(badge)
-    return elements
+    e.append(bc)
+    return e
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 2 — RÉSUMÉ DIRECTION
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# RÉSUMÉ GLOBAL
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _section_direction(periode, tenant, masse, bulletins, evolution, S):
-    elements = []
-    elements.append(Paragraph("1. Résumé de Direction", S["h2"]))
-    elements.append(HRFlowable(width="100%", thickness=1, color=C_DARK))
-    elements.append(Spacer(1, 4*mm))
+def _section_resume(periode, masse, bulletins, feuilles, evolution, sites):
+    e = []
+    e.append(Paragraph("1. Résumé consolidé", _s("h2")))
+    e.append(HRFlowable(width="100%", thickness=1, color=C_DARK))
+    e.append(Spacer(1, 3*mm))
 
-    total_brut    = masse.get("total_brut",       0)
-    total_net     = masse.get("total_net",         0)
-    total_charges = masse.get("total_charges_pat", 0)
-    cout_emp      = total_brut + total_charges
-    nb_bul        = masse.get("nb_bulletins",      0)
+    brut_sal     = masse.get("total_brut", 0)
+    net_sal      = masse.get("total_net",  0)
+    charges_pat  = masse.get("total_charges_pat", 0)
+    brut_jour    = sum(float(f.montant_brut or 0) for f in feuilles)
+    cout_total   = brut_sal + charges_pat + brut_jour
 
-    # ── KPIs en grille 2×2 ───────────────────────────────────────────────────
+    # KPIs 2×3
     kpis = [
-        [_kpi_cell("Masse salariale brute", _fcfa(total_brut),  C_DARK,  S),
-         _kpi_cell("Net total à payer",     _fcfa(total_net),   C_GREEN, S)],
-        [_kpi_cell("Charges patronales",    _fcfa(total_charges), C_RED, S),
-         _kpi_cell("Coût total employeur",  _fcfa(cout_emp),    C_BLUE,  S)],
+        [_kpi("Salariés (bulletins)", str(len(bulletins)), C_DARK),
+         _kpi("Journaliers (feuilles)", str(len(feuilles)), C_PURPLE),
+         _kpi("Sites actifs", str(len(sites)), C_BLUE)],
+        [_kpi("Masse brute salariés", _fcfa(brut_sal), C_DARK),
+         _kpi("Paie journaliers", _fcfa(brut_jour), C_PURPLE),
+         _kpi("Coût total employeur", _fcfa(cout_total), C_RED)],
     ]
-    kpi_table = Table(kpis, colWidths=["50%", "50%"])
-    kpi_table.setStyle(TableStyle([
-        ("PADDING",  (0,0), (-1,-1), 3*mm),
-        ("LINEAFTER", (0,0), (0,-1), 0.5, C_BORDER),
-    ]))
-    elements.append(kpi_table)
-    elements.append(Spacer(1, 5*mm))
+    kt = Table(kpis, colWidths=["33%","33%","34%"])
+    kt.setStyle(TableStyle([("PADDING",(0,0),(-1,-1), 3*mm)]))
+    e.append(kt)
+    e.append(Spacer(1, 4*mm))
 
-    # ── Décomposition visuelle (barre ASCII) ──────────────────────────────────
-    elements.append(Paragraph("Décomposition du coût employeur", S["h3"]))
-    if cout_emp > 0:
-        lignes_barre = [
-            ("Net à payer",        total_net,    _pct(total_net,    cout_emp), C_GREEN),
-            ("Retenues salariales",
-             total_brut - total_net, _pct(total_brut - total_net, cout_emp), C_ORANGE),
-            ("Charges patronales",  total_charges, _pct(total_charges, cout_emp), C_RED),
+    # Décomposition
+    e.append(Paragraph("Décomposition du coût global", _s("h3")))
+    if cout_total > 0:
+        lignes = [
+            ("Net salariés",       net_sal,             C_GREEN),
+            ("Retenues salariales",brut_sal - net_sal,  C_ORANGE),
+            ("Charges patronales", charges_pat,         C_RED),
+            ("Paie journaliers",   brut_jour,           C_PURPLE),
         ]
-        barre_data = []
-        for label, val, pct_str, color in lignes_barre:
-            barre = _bar(val, cout_emp, 30)
-            barre_data.append([
-                Paragraph(label, S["body"]),
-                Paragraph(f"<font color='#{color.hexval()[2:]}'>{'█' * int(val/cout_emp*30) if cout_emp else ''}</font>", S["body"]),
-                Paragraph(_fcfa(val), S["bold"]),
-                Paragraph(pct_str, S["small"]),
+        rows = []
+        for label, val, col in lignes:
+            rows.append([
+                Paragraph(label, _s("body")),
+                Paragraph(_bar(val, cout_total, 25), ParagraphStyle("bar", fontSize=6, fontName="Courier", textColor=col)),
+                Paragraph(_fcfa(val), _s("bold", textColor=col)),
+                Paragraph(_pct(val, cout_total), _s("small")),
             ])
-        bt = Table(barre_data, colWidths=[50*mm, 70*mm, 40*mm, 20*mm])
+        bt = Table(rows, colWidths=[45*mm, 65*mm, 40*mm, 20*mm])
         bt.setStyle(TableStyle([
-            ("ROWBACKGROUNDS", (0,0), (-1,-1), [C_LGRAY, C_WHITE]),
-            ("PADDING",        (0,0), (-1,-1), 2*mm),
-            ("FONTSIZE",       (0,0), (-1,-1), 8),
+            ("ROWBACKGROUNDS",(0,0),(-1,-1),[C_LGRAY, white]),
+            ("PADDING",       (0,0),(-1,-1), 2*mm),
         ]))
-        elements.append(bt)
-    elements.append(Spacer(1, 5*mm))
+        e.append(bt)
+    e.append(Spacer(1, 4*mm))
 
-    # ── Évolution 6 mois (tableau) ────────────────────────────────────────────
+    # Évolution 6 mois
     if evolution and len(evolution) > 1:
-        elements.append(Paragraph("Évolution masse salariale (6 derniers mois)", S["h3"]))
-        max_brut = max((e.get("brut", 0) for e in evolution), default=1) or 1
-        evo_header = [
-            Paragraph("Mois",  S["bold"]),
-            Paragraph("Brut",  S["bold"]),
-            Paragraph("Net",   S["bold"]),
-            Paragraph("Tendance", S["bold"]),
-        ]
-        evo_rows = [evo_header]
-        for e in evolution:
-            barre = _bar(e.get("brut", 0), max_brut, 20)
-            evo_rows.append([
-                Paragraph(f"{e.get('mois','')} {e.get('annee','')}", S["body"]),
-                Paragraph(_fcfa(e.get("brut", 0)),  S["body"]),
-                Paragraph(_fcfa(e.get("net",  0)),  S["green"]),
-                Paragraph(barre, ParagraphStyle("mono", fontSize=7,
-                           fontName="Courier", textColor=C_BLUE)),
+        e.append(Paragraph("Évolution masse salariale — 6 derniers mois", _s("h3")))
+        max_b = max((ev.get("brut",0) for ev in evolution), default=1) or 1
+        hdr = ["Mois","Masse brute","Net","Tendance"]
+        rows_evo = [[Paragraph(h, _s("white")) for h in hdr]]
+        for ev in evolution:
+            rows_evo.append([
+                Paragraph(f"{ev.get('mois','')} {ev.get('annee','')}", _s("body")),
+                Paragraph(_fcfa(ev.get("brut",0)), _s("body")),
+                Paragraph(_fcfa(ev.get("net",0)),  _s("green")),
+                Paragraph(_bar(ev.get("brut",0), max_b, 22),
+                          ParagraphStyle("bar2", fontSize=6, fontName="Courier", textColor=C_BLUE)),
             ])
-        et = Table(evo_rows, colWidths=[30*mm, 45*mm, 45*mm, 55*mm])
+        et = Table(rows_evo, colWidths=[28*mm, 42*mm, 42*mm, 55*mm])
         et.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0),  C_DARK),
-            ("TEXTCOLOR",     (0,0), (-1,0),  C_WHITE),
-            ("FONTNAME",      (0,0), (-1,0),  "Helvetica-Bold"),
-            ("ROWBACKGROUNDS",(0,1), (-1,-1), [C_WHITE, C_LGRAY]),
-            ("PADDING",       (0,0), (-1,-1), 2.5*mm),
-            ("LINEBELOW",     (0,0), (-1,-1), 0.3, C_BORDER),
+            ("BACKGROUND",    (0,0),(-1,0),  C_DARK),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1), [white, C_LGRAY]),
+            ("PADDING",       (0,0),(-1,-1), 2*mm),
+            ("LINEBELOW",     (0,0),(-1,-1), 0.2, C_BORDER),
+            ("FONTSIZE",      (0,0),(-1,-1), 7),
         ]))
-        elements.append(et)
+        e.append(et)
 
-    return elements
+    return e
 
 
-def _kpi_cell(label, value, color, S):
-    """Cellule KPI colorée."""
-    cell_data = [
-        [Paragraph(label, ParagraphStyle("kpi_lbl", fontSize=8,
-                   fontName="Helvetica", textColor=C_GRAY))],
-        [Paragraph(value, ParagraphStyle("kpi_val", fontSize=14,
-                   fontName="Helvetica-Bold", textColor=color))],
-    ]
-    t = Table(cell_data, colWidths=["100%"])
+def _kpi(label, value, color):
+    t = Table([
+        [Paragraph(label, _s("small"))],
+        [Paragraph(value, _s("bold", fontSize=12, textColor=color))],
+    ], colWidths=["100%"])
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,-1), C_LGRAY),
-        ("PADDING",    (0,0), (-1,-1), 3*mm),
-        ("LINEBELOW",  (0,1), (-1,1), 2, color),
+        ("BACKGROUND",(0,0),(-1,-1), C_LGRAY),
+        ("PADDING",   (0,0),(-1,-1), 2.5*mm),
+        ("LINEBELOW", (0,1),(-1,1), 2, color),
     ]))
     return t
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 3 — DÉTAIL PAR SALARIÉ
-# ══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION PAR SITE
+# ═══════════════════════════════════════════════════════════════════════════════
 
-def _section_detail_salaries(bulletins, periode, S):
-    elements = []
-    elements.append(Paragraph("2. Tableau de paie détaillé", S["h2"]))
-    elements.append(HRFlowable(width="100%", thickness=1, color=C_DARK))
-    elements.append(Paragraph(
-        f"Période : {periode.libelle_complet} {periode.annee} — "
-        f"{len(bulletins)} salarié(s)",
-        S["small"]
-    ))
-    elements.append(Spacer(1, 4*mm))
+def _section_site(site, bulletins, feuilles, masse_globale, total_jour_global):
+    e = []
+    nom_site = site.nom if site else "Sans site affecté"
+    code     = f" ({site.code})" if site and site.code else ""
+    ville    = f" — {site.ville}" if site and site.ville else ""
+    resp     = f" | Resp. : {site.responsable}" if site and site.responsable else ""
 
-    if not bulletins:
-        elements.append(Paragraph("Aucun bulletin validé pour cette période.", S["body"]))
-        return elements
+    # En-tête de section site
+    titre = Table([[
+        Paragraph(f"Site : {nom_site}{code}{ville}", _s("h2", textColor=white, spaceBefore=0, spaceAfter=0)),
+        Paragraph(f"{len(bulletins)} salarié(s) · {len(feuilles)} journalier(s){resp}",
+                  _s("small", textColor=HexColor("#9ca3af"))),
+    ]], colWidths=["60%","40%"])
+    titre.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), C_DARK if site else C_GRAY),
+        ("PADDING",   (0,0),(-1,-1), 3*mm),
+        ("VALIGN",    (0,0),(-1,-1), "MIDDLE"),
+    ]))
+    e.append(titre)
+    e.append(Spacer(1, 3*mm))
 
-    # En-têtes du tableau
-    headers = [
-        Paragraph("Matricule", S["bold"]),
-        Paragraph("Nom & Prénom", S["bold"]),
-        Paragraph("Brut", S["bold"]),
-        Paragraph("CNSS sal.", S["bold"]),
-        Paragraph("CNAMGS sal.", S["bold"]),
-        Paragraph("TCS", S["bold"]),
-        Paragraph("IRPP", S["bold"]),
-        Paragraph("Net à payer", S["bold"]),
-        Paragraph("Statut", S["bold"]),
-    ]
+    # ── Sous-section : SALARIÉS ───────────────────────────────────────────────
+    if bulletins:
+        e.append(Paragraph("Salariés", _s("h3", textColor=C_BLUE)))
+        cols = [16*mm, 38*mm, 22*mm, 16*mm, 16*mm, 12*mm, 16*mm, 22*mm, 12*mm]
+        hdr  = ["Matricule","Nom & Prénom","Brut","CNSS sal.","CNAMGS sal.","TCS","IRPP","Net à payer","Statut"]
+        rows = [_tr_header(hdr, cols)]
 
-    rows = [headers]
-    total_brut = total_net = total_cnss = total_cnamgs = total_tcs = total_irpp = 0
+        ts_brut = ts_net = ts_cnss = ts_cnamgs = ts_tcs = ts_irpp = 0
+        for b in sorted(bulletins, key=lambda x: x.salarie.nom):
+            s  = b.salarie
+            br = float(b.salaire_brut   or 0)
+            nt = float(b.net_a_payer    or 0)
+            cs = float(b.cnss_salarie   or 0)
+            cm = float(b.cnamgs_salarie or 0)
+            tc = float(b.tcs            or 0)
+            ir = float(b.irpp           or 0)
+            ts_brut += br; ts_net += nt; ts_cnss += cs
+            ts_cnamgs += cm; ts_tcs += tc; ts_irpp += ir
+            sc = C_GREEN if b.statut in ("VALIDÉ","VALIDE") else (C_BLUE if b.statut=="PAYÉ" else C_ORANGE)
+            rows.append([
+                Paragraph(s.matricule or "—", _s("small")),
+                Paragraph(s.nom_complet,      _s("body")),
+                Paragraph(_fcfa(br),          _s("body")),
+                Paragraph(_fcfa(cs),          _s("small")),
+                Paragraph(_fcfa(cm),          _s("small")),
+                Paragraph(_fcfa(tc),          _s("small")),
+                Paragraph(_fcfa(ir),          _s("small")),
+                Paragraph(_fcfa(nt),          _s("green")),
+                Paragraph(b.statut,           _s("small", textColor=sc)),
+            ])
+        # Totaux salariés
+        rows.append(_tr_total(["","SOUS-TOTAL",_fcfa(ts_brut),_fcfa(ts_cnss),
+                                _fcfa(ts_cnamgs),_fcfa(ts_tcs),_fcfa(ts_irpp),
+                                _fcfa(ts_net),""], cols))
+        e.append(_table(rows, cols))
+        e.append(Spacer(1, 3*mm))
 
-    for b in sorted(bulletins, key=lambda x: (x.salarie.nom, x.salarie.prenom)):
-        s = b.salarie
-        brut    = float(b.salaire_brut  or 0)
-        net     = float(b.net_a_payer   or 0)
-        cnss    = float(b.cnss_salarie  or 0)
-        cnamgs  = float(b.cnamgs_salarie or 0)
-        tcs     = float(b.tcs           or 0)
-        irpp    = float(b.irpp          or 0)
+    # ── Sous-section : JOURNALIERS ────────────────────────────────────────────
+    if feuilles:
+        e.append(Paragraph("Journaliers", _s("h3", textColor=C_PURPLE)))
+        cols_j = [38*mm, 25*mm, 22*mm, 22*mm, 22*mm, 25*mm, 12*mm]
+        hdr_j  = ["Nom & Prénom","Profession","Période","Nb jours","Taux horaire","Montant brut","Statut"]
+        rows_j = [_tr_header(hdr_j, cols_j)]
 
-        total_brut   += brut
-        total_net    += net
-        total_cnss   += cnss
-        total_cnamgs += cnamgs
-        total_tcs    += tcs
-        total_irpp   += irpp
+        tj_brut = tj_jours = 0
+        for f in sorted(feuilles, key=lambda x: x.journalier.nom if x.journalier else ""):
+            j  = f.journalier
+            br = float(f.montant_brut or 0)
+            nb = int(f.nb_jours or 0)
+            th = float(f.taux_horaire or 0)
+            tj_brut  += br
+            tj_jours += nb
+            periode_str = f"{f.date_debut.strftime('%d/%m') if f.date_debut else '—'} — {f.date_fin.strftime('%d/%m/%Y') if f.date_fin else '—'}"
+            sc = C_GREEN if f.statut == "PAYÉ" else (C_ORANGE if f.statut=="EN_ATTENTE" else C_GRAY)
+            rows_j.append([
+                Paragraph(j.nom_complet if j else "—", _s("body")),
+                Paragraph(j.profession  if j else "—", _s("small")),
+                Paragraph(periode_str,                 _s("small")),
+                Paragraph(str(nb),                     _s("body")),
+                Paragraph(_fcfa(th) + "/h",            _s("small")),
+                Paragraph(_fcfa(br),                   _s("bold", textColor=C_PURPLE)),
+                Paragraph(f.statut,                    _s("small", textColor=sc)),
+            ])
+        rows_j.append(_tr_total(["SOUS-TOTAL JOURNALIERS","",
+                                  f"{tj_jours} jours","","",
+                                  _fcfa(tj_brut),""], cols_j))
+        e.append(_table(rows_j, cols_j))
+        e.append(Spacer(1, 3*mm))
 
-        statut_color = C_GREEN if b.statut in ("VALIDÉ","VALIDE") else (
-            C_BLUE if b.statut == "PAYÉ" else C_ORANGE)
+    # ── Récap site ────────────────────────────────────────────────────────────
+    if bulletins or feuilles:
+        site_brut_sal = sum(float(b.salaire_brut or 0) for b in bulletins)
+        site_net_sal  = sum(float(b.net_a_payer  or 0) for b in bulletins)
+        site_brut_j   = sum(float(f.montant_brut or 0) for f in feuilles)
+        site_total    = site_brut_sal + site_brut_j
+        recap = Table([
+            [Paragraph(f"Masse salariale brute (salariés) : {_fcfa(site_brut_sal)}", _s("body")),
+             Paragraph(f"Net à payer (salariés) : {_fcfa(site_net_sal)}", _s("green")),
+             Paragraph(f"Paie journaliers : {_fcfa(site_brut_j)}", _s("bold", textColor=C_PURPLE)),
+             Paragraph(f"Coût brut total site : {_fcfa(site_total)}", _s("bold", textColor=C_RED))],
+        ], colWidths=["25%","25%","25%","25%"])
+        recap.setStyle(TableStyle([
+            ("BACKGROUND",(0,0),(-1,-1), HexColor("#f0fdf4")),
+            ("PADDING",   (0,0),(-1,-1), 2.5*mm),
+            ("LINEABOVE", (0,0),(-1,0), 1, C_GREEN),
+        ]))
+        e.append(recap)
 
-        rows.append([
-            Paragraph(s.matricule or "—",    S["small"]),
-            Paragraph(s.nom_complet,          S["body"]),
-            Paragraph(_fcfa(brut),            S["body"]),
-            Paragraph(_fcfa(cnss),            S["small"]),
-            Paragraph(_fcfa(cnamgs),          S["small"]),
-            Paragraph(_fcfa(tcs),             S["small"]),
-            Paragraph(_fcfa(irpp),            S["small"]),
-            Paragraph(_fcfa(net), ParagraphStyle("net_val", fontSize=9,
-                      fontName="Helvetica-Bold", textColor=C_GREEN)),
-            Paragraph(b.statut, ParagraphStyle("statut", fontSize=7,
-                      fontName="Helvetica-Bold", textColor=statut_color)),
-        ])
+    return e
 
-    # Ligne des totaux
-    rows.append([
-        Paragraph("", S["body"]),
-        Paragraph("TOTAUX", S["bold"]),
-        Paragraph(_fcfa(total_brut),   S["bold"]),
-        Paragraph(_fcfa(total_cnss),   S["bold"]),
-        Paragraph(_fcfa(total_cnamgs), S["bold"]),
-        Paragraph(_fcfa(total_tcs),    S["bold"]),
-        Paragraph(_fcfa(total_irpp),   S["bold"]),
-        Paragraph(_fcfa(total_net), ParagraphStyle("tot_net", fontSize=9,
-                  fontName="Helvetica-Bold", textColor=C_GREEN)),
-        Paragraph("", S["body"]),
-    ])
 
-    col_widths = [18*mm, 40*mm, 25*mm, 18*mm, 18*mm, 14*mm, 18*mm, 25*mm, 14*mm]
-    t = Table(rows, colWidths=col_widths, repeatRows=1)
+def _tr_header(cells, widths):
+    row = [Paragraph(c, _s("white")) for c in cells]
+    t = Table([row], colWidths=widths)
     t.setStyle(TableStyle([
-        # En-tête
-        ("BACKGROUND",    (0,0),  (-1,0),  C_DARK),
-        ("TEXTCOLOR",     (0,0),  (-1,0),  C_WHITE),
-        ("FONTNAME",      (0,0),  (-1,0),  "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0),  (-1,0),  7),
-        ("ALIGN",         (2,0),  (-1,0),  "RIGHT"),
-        # Corps
-        ("ROWBACKGROUNDS",(0,1),  (-1,-2), [C_WHITE, C_LGRAY]),
-        ("FONTSIZE",      (0,1),  (-1,-1), 7),
-        ("ALIGN",         (2,1),  (-1,-1), "RIGHT"),
-        ("PADDING",       (0,0),  (-1,-1), 2*mm),
-        ("LINEBELOW",     (0,0),  (-1,-1), 0.2, C_BORDER),
-        # Ligne totaux
-        ("BACKGROUND",    (0,-1), (-1,-1), C_DARK),
-        ("TEXTCOLOR",     (0,-1), (-1,-1), C_WHITE),
-        ("FONTNAME",      (0,-1), (-1,-1), "Helvetica-Bold"),
+        ("BACKGROUND",(0,0),(-1,-1), C_DARK),
+        ("PADDING",   (0,0),(-1,-1), 1.8*mm),
+        ("ALIGN",     (2,0),(-1,-1), "RIGHT"),
+        ("FONTSIZE",  (0,0),(-1,-1), 6.5),
     ]))
-    elements.append(t)
-    return elements
+    return t
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# SECTION 4 — RÉCAPITULATIF CHARGES
-# ══════════════════════════════════════════════════════════════════════════════
+def _tr_total(cells, widths):
+    row = [Paragraph(str(c), _s("bold", textColor=white)) for c in cells]
+    t = Table([row], colWidths=widths)
+    t.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), HexColor("#374151")),
+        ("PADDING",   (0,0),(-1,-1), 1.8*mm),
+        ("ALIGN",     (2,0),(-1,-1), "RIGHT"),
+        ("FONTSIZE",  (0,0),(-1,-1), 7),
+    ]))
+    return t
 
-def _section_recap_charges(masse, periode, tenant, S):
+
+def _table(rows, widths):
+    """Transforme une liste de Table-rows en un vrai Table."""
+    # Les rows sont déjà des Table (header/total) ou des listes de Paragraph
+    # On doit extraire les données pour en faire un seul Table
+    # Stratégie : wrapper dans un Table de tables (approche compatible ReportLab)
+    from reportlab.platypus import KeepTogether
     elements = []
-    elements.append(Paragraph("3. Récapitulatif des charges à verser", S["h2"]))
-    elements.append(HRFlowable(width="100%", thickness=1, color=C_DARK))
-    elements.append(Spacer(1, 4*mm))
+    for row in rows:
+        if isinstance(row, Table):
+            elements.append(row)
+        else:
+            t = Table([row], colWidths=widths)
+            t.setStyle(TableStyle([
+                ("ROWBACKGROUNDS",(0,0),(-1,-1),[white, C_LGRAY]),
+                ("PADDING",       (0,0),(-1,-1), 1.5*mm),
+                ("ALIGN",         (2,0),(-1,-1), "RIGHT"),
+                ("FONTSIZE",      (0,0),(-1,-1), 7),
+                ("LINEBELOW",     (0,0),(-1,-1), 0.2, C_BORDER),
+            ]))
+            elements.append(t)
+    return KeepTogether(elements) if len(elements) <= 30 else elements[0]
 
-    cnss_sal  = masse.get("total_cnss_sal",    0)
-    cnss_pat  = masse.get("total_cnss_pat",    0)
-    cnamgs_sal= masse.get("total_cnamgs_sal",  0)
-    cnamgs_pat= masse.get("total_cnamgs_pat",  0)
-    tcs       = masse.get("total_tcs",         0)
-    irpp      = masse.get("total_irpp",        0)
-    fnh       = masse.get("total_fnh",         0)
-    cfp       = masse.get("total_cfp",         0)
 
-    total_cnss   = cnss_sal + cnss_pat
-    total_cnamgs = cnamgs_sal + cnamgs_pat
+# ═══════════════════════════════════════════════════════════════════════════════
+# RÉCAPITULATIF CHARGES
+# ═══════════════════════════════════════════════════════════════════════════════
 
-    # Tableau des versements
-    recap_data = [
-        [Paragraph("Organisme", S["bold"]),
-         Paragraph("Part salarié", S["bold"]),
-         Paragraph("Part patronale", S["bold"]),
-         Paragraph("TOTAL À VERSER", S["bold"]),
-         Paragraph("Date limite", S["bold"])],
-        # CNSS
-        [Paragraph("CNSS", S["body"]),
-         Paragraph(_fcfa(cnss_sal),  S["body"]),
-         Paragraph(_fcfa(cnss_pat),  S["body"]),
-         Paragraph(_fcfa(total_cnss), ParagraphStyle("tot",fontSize=9,
-                   fontName="Helvetica-Bold", textColor=C_RED)),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # CNAMGS
-        [Paragraph("CNAMGS", S["body"]),
-         Paragraph(_fcfa(cnamgs_sal),   S["body"]),
-         Paragraph(_fcfa(cnamgs_pat),   S["body"]),
-         Paragraph(_fcfa(total_cnamgs), ParagraphStyle("tot2",fontSize=9,
-                   fontName="Helvetica-Bold", textColor=C_RED)),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # TCS
-        [Paragraph("TCS", S["body"]),
-         Paragraph(_fcfa(tcs), S["body"]),
-         Paragraph("—", S["small"]),
-         Paragraph(_fcfa(tcs), ParagraphStyle("tot3",fontSize=9,
-                   fontName="Helvetica-Bold", textColor=C_ORANGE)),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # IRPP
-        [Paragraph("IRPP", S["body"]),
-         Paragraph(_fcfa(irpp), S["body"]),
-         Paragraph("—", S["small"]),
-         Paragraph(_fcfa(irpp), ParagraphStyle("tot4",fontSize=9,
-                   fontName="Helvetica-Bold", textColor=C_ORANGE)),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # FNH
-        [Paragraph("FNH", S["body"]),
-         Paragraph("—", S["small"]),
-         Paragraph(_fcfa(fnh), S["body"]),
-         Paragraph(_fcfa(fnh), S["body"]),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # CFP
-        [Paragraph("CFP", S["body"]),
-         Paragraph("—", S["small"]),
-         Paragraph(_fcfa(cfp), S["body"]),
-         Paragraph(_fcfa(cfp), S["body"]),
-         Paragraph("Fin du mois suivant", S["small"])],
-        # Total
-        [Paragraph("TOTAL GÉNÉRAL", S["bold"]),
-         Paragraph("", S["body"]),
-         Paragraph("", S["body"]),
-         Paragraph(_fcfa(total_cnss + total_cnamgs + tcs + irpp + fnh + cfp),
-                   ParagraphStyle("gtot", fontSize=11,
-                   fontName="Helvetica-Bold", textColor=C_RED)),
-         Paragraph("", S["body"])],
+def _section_recap(masse, total_jour, periode, tenant):
+    e = []
+    e.append(Paragraph("4. Récapitulatif des charges à verser", _s("h2")))
+    e.append(HRFlowable(width="100%", thickness=1, color=C_DARK))
+    e.append(Spacer(1, 3*mm))
+
+    cs  = masse.get("total_cnss_sal",    0)
+    cp  = masse.get("total_cnss_pat",    0)
+    ms  = masse.get("total_cnamgs_sal",  0)
+    mp  = masse.get("total_cnamgs_pat",  0)
+    tcs = masse.get("total_tcs",         0)
+    ir  = masse.get("total_irpp",        0)
+    fnh = masse.get("total_fnh",         0)
+    cfp = masse.get("total_cfp",         0)
+
+    data = [
+        [Paragraph(h, _s("white")) for h in
+         ["Organisme","Part salarié","Part patronal","Total à verser","Périodicité"]],
+        [Paragraph("CNSS",   _s("body")), Paragraph(_fcfa(cs), _s("body")),
+         Paragraph(_fcfa(cp), _s("body")),
+         Paragraph(_fcfa(cs+cp), _s("red")), Paragraph("Trimestriel", _s("small"))],
+        [Paragraph("CNAMGS", _s("body")), Paragraph(_fcfa(ms), _s("body")),
+         Paragraph(_fcfa(mp), _s("body")),
+         Paragraph(_fcfa(ms+mp), _s("red")), Paragraph("Trimestriel", _s("small"))],
+        [Paragraph("TCS",    _s("body")), Paragraph(_fcfa(tcs),_s("body")),
+         Paragraph("—", _s("small")),
+         Paragraph(_fcfa(tcs), _s("bold", textColor=C_ORANGE)), Paragraph("Mensuel", _s("small"))],
+        [Paragraph("IRPP",   _s("body")), Paragraph(_fcfa(ir), _s("body")),
+         Paragraph("—", _s("small")),
+         Paragraph(_fcfa(ir),  _s("bold", textColor=C_ORANGE)), Paragraph("Mensuel", _s("small"))],
+        [Paragraph("FNH",    _s("body")), Paragraph("—", _s("small")),
+         Paragraph(_fcfa(fnh),_s("body")),
+         Paragraph(_fcfa(fnh), _s("body")), Paragraph("Mensuel", _s("small"))],
+        [Paragraph("CFP",    _s("body")), Paragraph("—", _s("small")),
+         Paragraph(_fcfa(cfp),_s("body")),
+         Paragraph(_fcfa(cfp), _s("body")), Paragraph("Mensuel", _s("small"))],
+        [Paragraph("Paie journaliers", _s("bold", textColor=C_PURPLE)),
+         Paragraph("—",_s("small")), Paragraph("—",_s("small")),
+         Paragraph(_fcfa(total_jour), _s("bold", textColor=C_PURPLE)),
+         Paragraph("—", _s("small"))],
+        [Paragraph("TOTAL GÉNÉRAL", _s("bold")),
+         Paragraph("",_s("body")), Paragraph("",_s("body")),
+         Paragraph(_fcfa(cs+cp+ms+mp+tcs+ir+fnh+cfp+total_jour),
+                   _s("bold", fontSize=11, textColor=C_RED)),
+         Paragraph("",_s("body"))],
     ]
 
-    rt = Table(recap_data, colWidths=[30*mm, 35*mm, 35*mm, 45*mm, 35*mm])
+    rt = Table(data, colWidths=[32*mm, 32*mm, 32*mm, 42*mm, 32*mm])
     rt.setStyle(TableStyle([
-        ("BACKGROUND",    (0,0),  (-1,0),  C_DARK),
-        ("TEXTCOLOR",     (0,0),  (-1,0),  C_WHITE),
-        ("FONTNAME",      (0,0),  (-1,0),  "Helvetica-Bold"),
-        ("FONTSIZE",      (0,0),  (-1,0),  8),
-        ("ROWBACKGROUNDS",(0,1),  (-1,-2), [C_WHITE, C_LGRAY]),
-        ("FONTSIZE",      (0,1),  (-1,-1), 8),
-        ("ALIGN",         (1,0),  (-1,-1), "RIGHT"),
-        ("PADDING",       (0,0),  (-1,-1), 2.5*mm),
-        ("LINEBELOW",     (0,0),  (-1,-1), 0.3, C_BORDER),
-        ("BACKGROUND",    (0,-1), (-1,-1), HexColor("#fef2f2")),
-        ("FONTNAME",      (0,-1), (-1,-1), "Helvetica-Bold"),
-        ("LINEABOVE",     (0,-1), (-1,-1), 1.5, C_RED),
+        ("BACKGROUND",    (0,0), (-1,0),  C_DARK),
+        ("ROWBACKGROUNDS",(0,1), (-1,-2), [white, C_LGRAY]),
+        ("ALIGN",         (1,0), (-1,-1), "RIGHT"),
+        ("PADDING",       (0,0), (-1,-1), 2*mm),
+        ("FONTSIZE",      (0,0), (-1,-1), 7.5),
+        ("LINEBELOW",     (0,0), (-1,-1), 0.2, C_BORDER),
+        ("BACKGROUND",    (0,-1),(-1,-1), HexColor("#fef2f2")),
+        ("LINEABOVE",     (0,-1),(-1,-1), 1.5, C_RED),
     ]))
-    elements.append(rt)
-    elements.append(Spacer(1, 6*mm))
+    e.append(rt)
+    e.append(Spacer(1, 5*mm))
 
-    # Encadré récapitulatif final
-    elements.append(Paragraph("Rappel des obligations légales (Gabon)", S["h3"]))
-    obligations = [
-        "CNSS : cotisations salariales (5%) + patronales (18%) — trimestriel",
-        "CNAMGS : cotisations salariales (1,5%) + patronales (6%) — trimestriel",
-        "TCS : Taxe sur les Contrats de Salaires — mensuel",
-        "IRPP : Impôt sur le Revenu des Personnes Physiques — mensuel",
-        "FNH : Fonds National de l'Habitat (1%) — mensuel",
-        "CFP : Contribution à la Formation Professionnelle (2%) — mensuel",
-    ]
-    for o in obligations:
-        elements.append(Paragraph(f"• {o}", S["small"]))
+    # Note légale
+    e.append(Paragraph("Obligations légales — Gabon", _s("h3")))
+    for txt in [
+        "CNSS/CNAMGS : déclaration et versement dans les 30 jours suivant la fin du trimestre.",
+        "TCS, IRPP, FNH, CFP : versement mensuel au plus tard le dernier jour du mois suivant.",
+        "Journaliers : pas de cotisations CNSS/CNAMGS sur les rémunérations journalières (sauf contrat spécifique).",
+    ]:
+        e.append(Paragraph(f"• {txt}", _s("small")))
 
-    return elements
+    return e
