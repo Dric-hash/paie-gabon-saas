@@ -713,6 +713,10 @@ def admin_dashboard():
     # ── Nouvelles inscriptions ce mois ───────────────────────────────────────
     nouveaux_ce_mois = [t for t in tenants if t.date_inscription and t.date_inscription >= debut_mois_c]
 
+    # ── Dernières actions audit (tous tenants) ───────────────────────────────
+    from audit import get_audit_logs_admin
+    derniers_logs = get_audit_logs_admin(limit=20)
+
     return render_template("admin/dashboard.html",
         tenants=tenants, nb_tenants=nb_tenants,
         nb_actifs=nb_actifs, nb_essai=nb_essai, nb_suspendus=nb_suspendus,
@@ -728,6 +732,7 @@ def admin_dashboard():
         score_par_tenant=score_par_tenant, top_tenants=top_tenants,
         nouveaux_ce_mois=nouveaux_ce_mois,
         bulletins_par_tenant=bul_par_tenant,
+        derniers_logs=derniers_logs,
         now=now)
 
 @app.route("/admin/tenants")

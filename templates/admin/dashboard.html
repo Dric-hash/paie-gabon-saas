@@ -328,6 +328,196 @@
     {% endif %}
   </div>
 
+  <!-- ══ SANTÉ DES CLIENTS (Customer Health) ══ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1rem">
+
+    <!-- Clients à risque -->
+    <div class="card" style="overflow:hidden">
+      <div style="padding:.875rem 1rem;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:.875rem;font-weight:900;color:white;margin:0">⚠️ Clients à surveiller</h2>
+        <span style="font-size:.7rem;color:#64748b">Score activité &lt; 30</span>
+      </div>
+      <div style="overflow-y:auto;max-height:260px">
+        {% set clients_risque = tenants | selectattr('statut', 'equalto', 'ACTIF') | list %}
+        {% set affiche = namespace(n=0) %}
+        {% for t in clients_risque %}
+        {% set sc = score_par_tenant.get(t.id, 0) %}
+        {% if sc < 30 %}
+        {% set affiche.n = affiche.n + 1 %}
+        <div style="padding:.625rem 1rem;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:.82rem;font-weight:700;color:white">{{ t.denomination }}</div>
+            <div style="font-size:.7rem;color:#64748b">{{ t.plan.nom if t.plan else '—' }} · {{ sal_par_tenant.get(t.id, 0) }} salariés</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <div style="text-align:right">
+              <div style="font-size:.875rem;font-weight:900;color:{% if sc < 10 %}#f87171{% elif sc < 20 %}#fb923c{% else %}#fbbf24{% endif %}">{{ sc }}/100</div>
+              <div style="width:60px;height:4px;background:#1e293b;border-radius:2px;margin-top:2px">
+                <div style="width:{{ sc }}%;height:100%;background:{% if sc < 10 %}#ef4444{% elif sc < 20 %}#f97316{% else %}#f59e0b{% endif %};border-radius:2px"></div>
+              </div>
+            </div>
+            <a href="/admin/tenants/{{ t.id }}" style="font-size:.7rem;color:#a78bfa;text-decoration:none;font-weight:700">Voir →</a>
+          </div>
+        </div>
+        {% endif %}
+        {% endfor %}
+        {% if affiche.n == 0 %}
+        <div style="padding:2rem;text-align:center;color:#475569;font-size:.8rem">✅ Tous les clients actifs ont un bon score d'activité</div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Pipeline expirations -->
+    <div class="card" style="overflow:hidden">
+      <div style="padding:.875rem 1rem;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center">
+        <h2 style="font-size:.875rem;font-weight:900;color:white;margin:0">📅 Pipeline expirations</h2>
+        <span style="font-size:.7rem;color:#64748b">30 prochains jours</span>
+      </div>
+      <div style="overflow-y:auto;max-height:260px">
+        {% set expiring = [] %}
+        {% for t in tenants %}
+        {% if t.date_expiration and t.statut in ('ACTIF','ESSAI') %}
+        {% set jours = (t.date_expiration - now).days %}
+        {% if jours <= 30 %}
+        <div style="padding:.625rem 1rem;border-bottom:1px solid #1e293b;display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <div style="font-size:.82rem;font-weight:700;color:white">{{ t.denomination }}</div>
+            <div style="font-size:.7rem;color:#64748b">{{ t.statut }} · {{ t.plan.nom if t.plan else '—' }}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:.75rem">
+            <span style="font-size:.78rem;font-weight:700;padding:.2rem .5rem;border-radius:.375rem;
+              background:{% if jours <= 3 %}#450a0a{% elif jours <= 7 %}#431407{% else %}#1c1a05{% endif %};
+              color:{% if jours <= 3 %}#fca5a5{% elif jours <= 7 %}#fdba74{% else %}#fef08a{% endif %}">
+              {% if jours <= 0 %}Expiré{% else %}{{ jours }}j{% endif %}
+            </span>
+            <a href="/admin/tenants/{{ t.id }}" style="font-size:.7rem;color:#a78bfa;text-decoration:none;font-weight:700">→</a>
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
+        {% endfor %}
+        {% if not tenants | selectattr('date_expiration') | list %}
+        <div style="padding:2rem;text-align:center;color:#475569;font-size:.8rem">Aucune expiration dans les 30 prochains jours</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ MÉTRIQUES API + PAIEMENTS ══ -->
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-top:1rem">
+
+    <!-- Clients API actifs -->
+    <div class="card" style="padding:1rem">
+      <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">🔑 Intégrations API</div>
+      {% set nb_tokens = tenants | selectattr('token_api') | list | length %}
+      <div style="font-size:2rem;font-weight:900;color:#a78bfa">{{ nb_tokens }}</div>
+      <div style="font-size:.75rem;color:#64748b;margin-top:.25rem">clients avec token API</div>
+      <div style="margin-top:.875rem;font-size:.75rem;color:#64748b">
+        {% set pct_api = (nb_tokens / nb_tenants * 100)|int if nb_tenants else 0 %}
+        <div style="display:flex;justify-content:space-between;margin-bottom:.25rem">
+          <span>Taux d'adoption API</span><span style="color:white;font-weight:700">{{ pct_api }}%</span>
+        </div>
+        <div style="height:4px;background:#1e293b;border-radius:2px">
+          <div style="width:{{ pct_api }}%;height:100%;background:#7c3aed;border-radius:2px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Paiements récents -->
+    <div class="card" style="padding:1rem">
+      <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">💳 Paiements abonnements</div>
+      {% set paiements_succes = [] %}
+      {% set total_encaisse = namespace(v=0) %}
+      <div style="font-size:2rem;font-weight:900;color:#34d399">
+        {{ (mrr / 1000)|round(1) }}k
+      </div>
+      <div style="font-size:.75rem;color:#64748b;margin-top:.25rem">FCFA MRR actuel</div>
+      <div style="margin-top:.875rem">
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.25rem">
+          <span style="color:#64748b">ARR projeté</span>
+          <span style="color:#34d399;font-weight:700">{{ (arr/1000)|int }}k FCFA</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.75rem">
+          <span style="color:#64748b">ARPU</span>
+          <span style="color:white;font-weight:700">{{ (arpu/1000)|round(1) }}k FCFA</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Langues utilisées -->
+    <div class="card" style="padding:1rem">
+      <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">🌐 Langues d'interface</div>
+      {% set nb_fr = tenants | selectattr('langue', 'equalto', 'fr') | list | length %}
+      {% set nb_en = tenants | selectattr('langue', 'equalto', 'en') | list | length %}
+      {% set nb_ar = tenants | selectattr('langue', 'equalto', 'ar') | list | length %}
+      {% set nb_nd = nb_tenants - nb_fr - nb_en - nb_ar %}
+      {% for label, nb, color in [('🇫🇷 Français', nb_fr + nb_nd, '#3b82f6'), ('🇬🇧 English', nb_en, '#10b981'), ('🇸🇦 عربي', nb_ar, '#f59e0b')] %}
+      <div style="margin-bottom:.625rem">
+        <div style="display:flex;justify-content:space-between;font-size:.75rem;margin-bottom:.2rem">
+          <span style="color:#e2e8f0">{{ label }}</span>
+          <span style="color:white;font-weight:700">{{ nb }}</span>
+        </div>
+        <div style="height:4px;background:#1e293b;border-radius:2px">
+          <div style="width:{{ (nb / nb_tenants * 100)|int if nb_tenants else 0 }}%;height:100%;background:{{ color }};border-radius:2px"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ══ JOURNAL D'AUDIT SUPER ADMIN (dernières actions) ══ -->
+  <div class="card" style="margin-top:1rem;overflow:hidden">
+    <div style="padding:.875rem 1rem;border-bottom:1px solid #1e293b;display:flex;justify-content:space-between;align-items:center">
+      <h2 style="font-size:.875rem;font-weight:900;color:white;margin:0">🔍 Dernières actions (audit global)</h2>
+      <span style="font-size:.7rem;color:#64748b">Toutes entreprises confondues</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+        <thead>
+          <tr style="background:#0f172a;color:#64748b;font-size:.68rem;text-transform:uppercase;letter-spacing:.04em">
+            <th style="padding:.5rem 1rem;text-align:left">Date</th>
+            <th style="padding:.5rem .75rem;text-align:left">Entreprise</th>
+            <th style="padding:.5rem .75rem;text-align:left">Utilisateur</th>
+            <th style="padding:.5rem .75rem;text-align:center">Action</th>
+            <th style="padding:.5rem .75rem;text-align:left">Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for log in derniers_logs %}
+          {% set action_colors = {'CREATE':'#34d399','UPDATE':'#60a5fa','DELETE':'#f87171',
+            'VALIDATE':'#34d399','CANCEL':'#fbbf24','PAY':'#60a5fa',
+            'LOGIN':'#94a3b8','EXPORT':'#a78bfa','IMPORT':'#a78bfa'} %}
+          <tr style="border-bottom:1px solid #1e293b">
+            <td style="padding:.5rem 1rem;font-family:monospace;font-size:.72rem;color:#64748b;white-space:nowrap">
+              {{ log.date_action.strftime('%d/%m %H:%M') if log.date_action else '—' }}
+            </td>
+            <td style="padding:.5rem .75rem;color:#e2e8f0;font-size:.78rem">
+              {% if log.tenant %}
+              <a href="/admin/tenants/{{ log.tenant.id }}" style="color:#a78bfa;text-decoration:none">{{ log.tenant.sigle or log.tenant.denomination[:15] }}</a>
+              {% else %}—{% endif %}
+            </td>
+            <td style="padding:.5rem .75rem;color:#94a3b8;font-size:.75rem">
+              {{ log.user.nom_complet if log.user else 'Système' }}
+            </td>
+            <td style="padding:.5rem .75rem;text-align:center">
+              <span style="font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;
+                background:{{ action_colors.get(log.action,'#475569') }}22;
+                color:{{ action_colors.get(log.action,'#94a3b8') }}">
+                {{ log.action }}
+              </span>
+            </td>
+            <td style="padding:.5rem .75rem;color:#94a3b8;font-size:.75rem;max-width:250px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {{ log.description or '—' }}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" style="text-align:center;padding:2rem;color:#475569">Aucune action enregistrée</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
 </main>
 
 <script>
