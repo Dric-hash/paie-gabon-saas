@@ -73,9 +73,9 @@
     <div>
       <div class="partie-titre">Employé</div>
       <div class="row"><span class="k">Nom</span><span class="v">{{ bulletin.salarie.nom }} {{ bulletin.salarie.prenom }}</span></div>
-      <div class="row"><span class="k">Matricule</span><span class="v" style="font-family:monospace">{{ bulletin.salarie.matricule }}</span></div>
-      <div class="row"><span class="k">Poste</span><span class="v">{{ bulletin.salarie.emploi or '—' }}</span></div>
-      {% if bulletin.salarie.categorie %}<div class="row"><span class="k">Catégorie</span><span class="v">{{ bulletin.salarie.categorie.code }}</span></div>{% endif %}
+      <div class="row"><span class="k" data-i18n="sal.matricule">Matricule</span><span class="v" style="font-family:monospace">{{ bulletin.salarie.matricule }}</span></div>
+      <div class="row"><span class="k" data-i18n="sal.position">Poste</span><span class="v">{{ bulletin.salarie.emploi or '—' }}</span></div>
+      {% if bulletin.salarie.categorie %}<div class="row"><span class="k" data-i18n="sal.category">Catégorie</span><span class="v">{{ bulletin.salarie.categorie.code }}</span></div>{% endif %}
       <div class="row"><span class="k">Jours trav.</span><span class="v">{{ bulletin.nb_jours_travailles or 26 }} j</span></div>
     </div>
   </div>
@@ -139,7 +139,7 @@
   <!-- Cotisations -->
   <div class="section-label">Cotisations</div>
   <table>
-    <thead><tr><th>Désignation</th><th>Assiette</th><th style="text-align:center">Taux sal.</th><th>Salarié</th><th>Patronal</th></tr></thead>
+    <thead><tr><th>Désignation</th><th>Assiette</th><th style="text-align:center">Taux sal.</th><th data-i18n="bul.employee">Salarié</th><th>Patronal</th></tr></thead>
     <tbody>
       <tr><td>CNSS</td><td>{{ [bulletin.salaire_brut, 1500000]|min|int|fcfa }}</td><td style="text-align:center">5%</td><td>{{ bulletin.cnss_salarie|int|fcfa }}</td><td>{{ bulletin.cnss_patronale|int|fcfa }}</td></tr>
       <tr><td>CNAMGS</td><td>{{ [bulletin.salaire_brut, 2500000]|min|int|fcfa }}</td><td style="text-align:center">2%</td><td>{{ bulletin.cnamgs_salarie|int|fcfa }}</td><td>{{ bulletin.cnamgs_patronale|int|fcfa }}</td></tr>
@@ -156,7 +156,7 @@
   <!-- Net -->
   <div class="net">
     <div>
-      <div class="net-lbl">Net à payer</div>
+      <div class="net-lbl" data-i18n="bul.net">Net à payer</div>
       {% if bulletin.acompte and bulletin.acompte > 0 %}
       <div style="font-size:8px;color:#555;margin-top:2px">Salaire net {{ bulletin.salaire_net|int|fcfa }} — Acompte {{ bulletin.acompte|int|fcfa }}</div>
       {% endif %}

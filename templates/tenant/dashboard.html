@@ -18,13 +18,13 @@
   </div>
   <div class="flex items-center gap-3 text-sm flex-wrap">
     <a href="/dashboard" class="font-semibold hover:text-slate-200">Dashboard</a>
-    <a href="/salaries" class="hover:text-slate-200">Salariés</a>
+    <a href="/salaries" class="hover:text-slate-200" data-i18n="sal.title">Salariés</a>
     <a href="/bulletins" class="hover:text-slate-200">Bulletins</a>
     <a href="/periodes" class="hover:text-slate-200">Périodes</a>
     <a href="/pointage" class="hover:text-slate-200">Pointage</a>
-    <a href="/acomptes" class="hover:text-slate-200">Acomptes</a>
-    <a href="/conges" class="hover:text-slate-200">Congés</a>
-    <a href="/journaliers" class="hover:text-slate-200">Journaliers</a>
+    <a href="/acomptes" class="hover:text-slate-200" data-i18n="ac.title">Acomptes</a>
+    <a href="/conges" class="hover:text-slate-200" data-i18n="con.title">Congés</a>
+    <a href="/journaliers" class="hover:text-slate-200" data-i18n="jour.title">Journaliers</a>
     <a href="/parametres" class="hover:text-slate-200">⚙️</a>
     <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
     <button onclick="viderCache()" id="btn-cache"
@@ -173,13 +173,13 @@
     <div class="bg-gradient-to-br from-slate-700 to-slate-900 rounded-2xl p-4 text-white">
       <div class="text-2xl mb-1">👥</div>
       <div class="text-3xl font-black">{{ nb_total_employes }}</div>
-      <div class="text-xs opacity-80">Total employés</div>
+      <div class="text-xs opacity-80" data-i18n="dash.total_emp">Total employés</div>
       <div class="text-xs opacity-60 mt-1">{{ nb_actifs }} mensuel(s) · {{ nb_journaliers }} jour.</div>
     </div>
     <div class="bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-4 text-white">
       <div class="text-2xl mb-1">👷</div>
       <div class="text-3xl font-black">{{ nb_actifs }}</div>
-      <div class="text-xs opacity-80">Salariés actifs</div>
+      <div class="text-xs opacity-80" data-i18n="dash.active_emp">Salariés actifs</div>
       <div class="text-xs opacity-60 mt-1">{{ nb_inactifs }} inactif(s)</div>
     </div>
     <div class="bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-4 text-white">
@@ -209,8 +209,8 @@
       {% if periode %}
       <div class="text-xl font-black text-blue-700 mb-2">{{ periode.libelle_complet }}</div>
       <div class="space-y-1 text-sm text-gray-600">
-        <div class="flex justify-between"><span>Brut total</span><span class="font-bold">{{ masse.get('total_brut',0)|int|fcfa }}</span></div>
-        <div class="flex justify-between"><span>Net total</span><span class="font-bold text-emerald-600">{{ masse.get('total_net',0)|int|fcfa }}</span></div>
+        <div class="flex justify-between"><span data-i18n="dash.gross_total">Brut total</span><span class="font-bold">{{ masse.get('total_brut',0)|int|fcfa }}</span></div>
+        <div class="flex justify-between"><span data-i18n="dash.net_total">Net total</span><span class="font-bold text-emerald-600">{{ masse.get('total_net',0)|int|fcfa }}</span></div>
         <div class="flex justify-between"><span>Charges pat.</span><span class="font-bold text-red-500">{{ masse.get('total_charges_pat',0)|int|fcfa }}</span></div>
       </div>
       <a href="/bulletins?periode_id={{ periode.id }}" class="block mt-3 text-center bg-blue-600 text-white text-sm font-bold py-2 rounded-xl hover:bg-blue-700">Voir les bulletins →</a>
@@ -283,17 +283,17 @@
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1rem">
       <!-- Salaire brut -->
       <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
-        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Masse brute</div>
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem" data-i18n="dash.gross_payroll">Masse brute</div>
         <div style="font-size:1.25rem;font-weight:500;color:var(--color-text-primary)">{{ masse.get('total_brut',0)|int|fcfa }}</div>
       </div>
       <!-- Net à payer -->
       <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
-        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Net à payer</div>
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem" data-i18n="bul.net">Net à payer</div>
         <div style="font-size:1.25rem;font-weight:500;color:#059669">{{ masse.get('total_net',0)|int|fcfa }}</div>
       </div>
       <!-- Charges patronales -->
       <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
-        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Charges patronales</div>
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem" data-i18n="dash.charges">Charges patronales</div>
         <div style="font-size:1.25rem;font-weight:500;color:#dc2626">{{ masse.get('total_charges_pat',0)|int|fcfa }}</div>
       </div>
       <!-- Coût total employeur -->

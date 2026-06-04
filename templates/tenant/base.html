@@ -399,5 +399,10 @@ if (window.MutationObserver) {
   observer.observe(document.body, { childList: true, subtree: true });
 }
 </script>
+  <script src="/static/js/i18n.js"></script>
+  <script>
+    // Sauvegarder la langue dans localStorage pour persistance côté client
+    localStorage.setItem('pg_lang', '{{ lang }}');
+  </script>
 </body>
 </html>

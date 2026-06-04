@@ -64,14 +64,14 @@
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Date d'embauche</label>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="sal.hire_date">Date d'embauche</label>
             <input type="date" name="date_embauche"
               value="{{ journalier.date_embauche.strftime('%Y-%m-%d') if journalier and journalier.date_embauche else '' }}"
               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
           </div>
           {% if journalier %}
           <div>
-            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Statut</label>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="common.status">Statut</label>
             <select name="statut" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
               <option value="ACTIF" {{ 'selected' if journalier.statut=='ACTIF' }}>ACTIF</option>
               <option value="INACTIF" {{ 'selected' if journalier.statut=='INACTIF' }}>INACTIF</option>

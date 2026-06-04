@@ -110,7 +110,7 @@
       {% if contrat %}
       {{ info2("Type de contrat", contrat.type_contrat) }}
       <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f9fafb;font-size:.875rem">
-        <span style="color:#6b7280">Salaire de base</span>
+        <span style="color:#6b7280" data-i18n="sal.base_salary">Salaire de base</span>
         <span style="font-weight:900;color:#1a2332">{{ contrat.salaire_base|fcfa }}</span>
       </div>
       {% endif %}
@@ -225,11 +225,11 @@
       <table>
         <thead>
           <tr>
-            <th>Période</th>
-            <th style="text-align:right">Brut</th>
-            <th style="text-align:right">Net à payer</th>
-            <th style="text-align:center">Statut</th>
-            <th style="text-align:center">Actions</th>
+            <th data-i18n="bul.period">Période</th>
+            <th style="text-align:right" data-i18n="bul.gross">Brut</th>
+            <th style="text-align:right" data-i18n="bul.net">Net à payer</th>
+            <th style="text-align:center" data-i18n="common.status">Statut</th>
+            <th style="text-align:center" data-i18n="common.actions">Actions</th>
           </tr>
         </thead>
         <tbody>

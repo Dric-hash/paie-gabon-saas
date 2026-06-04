@@ -75,9 +75,9 @@
         <tr>
           <th>Utilisateur</th>
           <th style="text-align:center">Rôle</th>
-          <th style="text-align:center">Statut</th>
+          <th style="text-align:center" data-i18n="common.status">Statut</th>
           <th>Dernière connexion</th>
-          {% if current_user.is_tenant_admin %}<th style="text-align:center">Actions</th>{% endif %}
+          {% if current_user.is_tenant_admin %}<th style="text-align:center" data-i18n="common.actions">Actions</th>{% endif %}
         </tr>
       </thead>
       <tbody>

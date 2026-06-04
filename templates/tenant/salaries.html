@@ -16,11 +16,11 @@
   </div>
   <div class="flex items-center gap-3 text-sm">
     <a href="/dashboard" class="hover:text-slate-200">Dashboard</a>
-    <a href="/salaries" class="font-semibold hover:text-slate-200">Salariés</a>
+    <a href="/salaries" class="font-semibold hover:text-slate-200" data-i18n="sal.title">Salariés</a>
     <a href="/bulletins" class="hover:text-slate-200">Bulletins</a>
     <a href="/periodes" class="hover:text-slate-200">Périodes</a>
     <a href="/pointage" class="hover:text-slate-200">Pointage</a>
-    <a href="/journaliers" class="hover:text-slate-200">Journaliers</a>
+    <a href="/journaliers" class="hover:text-slate-200" data-i18n="jour.title">Journaliers</a>
     <a href="/parametres" class="hover:text-slate-200">⚙️</a>
     <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
   </div>
@@ -38,7 +38,7 @@
 
   <div class="flex items-center justify-between mb-5">
     <div>
-      <h1 class="text-2xl font-black text-gray-900">Salariés</h1>
+      <h1 class="text-2xl font-black text-gray-900" data-i18n="sal.title">Salariés</h1>
       <p class="text-gray-500 text-sm mt-0.5">{{ salaries|length }} salarié(s) trouvé(s)</p>
     </div>
     <div class="flex gap-2">
@@ -74,7 +74,7 @@
         class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
     </div>
     <div>
-      <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Statut</label>
+      <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="common.status">Statut</label>
       <select name="statut" class="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
         <option value="">Tous les statuts</option>
         <option value="ACTIF" {{ 'selected' if statut=='ACTIF' }}>Actif</option>
@@ -89,13 +89,13 @@
     <table class="w-full text-sm">
       <thead>
         <tr class="bg-gray-50 text-xs text-gray-500 uppercase">
-          <th class="px-4 py-3 text-left">Matricule</th>
+          <th class="px-4 py-3 text-left" data-i18n="sal.matricule">Matricule</th>
           <th class="px-4 py-3 text-left">Nom & Prénom</th>
           <th class="px-4 py-3 text-left">Emploi</th>
-          <th class="px-4 py-3 text-center">Catégorie</th>
+          <th class="px-4 py-3 text-center" data-i18n="sal.category">Catégorie</th>
           <th class="px-4 py-3 text-right">Salaire base</th>
-          <th class="px-4 py-3 text-center">Statut</th>
-          <th class="px-4 py-3 text-center">Actions</th>
+          <th class="px-4 py-3 text-center" data-i18n="common.status">Statut</th>
+          <th class="px-4 py-3 text-center" data-i18n="common.actions">Actions</th>
         </tr>
       </thead>
       <tbody>

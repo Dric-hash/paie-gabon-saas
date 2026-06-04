@@ -135,7 +135,7 @@
     <tbody>
       {% if bulletin.salaire_base and bulletin.salaire_base|float > 0 %}
       <tr>
-        <td>Salaire de base</td>
+        <td data-i18n="sal.base_salary">Salaire de base</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_salaire_base|int if bulletin.base_salaire_base else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_salaire_base or '' }}</td>
         <td class="tr gain">{{ bulletin.salaire_base|fcfa }}</td>
@@ -347,7 +347,7 @@
     <div>
       <div class="section-title">Cotisations Salariales</div>
       <table>
-        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th></tr></thead>
+        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr" data-i18n="common.amount">Montant</th></tr></thead>
         <tbody>
           <tr><td>CNSS</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">5%</td><td class="tr retenue">{{ bulletin.cnss_salarie|fcfa }}</td></tr>
           <tr><td>CNAMGS</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">2%</td><td class="tr retenue">{{ bulletin.cnamgs_salarie|fcfa }}</td></tr>
@@ -363,7 +363,7 @@
     <div>
       <div class="section-title">Cotisations Patronales (informatif)</div>
       <table>
-        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr">Montant</th></tr></thead>
+        <thead><tr><th>Rubrique</th><th class="tr">Base</th><th class="tc">Taux</th><th class="tr" data-i18n="common.amount">Montant</th></tr></thead>
         <tbody>
           <tr><td>CNSS</td><td class="tr">{{ bulletin.base_cnss|fcfa }}</td><td class="tc">18%</td><td class="tr">{{ bulletin.cnss_patronale|fcfa }}</td></tr>
           <tr><td>CNAMGS</td><td class="tr">{{ bulletin.base_cnamgs|fcfa }}</td><td class="tc">4,1%</td><td class="tr">{{ bulletin.cnamgs_patronale|fcfa }}</td></tr>

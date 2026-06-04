@@ -267,7 +267,7 @@
           </div>
           <div style="text-align:right">
             <div style="font-size:1rem;font-weight:900;color:#dc2626">{{ "%.1f"|format(r.taux_salarie*100) }}%</div>
-            <div style="font-size:.7rem;color:#9ca3af">Salarié</div>
+            <div style="font-size:.7rem;color:#9ca3af" data-i18n="bul.employee">Salarié</div>
             {% if r.plafond_mensuel %}<div style="font-size:.7rem;color:#9ca3af">Plafond : {{ r.plafond_mensuel|int|fcfa }}</div>{% endif %}
           </div>
         </div>
@@ -601,7 +601,7 @@
         {% set pct_sal = ((tenant.nb_salaries_actifs / tenant.plan.max_salaries * 100)|int) if tenant.plan.max_salaries else 0 %}
         <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem 1rem">
           <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.375rem">
-            <span style="color:#6b7280;font-weight:600">Salariés actifs</span>
+            <span style="color:#6b7280;font-weight:600" data-i18n="dash.active_emp">Salariés actifs</span>
             <strong>{{ tenant.nb_salaries_actifs }} / {% if tenant.plan.max_salaries %}{{ tenant.plan.max_salaries }}{% else %}∞{% endif %}</strong>
           </div>
           {% if tenant.plan.max_salaries %}
@@ -628,7 +628,7 @@
         </div>
         <!-- Statut + Expiration -->
         <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:.8rem;color:#6b7280;font-weight:600">Statut</span>
+          <span style="font-size:.8rem;color:#6b7280;font-weight:600" data-i18n="common.status">Statut</span>
           {% set sc = {'ACTIF':'background:#d1fae5;color:#065f46','ESSAI':'background:#fef3c7;color:#92400e','SUSPENDU':'background:#fee2e2;color:#991b1b','PAIEMENT_EN_ATTENTE':'background:#dbeafe;color:#1e40af'} %}
           <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;{{ sc.get(tenant.statut,'background:#f3f4f6;color:#6b7280') }}">
             {{ tenant.statut.replace('_',' ') }}

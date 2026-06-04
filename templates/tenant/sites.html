@@ -27,7 +27,7 @@
 <!-- KPIs -->
 <div class="grid grid-cols-3 gap-4 mb-5">
   <div class="card p-4">
-    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Sites</div>
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1" data-i18n="site.title">Sites</div>
     <div class="text-3xl font-black text-gray-900">{{ sites|length }}</div>
     <div class="text-xs text-gray-400 mt-1">{{ sites|selectattr('actif')|list|length }} actifs</div>
   </div>

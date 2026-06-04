@@ -4,7 +4,7 @@
 
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
-    <h1 class="text-2xl font-black text-gray-900">Bulletins de paie</h1>
+    <h1 class="text-2xl font-black text-gray-900" data-i18n="bul.title">Bulletins de paie</h1>
     {% if site_filtre %}<p class="text-gray-500 text-sm mt-1">📍 <strong>{{ site_filtre.nom }}</strong></p>{% endif %}
   </div>
   <a href="/bulletins/saisie" class="btn-primary">+ Nouveau bulletin</a>
@@ -14,7 +14,7 @@
 <div class="card p-4 mb-5">
   <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
     <div style="flex:2;min-width:180px">
-      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Période</label>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem" data-i18n="bul.period">Période</label>
       <select name="periode_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
         <option value="">— Choisir une période —</option>
         {% for p in periodes %}
@@ -38,7 +38,7 @@
     </div>
     {% endif %}
     <div style="min-width:140px">
-      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Statut</label>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem" data-i18n="common.status">Statut</label>
       <select name="statut" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
         <option value="">Tous</option>
         {% for s in ['BROUILLON','VALIDÉ','PAYÉ'] %}
@@ -109,7 +109,7 @@
       <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.8rem;font-weight:700;color:#374151">
         <input type="checkbox" id="cb-all" onchange="toggleAll(this.checked)"
           style="width:16px;height:16px;cursor:pointer;accent-color:#1a2332">
-        <span id="lbl-all">Tout sélectionner</span>
+        <span id="lbl-all" data-i18n="common.select_all">Tout sélectionner</span>
       </label>
       <span style="font-size:.75rem;color:#9ca3af" id="cpt-sel">0 sélectionné(s)</span>
     </div>
@@ -175,15 +175,15 @@
           <input type="checkbox" onchange="toggleAll(this.checked)"
             style="width:15px;height:15px;cursor:pointer;accent-color:#1a2332">
         </th>
-        <th>Salarié</th>
+        <th data-i18n="bul.employee">Salarié</th>
         {% if sites %}<th>Site</th>{% endif %}
-        <th style="text-align:right">Brut</th>
+        <th style="text-align:right" data-i18n="bul.gross">Brut</th>
         <th style="text-align:right">CNSS</th>
         <th style="text-align:right">TCS</th>
         <th style="text-align:right">IRPP</th>
-        <th style="text-align:right">Net à payer</th>
-        <th style="text-align:center">Statut</th>
-        <th style="text-align:center">Actions</th>
+        <th style="text-align:right" data-i18n="bul.net">Net à payer</th>
+        <th style="text-align:center" data-i18n="common.status">Statut</th>
+        <th style="text-align:center" data-i18n="common.actions">Actions</th>
       </tr>
     </thead>
     <tbody id="tbody-bulletins">

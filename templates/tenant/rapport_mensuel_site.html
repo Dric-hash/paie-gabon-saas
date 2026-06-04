@@ -26,7 +26,7 @@
 <div class="card p-4 mb-5">
   <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:flex-end">
     <div>
-      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Mois</label>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem" data-i18n="per.month">Mois</label>
       <select name="mois" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
         {% for m in range(1, 13) %}
         <option value="{{ m }}" {% if m == mois %}selected{% endif %}>{{ MOIS_NOMS[m] }}</option>
@@ -34,7 +34,7 @@
       </select>
     </div>
     <div>
-      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem">Année</label>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;margin-bottom:.3rem" data-i18n="per.year">Année</label>
       <select name="annee" style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
         {% for y in range(now.year - 2, now.year + 2) %}
         <option value="{{ y }}" {% if y == annee %}selected{% endif %}>{{ y }}</option>
@@ -132,7 +132,7 @@
     <thead>
       <tr style="background:#f9fafb;font-size:.65rem;color:#9ca3af;text-transform:uppercase">
         <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Travailleur</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700;width:90px">Type</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:90px" data-i18n="con.type">Type</th>
         <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Emploi</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Prés.</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">Abs.</th>
@@ -186,12 +186,12 @@
       <tr style="background:#fef3c7;font-size:.65rem;color:#92400e;text-transform:uppercase">
         <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Journalier</th>
         <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Profession</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700">Période</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700" data-i18n="bul.period">Période</th>
         <th style="padding:.5rem;text-align:center;font-weight:700">Jours</th>
         <th style="padding:.5rem;text-align:center;font-weight:700">Heures</th>
         <th style="padding:.5rem;text-align:right;font-weight:700">Taux/h</th>
-        <th style="padding:.5rem;text-align:right;font-weight:700">Montant</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700">Statut</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700" data-i18n="common.amount">Montant</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700" data-i18n="common.status">Statut</th>
       </tr>
     </thead>
     <tbody>
@@ -234,13 +234,13 @@
   <table style="width:100%;border-collapse:collapse">
     <thead>
       <tr style="background:#eff6ff;font-size:.65rem;color:#1e40af;text-transform:uppercase">
-        <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Salarié</th>
+        <th style="padding:.5rem .875rem;text-align:left;font-weight:700" data-i18n="bul.employee">Salarié</th>
         <th style="padding:.5rem .875rem;text-align:left;font-weight:700">Emploi</th>
-        <th style="padding:.5rem;text-align:right;font-weight:700">Brut</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700" data-i18n="bul.gross">Brut</th>
         <th style="padding:.5rem;text-align:right;font-weight:700">CNSS</th>
         <th style="padding:.5rem;text-align:right;font-weight:700">IRPP</th>
-        <th style="padding:.5rem;text-align:right;font-weight:700">Net à payer</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700">Statut</th>
+        <th style="padding:.5rem;text-align:right;font-weight:700" data-i18n="bul.net">Net à payer</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700" data-i18n="common.status">Statut</th>
       </tr>
     </thead>
     <tbody>
