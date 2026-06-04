@@ -1,9 +1,22 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ lang }}" {% if rtl %}dir="rtl"{% endif %}>
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>{% block title %}PaieGabon{% endblock %}</title>
+  {% if rtl %}
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;700;900&display=swap" rel="stylesheet"/>
+  <style>
+    body, * { font-family: 'Cairo', 'Arial', sans-serif !important; }
+    /* Inverser les marges et paddings directionnels */
+    .ml-auto { margin-right: auto !important; margin-left: 0 !important; }
+    .mr-auto { margin-left: auto !important; margin-right: 0 !important; }
+    /* Inverser les icônes directionnelles */
+    .rtl-flip { transform: scaleX(-1); }
+  </style>
+  {% endif %}
 
   <!-- ── PWA Méta-tags ─────────────────────────────────────────────────── -->
   <link rel="manifest" href="/manifest.json"/>
@@ -105,65 +118,89 @@
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
       {% set ep = request.endpoint %}
       <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
-        🏠 <span>Tableau de bord</span>
+        🏠 <span>{{ T.nav.dashboard }}</span>
       </a>
       <a href="/salaries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'salari' in ep else 'text-white/80 hover:bg-white/10' }}">
-        👥 <span>Salariés</span>
+        👥 <span>{{ T.nav.salaries }}</span>
       </a>
       <a href="/simulateur"
           class="{{ 'bg-white/10 text-white' if request.endpoint == 'simulateur_paie' else 'text-white/70 hover:text-white hover:bg-white/5' }} flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all">
-          <span>🧮</span> Simulateur
+          <span>🧮</span> {{ "Simulateur" if lang == "fr" else "Simulator" }}
         </a>
         <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
-        📄 <span>Saisie bulletin</span>
+        📄 <span>{{ "Saisie bulletin" if lang == "fr" else "Enter payslip" }}</span>
       </a>
       <a href="/bulletins" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletins' else 'text-white/80 hover:bg-white/10' }}">
-        📊 <span>Bulletins</span>
+        📊 <span>{{ T.nav.bulletins }}</span>
       </a>
       <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
-        📅 <span>Périodes</span>
+        📅 <span>{{ T.nav.periodes }}</span>
       </a>
       <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🏖️ <span>Congés</span>
+        🏖️ <span>{{ T.nav.conges }}</span>
       </a>
       <a href="/acomptes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'acompte' in ep else 'text-white/80 hover:bg-white/10' }}">
-        💵 <span>Acomptes</span>
+        💵 <span>{{ T.nav.acomptes }}</span>
       </a>
       <div class="border-t border-white/10 my-2"></div>
-      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">Terrain</p>
+      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">{{ "Terrain" if lang == "fr" else "Field" }}</p>
       <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">
-        📋 <span>Pointage</span>
+        📋 <span>{{ "Pointage" if lang == "fr" else "Attendance" }}</span>
       </a>
       <a href="/sites" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='sites' else 'text-white/80 hover:bg-white/10' }}">
-        🏗️ <span>Sites</span>
+        🏗️ <span>{{ T.nav.sites }}</span>
       </a>
       <a href="/rapports/mensuel-site" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all {{ 'bg-white text-slate-900' if ep=='rapport' else 'text-white/80 hover:bg-white/10' }}">
-        📊 <span>Rapports</span>
+        📊 <span>{{ T.nav.rapports }}</span>
       </a>
       <a href="/journaliers" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journalier' in ep else 'text-white/80 hover:bg-white/10' }}">
-        👷 <span>Journaliers</span>
+        👷 <span>{{ T.nav.journaliers }}</span>
       </a>
       <a href="/journaliers/paie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journaliers_paie' in ep else 'text-white/80 hover:bg-white/10' }}">
-        💵 <span>Paie journaliers</span>
+        💵 <span>{{ "Paie journaliers" if lang == "fr" else "Daily pay" }}</span>
       </a>
       <div class="border-t border-white/10 my-2"></div>
-      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">Déclarations</p>
+      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">{{ T.nav.declaration }}</p>
       <a href="/declaration-cnss"
         class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_cnss' else 'text-white/80 hover:bg-white/10' }}">
-        📋 <span>Décl. CNSS</span>
+        📋 <span>{{ "Décl. CNSS" if lang == "fr" else "CNSS Decl." }}</span>
       </a>
       <div class="border-t border-white/10 my-2"></div>
       {% if current_user.is_tenant_admin %}
       <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🔐 <span>Utilisateurs</span>
+        🔐 <span>{{ "Utilisateurs" if lang == "fr" else "Users" }}</span>
       </a>
       {% endif %}
       <a href="/paiement" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='paiement' else 'text-white/80 hover:bg-white/10' }}">
-        💳 <span>Abonnement</span>
+        💳 <span>{{ "Abonnement" if lang == "fr" else "Subscription" }}</span>
       </a>
       <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
-        ⚙️ <span>Paramètres</span>
+        ⚙️ <span>{{ T.nav.parametres }}</span>
       </a>
+
+      <!-- Sélecteur de langue -->
+      <div class="border-t border-white/10 my-2"></div>
+      <div style="display:flex;gap:.375rem;padding:.5rem 1rem">
+        <a href="/langue/fr"
+          style="flex:1;text-align:center;padding:.3rem .5rem;border-radius:.5rem;font-size:.72rem;font-weight:700;text-decoration:none;
+                 background:{{ 'rgba(255,255,255,0.95)' if lang=='fr' else 'rgba(255,255,255,0.1)' }};
+                 color:{{ '#1a2332' if lang=='fr' else 'rgba(255,255,255,0.7)' }}">
+          🇫🇷 FR
+        </a>
+        <a href="/langue/en"
+          style="flex:1;text-align:center;padding:.3rem .5rem;border-radius:.5rem;font-size:.72rem;font-weight:700;text-decoration:none;
+                 background:{{ 'rgba(255,255,255,0.95)' if lang=='en' else 'rgba(255,255,255,0.1)' }};
+                 color:{{ '#1a2332' if lang=='en' else 'rgba(255,255,255,0.7)' }}">
+          🇬🇧 EN
+        </a>
+        <a href="/langue/ar"
+          style="flex:1;text-align:center;padding:.3rem .5rem;border-radius:.5rem;font-size:.72rem;font-weight:700;text-decoration:none;
+                 background:{{ 'rgba(255,255,255,0.95)' if lang=='ar' else 'rgba(255,255,255,0.1)' }};
+                 color:{{ '#1a2332' if lang=='ar' else 'rgba(255,255,255,0.7)' }}">
+          🇸🇦 AR
+        </a>
+      </div>
+
       {% if current_user.is_super_admin %}
       <div class="border-t border-white/10 my-2"></div>
       <a href="/admin" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-purple-300 hover:bg-white/10 transition-all">

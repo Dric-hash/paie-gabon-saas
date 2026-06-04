@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="{{ lang }}">
 <head>
   <meta charset="UTF-8"/>
-  <title>Bulletin de paie — {{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}</title>
+  <title>{{ T.payslip.title }} — {{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; color: #000; background: #fff; }
@@ -92,27 +92,27 @@
 
   <div class="month-band">
     <span>Matricule : <strong>{{ bulletin.salarie.matricule }}</strong></span>
-    <span>Catégorie : <strong>{{ bulletin.salarie.categorie.code if bulletin.salarie.categorie else '—' }}</strong></span>
-    <span>Embauche : <strong>{{ bulletin.salarie.date_embauche|date_fr }}</strong></span>
+    <span>{{ T.payslip.category }} : <strong>{{ bulletin.salarie.categorie.code if bulletin.salarie.categorie else '—' }}</strong></span>
+    <span>{{ T.payslip.hire_date }} : <strong>{{ bulletin.salarie.date_embauche|date_fr }}</strong></span>
     <span>N° CNSS : <strong>{{ bulletin.salarie.numero_cnss or '—' }}</strong></span>
-    <span>Parts IRPP : <strong>{{ bulletin.salarie.nombre_parts or 1 }}</strong></span>
+    <span>{{ "Parts IRPP" if lang == "fr" else "Tax shares" }} : <strong>{{ bulletin.salarie.nombre_parts or 1 }}</strong></span>
   </div>
 
   <div class="parties">
     <div class="bloc">
-      <div class="bloc-title">Informations Salarié</div>
-      <div class="bloc-line"><span class="lbl">Nom & Prénom</span><span class="val">{{ bulletin.salarie.nom_complet }}</span></div>
-      <div class="bloc-line"><span class="lbl">Emploi / Poste</span><span class="val">{{ bulletin.salarie.emploi or '—' }}</span></div>
-      <div class="bloc-line"><span class="lbl">Date d'embauche</span><span class="val">{{ bulletin.salarie.date_embauche|date_fr }}</span></div>
-      <div class="bloc-line"><span class="lbl">Nationalité</span><span class="val">{{ bulletin.salarie.nationalite or '—' }}</span></div>
+      <div class="bloc-title">{{ T.payslip.employee }}</div>
+      <div class="bloc-line"><span class="lbl">{{ "Nom & Prénom" if lang == "fr" else "Full name" }}</span><span class="val">{{ bulletin.salarie.nom_complet }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ T.payslip.position }}</span><span class="val">{{ bulletin.salarie.emploi or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ T.payslip.hire_date }}</span><span class="val">{{ bulletin.salarie.date_embauche|date_fr }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ "Nationalité" if lang == "fr" else "Nationality" }}</span><span class="val">{{ bulletin.salarie.nationalite or '—' }}</span></div>
     </div>
     <div class="bloc">
-      <div class="bloc-title">Situation Familiale & Cotisations</div>
-      <div class="bloc-line"><span class="lbl">Situation matrimoniale</span><span class="val">{{ bulletin.salarie.situation_matrimoniale or '—' }}</span></div>
-      <div class="bloc-line"><span class="lbl">Nombre d'enfants</span><span class="val">{{ bulletin.salarie.nb_enfants or 0 }} (dont {{ bulletin.salarie.nb_enfants_moins_16ans or 0 }} &lt; 16 ans)</span></div>
-      <div class="bloc-line"><span class="lbl">Nombre de parts</span><span class="val">{{ bulletin.salarie.nombre_parts or 1 }}</span></div>
-      <div class="bloc-line"><span class="lbl">N° CNAMGS</span><span class="val">{{ bulletin.salarie.numero_cnamgs or '—' }}</span></div>
-      <div class="bloc-line"><span class="lbl">Assujetti CNAMGS</span><span class="val">{{ 'OUI' if bulletin.salarie.assujetti_cnamgs else 'NON' }}</span></div>
+      <div class="bloc-title">{{ "Situation Familiale & Cotisations" if lang == "fr" else "Family Status & Contributions" }}</div>
+      <div class="bloc-line"><span class="lbl">{{ "Situation matrimoniale" if lang == "fr" else "Marital status" }}</span><span class="val">{{ bulletin.salarie.situation_matrimoniale or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ "Nombre d'enfants" if lang == "fr" else "Children" }}</span><span class="val">{{ bulletin.salarie.nb_enfants or 0 }} (dont {{ bulletin.salarie.nb_enfants_moins_16ans or 0 }} &lt; 16 ans)</span></div>
+      <div class="bloc-line"><span class="lbl">{{ T.payslip.advance if lang == "fr" else "Tax shares" }}</span><span class="val">{{ bulletin.salarie.nombre_parts or 1 }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ T.salaries.cnamgs_number }}</span><span class="val">{{ bulletin.salarie.numero_cnamgs or '—' }}</span></div>
+      <div class="bloc-line"><span class="lbl">{{ "Assujetti CNAMGS" if lang == "fr" else "CNAMGS liable" }}</span><span class="val">{{ ('OUI' if lang == 'fr' else 'YES') if bulletin.salarie.assujetti_cnamgs else ('NON' if lang == 'fr' else 'NO') }}</span></div>
     </div>
   </div>
 
@@ -334,7 +334,7 @@
         <td></td>
       </tr>{% endif %}
       <tr class="row-subtotal">
-        <td class="bold">SALAIRE BRUT</td>
+        <td class="bold">{{ T.payslip.gross_salary }}</td>
         <td></td><td></td>
         <td class="tr bold">{{ bulletin.salaire_brut|fcfa }}</td>
         <td></td>
@@ -387,27 +387,27 @@
       {% if bulletin.prime_panier and bulletin.prime_panier|float > 0 %}<tr><td>+ Prime de panier</td><td class="tr gain">{{ bulletin.prime_panier|fcfa }}</td></tr>{% endif %}
       {% if bulletin.indem_transport and bulletin.indem_transport|float > 0 %}<tr><td>+ Indemnité de transport (exonérée)</td><td class="tr gain">{{ bulletin.indem_transport|fcfa }}</td></tr>{% endif %}
       {% if bulletin.indem_representation and bulletin.indem_representation|float > 0 %}<tr><td>+ Indemnité de représentation</td><td class="tr gain">{{ bulletin.indem_representation|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.prime_salisure and bulletin.prime_salisure|float > 0 %}<tr><td>+ Prime de salisure</td><td class="tr gain">{{ bulletin.prime_salisure|fcfa }}</td></tr>{% endif %}
-      {% if bulletin.acompte and bulletin.acompte|float > 0 %}<tr><td>— Acompte versé</td><td class="tr retenue">{{ bulletin.acompte|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.prime_salisure and bulletin.prime_salisure|float > 0 %}<tr><td>+ {{ T.payslip.prime_salisure }}</td><td class="tr gain">{{ bulletin.prime_salisure|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.acompte and bulletin.acompte|float > 0 %}<tr><td>— {{ T.payslip.advance }}</td><td class="tr retenue">{{ bulletin.acompte|fcfa }}</td></tr>{% endif %}
     </tbody>
   </table>
 
   <div class="net-box">
-    <span class="net-label">💰 Net à Payer</span>
+    <span class="net-label">💰 {{ T.payslip.net_salary }}</span>
     <span class="net-amount">{{ bulletin.net_a_payer|fcfa }}</span>
   </div>
 
   <div class="signatures">
-    <div class="sig-box"><div class="sig-title">L'Employeur</div><div class="sig-space"></div><div class="sig-name">{{ tenant.denomination }}</div></div>
+    <div class="sig-box"><div class="sig-title">{{ T.payslip.signature }}</div><div class="sig-space"></div><div class="sig-name">{{ tenant.denomination }}</div></div>
     <div class="sig-box">
-      <div class="sig-title">Le Salarié <span style="font-weight:400;font-size:7.5px">(précéder la signature de "Lu et approuvé")</span></div>
+      <div class="sig-title">{{ T.payslip.employee_signature }} <span style="font-weight:400;font-size:7.5px">({{ T.payslip.received }})</span></div>
       <div class="sig-space"></div><div class="sig-name">{{ bulletin.salarie.nom_complet }}</div>
     </div>
   </div>
 
   <div class="footer">
-    <p>{{ tenant.denomination }} — Bulletin de paie {{ bulletin.periode.libelle_complet }} — Document confidentiel</p>
-    <p style="margin-top:2px">Conformément au Code du Travail Gabonais — Conservez ce document sans limitation de durée</p>
+    <p>{{ tenant.denomination }} — {{ T.payslip.title }} {{ bulletin.periode.libelle_complet }} — {{ "Document confidentiel" if lang == "fr" else "Confidential document" }}</p>
+    <p style="margin-top:2px">{{ "Conformément au Code du Travail Gabonais — Conservez ce document sans limitation de durée" if lang == "fr" else "In accordance with Gabonese Labor Code — Keep this document indefinitely" }}</p>
   </div>
 
 </div>

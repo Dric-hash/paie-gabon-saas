@@ -1,10 +1,10 @@
 {% extends "tenant/base.html" %}
-{% block title %}Bulletin {{ bulletin.salarie.nom_complet }}{% endblock %}
+{% block title %}{{ T.bulletins.title }} {{ bulletin.salarie.nom_complet }}{% endblock %}
 {% block content %}
 
 <div class="flex items-center gap-3 mb-6">
-  <a href="/bulletins" class="text-gray-400 hover:text-gray-700 text-sm">← Bulletins</a>
-  <h1 class="text-2xl font-black text-gray-900">Bulletin de paie</h1>
+  <a href="/bulletins" class="text-gray-400 hover:text-gray-700 text-sm">← {{ T.nav.bulletins }}</a>
+  <h1 class="text-2xl font-black text-gray-900">{{ T.payslip.title }}</h1>
   <span class="badge-{{ bulletin.statut|lower }}">{{ bulletin.statut }}</span>
 </div>
 
@@ -12,18 +12,18 @@
 <div class="card p-6 mb-6">
   <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem">
     <div>
-      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Salarié</div>
+      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">{{ T.payslip.employee }}</div>
       <div class="text-xl font-black">{{ bulletin.salarie.nom_complet }}</div>
       <div class="text-gray-500">{{ bulletin.salarie.emploi }}</div>
       <div class="font-mono text-xs text-gray-400 mt-1">{{ bulletin.salarie.matricule }}</div>
     </div>
     <div>
-      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Période</div>
+      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">{{ T.payslip.period }}</div>
       <div class="text-xl font-black">{{ bulletin.periode.libelle_complet }}</div>
-      <div class="text-gray-500">{{ bulletin.nb_jours_travailles or '—' }} jours travaillés</div>
+      <div class="text-gray-500">{{ bulletin.nb_jours_travailles or '—' }} {{ "jours travaillés" if lang == "fr" else "days worked" }}</div>
     </div>
     <div style="text-align:right">
-      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">Net à payer</div>
+      <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">{{ T.payslip.net_salary }}</div>
       <div class="text-3xl font-black" style="color:#1a2332">{{ bulletin.net_a_payer|fcfa }}</div>
     </div>
   </div>

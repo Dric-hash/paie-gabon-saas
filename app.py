@@ -17,6 +17,7 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from flask_mail import Mail, Message
 from flask_wtf.csrf import CSRFProtect
+from i18n import get_translations, detect_language, set_language, SUPPORTED_LANGUAGES, is_rtl
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -155,6 +156,19 @@ def gerer_session_inactivite():
 
 mail = Mail(app)
 csrf = CSRFProtect(app)
+
+# ── Internationalisation — injecte T et lang dans tous les templates ──────────
+@app.context_processor
+def inject_translations():
+    """
+    Injecte automatiquement dans tous les templates Jinja :
+      T    → objet de traduction (T.nav.dashboard, T.bulletins.validate, etc.)
+      lang → code langue actuel ("fr" ou "en")
+    """
+    lang = detect_language(request, current_user if current_user.is_authenticated else None)
+    T    = get_translations(lang)
+    rtl  = is_rtl(lang)
+    return {"T": T, "lang": lang, "rtl": rtl}
 # Accepter le token CSRF aussi via le header HTTP (pour les appels fetch/AJAX)
 app.config["WTF_CSRF_CHECK_DEFAULT"] = True
 app.config["WTF_CSRF_TIME_LIMIT"]    = 3600  # 1h
@@ -2887,8 +2901,28 @@ def parametres_societe():
     for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
         try: setattr(t,f,request.form.get(f,"").strip() or None)
         except: pass
-    db.session.commit(); flash("Informations mises à jour.","success")
+    # Langue de l'interface
+    langue = request.form.get("langue", "fr")
+    if langue in SUPPORTED_LANGUAGES:
+        t.langue = langue
+        set_language(langue)
+    db.session.commit()
+    flash("Informations mises à jour." if langue == "fr" else "Settings updated.", "success")
     return redirect(url_for("parametres"))
+
+
+@app.route("/langue/<lang>")
+def changer_langue(lang):
+    """Change la langue de l'interface — accessible depuis n'importe quelle page."""
+    set_language(lang)
+    # Sauvegarder sur le tenant si connecté
+    if current_user.is_authenticated and not current_user.is_super_admin:
+        t = get_tenant()
+        if t and lang in SUPPORTED_LANGUAGES:
+            t.langue = lang
+            db.session.commit()
+    # Rediriger vers la page précédente
+    return redirect(request.referrer or url_for("dashboard"))
 
 
 @app.route("/parametres/demande-changement-plan", methods=["POST"])
@@ -7133,6 +7167,7 @@ with app.app_context():
         "ALTER TABLE tenants ALTER COLUMN logo_url TYPE TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS langue VARCHAR(5) DEFAULT 'fr'",
         "ALTER TABLE tenants ALTER COLUMN slug TYPE VARCHAR(100)",
         "ALTER TABLE tenants ALTER COLUMN denomination TYPE VARCHAR(200)",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",

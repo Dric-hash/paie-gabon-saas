@@ -40,11 +40,68 @@
         {{ fi("Sigle / Abréviation", "sigle", tenant.sigle, "Ex: SGTG") }}
         {{ fi("Activité principale", "activite", tenant.activite, "Ex: Génie Civil") }}
         {{ fi("Secteur", "secteur", tenant.secteur, "Ex: BTP, Construction") }}
+
+        <!-- Sélecteur de langue -->
+        <div style="margin-top:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.5rem">
+            🌐 {{ T.parametres.language_pref }}
+          </label>
+          <div style="display:flex;gap:.5rem">
+            <label style="flex:1;cursor:pointer">
+              <input type="radio" name="langue" value="fr" {{ 'checked' if tenant.langue == 'fr' or not tenant.langue }} style="display:none" id="lang-fr">
+              <div onclick="selectLang('fr')"
+                id="lbl-fr"
+                style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
+                       border-color:{{ '#1a2332' if tenant.langue == 'fr' or not tenant.langue else '#e5e7eb' }};
+                       background:{{ '#1a2332' if tenant.langue == 'fr' or not tenant.langue else 'white' }};
+                       color:{{ 'white' if tenant.langue == 'fr' or not tenant.langue else '#374151' }}">
+                🇫🇷 Français
+              </div>
+            </label>
+            <label style="flex:1;cursor:pointer">
+              <input type="radio" name="langue" value="en" {{ 'checked' if tenant.langue == 'en' }} style="display:none" id="lang-en">
+              <div onclick="selectLang('en')"
+                id="lbl-en"
+                style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
+                       border-color:{{ '#1a2332' if tenant.langue == 'en' else '#e5e7eb' }};
+                       background:{{ '#1a2332' if tenant.langue == 'en' else 'white' }};
+                       color:{{ 'white' if tenant.langue == 'en' else '#374151' }}">
+                🇬🇧 English
+              </div>
+            </label>
+          </div>
+        </div>
+
+            <label style="flex:1;cursor:pointer">
+              <input type="radio" name="langue" value="ar" {{ 'checked' if tenant.langue == 'ar' }} style="display:none" id="lang-ar">
+              <div onclick="selectLang('ar')"
+                id="lbl-ar"
+                style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
+                       border-color:{{ '#1a2332' if tenant.langue == 'ar' else '#e5e7eb' }};
+                       background:{{ '#1a2332' if tenant.langue == 'ar' else 'white' }};
+                       color:{{ 'white' if tenant.langue == 'ar' else '#374151' }}">
+                🇸🇦 عربي
+              </div>
+            </label>
+
         <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
-          💾 Enregistrer les informations
+          💾 {{ T.parametres.save_changes }}
         </button>
       </form>
     </div>
+
+    <script>
+    function selectLang(lang) {
+      ['fr','en','ar'].forEach(l => {
+        document.getElementById('lang-' + l).checked = (l === lang);
+        const lbl = document.getElementById('lbl-' + l);
+        lbl.style.borderColor = (l === lang) ? '#1a2332' : '#e5e7eb';
+        lbl.style.background  = (l === lang) ? '#1a2332' : 'white';
+        lbl.style.color       = (l === lang) ? 'white'   : '#374151';
+      });
+    }
+    function updateLangUI() { selectLang(document.querySelector('input[name=langue]:checked')?.value || 'fr'); }
+    </script>
 
     <!-- Infos fiscales et localisation -->
     <div style="display:flex;flex-direction:column;gap:1rem">
