@@ -259,10 +259,109 @@
     </div>
   </div>
 
-  <!-- Graphique -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- RÉSUMÉ MASSE SALARIALE DU MOIS                       -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  {% if periode and masse %}
   <div class="card p-5 mb-5">
-    <h3 class="font-black text-gray-900 mb-4">Évolution masse salariale (6 mois)</h3>
-    <canvas id="chartEvolution" height="80"></canvas>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+      <h3 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0">
+        Résumé masse salariale — {{ periode.libelle_complet }}
+      </h3>
+      <div style="display:flex;gap:.5rem">
+        <span style="background:#d1fae5;color:#065f46;padding:.2rem .75rem;border-radius:9999px;font-size:.75rem;font-weight:700">
+          {{ nb_valides }} validé(s)
+        </span>
+        {% if nb_brouillon > 0 %}
+        <span style="background:#fef3c7;color:#92400e;padding:.2rem .75rem;border-radius:9999px;font-size:.75rem;font-weight:700">
+          {{ nb_brouillon }} brouillon(s)
+        </span>
+        {% endif %}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.75rem;margin-bottom:1rem">
+      <!-- Salaire brut -->
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Masse brute</div>
+        <div style="font-size:1.25rem;font-weight:500;color:var(--color-text-primary)">{{ masse.get('total_brut',0)|int|fcfa }}</div>
+      </div>
+      <!-- Net à payer -->
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Net à payer</div>
+        <div style="font-size:1.25rem;font-weight:500;color:#059669">{{ masse.get('total_net',0)|int|fcfa }}</div>
+      </div>
+      <!-- Charges patronales -->
+      <div style="background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.875rem">
+        <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.25rem">Charges patronales</div>
+        <div style="font-size:1.25rem;font-weight:500;color:#dc2626">{{ masse.get('total_charges_pat',0)|int|fcfa }}</div>
+      </div>
+      <!-- Coût total employeur -->
+      <div style="background:#1a2332;border-radius:var(--border-radius-md);padding:.875rem">
+        <div style="font-size:.7rem;color:#9ca3af;margin-bottom:.25rem">Coût total employeur</div>
+        <div style="font-size:1.25rem;font-weight:500;color:white">
+          {{ (masse.get('total_brut',0) + masse.get('total_charges_pat',0))|int|fcfa }}
+        </div>
+      </div>
+    </div>
+
+    <!-- Barre de décomposition visuelle -->
+    {% set total = masse.get('total_brut',0) + masse.get('total_charges_pat',0) %}
+    {% if total > 0 %}
+    {% set pct_net    = (masse.get('total_net',0)        / total * 100) | round(1) %}
+    {% set pct_ret    = ((masse.get('total_brut',0) - masse.get('total_net',0)) / total * 100) | round(1) %}
+    {% set pct_charges= (masse.get('total_charges_pat',0) / total * 100) | round(1) %}
+    <div style="margin-top:.25rem">
+      <div style="font-size:.7rem;color:var(--color-text-secondary);margin-bottom:.4rem">Décomposition du coût employeur</div>
+      <div style="display:flex;height:10px;border-radius:9999px;overflow:hidden;gap:2px">
+        <div style="width:{{ pct_net }}%;background:#059669;border-radius:9999px 0 0 9999px" title="Net {{ pct_net }}%"></div>
+        <div style="width:{{ pct_ret }}%;background:#f59e0b" title="Retenues salariales {{ pct_ret }}%"></div>
+        <div style="width:{{ pct_charges }}%;background:#dc2626;border-radius:0 9999px 9999px 0" title="Charges patronales {{ pct_charges }}%"></div>
+      </div>
+      <div style="display:flex;gap:1rem;margin-top:.4rem;font-size:.68rem;color:var(--color-text-secondary)">
+        <span><span style="display:inline-block;width:8px;height:8px;background:#059669;border-radius:50%;margin-right:3px"></span>Net {{ pct_net }}%</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#f59e0b;border-radius:50%;margin-right:3px"></span>Retenues sal. {{ pct_ret }}%</span>
+        <span><span style="display:inline-block;width:8px;height:8px;background:#dc2626;border-radius:50%;margin-right:3px"></span>Charges pat. {{ pct_charges }}%</span>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- ══════════════════════════════════════════════════════ -->
+  <!-- GRAPHIQUES                                            -->
+  <!-- ══════════════════════════════════════════════════════ -->
+  <div style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;margin-bottom:1.25rem">
+
+    <!-- Graphique évolution (courbe + barres) -->
+    <div class="card p-5">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <h3 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0">Évolution masse salariale (6 mois)</h3>
+        <div style="display:flex;gap:.5rem">
+          <button onclick="toggleChart('bar')" id="btn-bar"
+            style="padding:.2rem .6rem;border-radius:.375rem;font-size:.7rem;font-weight:700;border:1px solid #e5e7eb;cursor:pointer;background:#1a2332;color:white">
+            Barres
+          </button>
+          <button onclick="toggleChart('line')" id="btn-line"
+            style="padding:.2rem .6rem;border-radius:.375rem;font-size:.7rem;font-weight:700;border:1px solid #e5e7eb;cursor:pointer;background:white;color:#374151">
+            Courbe
+          </button>
+        </div>
+      </div>
+      <canvas id="chartEvolution" height="120"></canvas>
+    </div>
+
+    <!-- Camembert répartition par catégorie -->
+    <div class="card p-5">
+      <h3 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Répartition employés</h3>
+      {% if cats_stats %}
+      <canvas id="chartCategories" height="160"></canvas>
+      {% else %}
+      <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.8rem">
+        Aucune catégorie définie
+      </div>
+      {% endif %}
+    </div>
   </div>
 
   <!-- Top salariés + derniers bulletins -->
@@ -302,18 +401,108 @@
 
 <script>
 const evo = {{ evolution | tojson }};
-new Chart(document.getElementById('chartEvolution'), {
-  type: 'bar',
+const cats = {{ cats_stats | tojson if cats_stats else '[]' }};
+
+let chartType = 'bar';
+let chartEvo = null;
+
+function buildEvoChart(type) {
+  if (chartEvo) chartEvo.destroy();
+  chartEvo = new Chart(document.getElementById('chartEvolution'), {
+    type: type,
+    data: {
+      labels: evo.map(e => e.mois + ' ' + e.annee),
+      datasets: [
+        {
+          label: 'Brut',
+          data: evo.map(e => e.brut),
+          backgroundColor: type === 'bar' ? 'rgba(59,130,246,0.6)' : 'rgba(59,130,246,0.1)',
+          borderColor: '#3b82f6', borderWidth: 2,
+          fill: type === 'line', tension: 0.4,
+          pointBackgroundColor: '#3b82f6', pointRadius: type === 'line' ? 4 : 0,
+        },
+        {
+          label: 'Net',
+          data: evo.map(e => e.net),
+          backgroundColor: type === 'bar' ? 'rgba(16,185,129,0.6)' : 'rgba(16,185,129,0.1)',
+          borderColor: '#10b981', borderWidth: 2,
+          fill: type === 'line', tension: 0.4,
+          pointBackgroundColor: '#10b981', pointRadius: type === 'line' ? 4 : 0,
+        },
+        {
+          label: 'Charges pat.',
+          data: evo.map(e => e.charges),
+          backgroundColor: type === 'bar' ? 'rgba(239,68,68,0.5)' : 'rgba(239,68,68,0.1)',
+          borderColor: '#ef4444', borderWidth: 2,
+          fill: type === 'line', tension: 0.4,
+          pointBackgroundColor: '#ef4444', pointRadius: type === 'line' ? 4 : 0,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => ' ' + ctx.dataset.label + ' : ' + ctx.parsed.y.toLocaleString('fr') + ' FCFA'
+          }
+        }
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: {
+            font: { size: 10 },
+            callback: v => {
+              if (v >= 1000000) return (v/1000000).toFixed(1) + ' M';
+              if (v >= 1000)    return (v/1000).toFixed(0) + ' K';
+              return v;
+            }
+          }
+        },
+        x: { ticks: { font: { size: 10 } } }
+      }
+    }
+  });
+}
+
+function toggleChart(type) {
+  chartType = type;
+  document.getElementById('btn-bar').style.background  = type === 'bar'  ? '#1a2332' : 'white';
+  document.getElementById('btn-bar').style.color        = type === 'bar'  ? 'white'   : '#374151';
+  document.getElementById('btn-line').style.background = type === 'line' ? '#1a2332' : 'white';
+  document.getElementById('btn-line').style.color       = type === 'line' ? 'white'   : '#374151';
+  buildEvoChart(type);
+}
+
+buildEvoChart('bar');
+
+// Camembert catégories
+{% if cats_stats %}
+const catLabels = cats.map(c => c[1]);
+const catData   = cats.map(c => c[2]);
+const catColors = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316','#84cc16'];
+new Chart(document.getElementById('chartCategories'), {
+  type: 'doughnut',
   data: {
-    labels: evo.map(e => e.mois + ' ' + e.annee),
-    datasets: [
-      { label: 'Brut', data: evo.map(e => e.brut), backgroundColor: 'rgba(59,130,246,0.5)', borderColor: '#3b82f6', borderWidth: 1 },
-      { label: 'Net',  data: evo.map(e => e.net),  backgroundColor: 'rgba(16,185,129,0.5)', borderColor: '#10b981', borderWidth: 1 }
-    ]
+    labels: catLabels,
+    datasets: [{
+      data: catData,
+      backgroundColor: catColors.slice(0, catData.length),
+      borderWidth: 2, borderColor: '#fff',
+    }]
   },
-  options: { responsive: true, plugins: { legend: { position: 'top' } },
-    scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('fr') + ' F' } } } }
+  options: {
+    responsive: true,
+    plugins: {
+      legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } },
+      tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ' : ' + ctx.parsed + ' employé(s)' } }
+    },
+    cutout: '60%',
+  }
 });
+{% endif %}
 </script>
 <script>
 function toggleAlertes() {
