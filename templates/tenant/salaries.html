@@ -59,6 +59,7 @@
    style="background:#f0fdf4;color:#065f46;border:1px solid #a7f3d0;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">
   📥 Import Excel
 </a>
+{% if current_user.can_edit %}
 <a href="/salaries/nouveau" class="bg-slate-900 hover:bg-slate-700 text-white px-4 py-2 rounded-xl text-sm font-bold">
         + Nouveau salarié{% if q_s.max %} ({{ q_s.actuel }}/{{ q_s.max }}){% endif %}
       </a>

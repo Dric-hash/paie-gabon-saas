@@ -36,8 +36,29 @@
       <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Rôle *</label>
         <select name="role" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
-          <option value="GESTIONNAIRE">Gestionnaire — peut saisir et modifier</option>
-          <option value="TENANT_ADMIN">Administrateur — accès complet</option>
+          <option value="TENANT_ADMIN" {{ 'selected' if utilisateur and utilisateur.role == 'TENANT_ADMIN' }}>
+            🔴 Administrateur — accès complet (paramètres, utilisateurs, tout)
+          </option>
+          <option value="RH" {{ 'selected' if utilisateur and utilisateur.role == 'RH' }}>
+            🔵 Responsable RH — gère salariés, bulletins, congés, acomptes, pointages
+          </option>
+          <option value="COMPTABLE" {{ 'selected' if utilisateur and utilisateur.role == 'COMPTABLE' }}>
+            🟢 Comptable — lecture seule + exports (Excel, Sage 100, CNSS)
+          </option>
+          <option value="DIRECTEUR" {{ 'selected' if utilisateur and utilisateur.role == 'DIRECTEUR' }}>
+            🟠 Directeur — tableau de bord et rapports uniquement
+          </option>
+          <option value="GESTIONNAIRE" {{ 'selected' if not utilisateur or utilisateur.role == 'GESTIONNAIRE' }}>
+            ⚪ Gestionnaire — équivalent RH (ancien rôle, maintenu pour compatibilité)
+          </option>
+        </select>
+        <div style="margin-top:.75rem;padding:.75rem;background:#f9fafb;border-radius:.75rem;font-size:.75rem;color:#6b7280;line-height:1.8">
+          <strong>Récapitulatif des accès :</strong><br>
+          🔴 Admin → tout faire y compris paramètres et gestion des utilisateurs<br>
+          🔵 RH → saisie et modification des salariés, bulletins, congés, acomptes, pointages<br>
+          🟢 Comptable → lecture seule sur tout + télécharger les exports (pas de modification)<br>
+          🟠 Directeur → tableau de bord, statistiques et rapports uniquement (pas de saisie)
+        </div>
           <option value="LECTURE">Lecture seule</option>
         </select>
       </div>

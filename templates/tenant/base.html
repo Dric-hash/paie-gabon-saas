@@ -175,9 +175,11 @@
         🔐 <span>{{ "Utilisateurs" if lang == "fr" else "Users" }}</span>
       </a>
       {% endif %}
+      {% if current_user.has_permission('view_bulletins') or current_user.is_tenant_admin %}
       <a href="/paiement" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='paiement' else 'text-white/80 hover:bg-white/10' }}">
         💳 <span>{{ "Abonnement" if lang == "fr" else "Subscription" }}</span>
       </a>
+      {% endif %}
       <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
         ⚙️ <span>{{ T.nav.parametres }}</span>
       </a>
@@ -221,7 +223,16 @@
         </div>
         <div class="flex-1 min-w-0">
           <div class="text-sm font-bold truncate">{{ current_user.nom_complet }}</div>
-          <div class="text-xs text-white/50">{{ current_user.role }}</div>
+          <div style="font-size:.65rem;margin-top:.1rem">
+            <span style="padding:.1rem .5rem;border-radius:9999px;font-weight:700;
+              {% if current_user.role=='TENANT_ADMIN' %}background:rgba(239,68,68,.3);color:#fca5a5
+              {% elif current_user.role=='RH' %}background:rgba(59,130,246,.3);color:#93c5fd
+              {% elif current_user.role=='COMPTABLE' %}background:rgba(16,185,129,.3);color:#6ee7b7
+              {% elif current_user.role=='DIRECTEUR' %}background:rgba(245,158,11,.3);color:#fcd34d
+              {% else %}background:rgba(255,255,255,.1);color:rgba(255,255,255,.6){% endif %}">
+              {{ current_user.role_label }}
+            </span>
+          </div>
         </div>
         <button onclick="toggleDarkMode()" id="btn-dark"
         title="Basculer mode sombre"

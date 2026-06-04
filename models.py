@@ -146,12 +146,105 @@ class Utilisateur(db.Model, UserMixin):
     @property
     def is_tenant_admin(self): return self.role_normalized in ("SUPER_ADMIN", "TENANT_ADMIN")
 
+    # ══════════════════════════════════════════════════════════════════════
+    # SYSTÈME DE PERMISSIONS GRANULAIRES
+    # ══════════════════════════════════════════════════════════════════════
+    # Rôles disponibles :
+    #   TENANT_ADMIN  → tout faire (paramètres, utilisateurs, données)
+    #   RH            → salariés, bulletins, congés, acomptes, pointages
+    #   COMPTABLE     → lecture seule + exports (Excel, Sage, CNSS)
+    #   DIRECTEUR     → tableau de bord, rapports, statistiques uniquement
+    #   GESTIONNAIRE  → ancien rôle — équivalent RH (compatibilité)
+    # ══════════════════════════════════════════════════════════════════════
+
+    # Matrice des permissions par rôle
+    _PERMISSIONS = {
+        "SUPER_ADMIN":  {"all"},
+        "TENANT_ADMIN": {"all"},
+        "RH":           {"view_dashboard","view_salaries","edit_salaries","view_bulletins",
+                         "edit_bulletins","view_conges","edit_conges","view_acomptes",
+                         "edit_acomptes","view_periodes","edit_periodes","view_pointage",
+                         "edit_pointage","view_journaliers","edit_journaliers",
+                         "view_sites","view_rapports","view_declaration","export_excel"},
+        "COMPTABLE":    {"view_dashboard","view_salaries","view_bulletins","view_conges",
+                         "view_acomptes","view_periodes","view_pointage","view_journaliers",
+                         "view_sites","view_rapports","view_declaration",
+                         "export_excel","export_sage","export_cnss"},
+        "DIRECTEUR":    {"view_dashboard","view_rapports","view_salaries","view_bulletins",
+                         "view_declaration","view_journaliers","view_sites"},
+        "GESTIONNAIRE": {"view_dashboard","view_salaries","edit_salaries","view_bulletins",
+                         "edit_bulletins","view_conges","edit_conges","view_acomptes",
+                         "edit_acomptes","view_periodes","edit_periodes","view_pointage",
+                         "edit_pointage","view_journaliers","edit_journaliers",
+                         "view_sites","view_rapports","view_declaration","export_excel"},
+    }
+
+    def has_permission(self, perm: str) -> bool:
+        """Vérifie si l'utilisateur a une permission spécifique."""
+        perms = self._PERMISSIONS.get(self.role_normalized, set())
+        return "all" in perms or perm in perms
+
     @property
-    def can_edit(self): return self.role_normalized in ("SUPER_ADMIN", "TENANT_ADMIN", "GESTIONNAIRE")
+    def can_edit(self):
+        """Peut modifier des données (salariés, bulletins, etc.)."""
+        return self.has_permission("edit_salaries") or self.is_tenant_admin
+
+    @property
+    def can_edit_bulletins(self):
+        return self.has_permission("edit_bulletins") or self.is_tenant_admin
+
+    @property
+    def can_view_only(self):
+        """Accès lecture seule uniquement (Comptable, Directeur)."""
+        return self.role_normalized in ("COMPTABLE", "DIRECTEUR")
+
+    @property
+    def can_export(self):
+        return self.has_permission("export_excel") or self.is_tenant_admin
+
+    @property
+    def can_export_sage(self):
+        return self.has_permission("export_sage") or self.is_tenant_admin
+
+    @property
+    def can_manage_parametres(self):
+        """Seul l'admin peut modifier les paramètres de l'entreprise."""
+        return self.is_tenant_admin
+
+    @property
+    def can_manage_users(self):
+        """Seul l'admin peut gérer les utilisateurs."""
+        return self.is_tenant_admin
+
+    @property
+    def role_label(self):
+        """Libellé lisible du rôle."""
+        labels = {
+            "SUPER_ADMIN":  "Super Admin",
+            "TENANT_ADMIN": "Administrateur",
+            "RH":           "Responsable RH",
+            "COMPTABLE":    "Comptable",
+            "DIRECTEUR":    "Directeur",
+            "GESTIONNAIRE": "Gestionnaire",
+        }
+        return labels.get(self.role_normalized, self.role)
+
+    @property
+    def role_color(self):
+        """Couleur badge du rôle."""
+        colors = {
+            "SUPER_ADMIN":  "purple",
+            "TENANT_ADMIN": "red",
+            "RH":           "blue",
+            "COMPTABLE":    "green",
+            "DIRECTEUR":    "orange",
+            "GESTIONNAIRE": "gray",
+        }
+        return colors.get(self.role_normalized, "gray")
 
     def to_dict(self):
         return {"id":self.id,"nom":self.nom,"prenom":self.prenom,
-                "email":self.email,"role":self.role,
+                "email":self.email,"role":self.role,"role_label":self.role_label,
                 "tenant_id":self.tenant_id,"actif":self.actif}
 
 

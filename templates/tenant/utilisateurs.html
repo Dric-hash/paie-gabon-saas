@@ -106,10 +106,13 @@
           </td>
           <td style="text-align:center">
             <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;
-              {% if u.role=='TENANT_ADMIN' %}background:#dbeafe;color:#1e40af
-              {% elif u.role=='GESTIONNAIRE' %}background:#fef3c7;color:#92400e
+              {% if u.role=='TENANT_ADMIN' %}background:#fee2e2;color:#991b1b
+              {% elif u.role=='RH' %}background:#dbeafe;color:#1e40af
+              {% elif u.role=='COMPTABLE' %}background:#d1fae5;color:#065f46
+              {% elif u.role=='DIRECTEUR' %}background:#fef3c7;color:#92400e
+              {% elif u.role=='GESTIONNAIRE' %}background:#f3f4f6;color:#374151
               {% else %}background:#f3f4f6;color:#6b7280{% endif %}">
-              {{ u.role.replace('TENANT_ADMIN','Admin').replace('GESTIONNAIRE','Gestionnaire').replace('LECTURE','Lecture') }}
+              {{ u.role_label }}
             </span>
           </td>
           <td style="text-align:center">

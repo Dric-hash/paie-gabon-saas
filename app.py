@@ -263,10 +263,32 @@ def tenant_required(f):
     return d
 
 def can_edit(f):
+    """Décorateur : accès en écriture (RH, Admin, Gestionnaire)."""
     @wraps(f)
-    def d(*a,**k):
+    def d(*a, **k):
         if not current_user.can_edit: abort(403)
-        return f(*a,**k)
+        return f(*a, **k)
+    return d
+
+def require_permission(perm: str):
+    """Décorateur générique : vérifie une permission spécifique."""
+    def decorator(f):
+        @wraps(f)
+        def d(*a, **k):
+            if not current_user.is_authenticated:
+                return redirect(url_for("login"))
+            if not current_user.has_permission(perm) and not current_user.is_tenant_admin:
+                abort(403)
+            return f(*a, **k)
+        return d
+    return decorator
+
+def admin_only(f):
+    """Décorateur : réservé à l'admin du tenant uniquement."""
+    @wraps(f)
+    def d(*a, **k):
+        if not current_user.is_tenant_admin: abort(403)
+        return f(*a, **k)
     return d
 
 def get_tenant():
@@ -2960,6 +2982,9 @@ def parametres_modele_bulletin():
 @tenant_required
 @can_edit
 def parametres_societe():
+    if not current_user.can_manage_parametres:
+        flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
+        return redirect(url_for("parametres"))
     t=get_tenant()
     for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
         try: setattr(t,f,request.form.get(f,"").strip() or None)
@@ -6085,6 +6110,9 @@ def declaration_cnss():
 @app.route("/export/sage/journal/<int:periode_id>")
 @tenant_required
 def export_sage_journal(periode_id):
+    if not current_user.can_export_sage:
+        flash("Accès refusé. Seuls les Administrateurs et Comptables peuvent exporter vers Sage.", "error")
+        return redirect(url_for("bulletins"))
     """
     Export du journal de paie mensuel au format Sage 100 (.txt).
     Importable dans Sage 100 Comptabilité via Fichier → Importer → Journal.
@@ -7172,6 +7200,8 @@ with app.app_context():
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS derniere_activite TIMESTAMP",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS nb_echecs_connexion INTEGER DEFAULT 0",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS compte_bloque_jusqu TIMESTAMP",
+        # Étendre la colonne role pour les nouveaux rôles (RH, COMPTABLE, DIRECTEUR)
+        "ALTER TABLE utilisateurs ALTER COLUMN role TYPE VARCHAR(30)",
         # Marquer tous les users existants comme vérifiés (migration rétroactive)
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
     ]:
