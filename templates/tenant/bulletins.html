@@ -374,6 +374,54 @@
         document.getElementById("menu-sage").classList.add("hidden");
     });
   </script>
+
+  <!-- Rapport PDF mensuel -->
+  {% if current_user.can_export or current_user.is_tenant_admin %}
+  <a href="/rapport/pdf/{{ periode_sel.id }}"
+    style="display:inline-flex;align-items:center;gap:.4rem;background:#dc2626;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
+    📄 Rapport PDF mensuel
+  </a>
+  {% if current_user.is_tenant_admin %}
+  <button type="button"
+    onclick="document.getElementById('modal-email-rapport').style.display='flex'"
+    style="background:#7c3aed;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+    📧 Envoyer par email
+  </button>
+
+  <!-- Modal envoi email -->
+  <div id="modal-email-rapport"
+    style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center">
+    <div style="background:white;border-radius:1rem;padding:1.5rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
+      <h3 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 .75rem">Envoyer le rapport par email</h3>
+      <p style="font-size:.8rem;color:#6b7280;margin:0 0 .75rem">
+        Le rapport sera envoyé aux administrateurs et directeurs du compte.
+      </p>
+      <form method="POST" action="/rapport/pdf/{{ periode_sel.id }}/envoyer-email">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">
+            Email supplémentaire (optionnel)
+          </label>
+          <input type="email" name="email_extra" placeholder="expert@comptable.ga"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button type="submit"
+            style="flex:1;background:#dc2626;color:white;padding:.625rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+            📧 Envoyer
+          </button>
+          <button type="button"
+            onclick="document.getElementById('modal-email-rapport').style.display='none'"
+            style="flex:1;background:#f3f4f6;color:#374151;padding:.625rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+            Annuler
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+  {% endif %}
+
 </div>
 {% endif %}
 

@@ -6340,6 +6340,158 @@ def export_sage_les_deux(periode_id):
         return redirect(url_for("bulletins"))
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# RAPPORT PDF MENSUEL
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/rapport/pdf/<int:periode_id>")
+@tenant_required
+def rapport_pdf(periode_id):
+    """
+    Génère et télécharge le rapport PDF mensuel complet :
+      - Page de garde
+      - Résumé direction (KPIs + évolution 6 mois)
+      - Tableau détail par salarié
+      - Récapitulatif charges à verser
+    """
+    t = get_tenant()
+    if not current_user.can_export and not current_user.is_tenant_admin:
+        flash("Accès non autorisé.", "error")
+        return redirect(url_for("bulletins"))
+
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+        .filter(BulletinPaie.periode_id == periode_id,
+                BulletinPaie.tenant_id  == t.id,
+                BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"]))
+        .options(joinedload(BulletinPaie.salarie))
+        .join(Salarie).order_by(Salarie.nom).all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant de générer le rapport.", "warning")
+        return redirect(url_for("bulletins"))
+
+    # Récupérer l'évolution des 6 derniers mois pour le graphique
+    from datetime import timedelta
+    evolution = []
+    for i in range(5, -1, -1):
+        d     = date.today().replace(day=1)
+        mois  = (d.month - i - 1) % 12 + 1
+        annee = d.year - ((i + d.month - 1) // 12)
+        buls_m = BulletinPaie.query.join(PeriodePaie).filter(
+            BulletinPaie.tenant_id == t.id,
+            PeriodePaie.mois == mois,
+            PeriodePaie.annee == annee,
+        ).all()
+        evolution.append({
+            "mois":  ["","Jan","Fév","Mar","Avr","Mai","Jun",
+                      "Jul","Aoû","Sep","Oct","Nov","Déc"][mois],
+            "annee": annee,
+            "brut":  sum(float(b.salaire_brut or 0) for b in buls_m),
+            "net":   sum(float(b.net_a_payer  or 0) for b in buls_m),
+        })
+
+    try:
+        from rapport_pdf import generer_rapport_mensuel
+        pdf_bytes = generer_rapport_mensuel(bulletins, periode, t, evolution)
+
+        nom_fichier = f"rapport_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.pdf"
+        log_action("EXPORT", "rapport", periode_id,
+                   f"Rapport PDF mensuel — {periode.libelle_complet} ({len(bulletins)} bulletins)")
+        db.session.commit()
+
+        logger.info(f"[Rapport PDF] Généré — tenant={t.id} période={periode.libelle_complet}")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Rapport PDF] Erreur : {e}")
+        flash(f"Erreur lors de la génération du PDF : {e}", "error")
+        return redirect(url_for("bulletins"))
+
+
+@app.route("/rapport/pdf/<int:periode_id>/envoyer-email", methods=["POST"])
+@tenant_required
+def rapport_pdf_email(periode_id):
+    """
+    Génère le rapport PDF et l'envoie par email aux admins et directeurs du tenant.
+    Peut être déclenché manuellement ou automatiquement en fin de mois.
+    """
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("bulletins"))
+
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins_p = (BulletinPaie.query
+        .filter(BulletinPaie.periode_id == periode_id,
+                BulletinPaie.tenant_id  == t.id,
+                BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"]))
+        .options(joinedload(BulletinPaie.salarie))
+        .join(Salarie).order_by(Salarie.nom).all())
+
+    if not bulletins_p:
+        flash("Aucun bulletin validé — rapport non envoyé.", "warning")
+        return redirect(url_for("bulletins"))
+
+    # Destinataires : admins et directeurs actifs
+    destinataires = [
+        u.email for u in Utilisateur.query.filter_by(tenant_id=t.id, actif=True).all()
+        if u.email and u.role in ("TENANT_ADMIN", "DIRECTEUR")
+    ]
+    email_extra = request.form.get("email_extra", "").strip()
+    if email_extra:
+        destinataires.append(email_extra)
+
+    if not destinataires:
+        flash("Aucun destinataire configuré.", "error")
+        return redirect(url_for("bulletins"))
+
+    try:
+        from rapport_pdf import generer_rapport_mensuel
+        evolution = []  # Simplifié pour l'envoi auto
+        pdf_bytes = generer_rapport_mensuel(bulletins_p, periode, t, evolution)
+        nom_fichier = f"rapport_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.pdf"
+
+        from calculs_paie import calculer_masse_salariale
+        masse = calculer_masse_salariale(bulletins_p)
+
+        msg = Message(
+            subject=f"[PaieGabon] Rapport mensuel — {t.denomination} — {periode.libelle_complet}",
+            recipients=destinataires,
+            body=(
+                f"Bonjour,\n\n"
+                f"Veuillez trouver en pièce jointe le rapport mensuel de paie de {t.denomination} "
+                f"pour la période {periode.libelle_complet} {periode.annee}.\n\n"
+                f"Résumé :\n"
+                f"  • Nombre de bulletins : {len(bulletins_p)}\n"
+                f"  • Masse salariale brute : {int(masse.get('total_brut',0)):,} FCFA\n"
+                f"  • Net total à payer : {int(masse.get('total_net',0)):,} FCFA\n"
+                f"  • Coût total employeur : {int(masse.get('total_brut',0) + masse.get('total_charges_pat',0)):,} FCFA\n\n"
+                f"Ce rapport est confidentiel et destiné à usage interne uniquement.\n\n"
+                f"Cordialement,\nPaieGabon SaaS"
+            ),
+        )
+        msg.attach(nom_fichier, "application/pdf", pdf_bytes)
+        send_email_async(msg)
+
+        log_action("EXPORT", "rapport", periode_id,
+                   f"Rapport PDF envoyé par email à {len(destinataires)} destinataire(s)")
+        db.session.commit()
+
+        flash(f"Rapport envoyé par email à {len(destinataires)} destinataire(s).", "success")
+        logger.info(f"[Rapport PDF Email] Envoyé à {destinataires} — tenant={t.id}")
+
+    except Exception as e:
+        logger.error(f"[Rapport PDF Email] Erreur : {e}")
+        flash(f"Erreur lors de l'envoi : {e}", "error")
+
+    return redirect(url_for("bulletins", periode_id=periode_id))
+
+
 @app.route("/declaration-cnss/export-excel")
 @login_required
 def declaration_cnss_excel():
