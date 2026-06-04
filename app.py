@@ -688,6 +688,21 @@ def admin_tenant_notes(id):
     flash("Notes mises à jour.", "success")
     return redirect(url_for("admin_tenant_detail", id=id))
 
+
+@app.route("/admin/tenants/<int:id>/regenerer-token", methods=["POST"])
+@super_admin_required
+def admin_regenerer_token(id):
+    """Génère ou régénère le token API d'un tenant."""
+    t = Tenant.query.get_or_404(id)
+    ancien = t.token_api
+    t.token_api = sec.token_hex(32)
+    db.session.commit()
+    action = "généré" if not ancien else "régénéré"
+    flash(f"Token API {action} pour {t.denomination}. "
+          f"Transmettez-le de façon sécurisée au développeur RH du client.", "success")
+    logger.info(f"[SuperAdmin] Token API {action} — tenant={t.id} par {current_user.email}")
+    return redirect(url_for("admin_tenant_detail", id=id))
+
 @app.route("/admin/tenants/<int:id>/impersonate")
 @super_admin_required
 def admin_impersonate(id):
