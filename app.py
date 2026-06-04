@@ -157,6 +157,36 @@ def gerer_session_inactivite():
 mail = Mail(app)
 csrf = CSRFProtect(app)
 
+# ── Compression Gzip — réduit la taille des réponses de 60-80% ───────────────
+try:
+    from flask_compress import Compress
+    Compress(app)
+except ImportError:
+    pass
+
+# ── Headers de performance ────────────────────────────────────────────────────
+@app.after_request
+def add_performance_headers(response):
+    """
+    Ajoute des headers HTTP qui améliorent les performances :
+    - Cache-Control sur les assets statiques (JS, CSS, images)
+    - Security headers en bonus
+    """
+    path = request.path
+
+    # Cache long (1 an) pour les assets statiques — ils changent rarement
+    if path.startswith("/static/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    # Cache court (1h) pour les pages HTML dynamiques
+    elif response.content_type and "text/html" in response.content_type:
+        response.headers["Cache-Control"] = "private, no-cache"
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"]        = "SAMEORIGIN"
+        response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
+
+    return response
+
 # ── Internationalisation — injecte T et lang dans tous les templates ──────────
 @app.context_processor
 def inject_translations():
@@ -565,23 +595,47 @@ def admin_dashboard():
     total_bul = db.session.query(db.func.count(BulletinPaie.id)).scalar() or 0
     total_ptg = db.session.query(db.func.count(Pointage.id)).scalar() or 0
 
-    # ── Score d'activité par tenant (bulletins + pointages ce mois) ─────────
-    sal_par_tenant     = {}
-    bul_par_tenant     = {}
-    score_par_tenant   = {}
+    # ── Score d'activité par tenant — UNE SEULE requête agrégée ─────────────
+    # Avant : 4 requêtes × N tenants = N+1 massif
+    # Maintenant : 3 requêtes GROUP BY quel que soit le nombre de tenants
+    from sqlalchemy import func as sqlfunc
+
+    # Salariés actifs par tenant
+    sal_counts = dict(
+        db.session.query(Salarie.tenant_id, sqlfunc.count(Salarie.id))
+        .filter(Salarie.statut == "ACTIF")
+        .group_by(Salarie.tenant_id)
+        .all()
+    )
+    # Bulletins total par tenant
+    bul_counts = dict(
+        db.session.query(BulletinPaie.tenant_id, sqlfunc.count(BulletinPaie.id))
+        .group_by(BulletinPaie.tenant_id)
+        .all()
+    )
+    # Bulletins ce mois par tenant
+    bul_mois_counts = dict(
+        db.session.query(BulletinPaie.tenant_id, sqlfunc.count(BulletinPaie.id))
+        .join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
+        .filter(PeriodePaie.annee == now.year, PeriodePaie.mois == now.month)
+        .group_by(BulletinPaie.tenant_id)
+        .all()
+    )
+    # Pointages ce mois par tenant
+    ptg_mois_counts = dict(
+        db.session.query(Pointage.tenant_id, sqlfunc.count(Pointage.id))
+        .filter(Pointage.date_pointage >= debut_mois_c.date())
+        .group_by(Pointage.tenant_id)
+        .all()
+    )
+
+    sal_par_tenant   = sal_counts
+    bul_par_tenant   = bul_counts
+    score_par_tenant = {}
     for t in tenants:
-        nb_s = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
-        nb_b = BulletinPaie.query.filter_by(tenant_id=t.id).count()
-        nb_b_mois = BulletinPaie.query.join(PeriodePaie).filter(
-            PeriodePaie.tenant_id == t.id,
-            PeriodePaie.annee == now.year, PeriodePaie.mois == now.month
-        ).count()
-        nb_p_mois = Pointage.query.filter_by(tenant_id=t.id).filter(
-            Pointage.date_pointage >= debut_mois_c.date()
-        ).count()
-        sal_par_tenant[t.id]   = nb_s
-        bul_par_tenant[t.id]   = nb_b
-        # Score 0-100 : bulletins ce mois (50%) + pointages ce mois (30%) + salariés (20%)
+        nb_s     = sal_counts.get(t.id, 0)
+        nb_b_mois= bul_mois_counts.get(t.id, 0)
+        nb_p_mois= ptg_mois_counts.get(t.id, 0)
         score = min(100, int(
             min(nb_b_mois / max(nb_s, 1) * 50, 50) +
             min(nb_p_mois / max(nb_s * 20, 1) * 30, 30) +
@@ -1104,7 +1158,11 @@ def dashboard():
         _cache_set(_ck_evo, evolution, TTL_EVOLUTION)
     top_salaries = []
     if periode:
-        top_salaries = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).order_by(BulletinPaie.net_a_payer.desc()).limit(5).all()
+        top_salaries = (BulletinPaie.query
+            .filter_by(tenant_id=t.id, periode_id=periode.id)
+            .options(joinedload(BulletinPaie.salarie))
+            .order_by(BulletinPaie.net_a_payer.desc())
+            .limit(5).all())
     from sqlalchemy import func
     _ck_cats = f"{t.id}:cats_stats"
     cats_stats = _cache_get(_ck_cats)
@@ -1118,7 +1176,12 @@ def dashboard():
         # Convertir en liste de tuples simples (JSON sérialisable)
         cats_stats = [(r.code, r.libelle, r.nb) for r in cats_stats]
         _cache_set(_ck_cats, cats_stats, TTL_CATS_STATS)
-    derniers = BulletinPaie.query.filter_by(tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(6).all()
+    derniers = (BulletinPaie.query
+        .filter_by(tenant_id=t.id)
+        .options(joinedload(BulletinPaie.salarie),
+                 joinedload(BulletinPaie.periode))
+        .order_by(BulletinPaie.date_creation.desc())
+        .limit(6).all())
     # ══════════════════════════════════════════════════════════════════════════
     # ALERTES INTELLIGENTES
     # ══════════════════════════════════════════════════════════════════════════
