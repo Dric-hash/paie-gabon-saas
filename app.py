@@ -1101,6 +1101,8 @@ def dashboard():
         ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
          .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
          .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+        # Convertir en liste de tuples simples (JSON sérialisable)
+        cats_stats = [(r.code, r.libelle, r.nb) for r in cats_stats]
         _cache_set(_ck_cats, cats_stats, TTL_CATS_STATS)
     derniers = BulletinPaie.query.filter_by(tenant_id=t.id).order_by(BulletinPaie.date_creation.desc()).limit(6).all()
     # ══════════════════════════════════════════════════════════════════════════
