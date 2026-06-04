@@ -1,0 +1,179 @@
+{% extends "tenant/base.html" %}
+{% block title %}API — Intégration SIRH — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">API REST</h1>
+    <p style="color:#6b7280;font-size:.875rem;margin:.25rem 0 0">Intégration avec votre SIRH ou logiciel RH</p>
+  </div>
+</div>
+
+<!-- Token API fixe -->
+<div class="card p-5" style="margin-bottom:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem">
+    <div>
+      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0">Token API fixe</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0">Simple et rapide à intégrer. Idéal pour débuter.</p>
+    </div>
+    <span style="background:#d1fae5;color:#065f46;padding:.25rem .75rem;border-radius:9999px;font-size:.75rem;font-weight:700">
+      Actif
+    </span>
+  </div>
+  <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
+    <code style="font-family:monospace;font-size:.8rem;color:#1a2332;flex:1;word-break:break-all" id="token-api">
+      {{ tenant.token_api or '—' }}
+    </code>
+    <button onclick="navigator.clipboard.writeText('{{ tenant.token_api }}');this.textContent='Copié ✓';setTimeout(()=>this.textContent='Copier',2000)"
+      style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
+      Copier
+    </button>
+  </div>
+  <p style="font-size:.75rem;color:#9ca3af;margin:0">
+    Ajoutez ce header à chaque requête : <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:.25rem">X-API-Key: {{ tenant.token_api or 'VOTRE_TOKEN' }}</code>
+  </p>
+</div>
+
+<!-- Clients OAuth2 -->
+<div class="card p-5" style="margin-bottom:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <div>
+      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0">Clients OAuth2</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0">Plus sécurisé — tokens temporaires avec expiration automatique.</p>
+    </div>
+    <button onclick="document.getElementById('form-nouveau-client').style.display='block';this.style.display='none'"
+      style="background:#7c3aed;color:white;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+      + Nouveau client
+    </button>
+  </div>
+
+  <!-- Formulaire nouveau client -->
+  <div id="form-nouveau-client" style="display:none;background:#f9fafb;border-radius:.75rem;padding:1rem;margin-bottom:1rem">
+    <form method="POST" action="/api/clients/creer">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Nom du client *</label>
+          <input type="text" name="nom" required placeholder="Ex: SIRH Oracle, SAP HR..."
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Description</label>
+          <input type="text" name="description" placeholder="Ex: Synchronisation mensuelle des salaires"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+        </div>
+      </div>
+      <div style="display:flex;gap:.5rem">
+        <button type="submit"
+          style="background:#7c3aed;color:white;padding:.5rem 1rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+          Créer le client
+        </button>
+        <button type="button" onclick="document.getElementById('form-nouveau-client').style.display='none'"
+          style="background:#f3f4f6;color:#374151;padding:.5rem 1rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+          Annuler
+        </button>
+      </div>
+    </form>
+  </div>
+
+  {% if clients %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead>
+        <tr style="background:#f9fafb">
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Nom</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Client ID</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Client Secret</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Créé le</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Statut</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in clients %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:.625rem .75rem;font-weight:600">{{ c.nom }}</td>
+          <td style="padding:.625rem .75rem">
+            <code style="font-size:.75rem;background:#f3f4f6;padding:.1rem .4rem;border-radius:.25rem">{{ c.client_id }}</code>
+          </td>
+          <td style="padding:.625rem .75rem">
+            {% if c.actif %}
+            <span style="font-size:.75rem;color:#9ca3af">●●●●●●●●●●●● (masqué)</span>
+            {% else %}
+            <span style="font-size:.75rem;color:#d1d5db">Désactivé</span>
+            {% endif %}
+          </td>
+          <td style="padding:.625rem .75rem;color:#6b7280">{{ c.date_creation.strftime('%d/%m/%Y') }}</td>
+          <td style="padding:.625rem .75rem">
+            {% if c.actif %}
+            <span style="background:#d1fae5;color:#065f46;padding:.15rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:700">Actif</span>
+            {% else %}
+            <span style="background:#fee2e2;color:#dc2626;padding:.15rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:700">Désactivé</span>
+            {% endif %}
+          </td>
+          <td style="padding:.625rem .75rem">
+            {% if c.actif %}
+            <form method="POST" action="/api/clients/{{ c.id }}/supprimer" style="display:inline"
+              onsubmit="return confirm('Désactiver ce client ? Les intégrations utilisant ce client ne fonctionneront plus.')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit"
+                style="background:#fee2e2;color:#dc2626;padding:.25rem .625rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+                Désactiver
+              </button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af">
+    <div style="font-size:2rem;margin-bottom:.5rem">🔑</div>
+    <p style="margin:0">Aucun client OAuth créé. Créez-en un pour intégrer votre SIRH.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Documentation rapide -->
+<div class="card p-5">
+  <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin-bottom:1rem">Documentation rapide</h2>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+    <div>
+      <h3 style="font-size:.875rem;font-weight:700;color:#374151;margin-bottom:.5rem">🔐 Authentification</h3>
+      <pre style="background:#1a2332;color:#e5e7eb;padding:1rem;border-radius:.75rem;font-size:.72rem;overflow-x:auto;margin:0"># Token fixe
+curl -H "X-API-Key: VOTRE_TOKEN" \
+  {{ request.host_url }}api/v1/me
+
+# OAuth2
+curl -X POST {{ request.host_url }}api/v1/oauth/token \
+  -H "Content-Type: application/json" \
+  -d '{"grant_type":"client_credentials",
+       "client_id":"pg_xxx",
+       "client_secret":"yyy"}'</pre>
+    </div>
+
+    <div>
+      <h3 style="font-size:.875rem;font-weight:700;color:#374151;margin-bottom:.5rem">📋 Endpoints principaux</h3>
+      <div style="font-size:.78rem;line-height:2">
+        <div><span style="background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">GET</span> <code>/api/v1/salaries</code></div>
+        <div><span style="background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">GET</span> <code>/api/v1/salaries/{id}</code></div>
+        <div><span style="background:#d1fae5;color:#065f46;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">POST</span> <code>/api/v1/salaries</code></div>
+        <div><span style="background:#fef3c7;color:#92400e;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">PUT</span> <code>/api/v1/salaries/{id}</code></div>
+        <div><span style="background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">GET</span> <code>/api/v1/bulletins?periode_id=X</code></div>
+        <div><span style="background:#d1fae5;color:#065f46;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">POST</span> <code>/api/v1/bulletins/calculer</code></div>
+        <div><span style="background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:.25rem;font-weight:700">GET</span> <code>/api/v1/stats?periode_id=X</code></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:1rem;padding:.75rem;background:#eff6ff;border-radius:.75rem;font-size:.78rem;color:#1e40af">
+    💡 Toutes les réponses sont en JSON :
+    <code>{"success": true, "data": {...}, "meta": {"page": 1, "total": 50}}</code>
+  </div>
+</div>
+
+{% endblock %}

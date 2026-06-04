@@ -665,3 +665,29 @@ class Paiement(db.Model):
         if d["montant"] is not None:
             d["montant"] = float(d["montant"])
         return d
+
+
+class OAuthClient(db.Model):
+    """
+    Client OAuth2 pour les grandes entreprises.
+    Permet une authentification plus sécurisée que le token API fixe.
+    Un tenant peut avoir plusieurs clients OAuth (ex: un par application tierce).
+    """
+    __tablename__ = "oauth_clients"
+
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    nom           = db.Column(db.String(100), nullable=False)
+    client_id     = db.Column(db.String(64), unique=True, nullable=False)
+    client_secret = db.Column(db.String(128), nullable=False)
+    description   = db.Column(db.String(300))
+    actif         = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    derniere_utilisation = db.Column(db.DateTime)
+
+    tenant = db.relationship("Tenant", backref="oauth_clients")
+
+    __table_args__ = (
+        db.Index("idx_oauth_client_id", "client_id"),
+        db.Index("idx_oauth_tenant", "tenant_id"),
+    )
