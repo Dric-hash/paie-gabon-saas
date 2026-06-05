@@ -1452,12 +1452,86 @@ def pwa_offline():
 @app.route("/simulateur")
 @login_required
 def simulateur_paie():
-    """Simulateur de paie interactif."""
+    """Simulateur de paie interactif — avec comparaison scénarios, net→brut, augmentation."""
     if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("login"))
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")\
+        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
     return render_template("tenant/simulateur.html", tenant=t, salaries=salaries_list)
+
+
+@app.route("/api/simuler-paie/scenarios", methods=["POST"])
+@login_required
+@csrf.exempt
+def api_simuler_scenarios():
+    """Compare jusqu'à 3 scénarios de paie côte à côte."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    scenarios = data.get("scenarios", [])
+    nb_parts  = float(data.get("nb_parts", 1.0))
+
+    if not scenarios or len(scenarios) < 2:
+        return jsonify({"error": "Au moins 2 scénarios requis"}), 400
+
+    from simulation_paie import comparer_scenarios
+    result = comparer_scenarios(scenarios, nb_parts=nb_parts)
+    return jsonify(result)
+
+
+@app.route("/api/simuler-paie/net-vers-brut", methods=["POST"])
+@login_required
+@csrf.exempt
+def api_simuler_net_vers_brut():
+    """Calcule le brut nécessaire pour atteindre un net cible."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    net_cible = float(data.get("net_cible", 0))
+    nb_parts  = float(data.get("nb_parts",  1.0))
+    extras    = data.get("extras", {})
+
+    if not net_cible or net_cible <= 0:
+        return jsonify({"error": "Net cible invalide"}), 400
+
+    from simulation_paie import simuler_depuis_net
+    result = simuler_depuis_net(net_cible, nb_parts=nb_parts, donnees_extra=extras)
+    return jsonify(result)
+
+
+@app.route("/api/simuler-paie/augmentation", methods=["POST"])
+@login_required
+@csrf.exempt
+def api_simuler_augmentation():
+    """Simule l'impact d'une augmentation de salaire."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    salaire_actuel      = float(data.get("salaire_actuel", 0))
+    augmentation_pct    = data.get("augmentation_pct")
+    augmentation_montant= data.get("augmentation_montant")
+    nb_parts            = float(data.get("nb_parts", 1.0))
+    extras              = data.get("extras", {})
+
+    if not salaire_actuel or salaire_actuel <= 0:
+        return jsonify({"error": "Salaire actuel invalide"}), 400
+
+    from simulation_paie import simuler_augmentation
+    result = simuler_augmentation(
+        salaire_actuel       = salaire_actuel,
+        augmentation_pct     = float(augmentation_pct) if augmentation_pct else None,
+        augmentation_montant = float(augmentation_montant) if augmentation_montant else None,
+        nb_parts             = nb_parts,
+        donnees_extra        = extras,
+    )
+    return jsonify(result)
 
 
 @app.route("/api/simuler-paie", methods=["POST"])
@@ -4537,6 +4611,116 @@ def acompte_supprimer(id):
     db.session.delete(a); db.session.commit()
     flash("Acompte supprimé.", "success")
     return redirect(url_for("acomptes", mois=mois, annee=annee))
+
+# ── Congés avancés ────────────────────────────────────────────────────────────
+
+@app.route("/conges/bilan")
+@tenant_required
+def conges_bilan():
+    """Bilan congés de tous les salariés actifs avec jours acquis, pris, restants."""
+    t = get_tenant()
+    annee = request.args.get("annee", date.today().year, type=int)
+    salaries_actifs = Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF"
+    ).options(
+        joinedload(Salarie.conges),
+        joinedload(Salarie.contrats),
+    ).order_by(Salarie.nom).all()
+
+    from conges_avance import bilan_conges_tenant
+    bilan = bilan_conges_tenant(salaries_actifs, annee)
+
+    # Stats globales
+    total_acquis   = sum(b["jours_acquis"]   for b in bilan)
+    total_pris     = sum(b["jours_pris"]     for b in bilan)
+    total_restants = sum(b["jours_restants"] for b in bilan)
+    nb_alertes     = sum(1 for b in bilan if b["alerte"])
+
+    return render_template("tenant/conges_bilan.html",
+        tenant=t, bilan=bilan, annee=annee,
+        total_acquis=total_acquis, total_pris=total_pris,
+        total_restants=total_restants, nb_alertes=nb_alertes,
+        annees=list(range(date.today().year - 2, date.today().year + 2)),
+    )
+
+
+@app.route("/conges/planning")
+@tenant_required
+def conges_planning():
+    """Planning visuel des congés — vue calendrier mensuel."""
+    t    = get_tenant()
+    mois = request.args.get("mois", date.today().month, type=int)
+    annee= request.args.get("annee", date.today().year,  type=int)
+
+    tous_conges = Conge.query.filter_by(tenant_id=t.id)\
+        .options(joinedload(Conge.salarie))\
+        .filter(Conge.statut.in_(["APPROUVÉ","APPROUVE","DEMANDÉ","DEMANDE","PRIS"]))\
+        .all()
+
+    from conges_avance import planning_absences
+    planning = planning_absences(tous_conges, annee, mois)
+
+    # Infos du mois pour le calendrier
+    import calendar
+    cal = calendar.monthcalendar(annee, mois)
+    nb_jours = calendar.monthrange(annee, mois)[1]
+    MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+               "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    return render_template("tenant/conges_planning.html",
+        tenant=t, planning=planning, mois=mois, annee=annee,
+        mois_nom=MOIS_FR[mois], cal=cal, nb_jours=nb_jours,
+        MOIS_FR=MOIS_FR,
+    )
+
+
+@app.route("/salaries/<int:sal_id>/solde-tout-compte")
+@tenant_required
+def solde_tout_compte(sal_id):
+    """Calcul du solde de tout compte (indemnité congés + licenciement)."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id)\
+        .options(joinedload(Salarie.conges),
+                 joinedload(Salarie.contrats)).first_or_404()
+
+    date_cessation_str = request.args.get("date_cessation", "")
+    try:
+        date_cessation = datetime.strptime(date_cessation_str, "%Y-%m-%d").date() \
+            if date_cessation_str else date.today()
+    except ValueError:
+        date_cessation = date.today()
+
+    # 12 derniers bulletins
+    bulletins_12 = BulletinPaie.query.filter_by(
+        tenant_id=t.id, salarie_id=sal_id
+    ).filter(
+        BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"])
+    ).order_by(BulletinPaie.date_creation.desc()).limit(12).all()
+
+    from conges_avance import calculer_solde_tout_compte
+    solde = calculer_solde_tout_compte(s, bulletins_12, date_cessation)
+
+    return render_template("tenant/solde_tout_compte.html",
+        tenant=t, salarie=s, solde=solde, date_cessation=date_cessation,
+    )
+
+
+@app.route("/api/conges/jours-acquis/<int:sal_id>")
+@login_required
+def api_jours_acquis(sal_id):
+    """Retourne les jours acquis d'un salarié (JSON)."""
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+
+    from conges_avance import calculer_jours_acquis
+    result = calculer_jours_acquis(s.date_embauche)
+    # Sérialiser les dates
+    for k in ["periode_debut","periode_fin"]:
+        if result.get(k):
+            result[k] = str(result[k])
+    return jsonify(result)
+
 
 # ── Congés ────────────────────────────────────────────────────────────────────
 @app.route("/conges")

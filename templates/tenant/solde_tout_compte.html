@@ -1,0 +1,114 @@
+{% extends "tenant/base.html" %}
+{% block title %}Solde de tout compte — {{ salarie.nom_complet }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <a href="/salaries/{{ salarie.id }}" style="color:#6b7280;font-size:.875rem;text-decoration:none">← {{ salarie.nom_complet }}</a>
+  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">💼 Solde de tout compte</h1>
+</div>
+
+<!-- Sélecteur date cessation -->
+<div class="card p-4" style="margin-bottom:1.25rem">
+  <form method="GET" style="display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap">
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Date de cessation</label>
+      <input type="date" name="date_cessation"
+        value="{{ date_cessation.strftime('%Y-%m-%d') }}"
+        style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.875rem"/>
+    </div>
+    <button type="submit" style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+      Recalculer
+    </button>
+  </form>
+</div>
+
+<!-- Résultat -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+
+  <!-- Détail calcul congés -->
+  <div class="card p-5">
+    <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">🏖️ Indemnité compensatrice de congés</h2>
+    {% macro ligne(label, val, color='#374151', bold=False) %}
+    <div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #f3f4f6;font-size:.875rem">
+      <span style="color:#6b7280">{{ label }}</span>
+      <span style="font-weight:{{ '700' if bold else '400' }};color:{{ color }}">{{ val }}</span>
+    </div>
+    {% endmacro %}
+    {{ ligne("Salarié",        salarie.nom_complet) }}
+    {{ ligne("Date d'embauche",salarie.date_embauche|date_fr if salarie.date_embauche else '—') }}
+    {{ ligne("Date cessation", date_cessation.strftime('%d/%m/%Y')) }}
+    {{ ligne("Ancienneté",     solde.anciennete_annees|string + " an(s) " + solde.anciennete_mois|string + " mois") }}
+    <div style="height:.5rem"></div>
+    {{ ligne("Jours acquis",   (solde.jours_acquis|round(1))|string + " j") }}
+    {{ ligne("Jours pris",     (solde.jours_pris|round(1))|string + " j", '#059669') }}
+    {{ ligne("Jours restants", (solde.jours_restants|round(1))|string + " j", '#dc2626', True) }}
+    <div style="height:.5rem"></div>
+    {{ ligne("Nb bulletins analysés", solde.nb_bulletins|string) }}
+    {{ ligne("Moy. 12 derniers bruts", solde.moyenne_12_mois|int|fcfa) }}
+    {{ ligne("Dernier salaire brut",   solde.dernier_brut|int|fcfa) }}
+    {{ ligne("Base retenue (max)",     solde.base_calcul|int|fcfa, '#1a2332', True) }}
+    {{ ligne("Base journalière (÷30)", solde.base_journaliere|round(2)|string + " FCFA") }}
+    <div style="padding:.75rem 0;border-top:2px solid #1a2332;margin-top:.5rem">
+      <div style="display:flex;justify-content:space-between;font-size:1rem">
+        <span style="font-weight:700;color:#1a2332">Indemnité congés</span>
+        <span style="font-weight:900;font-size:1.1rem;color:#059669">{{ solde.indemnite_conges|int|fcfa }}</span>
+      </div>
+      <div style="font-size:.72rem;color:#9ca3af;margin-top:.25rem">
+        = {{ solde.base_journaliere }} × {{ solde.jours_restants|round(1) }} jours
+      </div>
+    </div>
+  </div>
+
+  <!-- Indemnité licenciement + total -->
+  <div>
+    <div class="card p-5" style="margin-bottom:1rem">
+      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">⚖️ Indemnité de licenciement</h2>
+      <p style="font-size:.78rem;color:#6b7280;margin:0 0 .75rem">Gabon : 1/3 de mois de salaire × années d'ancienneté (si ≥ 1 an)</p>
+      {% if solde.anciennete_annees >= 1 %}
+      <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
+        <span style="color:#6b7280">Ancienneté</span>
+        <span>{{ solde.anciennete_annees }} ans</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
+        <span style="color:#6b7280">Base (1/3 mois)</span>
+        <span>{{ (solde.base_calcul / 3)|int|fcfa }}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:.625rem 0;margin-top:.25rem;font-size:1rem">
+        <span style="font-weight:700;color:#1a2332">Indemnité licenciement</span>
+        <span style="font-weight:900;color:#f59e0b">{{ solde.indem_licenciement|int|fcfa }}</span>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:1rem;color:#9ca3af;font-size:.8rem">
+        Ancienneté insuffisante (&lt; 1 an)
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Total à payer -->
+    <div style="background:#1a2332;border-radius:1rem;padding:1.25rem;color:white">
+      <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.5rem">TOTAL À PAYER</div>
+      <div style="font-size:2rem;font-weight:900;color:#34d399">{{ solde.total_a_payer|int|fcfa }}</div>
+      <div style="font-size:.75rem;color:rgba(255,255,255,.5);margin-top:.5rem">
+        Congés non pris : {{ solde.indemnite_conges|int|fcfa }}<br>
+        {% if solde.indem_licenciement > 0 %}
+        Indemnité licenciement : {{ solde.indem_licenciement|int|fcfa }}
+        {% endif %}
+      </div>
+      <div style="margin-top:1rem">
+        <button onclick="window.print()"
+          style="background:rgba(255,255,255,.1);color:white;border:1px solid rgba(255,255,255,.2);padding:.5rem 1rem;border-radius:.5rem;font-size:.8rem;font-weight:700;cursor:pointer">
+          🖨️ Imprimer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Note légale -->
+<div style="margin-top:1rem;padding:.75rem 1rem;background:#eff6ff;border-radius:.75rem;font-size:.75rem;color:#1e40af;line-height:1.6">
+  <strong>Base légale :</strong> Code du Travail Gabonais, Art. 174 et suivants.
+  Indemnité compensatrice = salaire journalier moyen × jours de congés non pris.
+  Base journalière = max(moyenne 12 mois, dernier brut) ÷ 30.
+</div>
+
+{% endblock %}

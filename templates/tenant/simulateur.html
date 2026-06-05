@@ -384,4 +384,288 @@ const style = document.createElement('style');
 style.textContent = '@media print { .card:first-child, #panneau-resultats > .card:first-child { display:none!important; } #sim-grid { grid-template-columns:1fr; } #panneau-resultats { position:static; } }';
 document.head.appendChild(style);
 </script>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<!-- SIMULATIONS AVANCÉES                                       -->
+<!-- ══════════════════════════════════════════════════════════ -->
+<div style="margin-top:2rem">
+  <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">🔬 Simulations avancées</h2>
+
+  <!-- Onglets -->
+  <div style="display:flex;gap:.375rem;margin-bottom:1rem;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem">
+    {% for tab_id, tab_label in [('tab-aug','📈 Augmentation'),('tab-net','🎯 Net → Brut'),('tab-comp','⚖️ Comparer scénarios')] %}
+    <button onclick="switchTab('{{ tab_id }}')" id="btn-{{ tab_id }}"
+      style="padding:.375rem .875rem;border-radius:.5rem .5rem 0 0;font-size:.8rem;font-weight:700;border:none;cursor:pointer;
+             background:{% if tab_id == 'tab-aug' %}#1a2332;color:white{% else %}#f3f4f6;color:#374151{% endif %}">
+      {{ tab_label }}
+    </button>
+    {% endfor %}
+  </div>
+
+  <!-- TAB 1 : Augmentation -->
+  <div id="tab-aug" class="adv-tab">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card p-5">
+        <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Paramètres</h3>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Salaire actuel (FCFA)</label>
+          <input type="number" id="aug-salaire" placeholder="400000" step="1000"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem">
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">% augmentation</label>
+            <input type="number" id="aug-pct" placeholder="10" step="0.5" min="0"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">ou montant fixe</label>
+            <input type="number" id="aug-montant" placeholder="50000" step="1000"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+          </div>
+        </div>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Parts IRPP</label>
+          <input type="number" id="aug-parts" value="1" min="1" max="5" step="0.5"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        <button onclick="simulerAugmentation()"
+          style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.5rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+          Calculer l'impact
+        </button>
+      </div>
+      <div class="card p-5" id="aug-result" style="display:none">
+        <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Impact de l'augmentation</h3>
+        <div id="aug-result-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2 : Net → Brut -->
+  <div id="tab-net" class="adv-tab" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div class="card p-5">
+        <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Net souhaité</h3>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Net à payer cible (FCFA)</label>
+          <input type="number" id="ntb-net" placeholder="350000" step="1000"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        <div style="margin-bottom:.75rem">
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Parts IRPP</label>
+          <input type="number" id="ntb-parts" value="1" min="1" max="5" step="0.5"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        <button onclick="simulerNetVersBrut()"
+          style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.5rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+          Calculer le brut nécessaire
+        </button>
+        <p style="font-size:.72rem;color:#9ca3af;margin:.5rem 0 0">Utilise une recherche dichotomique précise à 100 FCFA</p>
+      </div>
+      <div class="card p-5" id="ntb-result" style="display:none">
+        <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Brut nécessaire</h3>
+        <div id="ntb-result-content"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3 : Comparer scénarios -->
+  <div id="tab-comp" class="adv-tab" style="display:none">
+    <div class="card p-5" style="margin-bottom:1rem">
+      <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Définir les scénarios (2 à 3)</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem" id="scenarios-grid">
+        {% for i in [1,2,3] %}
+        <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.875rem">
+          <input type="text" id="sc{{ i }}-label" value="Scénario {{ i }}"
+            style="width:100%;border:none;border-bottom:1px solid #e5e7eb;padding:.25rem 0;font-size:.8rem;font-weight:700;color:#1a2332;margin-bottom:.625rem;background:transparent;box-sizing:border-box"/>
+          {% for field, placeholder, label in [
+            ('salaire_base','400000','Salaire base'),('prime_caisse','0','Prime caisse'),
+            ('prime_transport','35000','Transport'),('heures_sup_10','0','H.sup 10%'),
+            ('indem_logement','0','Indem. logement'),
+          ] %}
+          <div style="margin-bottom:.375rem">
+            <label style="font-size:.65rem;color:#6b7280">{{ label }}</label>
+            <input type="number" id="sc{{ i }}-{{ field }}" placeholder="{{ placeholder }}" step="1000" value="{{ placeholder if field == 'prime_transport' else 0 if placeholder == '0' else '' }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.375rem;padding:.3rem .5rem;font-size:.8rem;box-sizing:border-box"/>
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <div style="margin-top:.75rem;display:flex;gap:.5rem">
+        <input type="number" id="comp-parts" value="1" min="1" max="5" step="0.5" placeholder="Parts IRPP"
+          style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem;width:100px"/>
+        <button onclick="comparerScenarios()"
+          style="background:#7c3aed;color:white;padding:.375rem 1.25rem;border-radius:.5rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+          Comparer
+        </button>
+      </div>
+    </div>
+    <div id="comp-result" style="display:none">
+      <div class="card p-5">
+        <h3 style="font-size:.875rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Comparaison</h3>
+        <div id="comp-result-content" style="overflow-x:auto"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function switchTab(id) {
+  document.querySelectorAll('.adv-tab').forEach(t => t.style.display = 'none');
+  document.getElementById(id).style.display = 'block';
+  document.querySelectorAll('[id^=btn-tab]').forEach(b => {
+    b.style.background = '#f3f4f6'; b.style.color = '#374151';
+  });
+  const btn = document.getElementById('btn-' + id);
+  if (btn) { btn.style.background = '#1a2332'; btn.style.color = 'white'; }
+}
+
+function fcfa(v) {
+  return parseInt(v || 0).toLocaleString('fr') + ' FCFA';
+}
+
+function rowKV(label, val, color) {
+  return `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid #f3f4f6;font-size:.82rem">
+    <span style="color:#6b7280">${label}</span>
+    <span style="font-weight:600;color:${color||'#374151'}">${val}</span>
+  </div>`;
+}
+
+async function simulerAugmentation() {
+  const salaire = parseFloat(document.getElementById('aug-salaire').value);
+  const pct     = document.getElementById('aug-pct').value    ? parseFloat(document.getElementById('aug-pct').value) : null;
+  const montant = document.getElementById('aug-montant').value ? parseFloat(document.getElementById('aug-montant').value) : null;
+  const parts   = parseFloat(document.getElementById('aug-parts').value) || 1;
+
+  if (!salaire) { alert('Entrez le salaire actuel'); return; }
+  if (!pct && !montant) { alert('Entrez un % ou un montant d\'augmentation'); return; }
+
+  const r = await fetch('/api/simuler-paie/augmentation', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ salaire_actuel: salaire, augmentation_pct: pct,
+                           augmentation_montant: montant, nb_parts: parts })
+  }).then(r => r.json());
+
+  if (r.error) { alert(r.error); return; }
+
+  const pctLabel = r.augmentation_pct.toFixed(1) + '%';
+  const montantLabel = fcfa(r.augmentation_montant);
+  document.getElementById('aug-result-content').innerHTML = `
+    ${rowKV('Salaire actuel → nouveau', fcfa(r.salaire_actuel) + ' → ' + fcfa(r.nouveau_salaire), '#1a2332')}
+    ${rowKV('Augmentation', montantLabel + ' (+' + pctLabel + ')', '#059669')}
+    <div style="height:.5rem"></div>
+    ${rowKV('Net avant', fcfa(r.avant_net), '#6b7280')}
+    ${rowKV('Net après', fcfa(r.apres_net), '#059669')}
+    ${rowKV('Gain net mensuel', '+' + fcfa(r.delta_net), '#059669')}
+    ${rowKV('Gain net annuel (×12)', '+' + fcfa(r.impact_annuel_net), '#059669')}
+    <div style="height:.5rem"></div>
+    ${rowKV('Coût employeur avant', fcfa(r.avant_cout), '#6b7280')}
+    ${rowKV('Coût employeur après', fcfa(r.apres_cout), '#dc2626')}
+    ${rowKV('Surcoût mensuel', '+' + fcfa(r.delta_cout), '#dc2626')}
+    ${rowKV('Surcoût annuel', '+' + fcfa(r.impact_annuel_cout), '#dc2626')}
+    <div style="height:.5rem"></div>
+    ${rowKV('IRPP avant → après', fcfa(r.avant_irpp) + ' → ' + fcfa(r.apres_irpp), '#f59e0b')}
+  `;
+  document.getElementById('aug-result').style.display = 'block';
+}
+
+async function simulerNetVersBrut() {
+  const netCible = parseFloat(document.getElementById('ntb-net').value);
+  const parts    = parseFloat(document.getElementById('ntb-parts').value) || 1;
+  if (!netCible) { alert('Entrez le net cible'); return; }
+
+  const btn = document.querySelector('[onclick="simulerNetVersBrut()"]');
+  btn.textContent = '⏳ Calcul...'; btn.disabled = true;
+
+  const r = await fetch('/api/simuler-paie/net-vers-brut', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ net_cible: netCible, nb_parts: parts })
+  }).then(r => r.json());
+
+  btn.textContent = 'Calculer le brut nécessaire'; btn.disabled = false;
+  if (r.error) { alert(r.error); return; }
+
+  document.getElementById('ntb-result-content').innerHTML = `
+    ${rowKV('Net cible', fcfa(r.net_cible), '#059669')}
+    <div style="padding:.75rem 0;border-bottom:1px solid #e5e7eb">
+      <div style="font-size:.72rem;color:#6b7280;margin-bottom:.25rem">Brut à fixer</div>
+      <div style="font-size:1.5rem;font-weight:900;color:#1a2332">${fcfa(r.brut_necessaire)}</div>
+    </div>
+    ${rowKV('Net obtenu', fcfa(r.net_obtenu), r.ecart >= 0 ? '#059669' : '#dc2626')}
+    ${rowKV('Écart', (r.ecart >= 0 ? '+' : '') + fcfa(r.ecart), r.ecart >= 0 ? '#059669' : '#dc2626')}
+    <div style="height:.5rem"></div>
+    ${rowKV('CNSS salarié', fcfa(r.cnss_salarie), '#6b7280')}
+    ${rowKV('CNAMGS salarié', fcfa(r.cnamgs_salarie), '#6b7280')}
+    ${rowKV('IRPP', fcfa(r.irpp), '#6b7280')}
+    <div style="height:.5rem"></div>
+    ${rowKV('Coût total employeur', fcfa(r.cout_employeur), '#dc2626')}
+    ${rowKV('Taux charges patronales', r.taux_charge_patronal + '%', '#f59e0b')}
+  `;
+  document.getElementById('ntb-result').style.display = 'block';
+}
+
+async function comparerScenarios() {
+  const parts = parseFloat(document.getElementById('comp-parts').value) || 1;
+  const scenarios = [];
+  for (let i = 1; i <= 3; i++) {
+    const sb = parseFloat(document.getElementById('sc' + i + '-salaire_base').value);
+    if (!sb) continue;
+    scenarios.push({
+      label: document.getElementById('sc' + i + '-label').value || 'Scénario ' + i,
+      salaire_base: sb,
+      prime_caisse: parseFloat(document.getElementById('sc' + i + '-prime_caisse').value) || 0,
+      prime_transport: parseFloat(document.getElementById('sc' + i + '-prime_transport').value) || 0,
+      heures_sup_10: parseFloat(document.getElementById('sc' + i + '-heures_sup_10').value) || 0,
+      indem_logement: parseFloat(document.getElementById('sc' + i + '-indem_logement').value) || 0,
+    });
+  }
+  if (scenarios.length < 2) { alert('Remplissez au moins 2 scénarios (salaire base obligatoire)'); return; }
+
+  const r = await fetch('/api/simuler-paie/scenarios', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ scenarios, nb_parts: parts })
+  }).then(r => r.json());
+
+  if (r.error) { alert(r.error); return; }
+
+  // Tableau comparatif
+  const fields = [
+    ['Salaire brut', 'salaire_brut'],
+    ['Net à payer', 'net_a_payer'],
+    ['Coût employeur', 'cout_employeur'],
+    ['CNSS salarié', 'cnss_salarie'],
+    ['IRPP', 'irpp'],
+  ];
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:.82rem"><thead><tr style="background:#f9fafb">';
+  html += '<th style="text-align:left;padding:.4rem .6rem;font-weight:700;color:#374151">Indicateur</th>';
+  r.resultats.forEach(res => {
+    html += `<th style="text-align:right;padding:.4rem .6rem;font-weight:700;color:#1a2332">${res.label}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+  fields.forEach(([label, key]) => {
+    const isNet = key === 'net_a_payer';
+    const isCout = key === 'cout_employeur';
+    html += '<tr style="border-bottom:1px solid #f3f4f6">';
+    html += `<td style="padding:.4rem .6rem;color:#6b7280">${label}</td>`;
+    r.resultats.forEach(res => {
+      const v = res[key] || 0;
+      html += `<td style="text-align:right;padding:.4rem .6rem;font-weight:${isNet?'700':'400'};color:${isNet?'#059669':isCout?'#dc2626':'#374151'}">${fcfa(v)}</td>`;
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  if (r.recommandation) {
+    html += `<div style="margin-top:.75rem;padding:.625rem;background:#f0fdf4;border-radius:.5rem;font-size:.78rem;color:#065f46">
+      ✅ Meilleur net : <strong>${r.recommandation.meilleur_net}</strong> &nbsp;|&nbsp;
+      💰 Moindre coût employeur : <strong>${r.recommandation.moindre_cout}</strong>
+    </div>`;
+  }
+
+  document.getElementById('comp-result-content').innerHTML = html;
+  document.getElementById('comp-result').style.display = 'block';
+}
+</script>
 {% endblock %}

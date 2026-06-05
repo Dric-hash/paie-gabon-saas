@@ -1,0 +1,128 @@
+{% extends "tenant/base.html" %}
+{% block title %}Planning congés {{ mois_nom }} {{ annee }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">📅 Planning — {{ mois_nom }} {{ annee }}</h1>
+  <div style="display:flex;gap:.5rem;align-items:center">
+    {% set mois_prev = mois - 1 if mois > 1 else 12 %}
+    {% set annee_prev = annee if mois > 1 else annee - 1 %}
+    {% set mois_next = mois + 1 if mois < 12 else 1 %}
+    {% set annee_next = annee if mois < 12 else annee + 1 %}
+    <a href="?mois={{ mois_prev }}&annee={{ annee_prev }}"
+      style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">← Préc.</a>
+    <a href="?mois={{ mois_next }}&annee={{ annee_next }}"
+      style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">Suiv. →</a>
+    <a href="/conges/bilan" style="background:#f3f4f6;color:#374151;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;text-decoration:none">📊 Bilan</a>
+    <a href="/conges" style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;text-decoration:none">← Congés</a>
+  </div>
+</div>
+
+{% if planning %}
+<!-- Liste des congés du mois -->
+<div class="card" style="overflow:hidden;margin-bottom:1.25rem">
+  <div style="padding:.75rem 1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+    <h2 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0">Absences en {{ mois_nom }}</h2>
+    <span style="font-size:.75rem;color:#6b7280">{{ planning|length }} absence(s)</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+          <th style="text-align:left;padding:.5rem 1rem;font-weight:700;color:#374151">Salarié</th>
+          <th style="text-align:center;padding:.5rem .75rem;font-weight:700;color:#374151">Départ</th>
+          <th style="text-align:center;padding:.5rem .75rem;font-weight:700;color:#374151">Retour</th>
+          <th style="text-align:center;padding:.5rem .75rem;font-weight:700;color:#374151">Jours</th>
+          <th style="text-align:center;padding:.5rem .75rem;font-weight:700;color:#374151">Type</th>
+          <th style="text-align:center;padding:.5rem .75rem;font-weight:700;color:#374151">Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in planning %}
+        <tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:.5rem 1rem;font-weight:600;color:#1a2332">{{ p.salarie_nom }}</td>
+          <td style="padding:.5rem .75rem;text-align:center;color:#374151">
+            {{ p.date_depart | replace('-', '/') }}
+          </td>
+          <td style="padding:.5rem .75rem;text-align:center;color:#374151">
+            {{ p.date_retour | replace('-', '/') if p.date_retour else '—' }}
+          </td>
+          <td style="padding:.5rem .75rem;text-align:center;font-weight:700">{{ p.jours|int }}j</td>
+          <td style="padding:.5rem .75rem;text-align:center">
+            <span style="padding:.2rem .5rem;border-radius:9999px;font-size:.72rem;font-weight:700;background:{{ p.couleur }}22;color:{{ p.couleur }}">
+              {{ p.type_conge }}
+            </span>
+          </td>
+          <td style="padding:.5rem .75rem;text-align:center">
+            {% set sc = {'APPROUVÉ':'#d1fae5','APPROUVE':'#d1fae5','PRIS':'#dbeafe','DEMANDÉ':'#fef3c7','DEMANDE':'#fef3c7'} %}
+            {% set tc = {'APPROUVÉ':'#065f46','APPROUVE':'#065f46','PRIS':'#1e40af','DEMANDÉ':'#92400e','DEMANDE':'#92400e'} %}
+            <span style="padding:.2rem .5rem;border-radius:9999px;font-size:.72rem;font-weight:700;
+              background:{{ sc.get(p.statut,'#f3f4f6') }};color:{{ tc.get(p.statut,'#374151') }}">
+              {{ p.statut }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Visualisation calendrier -->
+<div class="card p-5">
+  <h2 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Calendrier {{ mois_nom }} {{ annee }}</h2>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:700px">
+      <thead>
+        <tr>
+          <th style="padding:.4rem .5rem;text-align:left;width:140px;color:#6b7280;font-weight:500">Salarié</th>
+          {% for j in range(1, nb_jours + 1) %}
+          <th style="padding:.3rem;text-align:center;min-width:22px;
+            {% if j in [6,7,13,14,20,21,27,28] %}background:#f9fafb;{% endif %}
+            color:#6b7280;font-weight:500;font-size:.65rem">{{ j }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in planning %}
+        {% set d_debut = p.date_depart.split('-')[2]|int %}
+        {% set d_fin = p.date_retour.split('-')[2]|int if p.date_retour else d_debut %}
+        <tr style="border-bottom:1px solid #f9fafb">
+          <td style="padding:.3rem .5rem;font-weight:600;color:#374151;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">
+            {{ p.salarie_nom.split(' ')[0] }}
+          </td>
+          {% for j in range(1, nb_jours + 1) %}
+          <td style="padding:2px;text-align:center;min-height:20px;
+            {% if d_debut <= j <= d_fin %}background:{{ p.couleur }}33;{% endif %}">
+            {% if j == d_debut %}
+            <div style="background:{{ p.couleur }};border-radius:9999px 0 0 9999px;height:14px;font-size:0"></div>
+            {% elif j == d_fin and j != d_debut %}
+            <div style="background:{{ p.couleur }};border-radius:0 9999px 9999px 0;height:14px;font-size:0"></div>
+            {% elif d_debut < j < d_fin %}
+            <div style="background:{{ p.couleur }};height:14px;font-size:0"></div>
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top:.75rem;display:flex;gap:1rem;flex-wrap:wrap">
+    {% for type_c, color in [('ANNUEL','#3b82f6'),('MALADIE','#ef4444'),('MATERNITE','#ec4899'),('SANS_SOLDE','#9ca3af')] %}
+    <span style="display:flex;align-items:center;gap:.375rem;font-size:.72rem;color:#6b7280">
+      <span style="width:12px;height:12px;border-radius:2px;background:{{ color }};display:inline-block"></span>
+      {{ type_c }}
+    </span>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:3rem;color:#9ca3af">
+  <div style="font-size:3rem;margin-bottom:.75rem">🏖️</div>
+  <p style="margin:0;font-size:.9rem">Aucune absence en {{ mois_nom }} {{ annee }}</p>
+  <a href="/conges/nouveau" style="display:inline-block;margin-top:1rem;color:#2563eb;font-size:.8rem">+ Enregistrer un congé</a>
+</div>
+{% endif %}
+
+{% endblock %}
