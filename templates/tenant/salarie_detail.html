@@ -114,6 +114,19 @@
         <span style="font-weight:900;color:#1a2332">{{ contrat.salaire_base|fcfa }}</span>
       </div>
       {% endif %}
+      <!-- Lien gestion des contrats -->
+      <div style="padding:.625rem 0;border-bottom:1px solid #f9fafb">
+        <a href="/salaries/{{ salarie.id }}/contrats"
+          style="font-size:.78rem;color:#2563eb;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:.375rem">
+          📋 Voir l'historique des contrats
+          {% set nb_contrats = salarie.contrats|length %}
+          {% if nb_contrats > 0 %}
+          <span style="background:#dbeafe;color:#1e40af;padding:.1rem .4rem;border-radius:9999px;font-size:.68rem;font-weight:700">
+            {{ nb_contrats }}
+          </span>
+          {% endif %}
+        </a>
+      </div>
       {% if salarie.date_cessation %}
       {{ info2("Date de cessation", salarie.date_cessation|date_fr) }}
       {{ info2("Motif de rupture", salarie.type_rupture) }}

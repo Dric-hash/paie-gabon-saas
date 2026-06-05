@@ -1,0 +1,169 @@
+{% extends "tenant/base.html" %}
+{% block title %}Contrats — {{ salarie.nom_complet }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+  <a href="/salaries/{{ salarie.id }}" style="color:#6b7280;font-size:.875rem;text-decoration:none">← {{ salarie.nom_complet }}</a>
+  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">📋 Contrats</h1>
+  {% if current_user.can_edit %}
+  <a href="/salaries/{{ salarie.id }}/contrats/nouveau"
+    style="margin-left:auto;background:#1a2332;color:white;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">
+    + Nouveau contrat
+  </a>
+  {% endif %}
+</div>
+
+<!-- Infos salarié -->
+<div class="card p-4" style="margin-bottom:1.25rem;display:flex;gap:1.5rem;align-items:center;flex-wrap:wrap">
+  <div style="width:48px;height:48px;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:900;flex-shrink:0">
+    {{ salarie.nom[0] }}{{ salarie.prenom[0] }}
+  </div>
+  <div>
+    <div style="font-size:1rem;font-weight:700;color:#1a2332">{{ salarie.nom_complet }}</div>
+    <div style="font-size:.8rem;color:#6b7280">{{ salarie.matricule }} · {{ salarie.emploi or '—' }}</div>
+  </div>
+  {% set contrat_actif = contrats | selectattr('actif') | first %}
+  {% if contrat_actif %}
+  <div style="margin-left:auto;text-align:right">
+    <div style="font-size:.7rem;color:#6b7280">Contrat actif</div>
+    <div style="font-size:1rem;font-weight:700;color:#059669">{{ contrat_actif.type_contrat }}</div>
+    <div style="font-size:.8rem;color:#374151">{{ contrat_actif.salaire_base|fcfa }}</div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Liste des contrats -->
+<div class="card" style="overflow:hidden">
+  {% if contrats %}
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead>
+        <tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb">
+          <th style="text-align:left;padding:.625rem 1rem;font-weight:700;color:#374151">Type</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Poste</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Date début</th>
+          <th style="text-align:left;padding:.625rem .75rem;font-weight:700;color:#374151">Date fin</th>
+          <th style="text-align:right;padding:.625rem .75rem;font-weight:700;color:#374151">Salaire base</th>
+          <th style="text-align:center;padding:.625rem .75rem;font-weight:700;color:#374151">Statut</th>
+          {% if current_user.can_edit %}<th style="padding:.625rem .75rem"></th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contrats %}
+        <tr style="border-bottom:1px solid #f3f4f6;{% if c.actif %}background:#f0fdf4{% endif %}">
+          <td style="padding:.625rem 1rem">
+            <span style="font-weight:700;padding:.2rem .6rem;border-radius:.375rem;font-size:.75rem;
+              background:{% if c.type_contrat == 'CDI' %}#dbeafe{% elif c.type_contrat == 'CDD' %}#fef3c7{% else %}#f3f4f6{% endif %};
+              color:{% if c.type_contrat == 'CDI' %}#1e40af{% elif c.type_contrat == 'CDD' %}#92400e{% else %}#374151{% endif %}">
+              {{ c.type_contrat }}
+            </span>
+          </td>
+          <td style="padding:.625rem .75rem;color:#374151">{{ c.poste or '—' }}</td>
+          <td style="padding:.625rem .75rem;color:#374151">
+            {{ c.date_debut.strftime('%d/%m/%Y') if c.date_debut else '—' }}
+          </td>
+          <td style="padding:.625rem .75rem;color:{% if not c.date_fin %}#059669{% else %}#6b7280{% endif %}">
+            {{ c.date_fin.strftime('%d/%m/%Y') if c.date_fin else 'En cours' }}
+          </td>
+          <td style="padding:.625rem .75rem;text-align:right;font-weight:700;color:#1a2332">
+            {{ c.salaire_base|fcfa }}
+          </td>
+          <td style="padding:.625rem .75rem;text-align:center">
+            {% if c.actif %}
+            <span style="background:#d1fae5;color:#065f46;padding:.15rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:700">
+              ✅ Actif
+            </span>
+            {% else %}
+            <span style="background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:9999px;font-size:.7rem;font-weight:700">
+              Terminé
+            </span>
+            {% endif %}
+          </td>
+          {% if current_user.can_edit %}
+          <td style="padding:.625rem .75rem;text-align:right">
+            <div style="display:flex;gap:.375rem;justify-content:flex-end">
+              <a href="/contrats/{{ c.id }}/modifier"
+                style="background:#dbeafe;color:#1e40af;padding:.25rem .5rem;border-radius:.375rem;font-size:.72rem;font-weight:700;text-decoration:none">
+                ✏️ Modifier
+              </a>
+              {% if c.actif %}
+              <button type="button"
+                onclick="document.getElementById('modal-fin-{{ c.id }}').style.display='flex'"
+                style="background:#fef3c7;color:#92400e;padding:.25rem .5rem;border-radius:.375rem;font-size:.72rem;font-weight:700;border:none;cursor:pointer">
+                🔚 Terminer
+              </button>
+              <!-- Modal terminer contrat -->
+              <div id="modal-fin-{{ c.id }}"
+                style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center">
+                <div style="background:white;border-radius:1rem;padding:1.5rem;max-width:400px;width:90%">
+                  <h3 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 .75rem">
+                    Terminer le contrat
+                  </h3>
+                  <p style="font-size:.85rem;color:#6b7280;margin:0 0 .75rem">
+                    Date de fin : <strong>aujourd'hui</strong>
+                  </p>
+                  <form method="POST" action="/contrats/{{ c.id }}/terminer">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <div style="margin-bottom:.75rem">
+                      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">
+                        Motif (optionnel)
+                      </label>
+                      <select name="motif"
+                        style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.85rem">
+                        <option value="">— Sélectionner —</option>
+                        <option value="Fin CDD">Fin de CDD</option>
+                        <option value="Démission">Démission</option>
+                        <option value="Licenciement">Licenciement</option>
+                        <option value="Retraite">Départ à la retraite</option>
+                        <option value="Rupture conventionnelle">Rupture conventionnelle</option>
+                        <option value="Décès">Décès</option>
+                        <option value="Autre">Autre</option>
+                      </select>
+                    </div>
+                    <div style="display:flex;gap:.5rem">
+                      <button type="submit"
+                        style="flex:1;background:#f59e0b;color:white;padding:.625rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+                        Confirmer la fin
+                      </button>
+                      <button type="button"
+                        onclick="document.getElementById('modal-fin-{{ c.id }}').style.display='none'"
+                        style="flex:1;background:#f3f4f6;color:#374151;padding:.625rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+                        Annuler
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+              {% else %}
+              <form method="POST" action="/contrats/{{ c.id }}/supprimer" style="display:inline"
+                onsubmit="return confirm('Supprimer ce contrat définitivement ?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit"
+                  style="background:#fee2e2;color:#dc2626;padding:.25rem .5rem;border-radius:.375rem;font-size:.72rem;font-weight:700;border:none;cursor:pointer">
+                  🗑️
+                </button>
+              </form>
+              {% endif %}
+            </div>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">📋</div>
+    <p style="margin:0">Aucun contrat enregistré.</p>
+    {% if current_user.can_edit %}
+    <a href="/salaries/{{ salarie.id }}/contrats/nouveau"
+      style="display:inline-block;margin-top:1rem;background:#1a2332;color:white;padding:.5rem 1.25rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">
+      + Créer le premier contrat
+    </a>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

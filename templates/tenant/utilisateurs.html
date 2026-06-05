@@ -132,17 +132,34 @@
           <td style="text-align:center">
             {% if u.id != current_user.id %}
             <div style="display:flex;gap:.375rem;justify-content:center">
+              <!-- Modifier -->
+              <a href="/utilisateurs/{{ u.id }}/modifier"
+                style="font-size:.7rem;padding:.25rem .5rem;border-radius:.5rem;background:#dbeafe;color:#1e40af;font-weight:700;text-decoration:none">
+                ✏️
+              </a>
+              <!-- Activer/Désactiver -->
               <form method="POST" action="/utilisateurs/{{ u.id }}/toggle" style="display:inline">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                 <button title="{{ 'Désactiver' if u.actif else 'Activer' }}"
                   style="font-size:.7rem;padding:.25rem .5rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700;
                   {{ 'background:#fee2e2;color:#dc2626' if u.actif else 'background:#d1fae5;color:#059669' }}">
                   {{ '🔴' if u.actif else '✅' }}
                 </button>
               </form>
+              <!-- Supprimer définitivement -->
+              {% if current_user.is_tenant_admin %}
+              <form method="POST" action="/utilisateurs/{{ u.id }}/supprimer" style="display:inline"
+                onsubmit="return confirm('Supprimer définitivement {{ u.nom_complet }} ?\n\nCette action est irréversible.')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button title="Supprimer définitivement"
+                  style="font-size:.7rem;padding:.25rem .5rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700;background:#fef2f2;color:#991b1b">
+                  🗑️
+                </button>
+              </form>
+              {% endif %}
             </div>
             {% else %}
-            <span style="font-size:.7rem;color:#9ca3af">—</span>
+            <span style="font-size:.7rem;color:#9ca3af">— vous —</span>
             {% endif %}
           </td>
           {% endif %}

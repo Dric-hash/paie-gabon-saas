@@ -1,0 +1,167 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ 'Modifier' if contrat else 'Nouveau' }} contrat — {{ salarie.nom_complet }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+  <a href="/salaries/{{ salarie.id }}/contrats" style="color:#6b7280;font-size:.875rem;text-decoration:none">← Contrats</a>
+  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">
+    {{ '✏️ Modifier le contrat' if contrat else '+ Nouveau contrat' }}
+  </h1>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;max-width:900px">
+
+  <!-- Formulaire -->
+  <div class="card p-6">
+    <form method="POST"
+      action="{{ '/contrats/' + contrat.id|string + '/modifier' if contrat else '/salaries/' + salarie.id|string + '/contrats/nouveau' }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+      <!-- Type de contrat -->
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+          Type de contrat *
+        </label>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          {% for tc in ['CDI','CDD','CDIC','Stage','Essai','Mission'] %}
+          <label style="cursor:pointer">
+            <input type="radio" name="type_contrat" value="{{ tc }}"
+              {{ 'checked' if (contrat and contrat.type_contrat == tc) or (not contrat and tc == 'CDI') }}
+              style="display:none" class="radio-contrat" data-label="{{ tc }}">
+            <span class="badge-contrat" style="display:inline-block;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;cursor:pointer;border:2px solid #e5e7eb;background:white;color:#374151">
+              {{ tc }}
+            </span>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Poste -->
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">Poste *</label>
+        <input type="text" name="poste" required
+          value="{{ contrat.poste if contrat else salarie.emploi or '' }}"
+          placeholder="Ex: Technicien BTP, Comptable..."
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+      </div>
+
+      <!-- Salaire de base -->
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+          Salaire de base (FCFA) *
+        </label>
+        <input type="number" name="salaire_base" required min="0" step="1000"
+          value="{{ (contrat.salaire_base|int) if contrat else '' }}"
+          placeholder="Ex: 400000"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+        <p style="font-size:.7rem;color:#9ca3af;margin:.25rem 0 0">SMIG Gabon 2026 : 150 000 FCFA</p>
+      </div>
+
+      <!-- Catégorie -->
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">Catégorie d'emploi</label>
+        <select name="categorie_id"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+          <option value="">— Non définie —</option>
+          {% for cat in categories %}
+          <option value="{{ cat.id }}"
+            {{ 'selected' if (contrat and contrat.categorie_id == cat.id) or (not contrat and salarie.categorie_id == cat.id) }}>
+            {{ cat.code }} — {{ cat.libelle }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <!-- Dates -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:1rem">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+            Date de début *
+          </label>
+          <input type="date" name="date_debut" required
+            value="{{ contrat.date_debut.strftime('%Y-%m-%d') if contrat and contrat.date_debut else '' }}"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+            Date de fin <span style="color:#9ca3af">(CDD uniquement)</span>
+          </label>
+          <input type="date" name="date_fin"
+            value="{{ contrat.date_fin.strftime('%Y-%m-%d') if contrat and contrat.date_fin else '' }}"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
+      </div>
+
+      <button type="submit"
+        style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+        💾 {{ 'Enregistrer les modifications' if contrat else 'Créer le contrat' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Historique contrats existants -->
+  <div>
+    <h3 style="font-size:.875rem;font-weight:700;color:#374151;margin:0 0 .75rem">Historique des contrats</h3>
+    {% set contrats_hist = salarie.contrats | sort(attribute='date_debut', reverse=True) %}
+    {% if contrats_hist %}
+    {% for c in contrats_hist %}
+    <div style="padding:.75rem;border-radius:.75rem;margin-bottom:.5rem;
+      background:{% if c.actif %}#f0fdf4{% else %}#f9fafb{% endif %};
+      border:1px solid {% if c.actif %}#bbf7d0{% else %}#e5e7eb{% endif %}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <span style="font-size:.78rem;font-weight:700;
+            color:{% if c.type_contrat == 'CDI' %}#1e40af{% elif c.type_contrat == 'CDD' %}#92400e{% else %}#374151{% endif %}">
+            {{ c.type_contrat }}
+          </span>
+          {% if c.actif %}
+          <span style="font-size:.68rem;background:#d1fae5;color:#065f46;padding:.1rem .4rem;border-radius:9999px;font-weight:700;margin-left:.4rem">
+            ACTIF
+          </span>
+          {% endif %}
+        </div>
+        <span style="font-size:.72rem;color:#6b7280">
+          {{ c.date_debut.strftime('%d/%m/%Y') if c.date_debut else '—' }}
+          {% if c.date_fin %} → {{ c.date_fin.strftime('%d/%m/%Y') }}{% endif %}
+        </span>
+      </div>
+      <div style="font-size:.8rem;color:#374151;margin-top:.25rem">{{ c.poste or '—' }}</div>
+      <div style="font-size:.8rem;font-weight:700;color:#059669;margin-top:.1rem">{{ c.salaire_base|fcfa }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.8rem">
+      Aucun contrat précédent
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+// Sélecteur de type de contrat visuel
+document.querySelectorAll('.radio-contrat').forEach(radio => {
+  radio.addEventListener('change', () => updateBadges());
+  radio.parentElement.querySelector('.badge-contrat').addEventListener('click', () => {
+    radio.checked = true;
+    updateBadges();
+  });
+});
+
+function updateBadges() {
+  document.querySelectorAll('.radio-contrat').forEach(r => {
+    const badge = r.parentElement.querySelector('.badge-contrat');
+    if (r.checked) {
+      badge.style.background = '#1a2332';
+      badge.style.color = 'white';
+      badge.style.borderColor = '#1a2332';
+    } else {
+      badge.style.background = 'white';
+      badge.style.color = '#374151';
+      badge.style.borderColor = '#e5e7eb';
+    }
+  });
+}
+updateBadges();
+</script>
+
+{% endblock %}

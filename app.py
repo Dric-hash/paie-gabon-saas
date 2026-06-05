@@ -1915,6 +1915,188 @@ def salarie_modifier(id):
         action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# GESTION DES CONTRATS SALARIÉS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/salaries/<int:sal_id>/contrats")
+@login_required
+@tenant_required
+def contrats_salarie(sal_id):
+    """Liste de tous les contrats d'un salarié avec historique."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    contrats = Contrat.query.filter_by(
+        salarie_id=sal_id, tenant_id=t.id
+    ).order_by(Contrat.date_debut.desc()).all()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).order_by(CategorieEmploi.code).all()
+    return render_template("tenant/contrats_salarie.html",
+                           salarie=s, contrats=contrats, tenant=t,
+                           categories=cats)
+
+
+@app.route("/salaries/<int:sal_id>/contrats/nouveau", methods=["GET","POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_nouveau(sal_id):
+    """Créer un nouveau contrat pour un salarié."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+
+    if request.method == "POST":
+        type_c  = request.form.get("type_contrat", "CDI")
+        salaire = float(request.form.get("salaire_base", 0) or 0)
+        poste   = request.form.get("poste", "").strip() or s.emploi
+        cat_id  = request.form.get("categorie_id", type=int)
+
+        try:
+            date_debut = datetime.strptime(request.form.get("date_debut",""), "%Y-%m-%d").date()
+        except ValueError:
+            flash("Date de début invalide.", "error")
+            return render_template("tenant/contrat_form.html",
+                                   salarie=s, tenant=t, categories=cats, contrat=None)
+
+        date_fin = None
+        if request.form.get("date_fin"):
+            try:
+                date_fin = datetime.strptime(request.form.get("date_fin"), "%Y-%m-%d").date()
+            except ValueError:
+                flash("Date de fin invalide.", "error")
+                return render_template("tenant/contrat_form.html",
+                                       salarie=s, tenant=t, categories=cats, contrat=None)
+
+        if not salaire or salaire <= 0:
+            flash("Le salaire de base doit être positif.", "error")
+            return render_template("tenant/contrat_form.html",
+                                   salarie=s, tenant=t, categories=cats, contrat=None)
+
+        # Désactiver l'ancien contrat actif
+        Contrat.query.filter_by(
+            salarie_id=sal_id, tenant_id=t.id, actif=True
+        ).update({"actif": False})
+
+        # Créer le nouveau contrat
+        c = Contrat(
+            tenant_id    = t.id,
+            salarie_id   = sal_id,
+            type_contrat = type_c,
+            date_debut   = date_debut,
+            date_fin     = date_fin,
+            salaire_base = salaire,
+            poste        = poste,
+            categorie_id = cat_id,
+            actif        = True,
+        )
+        # Mettre à jour le salarié
+        s.emploi = poste
+        if cat_id:
+            s.categorie_id = cat_id
+
+        db.session.add(c)
+        db.session.flush()
+        log_action("CREATE", "contrat", c.id,
+                   f"Nouveau contrat {type_c} pour {s.nom_complet} — "
+                   f"salaire {int(salaire):,} FCFA à partir du {date_debut.strftime('%d/%m/%Y')}")
+        db.session.commit()
+        _cache_delete(f"{t.id}:")
+        flash(f"Contrat {type_c} créé pour {s.nom_complet}.", "success")
+        return redirect(url_for("contrats_salarie", sal_id=sal_id))
+
+    return render_template("tenant/contrat_form.html",
+                           salarie=s, tenant=t, categories=cats, contrat=None)
+
+
+@app.route("/contrats/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_modifier(id):
+    """Modifier un contrat existant."""
+    t = get_tenant()
+    c = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = c.salarie
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+
+    if request.method == "POST":
+        avant = c.to_dict()
+        c.type_contrat = request.form.get("type_contrat", c.type_contrat)
+        c.poste        = request.form.get("poste", c.poste or "").strip()
+        c.categorie_id = request.form.get("categorie_id", type=int) or c.categorie_id
+
+        try:
+            c.salaire_base = float(request.form.get("salaire_base", c.salaire_base) or 0)
+        except ValueError:
+            pass
+
+        if request.form.get("date_fin"):
+            try:
+                c.date_fin = datetime.strptime(request.form.get("date_fin"), "%Y-%m-%d").date()
+            except ValueError:
+                flash("Date de fin invalide.", "error")
+                return render_template("tenant/contrat_form.html",
+                                       salarie=s, tenant=t, categories=cats, contrat=c)
+        else:
+            c.date_fin = None
+
+        db.session.flush()
+        log_action("UPDATE", "contrat", c.id,
+                   f"Modification contrat {s.nom_complet}",
+                   avant=avant, apres=c.to_dict())
+        db.session.commit()
+        flash("Contrat mis à jour.", "success")
+        return redirect(url_for("contrats_salarie", sal_id=s.id))
+
+    return render_template("tenant/contrat_form.html",
+                           salarie=s, tenant=t, categories=cats, contrat=c)
+
+
+@app.route("/contrats/<int:id>/terminer", methods=["POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_terminer(id):
+    """Marquer un contrat comme terminé (date de fin = aujourd'hui)."""
+    t  = get_tenant()
+    c  = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s  = c.salarie
+    motif = request.form.get("motif", "").strip()
+
+    from datetime import date as _date
+    c.date_fin = _date.today()
+    c.actif    = False
+
+    log_action("UPDATE", "contrat", c.id,
+               f"Fin de contrat {s.nom_complet} — {motif or 'Non précisé'}")
+    db.session.commit()
+    flash(f"Contrat de {s.nom_complet} terminé.", "success")
+    return redirect(url_for("contrats_salarie", sal_id=s.id))
+
+
+@app.route("/contrats/<int:id>/supprimer", methods=["POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_supprimer(id):
+    """Supprimer un contrat (uniquement si inactif ou aucun bulletin associé)."""
+    t = get_tenant()
+    c = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = c.salarie
+
+    if c.actif:
+        flash("Impossible de supprimer le contrat actif. Terminez-le d'abord.", "error")
+        return redirect(url_for("contrats_salarie", sal_id=s.id))
+
+    log_action("DELETE", "contrat", c.id,
+               f"Suppression contrat {c.type_contrat} de {s.nom_complet} "
+               f"(du {c.date_debut} au {c.date_fin or 'en cours'})")
+    db.session.delete(c)
+    db.session.commit()
+    flash("Contrat supprimé.", "success")
+    return redirect(url_for("contrats_salarie", sal_id=s.id))
+
+
 @app.route("/salaries/<int:id>/supprimer", methods=["POST"])
 @login_required
 def salarie_supprimer(id):
@@ -3231,7 +3413,99 @@ def utilisateur_toggle(id):
     u.actif = not u.actif
     db.session.commit()
     etat = "activé" if u.actif else "désactivé"
+    log_action("UPDATE", "utilisateur", u.id,
+               f"Utilisateur {u.nom_complet} {etat} par {current_user.nom_complet}")
+    db.session.commit()
     flash(f"Utilisateur {u.nom_complet} {etat}.", "success")
+    return redirect(url_for("utilisateurs"))
+
+
+@app.route("/utilisateurs/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def utilisateur_modifier(id):
+    """Modifier le rôle et les infos d'un utilisateur."""
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("utilisateurs"))
+
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    if request.method == "POST":
+        ancien_role = u.role
+        nouveau_role = request.form.get("role", u.role)
+
+        # Empêcher de retirer son propre rôle admin
+        if u.id == current_user.id and nouveau_role != "TENANT_ADMIN":
+            flash("Vous ne pouvez pas changer votre propre rôle.", "error")
+            return redirect(url_for("utilisateurs"))
+
+        u.nom    = request.form.get("nom", u.nom).strip().upper()
+        u.prenom = request.form.get("prenom", u.prenom).strip()
+        u.role   = nouveau_role
+
+        # Changer le mot de passe si fourni
+        nouveau_mdp = request.form.get("nouveau_mdp", "").strip()
+        if nouveau_mdp:
+            if len(nouveau_mdp) < 8:
+                flash("Le mot de passe doit faire au moins 8 caractères.", "error")
+                return render_template("tenant/utilisateur_form.html",
+                                       utilisateur=u, tenant=t, mode="modifier")
+            u.set_password(nouveau_mdp)
+
+        db.session.commit()
+        log_action("UPDATE", "utilisateur", u.id,
+                   f"Modification {u.nom_complet} — rôle : {ancien_role} → {nouveau_role}")
+        db.session.commit()
+        flash(f"Utilisateur {u.nom_complet} mis à jour.", "success")
+        return redirect(url_for("utilisateurs"))
+
+    return render_template("tenant/utilisateur_form.html",
+                           utilisateur=u, tenant=t, mode="modifier")
+
+
+@app.route("/utilisateurs/<int:id>/supprimer", methods=["POST"])
+@login_required
+def utilisateur_supprimer(id):
+    """
+    Supprime définitivement un utilisateur.
+    Règles :
+      - Seul l'admin du tenant peut supprimer
+      - On ne peut pas se supprimer soi-même
+      - On ne peut pas supprimer le dernier admin
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("utilisateurs"))
+
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Règle 1 : pas de suicide
+    if u.id == current_user.id:
+        flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
+        return redirect(url_for("utilisateurs"))
+
+    # Règle 2 : conserver au moins un admin
+    if u.role == "TENANT_ADMIN":
+        nb_admins = Utilisateur.query.filter_by(
+            tenant_id=t.id, role="TENANT_ADMIN", actif=True
+        ).count()
+        if nb_admins <= 1:
+            flash("Impossible de supprimer le seul administrateur du compte. "
+                  "Désignez d'abord un autre administrateur.", "error")
+            return redirect(url_for("utilisateurs"))
+
+    nom_sauvegarde = u.nom_complet
+    log_action("DELETE", "utilisateur", u.id,
+               f"Suppression définitive de {nom_sauvegarde} ({u.role_label})")
+    db.session.delete(u)
+    db.session.commit()
+    flash(f"Utilisateur {nom_sauvegarde} supprimé définitivement.", "success")
     return redirect(url_for("utilisateurs"))
 
 # ── Journaliers ───────────────────────────────────────────────────────────────
