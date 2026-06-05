@@ -3490,14 +3490,14 @@ def utilisateur_supprimer(id):
         flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
         return redirect(url_for("utilisateurs"))
 
-    # Règle 2 : conserver au moins un admin
+    # Règle 2 : conserver au moins un admin actif
     if u.role == "TENANT_ADMIN":
         nb_admins = Utilisateur.query.filter_by(
             tenant_id=t.id, role="TENANT_ADMIN", actif=True
-        ).count()
-        if nb_admins <= 1:
-            flash("Impossible de supprimer le seul administrateur du compte. "
-                  "Désignez d'abord un autre administrateur.", "error")
+        ).filter(Utilisateur.id != u.id).count()
+        if nb_admins == 0:
+            flash("Impossible de supprimer le seul administrateur actif du compte. "
+                  "Activez ou désignez d'abord un autre administrateur.", "error")
             return redirect(url_for("utilisateurs"))
 
     nom_sauvegarde = u.nom_complet
