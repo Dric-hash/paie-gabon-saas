@@ -37,6 +37,14 @@
        style="background:rgba(255,255,255,.15);color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
       ✏️ Modifier
     </a>
+    <a href="/salaries/{{ salarie.id }}/contrats"
+       style="background:#2563eb;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      📋 Contrats
+      {% set nb_c = salarie.contrats | length %}
+      {% if nb_c > 0 %}
+      <span style="background:rgba(255,255,255,.25);padding:.1rem .4rem;border-radius:9999px;font-size:.72rem;margin-left:.3rem">{{ nb_c }}</span>
+      {% endif %}
+    </a>
     <a href="/bulletins/saisie?salarie_id={{ salarie.id }}"
        style="background:#f59e0b;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
       📄 Nouveau bulletin
