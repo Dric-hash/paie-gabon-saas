@@ -62,24 +62,28 @@
   <!-- Indemnité licenciement + total -->
   <div>
     <div class="card p-5" style="margin-bottom:1rem">
-      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">⚖️ Indemnité de licenciement</h2>
-      <p style="font-size:.78rem;color:#6b7280;margin:0 0 .75rem">Gabon : 1/3 de mois de salaire × années d'ancienneté (si ≥ 1 an)</p>
-      {% if solde.anciennete_annees >= 1 %}
+      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">⚖️ Indemnité de services rendus</h2>
+      <p style="font-size:.78rem;color:#6b7280;margin:0 0 .75rem">Convention BTP Gabon Art. A.32 — applicable après 2 ans de présence</p>
+      {% if solde.anciennete_annees >= 2 %}
       <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
         <span style="color:#6b7280">Ancienneté</span>
         <span>{{ solde.anciennete_annees }} ans</span>
       </div>
       <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
-        <span style="color:#6b7280">Base (1/3 mois)</span>
-        <span>{{ (solde.base_calcul / 3)|int|fcfa }}</span>
+        <span style="color:#6b7280">Taux applicable</span>
+        <span>{% if solde.anciennete_annees <= 10 %}20%{% elif solde.anciennete_annees <= 15 %}26%{% elif solde.anciennete_annees <= 20 %}30%{% else %}35%{% endif %} × {{ solde.anciennete_annees }} ans</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
+        <span style="color:#6b7280">Base (moy. 12 mois)</span>
+        <span>{{ solde.moyenne_12_mois|int|fcfa }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:.625rem 0;margin-top:.25rem;font-size:1rem">
-        <span style="font-weight:700;color:#1a2332">Indemnité licenciement</span>
+        <span style="font-weight:700;color:#1a2332">Indemnité services rendus</span>
         <span style="font-weight:900;color:#f59e0b">{{ solde.indem_licenciement|int|fcfa }}</span>
       </div>
       {% else %}
       <div style="text-align:center;padding:1rem;color:#9ca3af;font-size:.8rem">
-        Ancienneté insuffisante (&lt; 1 an)
+        Ancienneté insuffisante (&lt; 2 ans — Convention BTP Art. A.32)
       </div>
       {% endif %}
     </div>
@@ -106,9 +110,10 @@
 
 <!-- Note légale -->
 <div style="margin-top:1rem;padding:.75rem 1rem;background:#eff6ff;border-radius:.75rem;font-size:.75rem;color:#1e40af;line-height:1.6">
-  <strong>Base légale :</strong> Code du Travail Gabonais, Art. 174 et suivants.
-  Indemnité compensatrice = salaire journalier moyen × jours de congés non pris.
-  Base journalière = max(moyenne 12 mois, dernier brut) ÷ 30.
+  <strong>Base légale :</strong> Convention Collective BTP Gabon (octobre 1983).
+  Art. A.42-A.43 (congés) : allocation = max(moy. 12 mois, dernier brut) ÷ 30 × jours restants.
+  Art. A.32 (services rendus) : moy. 12 mois × taux (20%/26%/30%/35%) × années — applicable après 2 ans.
+  Art. A.30.3 (préavis) : barème spécifique BTP de 15 à 190 jours selon ancienneté.
 </div>
 
 {% endblock %}

@@ -172,12 +172,25 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None) -
     base_journaliere = round(base_calcul / 30, 2)
     indemnite        = round(base_journaliere * jours_restants, 0)
 
-    # Indemnité de licenciement (si ancienneté >= 1 an)
+    # ── Indemnité de services rendus — Convention BTP Gabon Art. A.32 ────────
+    # Base : moyenne mensuelle salaire global des 12 derniers mois
+    # Taux par tranche d'ancienneté × nb années de présence :
+    #   2 à 10 ans  → 20%/année
+    #   10 à 15 ans → 26%/année
+    #   15 à 20 ans → 30%/année
+    #   > 20 ans    → 35%/année
     anciennete_annees = acquis_calc["anciennete_annees"]
     indem_licenciement = 0
-    if anciennete_annees >= 1:
-        # Gabon : 1/3 mois de salaire par année d'ancienneté (après 1 an)
-        indem_licenciement = round(base_calcul / 3 * anciennete_annees, 0)
+    if anciennete_annees >= 2:
+        if anciennete_annees <= 10:
+            taux = 0.20
+        elif anciennete_annees <= 15:
+            taux = 0.26
+        elif anciennete_annees <= 20:
+            taux = 0.30
+        else:
+            taux = 0.35
+        indem_licenciement = round(base_calcul * taux * anciennete_annees, 0)
 
     return {
         "salarie":            salarie,

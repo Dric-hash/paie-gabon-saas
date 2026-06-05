@@ -394,3 +394,108 @@ def distribuer_heures_semaine_btp(heures_par_jour: list,
         "heures_restantes_avant_10": max(0, round(SEUIL_10 - total_norm, 2)),
         "heures_restantes_avant_30": max(0, round(SEUIL_30 - total_norm, 2)),
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UTILITAIRES CONVENTION BTP GABON
+# ══════════════════════════════════════════════════════════════════════════════
+
+def calculer_prime_anciennete_btp(salaire_base: float, anciennete_annees: int) -> float:
+    """
+    Calcule la prime d'ancienneté BTP Gabon — Art. A.46.
+    Attribuée après 2 ans de présence continue.
+    Taux : 2% du salaire de base conventionnel, majoré de 1% par an.
+
+    Exemples :
+      2 ans → 2%    du salaire base
+      3 ans → 3%
+      5 ans → 5%
+     10 ans → 10%
+    """
+    if anciennete_annees < 2 or salaire_base <= 0:
+        return 0.0
+    taux = min(0.02 + 0.01 * (anciennete_annees - 2), 0.30)  # plafond 30%
+    return round(salaire_base * taux, 0)
+
+
+def calculer_preavis_btp(anciennete_annees: int) -> int:
+    """
+    Calcule la durée du préavis en jours — Convention BTP Art. A.30.3.
+    Applicable aux CDI.
+
+    Barème :
+      1 mois à 1 an  → 15 jours
+      1 à 3 ans      → 30 jours
+      3 à 5 ans      → 60 jours
+      5 à 10 ans     → 95 jours
+      10 à 15 ans    → 125 jours
+      15 à 20 ans    → 160 jours
+      20 à 25 ans    → 180 jours
+      26 ans+        → 190 jours + 10j par année supplémentaire
+    """
+    if anciennete_annees < 1:
+        return 15
+    elif anciennete_annees < 3:
+        return 30
+    elif anciennete_annees < 5:
+        return 60
+    elif anciennete_annees < 10:
+        return 95
+    elif anciennete_annees < 15:
+        return 125
+    elif anciennete_annees < 20:
+        return 160
+    elif anciennete_annees < 26:
+        return 180
+    else:
+        return 190 + (anciennete_annees - 26) * 10
+
+
+def calculer_indemnite_services_rendus_btp(
+    moyenne_12_mois: float, anciennete_annees: int
+) -> float:
+    """
+    Calcule l'indemnité de services rendus — Convention BTP Art. A.32.
+    En cas de licenciement (hors faute lourde) après 2 ans de présence.
+
+    Base : moyenne mensuelle salaire global des 12 derniers mois
+    Taux :
+      2 à 10 ans  → 20% × années
+      10 à 15 ans → 26% × années
+      15 à 20 ans → 30% × années
+      > 20 ans    → 35% × années
+    """
+    if anciennete_annees < 2 or moyenne_12_mois <= 0:
+        return 0.0
+    if anciennete_annees <= 10:
+        taux = 0.20
+    elif anciennete_annees <= 15:
+        taux = 0.26
+    elif anciennete_annees <= 20:
+        taux = 0.30
+    else:
+        taux = 0.35
+    return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def permissions_familiales_btp(evenement: str) -> int:
+    """
+    Jours de permissions exceptionnelles — Convention BTP Art. A.41.
+    Ces jours NE SONT PAS déduits du congé annuel.
+
+    Événements reconnus :
+      mariage_travailleur, mariage_enfant, mariage_frere_soeur,
+      deces_conjoint_parent_enfant, deces_frere_soeur,
+      deces_beau_parent, naissance_enfant, ceremonie_religieuse
+    """
+    BAREMES = {
+        "mariage_travailleur":         4,
+        "mariage_enfant":              2,
+        "mariage_frere_soeur":         1,
+        "deces_conjoint_parent_enfant":5,
+        "deces_frere_soeur":           2,
+        "deces_beau_parent":           2,
+        "naissance_enfant":            3,
+        "ceremonie_religieuse":        1,
+    }
+    return BAREMES.get(evenement, 0)
