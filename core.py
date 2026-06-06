@@ -246,3 +246,22 @@ def init_limiter(app):
         logger.warning("[LIMITER] flask-limiter non installé. Rate limiting désactivé.")
         _limiter = None
     return _limiter
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ALIAS rétro-compatibilité (anciens noms utilisés dans les blueprints)
+# ══════════════════════════════════════════════════════════════════════════════
+_cache_get    = cache_get
+_cache_set    = cache_set
+_cache_delete = cache_delete
+_parse_date   = parse_date
+
+
+def _pd(v):
+    """Parse une date au format YYYY-MM-DD (alias court)."""
+    if not v:
+        return None
+    try:
+        return datetime.strptime(str(v)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return None

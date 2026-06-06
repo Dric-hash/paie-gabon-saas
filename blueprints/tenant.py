@@ -4,13 +4,14 @@ blueprints/tenant.py — Toutes les routes tenant :
     journaliers, pointage, sites, rapports, exports, paiement,
     paramètres, utilisateurs, audit, recherche, simulateur
 """
-import os, io, json, hmac, math
+import os, io, json, hmac, math, logging
 import secrets as sec
 from datetime import datetime, date, timedelta
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, send_file, abort, session, Response, current_app)
-from flask_login import login_required, current_user
+from flask_login import login_required, current_user, logout_user
+from flask_mail import Message
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 
@@ -26,8 +27,12 @@ from audit import log_action, get_audit_logs
 from core import (get_tenant, tenant_required, can_edit, admin_only,
                   require_permission, calculer_parts_irpp, parse_date,
                   cache_get, cache_set, cache_delete,
+                  _cache_get, _cache_set, _cache_delete, _parse_date, _pd,
+                  send_email_async,
                   TTL_KPIS_DASH, TTL_EVOLUTION, TTL_CATS_STATS, TTL_ALERTES)
 from i18n import SUPPORTED_LANGUAGES, set_language
+
+logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("tenant", __name__)
 
@@ -131,7 +136,7 @@ def dashboard():
     # ── 1. Quota employés dépassé ou proche ──────────────────────────────────
     q_info = t.quota_employes_info
     if q_info.get("max"):
-        pct = round(q_info["total"] / q_info["max"] * 100)
+        pct = round(q_info["actuel"] / q_info["max"] * 100)
         if q_info["plein"]:
             alertes.append({"type":"danger","icone":"🚫","titre":"Limite d'employés atteinte",
                 "msg":f"Vous avez atteint la limite de {q_info['max']} employés de votre plan {t.plan.nom}. "
@@ -139,8 +144,8 @@ def dashboard():
                 "lien":"/parametres","lien_texte":"Changer de plan"})
         elif pct >= 80:
             alertes.append({"type":"warning","icone":"⚠️","titre":"Quota employés bientôt atteint",
-                "msg":f"{q_info['total']}/{q_info['max']} employés utilisés ({pct}%). "
-                      f"Il reste {q_info['max'] - q_info['total']} place(s).",
+                "msg":f"{q_info['actuel']}/{q_info['max']} employés utilisés ({pct}%). "
+                      f"Il reste {q_info['max'] - q_info['actuel']} place(s).",
                 "lien":"/parametres","lien_texte":"Voir le plan"})
 
     # ── 2. Période non créée pour le mois courant ─────────────────────────────
@@ -1451,7 +1456,7 @@ def bulletin_envoyer_email(id):
             subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
             recipients=[dest_email],
             body=corps,
-            sender=app.config["MAIL_DEFAULT_SENDER"]
+            sender=current_app.config["MAIL_DEFAULT_SENDER"]
         )
         # ✅ Envoi dans un thread séparé → le serveur répond immédiatement
         send_email_async(current_app.extensions["mail"], msg)
@@ -1479,7 +1484,7 @@ def bulletins_envoyer_tous():
                      f"Cordialement, {t.denomination}")
             msg = Message(subject=f"Bulletin {b.periode.libelle_complet}",
                 recipients=[b.salarie.email], body=corps,
-                sender=app.config["MAIL_DEFAULT_SENDER"])
+                sender=current_app.config["MAIL_DEFAULT_SENDER"])
             send_email_async(current_app.extensions["mail"], msg)
             nb_ok+=1
         except Exception as e:

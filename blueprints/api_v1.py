@@ -1,26 +1,27 @@
 """
 blueprints/api_v1.py — API REST v1 publique (OAuth2 + token API)
 """
-import json, hmac
+import json, hmac, logging
 from datetime import datetime, timedelta
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import (Blueprint, request, jsonify, current_app,
+                   render_template, flash, redirect, url_for)
 from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 
-from models import (db, Tenant, Utilisateur, Salarie, PeriodePaie,
-                    BulletinPaie, OAuthClient, AuditLog)
+from models import (db, Tenant, Utilisateur, Salarie, CategorieEmploi,
+                    PeriodePaie, BulletinPaie, OAuthClient, AuditLog)
 from calculs_paie import calculer_bulletin
 from audit import log_action
-from core import calculer_parts_irpp, tenant_required, get_tenant, require_permission
+from core import (calculer_parts_irpp, tenant_required, get_tenant,
+                  require_permission, cache_delete, _cache_delete)
 
-try:
-    from api_rest import api_auth_required, _ok, _err, _paginate, require_json
-except ImportError:
-    def api_auth_required(f): return f
-    def _ok(data, **kw): return jsonify({"success": True, "data": data, **kw})
-    def _err(msg, code=400): return jsonify({"success": False, "error": msg}), code
-    def _paginate(q, page, per): items = q.all(); return items, len(items)
-    def require_json(f): return f
+from api_rest import (api_auth_required, _ok, _err, _paginate,
+                      _salarie_dict, _bulletin_dict, _periode_dict,
+                      _oauth_tokens, OAUTH_TOKEN_TTL)
+
+logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 

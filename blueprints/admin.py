@@ -1,13 +1,15 @@
 """
 blueprints/admin.py — Super-Admin : gestion tenants, plans, stats, import
 """
-import os
+import os, io, logging
+import secrets as sec
 from datetime import datetime, timedelta
 
 from flask import (Blueprint, render_template, request, redirect,
                    url_for, flash, jsonify, send_file, abort, session, current_app)
-from flask_login import login_user, login_required, current_user
-import io
+from flask_login import login_user, login_required, logout_user, current_user
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
@@ -15,7 +17,9 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Site, AffectationSite, Paiement)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from audit import log_action
-from core import super_admin_required, get_tenant, cache_delete
+from core import super_admin_required, get_tenant, cache_delete, _cache_delete
+
+logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("admin", __name__)
 
