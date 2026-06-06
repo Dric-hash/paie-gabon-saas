@@ -3078,6 +3078,7 @@ def journalier_feuille_supprimer(id):
 def journaliers_paie_export():
     """Export Excel des feuilles de paie journalier — filtré par site et/ou période."""
     from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
     import io, calendar
 
@@ -3230,7 +3231,7 @@ def journaliers_paie_export():
     # Largeurs colonnes
     col_widths = [28, 18, 20, 13, 13, 10, 13, 16, 20, 14, 15]
     for i, w in enumerate(col_widths, 1):
-        ws.column_dimensions[ws.cell(1, i).column_letter].width = w
+        ws.column_dimensions[get_column_letter(i)].width = w
 
     # ══════════════════════════════════════════════════════════════════════════
     # ONGLET 2 — Récap par site
@@ -3307,7 +3308,7 @@ def journaliers_paie_export():
             cell.alignment     = RIGHT
 
     for i, w in enumerate([28, 16, 14, 14, 22, 22], 1):
-        ws2.column_dimensions[ws2.cell(1, i).column_letter].width = w
+        ws2.column_dimensions[get_column_letter(i)].width = w
 
     # ══════════════════════════════════════════════════════════════════════════
     # ONGLET 3 — Récap par journalier
@@ -3370,7 +3371,7 @@ def journaliers_paie_export():
             cell.number_format = MONEY_FMT; cell.alignment = RIGHT
 
     for i, w in enumerate([28, 18, 20, 12, 11, 13, 22], 1):
-        ws3.column_dimensions[ws3.cell(1, i).column_letter].width = w
+        ws3.column_dimensions[get_column_letter(i)].width = w
 
     # ── Export ────────────────────────────────────────────────────────────────
     out = io.BytesIO()
@@ -4264,6 +4265,7 @@ def journaliers_imprimer():
 @tenant_required
 def export_journal(periode_id):
     from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
     from openpyxl.styles import Font, PatternFill, Alignment
     t=get_tenant()
     p=PeriodePaie.query.filter_by(id=periode_id,tenant_id=t.id).first_or_404()
@@ -4824,6 +4826,7 @@ def rapport_mensuel_site():
 def rapport_mensuel_site_export():
     """Export Excel du rapport mensuel par site."""
     from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     import io, calendar
 
@@ -4955,7 +4958,7 @@ def rapport_mensuel_site_export():
         if ci in (10, 11): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
 
     for i, w in enumerate([24,10,10,12,10,10,10,12,10,22,22], 1):
-        ws.column_dimensions[ws.cell(1,i).column_letter].width = w
+        ws.column_dimensions[get_column_letter(i)].width = w
 
     # ══════════════════════════════════════════════════════════════════════════
     # ONGLETS PAR SITE
@@ -5099,7 +5102,7 @@ def rapport_mensuel_site_export():
                         if ci in (4,8): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
 
         for i, w in enumerate([28,12,20,10,10,10,10,20,12], 1):
-            ws_s.column_dimensions[ws_s.cell(1,i).column_letter].width = w
+            ws_s.column_dimensions[get_column_letter(i)].width = w
 
     # Export
     out = io.BytesIO(); wb.save(out); out.seek(0)
@@ -6119,3 +6122,114 @@ from api_rest import (api_auth_required, _ok, _err, _paginate,
                       _oauth_tokens, OAUTH_TOKEN_TTL)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# RECHERCHE GLOBALE
+# ══════════════════════════════════════════════════════════════════════════════
+@bp.route("/recherche")
+@login_required
+def recherche_globale():
+    """Recherche globale : salariés, journaliers, bulletins, acomptes."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    q = request.args.get("q", "").strip()
+    if not q:
+        return render_template("tenant/recherche.html",
+                               tenant=t, q="", resultats={}, nb_total=0)
+
+    like = f"%{q}%"
+    resultats = {}
+
+    # ── Salariés ──────────────────────────────────────────────────────────────
+    sals = (Salarie.query.filter_by(tenant_id=t.id)
+            .filter(db.or_(
+                Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+                Salarie.matricule.ilike(like), Salarie.emploi.ilike(like),
+                Salarie.telephone.ilike(like)))
+            .order_by(Salarie.nom).limit(10).all())
+    if sals:
+        resultats["salaries"] = [{"id": s.id, "titre": s.nom_complet,
+            "sous_titre": f"{s.emploi or '—'} · {s.matricule}",
+            "badge": s.statut, "lien": f"/salaries/{s.id}",
+            "icone": "👤"} for s in sals]
+
+    # ── Journaliers ───────────────────────────────────────────────────────────
+    jours = (Journalier.query.filter_by(tenant_id=t.id)
+             .filter(db.or_(
+                 Journalier.nom.ilike(like), Journalier.prenom.ilike(like),
+                 Journalier.profession.ilike(like), Journalier.telephone.ilike(like)))
+             .order_by(Journalier.nom).limit(10).all())
+    if jours:
+        resultats["journaliers"] = [{"id": j.id, "titre": j.nom_complet,
+            "sous_titre": f"{j.profession or '—'} · {int(j.taux_horaire or 0)} FCFA/h",
+            "badge": j.statut, "lien": f"/journaliers/{j.id}",
+            "icone": "🦺"} for j in jours]
+
+    # ── Bulletins ─────────────────────────────────────────────────────────────
+    buls = (BulletinPaie.query.filter_by(tenant_id=t.id)
+            .join(Salarie, BulletinPaie.salarie_id == Salarie.id)
+            .join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
+            .filter(db.or_(
+                Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+                Salarie.matricule.ilike(like)))
+            .order_by(BulletinPaie.date_creation.desc()).limit(10).all())
+    if buls:
+        resultats["bulletins"] = [{"id": b.id,
+            "titre": b.salarie.nom_complet,
+            "sous_titre": f"{b.periode.libelle_complet} · Net : {int(b.net_a_payer or 0):,} FCFA",
+            "badge": b.statut, "lien": f"/bulletins/{b.id}",
+            "icone": "📄"} for b in buls]
+
+    # ── Acomptes ──────────────────────────────────────────────────────────────
+    acomps = (Acompte.query.filter_by(tenant_id=t.id)
+              .join(Salarie, Acompte.salarie_id == Salarie.id)
+              .filter(db.or_(
+                  Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+                  Salarie.matricule.ilike(like)))
+              .order_by(Acompte.date_acompte.desc()).limit(10).all())
+    if acomps:
+        resultats["acomptes"] = [{"id": a.id,
+            "titre": a.salarie.nom_complet,
+            "sous_titre": f"{int(a.montant or 0):,} FCFA · {a.date_acompte.strftime('%d/%m/%Y') if a.date_acompte else ''}",
+            "badge": a.statut, "lien": "/acomptes",
+            "icone": "💸"} for a in acomps]
+
+    nb_total = sum(len(v) for v in resultats.values())
+    return render_template("tenant/recherche.html",
+                           tenant=t, q=q, resultats=resultats, nb_total=nb_total)
+
+
+@bp.route("/api/recherche-rapide")
+@login_required
+def api_recherche_rapide():
+    """API JSON pour l'autocomplétion dans la barre de recherche."""
+    t = get_tenant()
+    if not t:
+        return jsonify([])
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+
+    like = f"%{q}%"
+    resultats = []
+
+    for s in (Salarie.query.filter_by(tenant_id=t.id)
+              .filter(db.or_(Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+                             Salarie.matricule.ilike(like)))
+              .limit(5).all()):
+        resultats.append({"icone": "👤", "titre": s.nom_complet,
+            "sous_titre": s.emploi or "Salarié", "lien": f"/salaries/{s.id}",
+            "categorie": "Salariés"})
+
+    for j in (Journalier.query.filter_by(tenant_id=t.id)
+              .filter(db.or_(Journalier.nom.ilike(like), Journalier.prenom.ilike(like),
+                             Journalier.profession.ilike(like)))
+              .limit(5).all()):
+        resultats.append({"icone": "🦺", "titre": j.nom_complet,
+            "sous_titre": j.profession or "Journalier", "lien": f"/journaliers/{j.id}",
+            "categorie": "Journaliers"})
+
+    return jsonify(resultats[:10])

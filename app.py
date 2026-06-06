@@ -134,12 +134,14 @@ def add_security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"]        = "SAMEORIGIN"
         response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
-        # ✅ Content-Security-Policy
+        # ✅ Content-Security-Policy — protège contre l'injection de scripts
+        #    externes tout en autorisant les handlers inline (oninput, onclick…)
+        #    et les fetch vers les routes internes utilisés par l'app.
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' cdn.tailwindcss.com cdnjs.cloudflare.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-hashes' cdn.tailwindcss.com cdnjs.cloudflare.com; "
             "style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; "
-            "font-src 'self' fonts.gstatic.com cdnjs.cloudflare.com; "
+            "font-src 'self' data: fonts.gstatic.com cdnjs.cloudflare.com; "
             "img-src 'self' data: blob:; "
             "connect-src 'self'; "
             "frame-ancestors 'none';"
