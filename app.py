@@ -200,6 +200,25 @@ app.register_blueprint(tenant_bp)
 app.register_blueprint(api_v1_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
 
+# ── Exemption CSRF des routes API internes JSON ───────────────────────────────
+# Ces routes sont appelées en POST par le JavaScript (calcul temps réel,
+# simulateur, BTP). Elles sont protégées par @login_required + session et ne
+# font que des calculs (aucune écriture en base), donc le token CSRF n'est pas
+# requis. Sans cette exemption, les fetch JSON sont rejetés (400 CSRF missing).
+_CSRF_EXEMPT_ENDPOINTS = [
+    "tenant.api_calculer",
+    "tenant.api_semaine_btp",
+    "tenant.api_simuler_paie",
+    "tenant.api_simuler_scenarios",
+    "tenant.api_simuler_net_vers_brut",
+    "tenant.api_simuler_augmentation",
+    "tenant.api_cache_clear",
+]
+for _ep in _CSRF_EXEMPT_ENDPOINTS:
+    _view = app.view_functions.get(_ep)
+    if _view:
+        csrf.exempt(_view)
+
 # ── PWA ───────────────────────────────────────────────────────────────────────
 @app.route("/manifest.json")
 def pwa_manifest():
