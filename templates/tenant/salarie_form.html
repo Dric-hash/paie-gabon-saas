@@ -3,7 +3,7 @@
 {% block content %}
 
 <div class="flex items-center gap-3 mb-6">
-  <a href="{{ url_for("salaries") }}" class="text-gray-400 hover:text-gray-700">← Retour</a>
+  <a href="{{ url_for("tenant.salaries") }}" class="text-gray-400 hover:text-gray-700">← Retour</a>
   <h1 class="text-2xl font-black text-gray-900">
     {{ 'Modifier' if action == 'modifier' else 'Nouveau salarié' }}
   </h1>
@@ -213,7 +213,7 @@
 
   <!-- Boutons -->
   <div class="col-span-2 flex gap-3 justify-end">
-    <a href="{{ url_for("salaries") }}" class="btn-secondary" data-i18n="common.cancel">Annuler</a>
+    <a href="{{ url_for("tenant.salaries") }}" class="btn-secondary" data-i18n="common.cancel">Annuler</a>
     <button type="submit" class="btn-primary text-base px-8">
       💾 {{ 'Enregistrer les modifications' if action == 'modifier' else 'Créer le salarié' }}
     </button>

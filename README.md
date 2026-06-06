@@ -1,7 +1,23 @@
 # PaieGabon — Logiciel SaaS de gestion de la paie
 
-Logiciel multi-entreprises de gestion de la paie conforme à la réglementation gabonaise.
+Logiciel multi-entreprises de gestion de la paie conforme à la réglementation gabonaise.  
 Développé avec Flask (Python) + PostgreSQL + Tailwind CSS.
+
+---
+
+## Architecture
+
+```
+app.py                    ← Factory Flask (328 lignes — config, blueprints, middleware)
+core.py                   ← Utilitaires partagés (cache Redis, décorateurs, email, rate limiter)
+models.py                 ← Modèles SQLAlchemy
+calculs_paie.py           ← Moteur de calcul paie gabonais
+blueprints/
+  auth.py                 ← /login  /inscription  /logout  /confirmer-email  /profil
+  admin.py                ← /admin/*  (super-admin)
+  tenant.py               ← /dashboard  /salaries  /bulletins  /conges  /pointage …
+  api_v1.py               ← /api/v1/*  (API REST OAuth2)
+```
 
 ---
 
@@ -12,36 +28,34 @@ Développé avec Flask (Python) + PostgreSQL + Tailwind CSS.
 pip install -r requirements.txt
 ```
 
-### 2. Lancer l'application
+### 2. Configurer l'environnement
+```bash
+cp .env.example .env
+# Éditez .env et définissez au minimum SECRET_KEY et DATABASE_URL
+```
+
+### 3. Lancer l'application
 ```bash
 python app.py
 ```
 
-### 3. Ouvrir dans le navigateur
+### 4. Ouvrir dans le navigateur
 ```
 http://localhost:5000
 ```
 
 ---
 
-## Comptes par défaut
+## Comptes initiaux
 
-| Rôle | Email | Mot de passe |
-|------|-------|--------------|
-| Super Admin | superadmin@paiegalon.com | Admin2026! |
-| Compte démo | demo@paiegalon.ga | Demo2026! |
-
-> Changez ces mots de passe avant toute mise en production.
-
-### Promouvoir votre compte en super-admin (production)
-
-Définissez la variable d'environnement `SUPER_ADMIN_EMAIL` avec l'email de votre compte, puis redéployez ou redémarrez l'application :
+Au premier démarrage, les mots de passe sont **générés automatiquement** et affichés dans les logs :
 
 ```
-SUPER_ADMIN_EMAIL=votre.email@entreprise.ga
+[INIT] Super-admin — email: superadmin@paiegalon.com — mdp auto: <généré>
+[INIT] Démo — email: demo@paiegalon.ga — mdp auto: <généré>
 ```
 
-Au démarrage, ce compte reçoit le rôle `SUPER_ADMIN` et peut accéder à `/admin`.
+Configurez ces valeurs via les variables d'environnement `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`, `DEMO_EMAIL`, `DEMO_PASSWORD`.
 
 ---
 
@@ -50,129 +64,76 @@ Au démarrage, ce compte reçoit le rôle `SUPER_ADMIN` et peut accéder à `/ad
 ### Multi-entreprises
 - Isolation complète des données par entreprise (tenant)
 - Inscription libre des entreprises
-- 4 plans : Starter, Pro, Premium, Cabinet
+- 3 plans : Starter (10 sal.), Pro (50 sal.), Cabinet (illimité)
 - Panneau Super Admin complet
 
-### Gestion de la paie
-- Saisie bulletin avec calcul automatique en temps réel
-- Impression PDF professionnelle des bulletins
-- Export journal de paie Excel
-- Historique complet par période
-
-### Calculs réglementaires Gabon
+### Calculs réglementaires Gabon 2026
 - CNSS : 5% salarié / 18% patronal (plafond 1 500 000 FCFA)
 - CNAMGS : 2% salarié / 4,1% patronal (plafond 2 500 000 FCFA)
 - TCS : 5% (exonération 150 000 FCFA)
-- FNH : 2% patronal (plafond 1 500 000 FCFA)
+- FNH : 3% patronal (plafond 1 500 000 FCFA)
 - CFP : 0,5% patronal
 - IRPP : barème progressif par quotient familial
+- Convention BTP : heures 10%/30%/40%/70%, prime ancienneté, préavis, ISR
 
 ### Gestion des salariés
-- Fiche complète avec statistiques cumulées
+- Fiche complète avec historique contrats
 - Suivi des congés (2 jours/mois, 24 jours/an)
-- Gestion des contrats
+- Gestion des acomptes
+- Pointage journalier (salariés + journaliers)
+- Gestion multi-sites / chantiers
 
-### Tableau de bord
-- KPIs en temps réel
-- Évolution masse salariale sur 6 mois
-- Répartition par catégorie (C1-C4)
-- Top 5 salaires
-- Alertes automatiques
+### Sécurité
+- RBAC à 5 rôles (TENANT_ADMIN, RH, COMPTABLE, DIRECTEUR, GESTIONNAIRE)
+- Isolation multi-tenant (filter_by tenant_id systématique)
+- Brute-force protection (blocage après N échecs)
+- Validation mot de passe (longueur, majuscule, chiffre)
+- Content-Security-Policy header
+- Rate limiting sur les routes publiques
+- Sessions avec timeout d'inactivité configurable
+- CSRF protection (Flask-WTF)
+- Audit trail complet
 
-### Administration
-- Import données Excel (SGTG compatible)
-- Gestion utilisateurs par entreprise
-- Paramètres société complets (5 onglets)
+### Exports
+- Bulletins PDF (3 modèles : classique, moderne, minimaliste)
+- Déclaration CNSS/CNAMGS Excel + CSV
+- Export comptable Sage (journal + grand livre)
+- Journal de paie Excel
+
+### API REST
+- OAuth2 (client_credentials)
+- Endpoints : /api/v1/salaries, /api/v1/bulletins, /api/v1/periodes, /api/v1/stats
 
 ---
 
-## Structure du projet
+## Variables d'environnement
 
-```
-paie_gabon_saas/
-├── app.py                      # Application principale (939 lignes)
-├── models.py                   # Base de données (10 tables)
-├── calculs_paie.py             # Moteur de calcul gabonais
-├── migration_sgtg.py           # Script migration Excel → BDD
-├── requirements.txt            # Dépendances Python
-├── Procfile                    # Configuration Railway
-├── runtime.txt                 # Python 3.11.6
-├── templates/
-│   ├── base.html               # Layout principal
-│   ├── auth/
-│   │   ├── login.html          # Connexion
-│   │   └── inscription.html    # Inscription entreprise
-│   ├── admin/
-│   │   ├── dashboard.html      # Tableau de bord super admin
-│   │   ├── tenants.html        # Liste entreprises
-│   │   ├── tenant_detail.html  # Détail entreprise
-│   │   ├── plans.html          # Gestion plans
-│   │   ├── rubriques.html      # Rubriques paie
-│   │   ├── stats.html          # Statistiques globales
-│   │   └── import_excel.html   # Import données Excel
-│   └── tenant/
-│       ├── base.html           # Layout tenant
-│       ├── dashboard.html      # Tableau de bord entreprise
-│       ├── salaries.html       # Liste salariés
-│       ├── salarie_detail.html # Fiche salarié complète
-│       ├── salarie_form.html   # Formulaire salarié
-│       ├── bulletin_saisie.html# Saisie bulletin (temps réel)
-│       ├── bulletin_detail.html# Détail bulletin
-│       ├── bulletin_print.html # Impression PDF professionnelle
-│       ├── bulletins.html      # Historique bulletins
-│       ├── periodes.html       # Gestion périodes
-│       ├── conges.html         # Gestion congés
-│       ├── conge_form.html     # Formulaire congé
-│       ├── parametres.html     # Paramètres (5 onglets)
-│       ├── utilisateurs.html   # Gestion utilisateurs
-│       └── utilisateur_form.html
+| Variable | Obligatoire | Description |
+|----------|-------------|-------------|
+| `SECRET_KEY` | ✅ prod | Clé secrète Flask (min 32 chars) |
+| `DATABASE_URL` | ✅ prod | URL PostgreSQL |
+| `SUPER_ADMIN_EMAIL` | recommandé | Email du super-admin |
+| `SUPER_ADMIN_PASSWORD` | recommandé | Mot de passe super-admin |
+| `REDIS_URL` | optionnel | Cache Redis (recommandé multi-workers) |
+| `MAIL_USERNAME` | optionnel | Email Gmail (envoi de mails) |
+| `MAIL_PASSWORD` | optionnel | App password Gmail |
+| `SESSION_TIMEOUT_MINUTES` | optionnel | Timeout inactivité (défaut: 60) |
+| `LOGIN_MAX_ECHECS` | optionnel | Tentatives avant blocage (défaut: 5) |
+| `LOGIN_BLOCAGE_MIN` | optionnel | Durée blocage en minutes (défaut: 15) |
+| `LOG_LEVEL` | optionnel | Niveau de log (défaut: INFO) |
+
+---
+
+## Tests
+
+```bash
+pytest tests/ -v
 ```
 
----
-
-## Routes principales (39 routes)
-
-| Route | Description |
-|-------|-------------|
-| `/` | Accueil → redirection |
-| `/login` | Connexion |
-| `/inscription` | Inscription entreprise |
-| `/dashboard` | Tableau de bord |
-| `/salaries` | Liste salariés |
-| `/salaries/<id>` | Fiche salarié |
-| `/bulletins/saisie` | Saisie bulletin |
-| `/bulletins/<id>/imprimer` | Impression PDF |
-| `/bulletins/export/<periode>` | Export Excel |
-| `/conges` | Gestion congés |
-| `/parametres` | Paramètres entreprise |
-| `/admin` | Panneau super admin |
-| `/admin/import` | Import Excel |
-| `/api/calculer-bulletin` | API calcul temps réel |
-
----
-
-## Hébergement (Railway.app)
-
-Variables d'environnement requises :
-```
-SECRET_KEY=votre-cle-secrete-longue
-DATABASE_URL=postgresql://...
-```
-
-URL actuelle : https://ameriack-paie.up.railway.app
-
----
-
-## Réglementation appliquée
-
-- Code du Travail Gabonais
-- CGI Gabon
-- Décret 578/PR/MDSFPSSN
-- Arrêté 037/METPS
-- SMIG : 150 000 FCFA/mois
-- Congés : 2 jours/mois (24 jours/an)
-
----
-
-*Version 2.0 — Mai 2026*
-*Développé avec Flask + PostgreSQL + Tailwind CSS*
+225 tests unitaires couvrant :
+- Moteur de calcul paie (IRPP, CNSS, CNAMGS, TCS, BTP)
+- Système de permissions RBAC
+- Gestion des congés
+- Déclarations CNSS
+- Paiements (Airtel Money, CinetPay)
+- Exports comptables

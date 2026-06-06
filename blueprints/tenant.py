@@ -1,0 +1,6116 @@
+"""
+blueprints/tenant.py — Toutes les routes tenant :
+    dashboard, salariés, bulletins, congés, acomptes, périodes,
+    journaliers, pointage, sites, rapports, exports, paiement,
+    paramètres, utilisateurs, audit, recherche, simulateur
+"""
+import os, io, json, hmac, math
+import secrets as sec
+from datetime import datetime, date, timedelta
+
+from flask import (Blueprint, render_template, request, redirect, url_for,
+                   flash, jsonify, send_file, abort, session, Response, current_app)
+from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
+
+from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
+                    Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
+                    Acompte, Journalier, Pointage, FeuillePaieJournalier,
+                    Site, AffectationSite, Paiement, OAuthClient, AuditLog)
+from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
+                           calculer_heures_sup_btp, distribuer_heures_semaine_btp,
+                           calculer_prime_anciennete_btp, calculer_preavis_btp,
+                           calculer_indemnite_services_rendus_btp)
+from audit import log_action, get_audit_logs
+from core import (get_tenant, tenant_required, can_edit, admin_only,
+                  require_permission, calculer_parts_irpp, parse_date,
+                  cache_get, cache_set, cache_delete,
+                  TTL_KPIS_DASH, TTL_EVOLUTION, TTL_CATS_STATS, TTL_ALERTES)
+from i18n import SUPPORTED_LANGUAGES, set_language
+
+bp = Blueprint("tenant", __name__)
+
+@bp.route("/dashboard")
+@login_required
+def dashboard():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("auth.login"))
+    now=datetime.now()
+
+    # ── KPIs emploi (cache TTL=5min) ─────────────────────────────────────────
+    _ck_kpis = f"{t.id}:kpis_emploi"
+    kpis_cached = _cache_get(_ck_kpis)
+    if kpis_cached:
+        nb_actifs, nb_inactifs, nb_total, nb_journaliers, nb_new_mois = kpis_cached
+    else:
+        from sqlalchemy import func
+        _sal_q = db.session.query(
+            func.sum(db.cast(Salarie.statut == "ACTIF",   db.Integer)).label("actifs"),
+            func.sum(db.cast(Salarie.statut == "INACTIF", db.Integer)).label("inactifs"),
+            func.count().label("total"),
+        ).filter(Salarie.tenant_id == t.id).one()
+        nb_actifs   = int(_sal_q.actifs   or 0)
+        nb_inactifs = int(_sal_q.inactifs or 0)
+        nb_total    = int(_sal_q.total    or 0)
+        nb_journaliers = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+        debut_mois  = datetime(now.year, now.month, 1).date()
+        nb_new_mois = Salarie.query.filter(Salarie.tenant_id==t.id,
+                                           Salarie.date_embauche>=debut_mois).count()
+        _cache_set(_ck_kpis, (nb_actifs, nb_inactifs, nb_total, nb_journaliers, nb_new_mois),
+                   TTL_KPIS_DASH)
+    nb_total_employes = nb_actifs + nb_journaliers
+    debut_mois  = datetime(now.year, now.month, 1).date()
+    periode = PeriodePaie.query.filter_by(tenant_id=t.id, annee=now.year, mois=now.month).first()
+    masse={}; nb_v=nb_b=nb_p=0
+    if periode:
+        buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).all()
+        masse = calculer_masse_salariale(buls)
+        nb_v = sum(1 for b in buls if b.statut=="VALIDÉ")
+        nb_p = sum(1 for b in buls if b.statut=="PAYÉ")
+        nb_b = sum(1 for b in buls if b.statut=="BROUILLON")
+    _ck_evo = f"{t.id}:evolution_{now.year}_{now.month}"
+    evolution = _cache_get(_ck_evo)
+    if evolution is None:
+        evolution = []
+        mois_noms = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+        for i in range(5, -1, -1):
+            m = now.month - i; y = now.year
+            while m <= 0: m += 12; y -= 1
+            p = PeriodePaie.query.filter_by(tenant_id=t.id, annee=y, mois=m).first()
+            if p:
+                buls_p = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=p.id).all()
+                total_net    = sum(float(b.net_a_payer    or 0) for b in buls_p)
+                total_brut   = sum(float(b.salaire_brut   or 0) for b in buls_p)
+                total_charges= sum(float(b.cnss_patronale or 0)+float(b.cnamgs_patronale or 0)
+                                   +float(b.fnh or 0)+float(b.cfp or 0) for b in buls_p)
+            else:
+                total_net=total_brut=total_charges=0; buls_p=[]
+            evolution.append({"mois":mois_noms[m],"annee":y,"brut":round(total_brut),
+                              "net":round(total_net),"charges":round(total_charges),
+                              "nb_bulletins":len(buls_p)})
+        _cache_set(_ck_evo, evolution, TTL_EVOLUTION)
+    top_salaries = []
+    if periode:
+        top_salaries = (BulletinPaie.query
+            .filter_by(tenant_id=t.id, periode_id=periode.id)
+            .options(joinedload(BulletinPaie.salarie))
+            .order_by(BulletinPaie.net_a_payer.desc())
+            .limit(5).all())
+    from sqlalchemy import func
+    _ck_cats = f"{t.id}:cats_stats"
+    cats_stats = _cache_get(_ck_cats)
+    if cats_stats is None:
+        cats_stats = db.session.query(
+            CategorieEmploi.code, CategorieEmploi.libelle,
+            func.count(Salarie.id).label("nb")
+        ).join(Salarie, Salarie.categorie_id==CategorieEmploi.id)\
+         .filter(Salarie.tenant_id==t.id, Salarie.statut=="ACTIF")\
+         .group_by(CategorieEmploi.code, CategorieEmploi.libelle).all()
+        # Convertir en liste de tuples simples (JSON sérialisable)
+        cats_stats = [(r.code, r.libelle, r.nb) for r in cats_stats]
+        _cache_set(_ck_cats, cats_stats, TTL_CATS_STATS)
+    derniers = (BulletinPaie.query
+        .filter_by(tenant_id=t.id)
+        .options(joinedload(BulletinPaie.salarie),
+                 joinedload(BulletinPaie.periode))
+        .order_by(BulletinPaie.date_creation.desc())
+        .limit(6).all())
+    # ══════════════════════════════════════════════════════════════════════════
+    # ALERTES INTELLIGENTES
+    # ══════════════════════════════════════════════════════════════════════════
+    import calendar
+    alertes = []
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+    mois_courant = MOIS_NOMS_LONG[now.month]
+    debut_mois_d = date(now.year, now.month, 1)
+    fin_mois_d   = date(now.year, now.month, calendar.monthrange(now.year, now.month)[1])
+
+    # ── 1. Quota employés dépassé ou proche ──────────────────────────────────
+    q_info = t.quota_employes_info
+    if q_info.get("max"):
+        pct = round(q_info["total"] / q_info["max"] * 100)
+        if q_info["plein"]:
+            alertes.append({"type":"danger","icone":"🚫","titre":"Limite d'employés atteinte",
+                "msg":f"Vous avez atteint la limite de {q_info['max']} employés de votre plan {t.plan.nom}. "
+                      f"Impossible d'ajouter de nouveaux travailleurs.",
+                "lien":"/parametres","lien_texte":"Changer de plan"})
+        elif pct >= 80:
+            alertes.append({"type":"warning","icone":"⚠️","titre":"Quota employés bientôt atteint",
+                "msg":f"{q_info['total']}/{q_info['max']} employés utilisés ({pct}%). "
+                      f"Il reste {q_info['max'] - q_info['total']} place(s).",
+                "lien":"/parametres","lien_texte":"Voir le plan"})
+
+    # ── 2. Période non créée pour le mois courant ─────────────────────────────
+    if not periode:
+        alertes.append({"type":"warning","icone":"📅","titre":f"Période {mois_courant} {now.year} manquante",
+            "msg":f"Aucune période de paie n'est ouverte pour {mois_courant} {now.year}. "
+                  f"Les bulletins ne peuvent pas être saisis.",
+            "lien":"/periodes","lien_texte":"Créer la période"})
+
+    # ── 3. Période précédente non clôturée ────────────────────────────────────
+    mois_prec = now.month - 1 or 12
+    annee_prec = now.year if now.month > 1 else now.year - 1
+    periode_prec = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=annee_prec, mois=mois_prec).first()
+    if periode_prec and periode_prec.statut not in ("CLÔTURÉE", "CLOTUREE", "PAYÉE"):
+        buls_prec = BulletinPaie.query.filter_by(
+            tenant_id=t.id, periode_id=periode_prec.id).all()
+        nb_non_clos = sum(1 for b in buls_prec if b.statut in ("BROUILLON", "VALIDÉ"))
+        if nb_non_clos > 0:
+            alertes.append({"type":"warning","icone":"🔓","titre":f"Période {MOIS_NOMS_LONG[mois_prec]} non clôturée",
+                "msg":f"{nb_non_clos} bulletin(s) de {MOIS_NOMS_LONG[mois_prec]} {annee_prec} "
+                      f"ne sont pas encore payés.",
+                "lien":f"/bulletins?periode_id={periode_prec.id}","lien_texte":"Voir les bulletins"})
+
+    # ── 4. Bulletins en brouillon ce mois ─────────────────────────────────────
+    if nb_b > 0:
+        alertes.append({"type":"warning","icone":"📝","titre":f"{nb_b} brouillon(s) à valider",
+            "msg":f"{nb_b} bulletin(s) de {mois_courant} sont en brouillon et doivent être validés.",
+            "lien":f"/bulletins?periode_id={periode.id}&statut=BROUILLON" if periode else "/bulletins",
+            "lien_texte":"Valider maintenant"})
+
+    # ── 5. Salariés actifs sans bulletin ce mois ──────────────────────────────
+    if periode:
+        ids_avec_bulletin = {b.salarie_id for b in
+            BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).all()}
+        salaries_sans_bulletin = Salarie.query.filter_by(
+            tenant_id=t.id, statut="ACTIF"
+        ).filter(~Salarie.id.in_(ids_avec_bulletin)).all() if ids_avec_bulletin else             Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+        nb_sans = len(salaries_sans_bulletin)
+        if nb_sans > 0:
+            exemples = ", ".join(s.nom_complet for s in salaries_sans_bulletin[:3])
+            if nb_sans > 3: exemples += f" et {nb_sans-3} autre(s)"
+            alertes.append({"type":"info","icone":"👤","titre":f"{nb_sans} salarié(s) sans bulletin ce mois",
+                "msg":f"{exemples}.",
+                "lien":f"/bulletins/saisie","lien_texte":"Saisir un bulletin"})
+
+    # ── 6. Journaliers avec feuilles en attente de paiement ───────────────────
+    feuilles_att = FeuillePaieJournalier.query.filter_by(
+        tenant_id=t.id, statut="EN_ATTENTE").all()
+    nb_feuilles_att = len(feuilles_att)
+    if nb_feuilles_att > 0:
+        montant_att = sum(float(f.montant_brut or 0) for f in feuilles_att)
+        alertes.append({"type":"warning","icone":"🦺","titre":f"{nb_feuilles_att} feuille(s) journaliers non payée(s)",
+            "msg":f"Total en attente : {int(montant_att):,} FCFA.",
+            "lien":"/journaliers/paie","lien_texte":"Payer maintenant"})
+
+    # ── 7. Journaliers actifs sans pointage cette semaine ─────────────────────
+    lundi = (now.date() - timedelta(days=now.weekday()))
+    samedi = lundi + timedelta(days=5)
+    nb_jour_actifs = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    if nb_jour_actifs > 0:
+        ids_pointes_sem = {p.journalier_id for p in
+            Pointage.query.filter_by(tenant_id=t.id)
+            .filter(Pointage.journalier_id.isnot(None),
+                    Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi).all()}
+        nb_non_pointes_jour = nb_jour_actifs - len(ids_pointes_sem)
+        if nb_non_pointes_jour > 0 and now.weekday() >= 1:   # après lundi
+            alertes.append({"type":"info","icone":"📋","titre":f"{nb_non_pointes_jour} journalier(s) non pointé(s) cette semaine",
+                "msg":f"Semaine du {lundi.strftime('%d/%m')} : {nb_non_pointes_jour} journalier(s) "
+                      f"sans pointage enregistré.",
+                "lien":f"/pointage/recap-semaine","lien_texte":"Voir le récap"})
+
+    # ── 8. Acomptes en attente de déduction ───────────────────────────────────
+    acomptes_att = Acompte.query.filter_by(tenant_id=t.id, statut="EN_ATTENTE").count()
+    if acomptes_att > 0:
+        alertes.append({"type":"info","icone":"💸","titre":f"{acomptes_att} acompte(s) en attente",
+            "msg":f"{acomptes_att} acompte(s) n'ont pas encore été déduits des bulletins.",
+            "lien":"/acomptes","lien_texte":"Voir les acomptes"})
+
+    # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
+    exp_date = t.date_expiration
+    jours_restants = (exp_date.date() - now.date()).days if exp_date else None
+
+    if t.statut == "ESSAI":
+        if jours_restants is None or jours_restants <= 0:
+            alertes.append({"type":"danger","icone":"🚫",
+                "titre":"Période d'essai expirée",
+                "msg":"Votre essai gratuit a expiré. Souscrivez maintenant pour continuer.",
+                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+        elif jours_restants <= 7:
+            alertes.append({"type":"danger","icone":"⏰",
+                "titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}. Souscrivez pour ne pas perdre vos données.",
+                "lien":"/parametres","lien_texte":"Souscrire maintenant"})
+        elif jours_restants <= 14:
+            alertes.append({"type":"warning","icone":"⏳",
+                "titre":f"Essai : {jours_restants} jour(s) restant(s)",
+                "msg":f"Votre période d'essai se termine le {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Voir les plans"})
+        else:
+            alertes.append({"type":"info","icone":"🧪",
+                "titre":f"Période d'essai — {jours_restants} jour(s) restant(s)",
+                "msg":f"Essai gratuit jusqu'au {exp_date.strftime('%d/%m/%Y')}. Plan actuel : {t.plan.nom}.",
+                "lien":"/parametres","lien_texte":"Voir les plans"})
+
+    elif t.statut == "ACTIF":
+        if jours_restants is None or jours_restants <= 0:
+            alertes.append({"type":"danger","icone":"🔒",
+                "titre":"Abonnement expiré",
+                "msg":"Votre abonnement a expiré. Renouvelez pour continuer.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        elif jours_restants <= 7:
+            alertes.append({"type":"danger","icone":"⏰",
+                "titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}. Renouvelez dès maintenant.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        elif jours_restants <= 30:
+            alertes.append({"type":"warning","icone":"📅",
+                "titre":f"Abonnement : {jours_restants} jour(s) restant(s)",
+                "msg":f"Expire le {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Renouveler"})
+        else:
+            alertes.append({"type":"info","icone":"✅",
+                "titre":f"Abonnement actif — {jours_restants} jour(s) restant(s)",
+                "msg":f"Plan {t.plan.nom} valide jusqu'au {exp_date.strftime('%d/%m/%Y')}.",
+                "lien":"/parametres","lien_texte":"Gérer l'abonnement"})
+
+    elif t.statut == "PAIEMENT_EN_ATTENTE":
+        alertes.append({"type":"warning","icone":"💳",
+            "titre":"Paiement en attente",
+            "msg":"Votre paiement est en cours de traitement. L'accès complet sera rétabli dès confirmation.",
+            "lien":"/parametres","lien_texte":"Contacter le support"})
+
+    # Trier par priorité : danger > warning > info
+    _prio = {"danger": 0, "warning": 1, "info": 2}
+    alertes.sort(key=lambda a: _prio.get(a["type"], 3))
+
+    # Compteurs pour l'en-tête
+    nb_alertes_critiques = sum(1 for a in alertes if a["type"] == "danger")
+    nb_alertes_warning   = sum(1 for a in alertes if a["type"] == "warning")
+
+    return render_template("tenant/dashboard.html", tenant=t,
+        nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
+        nb_journaliers=nb_journaliers, nb_total_employes=nb_total_employes,
+        nb_new_mois=nb_new_mois, periode=periode, masse=masse,
+        nb_valides=nb_v, nb_payes=nb_p, nb_brouillon=nb_b,
+        evolution=evolution, top_salaries=top_salaries,
+        cats_stats=cats_stats, derniers=derniers, alertes=alertes,
+        nb_alertes_critiques=nb_alertes_critiques,
+        nb_alertes_warning=nb_alertes_warning, now=now)
+
+# ── Salariés ──────────────────────────────────────────────────────────────────
+@bp.route("/salaries")
+@login_required
+def salaries():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    q      = request.args.get("q", "")
+    statut = request.args.get("statut", "")
+    page   = request.args.get("page", 1, type=int)
+    query  = Salarie.query.filter_by(tenant_id=t.id)
+    if q:      query = query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"), Salarie.prenom.ilike(f"%{q}%"), Salarie.matricule.ilike(f"%{q}%")))
+    if statut: query = query.filter_by(statut=statut)
+    query = query.options(joinedload(Salarie.categorie))
+    pagination = query.order_by(Salarie.nom).paginate(page=page, per_page=25, error_out=False)
+    _args  = {k: v for k, v in request.args.items() if k != 'page'}
+    _base  = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep   = '&' if _args else '?'
+    return render_template("tenant/salaries.html",
+        salaries=pagination.items, pagination=pagination,
+        categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
+        q=q, statut=statut, tenant=t,
+        pagination_base=_base + _sep)
+
+
+
+
+
+
+
+@bp.route("/simulateur")
+@login_required
+def simulateur_paie():
+    """Simulateur de paie interactif — avec comparaison scénarios, net→brut, augmentation."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")\
+        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
+    return render_template("tenant/simulateur.html", tenant=t, salaries=salaries_list)
+
+
+@bp.route("/api/simuler-paie/scenarios", methods=["POST"])
+@login_required
+def api_simuler_scenarios():
+    """Compare jusqu'à 3 scénarios de paie côte à côte."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    scenarios = data.get("scenarios", [])
+    nb_parts  = float(data.get("nb_parts", 1.0))
+
+    if not scenarios or len(scenarios) < 2:
+        return jsonify({"error": "Au moins 2 scénarios requis"}), 400
+
+    from simulation_paie import comparer_scenarios
+    result = comparer_scenarios(scenarios, nb_parts=nb_parts)
+    return jsonify(result)
+
+
+@bp.route("/api/simuler-paie/net-vers-brut", methods=["POST"])
+@login_required
+def api_simuler_net_vers_brut():
+    """Calcule le brut nécessaire pour atteindre un net cible."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    net_cible = float(data.get("net_cible", 0))
+    nb_parts  = float(data.get("nb_parts",  1.0))
+    extras    = data.get("extras", {})
+
+    if not net_cible or net_cible <= 0:
+        return jsonify({"error": "Net cible invalide"}), 400
+
+    from simulation_paie import simuler_depuis_net
+    result = simuler_depuis_net(net_cible, nb_parts=nb_parts, donnees_extra=extras)
+    return jsonify(result)
+
+
+@bp.route("/api/simuler-paie/augmentation", methods=["POST"])
+@login_required
+def api_simuler_augmentation():
+    """Simule l'impact d'une augmentation de salaire."""
+    if current_user.is_super_admin: return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+
+    data = request.get_json(force=True) or {}
+    salaire_actuel      = float(data.get("salaire_actuel", 0))
+    augmentation_pct    = data.get("augmentation_pct")
+    augmentation_montant= data.get("augmentation_montant")
+    nb_parts            = float(data.get("nb_parts", 1.0))
+    extras              = data.get("extras", {})
+
+    if not salaire_actuel or salaire_actuel <= 0:
+        return jsonify({"error": "Salaire actuel invalide"}), 400
+
+    from simulation_paie import simuler_augmentation
+    result = simuler_augmentation(
+        salaire_actuel       = salaire_actuel,
+        augmentation_pct     = float(augmentation_pct) if augmentation_pct else None,
+        augmentation_montant = float(augmentation_montant) if augmentation_montant else None,
+        nb_parts             = nb_parts,
+        donnees_extra        = extras,
+    )
+    return jsonify(result)
+
+
+@bp.route("/api/simuler-paie", methods=["POST"])
+@login_required
+def api_simuler_paie():
+    """API JSON : simuler un bulletin de paie complet sans le sauvegarder."""
+    t = get_tenant()
+    if not t: return jsonify({"erreur": "non connecté"})
+    from calculs_paie import calculer_bulletin, calculer_heures_sup_btp
+    try:
+        d = request.get_json(force=True) or {}
+        # Accepter aussi le form-data
+        if not d:
+            d = {k: request.form.get(k) for k in request.form}
+
+        def flt(key, default=0):
+            try: return float(str(d.get(key) or default).replace(",",".") or default)
+            except: return float(default)
+
+        # Calcul des heures sup si mode BTP demandé
+        mode_btp = d.get("mode_btp") == "1"
+        sal_base = flt("salaire_base")
+
+        if mode_btp and sal_base > 0:
+            from calculs_paie import calculer_heures_sup_btp
+            btp = calculer_heures_sup_btp(sal_base,
+                h10=flt("h10") or None, h30=flt("h30") or None,
+                h40=flt("h40"), h70=flt("h70"))
+            d["heures_sup_10"] = btp["montant_10"]
+            d["heures_sup_30"] = btp["montant_30"]
+            d["heures_sup_40"] = btp["montant_40"]
+            d["heures_sup_70"] = btp["montant_70"]
+
+        # Nombre de parts IRPP
+        sal_id = d.get("salarie_id")
+        nb_parts = 1.0
+        if sal_id:
+            s = Salarie.query.filter_by(id=int(sal_id), tenant_id=t.id).first()
+            if s: nb_parts = float(s.nombre_parts or 1)
+        nb_parts = flt("nb_parts") or nb_parts
+
+        result = calculer_bulletin(d, nb_parts=nb_parts)
+
+        # Enrichir avec détails BTP
+        from calculs_paie import calculer_taux_horaire, H_NORMALES_MENSUEL
+        if sal_base > 0:
+            th = calculer_taux_horaire(sal_base)
+            result["taux_horaire"]     = round(th, 2)
+            result["h_normales_mensuel"] = H_NORMALES_MENSUEL
+
+        # Ajouter libellés pour l'affichage
+        result["gains_detail"] = [
+            {"label": "Salaire de base",          "montant": result["salaire_base"]},
+            {"label": "H.sup +10%",               "montant": result["heures_sup_10"]},
+            {"label": "H.sup +30%",               "montant": result["heures_sup_30"]},
+            {"label": "H.sup +40% (nuit/dim.)",   "montant": result["heures_sup_40"]},
+            {"label": "H.sup +70% (fériés)",      "montant": result["heures_sup_70"]},
+            {"label": "Sursalaire",               "montant": result["sursalaire"]},
+            {"label": "Prime de transport",       "montant": result["prime_transport"]},
+            {"label": "Prime de responsabilité",  "montant": result["prime_responsabilite"]},
+            {"label": "Indemnité logement",       "montant": result["indem_logement"]},
+            {"label": "Prime d'ancienneté",      "montant": result["prime_anciennete"]},
+            {"label": "Autres primes",            "montant": sum([
+                result["prime_caisse"], result["carburant"],
+                result["prime_rendement"], result["prime_qualite"],
+                result["prime_performance"], result["prime_assiduité"],
+            ])},
+        ]
+        result["gains_detail"] = [g for g in result["gains_detail"] if g["montant"] > 0]
+
+        result["retenues_detail"] = [
+            {"label": f"CNSS salarié (5% / base {int(result['base_cnss']):,} FCFA)", "montant": result["cnss_salarie"]},
+            {"label": f"CNAMGS salarié (2% / base {int(result['base_cnamgs']):,} FCFA)", "montant": result["cnamgs_salarie"]},
+            {"label": f"TCS (5% / base {int(result['base_tcs']):,} FCFA)",             "montant": result["tcs"]},
+            {"label": f"IRPP ({nb_parts} part(s))",                                    "montant": result["irpp"]},
+            {"label": "Acompte",                                                        "montant": result["acompte"]},
+            {"label": "Retenue absences",                                               "montant": result["absences"]},
+        ]
+        result["retenues_detail"] = [r for r in result["retenues_detail"] if r["montant"] > 0]
+
+        result["charges_pat_detail"] = [
+            {"label": "CNSS patronal (18%)",     "montant": result["cnss_patronale"]},
+            {"label": "CNAMGS patronal (4.1%)",  "montant": result["cnamgs_patronale"]},
+            {"label": "FNH (3%)",                "montant": result["fnh"]},
+            {"label": "CFP (0.5%)",              "montant": result["cfp"]},
+        ]
+
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        return jsonify({"erreur": str(e), "trace": traceback.format_exc()[-300:]})
+
+@bp.route("/salaries/import", methods=["GET","POST"])
+@login_required
+def salaries_import():
+    """Import en masse de salariés depuis un fichier Excel."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    if request.method == "GET":
+        categories = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+        return render_template("tenant/salaries_import.html",
+            tenant=t, categories=categories)
+
+    # ── POST : traitement du fichier ─────────────────────────────────────────
+    fichier = request.files.get("fichier")
+    if not fichier or not fichier.filename.endswith((".xlsx", ".xls")):
+        flash("❌ Fichier invalide. Utilisez le modèle Excel fourni (.xlsx).", "error")
+        return redirect(url_for("tenant.salaries_import"))
+
+    mode = request.form.get("mode", "ignorer")  # ignorer | ecraser
+
+    import openpyxl
+    from datetime import date as date_type
+
+    def parse_date(val):
+        if not val: return None
+        if isinstance(val, (date_type, datetime)): return val if isinstance(val, date_type) else val.date()
+        s = str(val).strip()
+        for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y"):
+            try: return datetime.strptime(s, fmt).date()
+            except: pass
+        return None
+
+    def clean(val): return str(val).strip() if val not in (None, "") else None
+
+    try:
+        wb = openpyxl.load_workbook(fichier, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        flash(f"❌ Erreur lecture fichier : {e}", "error")
+        return redirect(url_for("tenant.salaries_import"))
+
+    # Trouver la ligne d'en-tête (ligne avec "MATRICULE")
+    header_row = None
+    for row_idx in range(1, 10):
+        row_vals = [str(ws.cell(row_idx, c).value or "").upper().strip() for c in range(1, 20)]
+        if "MATRICULE" in row_vals:
+            header_row = row_idx
+            break
+
+    if not header_row:
+        flash("❌ Entête non trouvée. Utilisez le modèle Excel fourni.", "error")
+        return redirect(url_for("tenant.salaries_import"))
+
+    # Mapper les colonnes
+    headers = {}
+    for col in range(1, ws.max_column + 1):
+        val = str(ws.cell(header_row, col).value or "").upper().strip()
+        if val: headers[val] = col
+
+    required = ["MATRICULE", "NOM", "PRENOM", "EMPLOI", "DATE_EMBAUCHE"]
+    for req in required:
+        if req not in headers:
+            flash(f"❌ Colonne obligatoire manquante : {req}", "error")
+            return redirect(url_for("tenant.salaries_import"))
+
+    # Charger les catégories du tenant
+    cats = {c.code.upper(): c for c in CategorieEmploi.query.filter_by(tenant_id=t.id).all()}
+
+    # ── Vérifier quota ────────────────────────────────────────────────────────
+    nb_existants = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    quota = t.quota_employes_info
+
+    # Traiter les lignes de données
+    nb_crees = nb_maj = nb_erreurs = nb_ignores = 0
+    erreurs   = []
+    avertissements = []
+
+    for row_idx in range(header_row + 1, ws.max_row + 1):
+        def get(col_name):
+            c = headers.get(col_name)
+            return ws.cell(row_idx, c).value if c else None
+
+        matricule = clean(get("MATRICULE"))
+        if not matricule: continue  # ligne vide
+
+        nom    = clean(get("NOM"))
+        prenom = clean(get("PRENOM"))
+        emploi = clean(get("EMPLOI"))
+        date_e = parse_date(get("DATE_EMBAUCHE"))
+
+        # Validation champs obligatoires
+        if not all([nom, prenom, emploi, date_e]):
+            erreurs.append(f"Ligne {row_idx} ({matricule}) : champs obligatoires manquants")
+            nb_erreurs += 1
+            continue
+
+        # Vérifier si matricule existe
+        existant = Salarie.query.filter_by(tenant_id=t.id, matricule=matricule).first()
+
+        if existant and mode == "ignorer":
+            nb_ignores += 1
+            continue
+
+        # Récupérer catégorie
+        cat_code = clean(get("CATEGORIE"))
+        cat = cats.get(cat_code.upper()) if cat_code else None
+
+        # Salaire de base → créer/maj contrat
+        salaire_raw = get("SALAIRE_BASE")
+        salaire_base = None
+        if salaire_raw:
+            try: salaire_base = float(str(salaire_raw).replace(" ","").replace(",","."))
+            except: pass
+
+        # Quota check pour nouvelles créations
+        if not existant and quota.get("max"):
+            if nb_existants + nb_crees >= quota["max"]:
+                erreurs.append(f"Quota atteint ({quota['max']} employés). Import arrêté à la ligne {row_idx}.")
+                break
+
+        data = dict(
+            tenant_id              = t.id,
+            matricule              = matricule.upper(),
+            nom                    = nom.upper(),
+            prenom                 = prenom,
+            emploi                 = emploi.upper(),
+            date_embauche          = date_e,
+            categorie_id           = cat.id if cat else None,
+            telephone              = clean(get("TELEPHONE")),
+            sexe                   = clean(get("SEXE")),
+            date_naissance         = parse_date(get("DATE_NAISSANCE")),
+            situation_matrimoniale = clean(get("SITUATION_MAT")),
+            nationalite            = clean(get("NATIONALITE")) or "GABONAISE",
+            numero_cnss            = clean(get("NUMERO_CNSS")),
+            numero_cnamgs          = clean(get("NUMERO_CNAMGS")),
+            email                  = clean(get("EMAIL")),
+            adresse                = clean(get("ADRESSE")),
+            statut                 = "ACTIF",
+        )
+        try: data["nb_enfants"]   = int(float(str(get("NB_ENFANTS") or 0)))
+        except: data["nb_enfants"] = 0
+        try: data["nombre_parts"] = float(str(get("NOMBRE_PARTS") or 1).replace(",","."))
+        except: data["nombre_parts"] = 1
+
+        try:
+            if existant:
+                for k, v in data.items():
+                    if v is not None: setattr(existant, k, v)
+                s_obj = existant
+                nb_maj += 1
+            else:
+                s_obj = Salarie(**data)
+                db.session.add(s_obj)
+                db.session.flush()
+                nb_crees += 1
+
+            # Créer/maj contrat si salaire fourni
+            if salaire_base and salaire_base > 0:
+                contrat = next((c for c in (s_obj.contrats if s_obj.id else [])), None)
+                if not contrat:
+                    contrat = Contrat(tenant_id=t.id, salarie_id=s_obj.id,
+                                      date_debut=date_e, actif=True)
+                    db.session.add(contrat)
+                contrat.salaire_base = salaire_base
+                contrat.type_contrat = "CDI"
+                contrat.actif        = True
+
+        except Exception as e:
+            db.session.rollback()
+            erreurs.append(f"Ligne {row_idx} ({matricule}) : {str(e)[:80]}")
+            nb_erreurs += 1
+            continue
+
+    db.session.commit()
+    _cache_delete(f"{t.id}:")  # Invalider cache
+
+    # Message résumé
+    msg_parts = []
+    if nb_crees:   msg_parts.append(f"✅ {nb_crees} salarié(s) créé(s)")
+    if nb_maj:     msg_parts.append(f"🔄 {nb_maj} mis à jour")
+    if nb_ignores: msg_parts.append(f"⏭️ {nb_ignores} ignoré(s) (déjà existants)")
+    if nb_erreurs: msg_parts.append(f"❌ {nb_erreurs} erreur(s)")
+    flash(" · ".join(msg_parts) or "Aucune donnée importée.", "success" if not nb_erreurs else "error")
+
+    for err in erreurs[:5]:
+        flash(f"⚠️ {err}", "error")
+
+    return redirect(url_for("tenant.salaries"))
+
+
+@bp.route("/salaries/import/modele")
+@login_required
+def salaries_import_modele():
+    """Télécharger le modèle Excel vierge."""
+    import os
+    modele_path = os.path.join(os.path.dirname(__file__), "modele_import_salaries.xlsx")
+    if os.path.exists(modele_path):
+        from flask import send_file
+        return send_file(modele_path, as_attachment=True,
+                         download_name="modele_import_salaries.xlsx",
+                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    flash("Modèle non disponible.", "error")
+    return redirect(url_for("tenant.salaries_import"))
+
+@bp.route("/salaries/nouveau", methods=["GET","POST"])
+@login_required
+def salarie_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit: abort(403)
+    cats=CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+    # Vérifier quota dès le GET (bloquer accès au formulaire)
+    q = t.quota_employes_info
+    if q["max"] and q["plein"]:
+        flash(
+            f"Limite atteinte — Plan « {t.plan.nom} » : {q['max']} employé(s) maximum "
+            f"({q['salaries']} salarié(s) + {q['journaliers']} journalier(s)). "
+            f"Passez au plan supérieur.", "error"
+        )
+        return redirect(url_for("tenant.salaries"))
+    if request.method=="POST":
+        if not t.peut_ajouter_employe:
+            flash(f"Limite atteinte ({t.plan.max_salaries} employés). Passez au plan supérieur.","error")
+            return redirect(url_for("tenant.salaries"))
+        s=Salarie(tenant_id=t.id,
+            matricule=request.form["matricule"].strip().upper(),
+            categorie_id=request.form.get("categorie_id") or None,
+            nom=request.form["nom"].strip().upper(), prenom=request.form["prenom"].strip(),
+            telephone=request.form.get("telephone"), email=request.form.get("email","").strip() or None,
+            nationalite=request.form.get("nationalite","GABONAISE"),
+            sexe=request.form.get("sexe"),
+            date_naissance=_pd(request.form.get("date_naissance")),
+            date_embauche=_pd(request.form["date_embauche"]),
+            situation_matrimoniale=request.form.get("situation_matrimoniale"),
+            nb_enfants=int(request.form.get("nb_enfants") or 0),
+            nb_enfants_moins_16ans=int(request.form.get("nb_enfants_moins_16ans") or 0),
+            nombre_parts=float(request.form.get("nombre_parts") or 1),
+            numero_cnss=request.form.get("numero_cnss"), numero_cnamgs=request.form.get("numero_cnamgs"),
+            emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", statut="ACTIF")
+        db.session.add(s)
+        sb=float(request.form.get("salaire_base") or 0)
+        if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
+        db.session.flush()
+        log_action("CREATE", "salarie", s.id,
+                   f"Nouveau salarié : {s.nom_complet} (matricule {s.matricule})",
+                   apres={"nom": s.nom, "prenom": s.prenom, "matricule": s.matricule,
+                          "emploi": s.emploi, "salaire_base": sb})
+        db.session.commit(); flash(f"Salarié {s.nom_complet} créé.","success")
+        return redirect(url_for("tenant.salarie_detail",id=s.id))
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/salarie_form.html", salarie=None, categories=cats,
+        action="nouveau", tenant=t, sites=sites, aff_actuelle=None)
+
+@bp.route("/salaries/<int:id>")
+@login_required
+def salarie_detail(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)        .order_by(BulletinPaie.date_creation.desc()).all()
+    contrat = Contrat.query.filter_by(salarie_id=id, tenant_id=t.id, actif=True).first()
+    conge   = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
+                                     annee=datetime.now().year).first()
+    total_brut = sum(float(b.salaire_brut or 0) for b in bulletins)
+    total_net  = sum(float(b.net_a_payer  or 0) for b in bulletins)
+    total_cnss = sum(float(b.cnss_salarie or 0) for b in bulletins)
+    total_irpp = sum(float(b.irpp         or 0) for b in bulletins)
+    nb_mois    = len(bulletins)
+    anciennete_jours = (datetime.now().date() - s.date_embauche).days if s.date_embauche else 0
+    anciennete_ans   = anciennete_jours // 365
+    anciennete_mois  = (anciennete_jours % 365) // 30
+
+    # ── Historique des pointages (30 derniers jours) ──────────────────────────
+    nb_jours = request.args.get("nb_jours", type=int, default=30)
+    nb_jours = min(max(nb_jours, 7), 90)          # borne 7-90 jours
+    date_fin   = datetime.now().date()
+    date_debut = date_fin - timedelta(days=nb_jours - 1)
+
+    pts_hist = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= date_debut,
+                Pointage.date_pointage <= date_fin)        .order_by(Pointage.date_pointage.desc()).all()
+
+    # Stats synthèse
+    nb_presences  = sum(1 for p in pts_hist if p.present)
+    nb_absences   = sum(1 for p in pts_hist if p.absent)
+    nb_non_pointes = nb_jours - len(pts_hist)
+    h_normales_tot = round(sum(float(p.heures_normales or 0) for p in pts_hist if p.present), 1)
+    h_sup_tot      = round(sum(
+        float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+        float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0)
+        for p in pts_hist if p.present), 1)
+    taux_presence = round(nb_presences / (nb_presences + nb_absences) * 100
+                          ) if (nb_presences + nb_absences) > 0 else 0
+
+    return render_template("tenant/salarie_detail.html",
+        salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
+        total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
+        total_irpp=total_irpp, nb_mois=nb_mois,
+        anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois,
+        # Historique pointage
+        pts_hist=pts_hist, nb_jours=nb_jours,
+        nb_presences=nb_presences, nb_absences=nb_absences,
+        nb_non_pointes=nb_non_pointes,
+        h_normales_tot=h_normales_tot, h_sup_tot=h_sup_tot,
+        taux_presence=taux_presence,
+        date_debut_hist=date_debut, date_fin_hist=date_fin)
+
+@bp.route("/salaries/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def salarie_modifier(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit: abort(403)
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+    if request.method=="POST":
+        for f,v in [("nom",request.form["nom"].strip().upper()),("prenom",request.form["prenom"].strip()),
+            ("telephone",request.form.get("telephone")),
+            ("email",request.form.get("email","").strip() or None),
+            ("nationalite",request.form.get("nationalite")),
+            ("sexe",request.form.get("sexe")),("date_naissance",_pd(request.form.get("date_naissance"))),
+            ("situation_matrimoniale",request.form.get("situation_matrimoniale")),
+            ("nb_enfants",int(request.form.get("nb_enfants") or 0)),
+            ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
+            ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
+            ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
+            ("statut",request.form.get("statut","ACTIF")),("date_modification",datetime.utcnow())]:
+            setattr(s,f,v)
+        db.session.commit()
+        # ── Affectation site ──────────────────────────────────────────────
+        site_id = request.form.get("site_id", type=int)
+        if site_id:
+            aff_prev = AffectationSite.query.filter_by(
+                salarie_id=s.id, tenant_id=t.id, actif=True).first()
+            if aff_prev and aff_prev.site_id != site_id:
+                aff_prev.actif    = False
+                aff_prev.date_fin = date.today()
+                aff_prev.motif    = "Réaffecté via formulaire salarié"
+            if not aff_prev or aff_prev.site_id != site_id:
+                db.session.add(AffectationSite(
+                    tenant_id=t.id, site_id=site_id, salarie_id=s.id,
+                    date_debut=date.today(), actif=True,
+                    cree_par=current_user.email))
+            db.session.commit()
+        elif request.form.get("retirer_site"):
+            aff = AffectationSite.query.filter_by(
+                salarie_id=s.id, tenant_id=t.id, actif=True).first()
+            if aff:
+                aff.actif    = False
+                aff.date_fin = date.today()
+                aff.motif    = "Retiré via formulaire salarié"
+                db.session.commit()
+        flash("Fiche mise à jour.", "success")
+        return redirect(url_for("tenant.salarie_detail", id=s.id))
+    # Récupérer site actuel + liste des sites
+    aff_actuelle = AffectationSite.query.filter_by(
+        salarie_id=id, tenant_id=t.id, actif=True).first()
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/salarie_form.html", salarie=s, categories=cats,
+        action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# GESTION DES CONTRATS SALARIÉS
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/salaries/<int:sal_id>/contrats")
+@login_required
+@tenant_required
+def contrats_salarie(sal_id):
+    """Liste de tous les contrats d'un salarié avec historique."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    contrats = Contrat.query.filter_by(
+        salarie_id=sal_id, tenant_id=t.id
+    ).order_by(Contrat.date_debut.desc()).all()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).order_by(CategorieEmploi.code).all()
+    return render_template("tenant/contrats_salarie.html",
+                           salarie=s, contrats=contrats, tenant=t,
+                           categories=cats)
+
+
+@bp.route("/salaries/<int:sal_id>/contrats/nouveau", methods=["GET","POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_nouveau(sal_id):
+    """Créer un nouveau contrat pour un salarié."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+
+    if request.method == "POST":
+        type_c  = request.form.get("type_contrat", "CDI")
+        salaire = float(request.form.get("salaire_base", 0) or 0)
+        poste   = request.form.get("poste", "").strip() or s.emploi
+        cat_id  = request.form.get("categorie_id", type=int)
+
+        try:
+            date_debut = datetime.strptime(request.form.get("date_debut",""), "%Y-%m-%d").date()
+        except ValueError:
+            flash("Date de début invalide.", "error")
+            return render_template("tenant/contrat_form.html",
+                                   salarie=s, tenant=t, categories=cats, contrat=None)
+
+        date_fin = None
+        if request.form.get("date_fin"):
+            try:
+                date_fin = datetime.strptime(request.form.get("date_fin"), "%Y-%m-%d").date()
+            except ValueError:
+                flash("Date de fin invalide.", "error")
+                return render_template("tenant/contrat_form.html",
+                                       salarie=s, tenant=t, categories=cats, contrat=None)
+
+        if not salaire or salaire <= 0:
+            flash("Le salaire de base doit être positif.", "error")
+            return render_template("tenant/contrat_form.html",
+                                   salarie=s, tenant=t, categories=cats, contrat=None)
+
+        # Désactiver l'ancien contrat actif
+        Contrat.query.filter_by(
+            salarie_id=sal_id, tenant_id=t.id, actif=True
+        ).update({"actif": False})
+
+        # Créer le nouveau contrat
+        c = Contrat(
+            tenant_id    = t.id,
+            salarie_id   = sal_id,
+            type_contrat = type_c,
+            date_debut   = date_debut,
+            date_fin     = date_fin,
+            salaire_base = salaire,
+            poste        = poste,
+            categorie_id = cat_id,
+            actif        = True,
+        )
+        # Mettre à jour le salarié
+        s.emploi = poste
+        if cat_id:
+            s.categorie_id = cat_id
+
+        db.session.add(c)
+        db.session.flush()
+        log_action("CREATE", "contrat", c.id,
+                   f"Nouveau contrat {type_c} pour {s.nom_complet} — "
+                   f"salaire {int(salaire):,} FCFA à partir du {date_debut.strftime('%d/%m/%Y')}")
+        db.session.commit()
+        _cache_delete(f"{t.id}:")
+        flash(f"Contrat {type_c} créé pour {s.nom_complet}.", "success")
+        return redirect(url_for("tenant.contrats_salarie", sal_id=sal_id))
+
+    return render_template("tenant/contrat_form.html",
+                           salarie=s, tenant=t, categories=cats, contrat=None)
+
+
+@bp.route("/contrats/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_modifier(id):
+    """Modifier un contrat existant."""
+    t = get_tenant()
+    c = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = c.salarie
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+
+    if request.method == "POST":
+        avant = c.to_dict()
+        c.type_contrat = request.form.get("type_contrat", c.type_contrat)
+        c.poste        = request.form.get("poste", c.poste or "").strip()
+        c.categorie_id = request.form.get("categorie_id", type=int) or c.categorie_id
+
+        try:
+            c.salaire_base = float(request.form.get("salaire_base", c.salaire_base) or 0)
+        except ValueError:
+            pass
+
+        if request.form.get("date_fin"):
+            try:
+                c.date_fin = datetime.strptime(request.form.get("date_fin"), "%Y-%m-%d").date()
+            except ValueError:
+                flash("Date de fin invalide.", "error")
+                return render_template("tenant/contrat_form.html",
+                                       salarie=s, tenant=t, categories=cats, contrat=c)
+        else:
+            c.date_fin = None
+
+        db.session.flush()
+        log_action("UPDATE", "contrat", c.id,
+                   f"Modification contrat {s.nom_complet}",
+                   avant=avant, apres=c.to_dict())
+        db.session.commit()
+        flash("Contrat mis à jour.", "success")
+        return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
+
+    return render_template("tenant/contrat_form.html",
+                           salarie=s, tenant=t, categories=cats, contrat=c)
+
+
+@bp.route("/contrats/<int:id>/terminer", methods=["POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_terminer(id):
+    """Marquer un contrat comme terminé (date de fin = aujourd'hui)."""
+    t  = get_tenant()
+    c  = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s  = c.salarie
+    motif = request.form.get("motif", "").strip()
+
+    from datetime import date as _date
+    c.date_fin = _date.today()
+    c.actif    = False
+
+    log_action("UPDATE", "contrat", c.id,
+               f"Fin de contrat {s.nom_complet} — {motif or 'Non précisé'}")
+    db.session.commit()
+    flash(f"Contrat de {s.nom_complet} terminé.", "success")
+    return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
+
+
+@bp.route("/contrats/<int:id>/supprimer", methods=["POST"])
+@login_required
+@tenant_required
+@can_edit
+def contrat_supprimer(id):
+    """Supprimer un contrat (uniquement si inactif ou aucun bulletin associé)."""
+    t = get_tenant()
+    c = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = c.salarie
+
+    if c.actif:
+        flash("Impossible de supprimer le contrat actif. Terminez-le d'abord.", "error")
+        return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
+
+    log_action("DELETE", "contrat", c.id,
+               f"Suppression contrat {c.type_contrat} de {s.nom_complet} "
+               f"(du {c.date_debut} au {c.date_fin or 'en cours'})")
+    db.session.delete(c)
+    db.session.commit()
+    flash("Contrat supprimé.", "success")
+    return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
+
+
+@bp.route("/salaries/<int:id>/supprimer", methods=["POST"])
+@login_required
+def salarie_supprimer(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Seul l'administrateur peut supprimer un salarié.", "error")
+        return redirect(url_for("tenant.salaries"))
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    nom = s.nom_complet
+    bulletins_actifs = BulletinPaie.query.filter_by(salarie_id=id).filter(
+        BulletinPaie.statut.in_(["VALIDÉ","PAYÉ"])).count()
+    if bulletins_actifs > 0:
+        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s). Passez-le en INACTIF.", "error")
+        return redirect(url_for("tenant.salarie_detail", id=id))
+    try:
+        BulletinPaie.query.filter_by(salarie_id=id).delete()
+        Contrat.query.filter_by(salarie_id=id).delete()
+        Pointage.query.filter_by(salarie_id=id).delete()
+        Acompte.query.filter_by(salarie_id=id).delete()
+        Conge.query.filter_by(salarie_id=id).delete()
+        db.session.delete(s); db.session.commit()
+        flash(f"Salarié {nom} supprimé.", "success")
+    except Exception as e:
+        db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
+        return redirect(url_for("tenant.salarie_detail", id=id))
+    return redirect(url_for("tenant.salaries"))
+
+# ── Bulletins ─────────────────────────────────────────────────────────────────
+@bp.route("/bulletins")
+@login_required
+def bulletins():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    pid          = request.args.get("periode_id", type=int)
+    sf           = request.args.get("statut", "")
+    site_filtre_id = request.args.get("site_id", type=int)
+    periodes     = PeriodePaie.query.filter_by(tenant_id=t.id)                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
+    sites_list   = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_filtre  = Site.query.get(site_filtre_id) if site_filtre_id else None
+    ps = None; buls = []; masse = {}; pagination = None
+
+    if pid:
+        ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+        q = BulletinPaie.query.options(
+            joinedload(BulletinPaie.salarie),
+            joinedload(BulletinPaie.periode),
+        ).filter_by(tenant_id=t.id, periode_id=pid)
+        if sf:
+            q = q.filter_by(statut=sf)
+
+        # ── Filtre par site ──────────────────────────────────────────────────
+        if site_filtre_id:
+            # Récupérer les IDs des salariés affectés à ce site
+            ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+                tenant_id=t.id, site_id=site_filtre_id, actif=True
+            ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+            q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
+
+        page_bul   = request.args.get("page", 1, type=int)
+        # Une seule query base avec le join, puis on pagine
+        q_joined   = q.join(Salarie).order_by(Salarie.nom)
+        buls_tous  = q_joined.all()
+        masse      = calculer_masse_salariale(buls_tous)
+        pagination = q_joined.paginate(page=page_bul, per_page=25, error_out=False)
+        buls       = pagination.items
+
+    # Affectation site de chaque salarié pour affichage dans le tableau
+    aff_sal = {a.salarie_id: a.site for a in AffectationSite.query.filter_by(
+        tenant_id=t.id, actif=True
+    ).filter(AffectationSite.salarie_id.isnot(None)).all()}
+
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
+    return render_template("tenant/bulletins.html",
+        periodes=periodes, periode_sel=ps,
+        bulletins=buls, masse=masse, statut_filtre=sf,
+        sites=sites_list, site_filtre=site_filtre, aff_sal=aff_sal,
+        pagination=pagination if pid else None,
+        pagination_base=_base + _sep,
+        tenant=t)
+
+@bp.route("/bulletins/valider-lot", methods=["POST"])
+@login_required
+def bulletins_valider_lot():
+    """Valider une sélection de bulletins ou tous les brouillons d'une période."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit: abort(403)
+
+    pid      = request.form.get("periode_id", type=int)
+    site_id  = request.form.get("site_id",    type=int)
+    action   = request.form.get("action_lot", "valider")
+    ids_str  = request.form.get("bulletin_ids", "")
+    ids_sel  = [int(x) for x in ids_str.split(",") if x.strip().isdigit()]
+
+    if not pid:
+        flash("Période manquante.", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+    # ── CORRECTION BUG : si aucun ID sélectionné + action valider → refuser ──
+    # Avant : ids_sel vide → validait TOUS les bulletins de la période
+    # Maintenant : ids_sel vide → uniquement pour les actions "tout valider" explicites
+    if not ids_sel and action == "valider":
+        # Vérifier que c'est bien une demande "tout valider" (bouton dédié)
+        tout_valider = request.form.get("tout_valider", "0")
+        if tout_valider != "1":
+            flash("Aucun bulletin sélectionné. Cochez des bulletins ou utilisez 'Tout valider'.", "warning")
+            return redirect(f"/bulletins?periode_id={pid}" + (f"&site_id={site_id}" if site_id else ""))
+
+    # Charger les bulletins ciblés
+    if ids_sel:
+        buls = BulletinPaie.query.filter(
+            BulletinPaie.id.in_(ids_sel),
+            BulletinPaie.tenant_id == t.id
+        ).all()
+    else:
+        q = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=pid, statut="BROUILLON")
+        if site_id:
+            ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+                tenant_id=t.id, site_id=site_id, actif=True
+            ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+            q = q.filter(BulletinPaie.salarie_id.in_(ids_sal))
+        buls = q.all()
+
+    nb = 0
+    if action == "valider":
+        for b in buls:
+            if b.statut != "BROUILLON": continue
+            b.statut          = "VALIDÉ"
+            b.date_validation = datetime.utcnow()
+            for a in Acompte.query.filter_by(
+                tenant_id=t.id, salarie_id=b.salarie_id,
+                mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all():
+                a.statut = "DEDUIT"
+            nb += 1
+        msg = f"✅ {nb} bulletin(s) validé(s)."
+        log_action("VALIDATE", "bulletin", pid,
+                   f"Validation de {nb} bulletin(s) — période {pid}")
+
+    elif action == "annuler_validation":
+        # ── NOUVEAU : annuler la validation → repasser en BROUILLON ──────────
+        for b in buls:
+            if b.statut not in ("VALIDÉ", "VALIDE"): continue
+            b.statut          = "BROUILLON"
+            b.date_validation = None
+            # Remettre les acomptes déduits en attente
+            for a in Acompte.query.filter_by(
+                tenant_id=t.id, salarie_id=b.salarie_id,
+                mois=b.periode.mois, annee=b.periode.annee, statut="DEDUIT").all():
+                a.statut = "EN_ATTENTE"
+            nb += 1
+        msg = f"↩️ {nb} bulletin(s) remis en brouillon."
+        log_action("CANCEL", "bulletin", pid,
+                   f"Annulation validation de {nb} bulletin(s) — période {pid}")
+
+    elif action == "payer":
+        for b in buls:
+            if b.statut not in ("VALIDÉ", "VALIDE", "BROUILLON"): continue
+            b.statut = "PAYÉ"
+            nb += 1
+        msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
+        log_action("PAY", "bulletin", pid,
+                   f"{nb} bulletin(s) marqué(s) payé(s) — période {pid}")
+
+    elif action == "supprimer_brouillons":
+        for b in buls:
+            if b.statut != "BROUILLON": continue
+            db.session.delete(b); nb += 1
+        msg = f"🗑️ {nb} brouillon(s) supprimé(s)."
+        log_action("DELETE", "bulletin", pid,
+                   f"Suppression de {nb} brouillon(s) — période {pid}")
+
+    else:
+        flash("Action inconnue.", "error")
+        return redirect(f"/bulletins?periode_id={pid}")
+
+    db.session.commit()
+    _cache_delete(f"{t.id}:")
+    flash(msg, "success")
+    redir = f"/bulletins?periode_id={pid}"
+    if site_id: redir += f"&site_id={site_id}"
+    return redirect(redir)
+
+@bp.route("/bulletins/saisie", methods=["GET","POST"])
+@login_required
+def bulletin_saisie():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit: abort(403)
+    sals=Salarie.query.filter_by(tenant_id=t.id,statut="ACTIF").order_by(Salarie.nom).all()
+    pers=PeriodePaie.query.filter_by(tenant_id=t.id,statut="OUVERT").order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all()
+    if request.method=="POST":
+        sid=int(request.form["salarie_id"]); pid=int(request.form["periode_id"])
+        s=Salarie.query.filter_by(id=sid,tenant_id=t.id).first_or_404()
+        periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+        acomptes_en_attente = Acompte.query.filter_by(
+            tenant_id=t.id, salarie_id=sid,
+            mois=periode.mois, annee=periode.annee, statut="EN_ATTENTE").all()
+        total_acomptes = sum(float(a.montant) for a in acomptes_en_attente)
+        donnees={}
+        for k,v in request.form.items():
+            # Exclure les champs non-numériques et les champs base_/taux_ (traités séparément)
+            if k in ("salarie_id","periode_id","csrf_token","action","nb_jours_travailles"):
+                continue
+            if k.startswith("base_") or k.startswith("taux_"):
+                continue
+            try:
+                donnees[k] = float(v) if v else 0
+            except (ValueError, TypeError):
+                donnees[k] = 0
+        if total_acomptes > 0:
+            donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
+        res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
+        ex=BulletinPaie.query.filter_by(tenant_id=t.id,salarie_id=sid,periode_id=pid).first()
+        b=ex or BulletinPaie(tenant_id=t.id,salarie_id=sid,periode_id=pid)
+        if not ex: db.session.add(b)
+        for k,v in res.items():
+            if not k.startswith("_") and hasattr(b,k): setattr(b,k,v)
+        b.nb_jours_travailles=int(request.form.get("nb_jours_travailles") or 0)
+        # ✅ Sauvegarder base et taux saisis manuellement pour chaque rubrique
+        RUBRIQUES_BT = ["salaire_base","heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70",
+            "absences","sursalaire","prime_caisse","carburant","prime_anciennete",
+            "indem_logement","indem_domesticite","indem_eau_electricite","indem_nourriture",
+            "prime_transport","prime_responsabilite","prime_rendement","prime_assiduité",
+            "prime_qualite","prime_performance","allocations_conge",
+            "indem_compensatrice_conge","indem_services_rendus",
+            "indem_compensatrice_preavis","indem_licenciement"]
+        for r in RUBRIQUES_BT:
+            base_val = request.form.get(f"base_{r}", "")
+            taux_val = request.form.get(f"taux_{r}", "")
+            if hasattr(b, f"base_{r}"):
+                try: setattr(b, f"base_{r}", float(base_val) if base_val else None)
+                except: pass
+            if hasattr(b, f"taux_{r}"):
+                setattr(b, f"taux_{r}", taux_val.strip()[:20] if taux_val else "")
+        action=request.form.get("action","brouillon")
+        if action=="valider":
+            b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
+            for a in acomptes_en_attente: a.statut = "DEDUIT"
+        else:
+            b.statut="BROUILLON"
+        db.session.commit()
+        if total_acomptes > 0:
+            flash(f"Bulletin sauvegardé. Acompte de {int(total_acomptes):,} FCFA déduit automatiquement.".replace(",", " "), "success")
+        else:
+            flash(f"Bulletin {'validé' if b.statut=='VALIDÉ' else 'sauvegardé'}.","success")
+        return redirect(url_for("tenant.bulletin_detail",id=b.id))
+    sid=request.args.get("salarie_id",type=int)
+    ss=Salarie.query.filter_by(id=sid,tenant_id=t.id).first() if sid else None
+    c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
+    acomptes_attente = Acompte.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_ATTENTE").all() if sid else []
+    total_acomptes = sum(float(a.montant) for a in acomptes_attente)
+    return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t,
+        acomptes_attente=acomptes_attente, total_acomptes=total_acomptes)
+
+@bp.route("/bulletins/<int:id>")
+@login_required
+def bulletin_detail(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    return render_template("tenant/bulletin_detail.html",
+        bulletin=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404(), tenant=t)
+
+@bp.route("/bulletins/<int:id>/valider", methods=["POST"])
+@login_required
+def bulletin_valider(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if b.statut == "VALIDÉ":
+        flash("Ce bulletin est déjà validé.", "info")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    acomptes = Acompte.query.filter_by(
+        tenant_id=t.id, salarie_id=b.salarie_id,
+        mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
+    for a in acomptes: a.statut = "DEDUIT"
+    b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
+    db.session.commit()
+    flash("Bulletin validé avec succès.", "success")
+    return redirect(url_for("tenant.bulletin_detail", id=id))
+
+@bp.route("/bulletins/<int:id>/payer", methods=["POST"])
+@login_required
+def bulletin_paye(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    b.statut = "PAYÉ"; db.session.commit()
+    flash("Bulletin marqué comme payé.", "success")
+    return redirect(url_for("tenant.bulletin_detail", id=id))
+
+@bp.route("/bulletins/<int:id>/supprimer", methods=["POST"])
+@login_required
+def bulletin_supprimer(id):
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        salarie_id = b.salarie_id
+        db.session.delete(b); db.session.commit()
+        flash("Bulletin supprimé (super admin).", "success")
+        return redirect(url_for("tenant.salarie_detail", id=salarie_id))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if b.statut == "VALIDÉ":
+        flash("Impossible de supprimer un bulletin validé.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    db.session.delete(b); db.session.commit()
+    flash("Bulletin supprimé.", "success")
+    return redirect(url_for("tenant.bulletins"))
+
+@bp.route("/bulletins/<int:id>/pdf")
+@login_required
+def bulletin_pdf(id):
+    """Génère et retourne le bulletin en PDF téléchargeable."""
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        t = b.salarie.tenant
+    else:
+        t = get_tenant()
+        if not t: return redirect(url_for("auth.login"))
+        b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    try:
+        from pdf_bulletin import generer_bulletin_pdf
+        pdf_bytes = generer_bulletin_pdf(b, t)
+        nom_fichier = (
+            f"bulletin_{b.salarie.nom}_{b.salarie.prenom}_{b.periode.annee}_{b.periode.mois:02d}.pdf"
+            .replace(" ", "_")
+        )
+        from flask import Response
+        return Response(
+            pdf_bytes,
+            mimetype="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{nom_fichier}"',
+                "Content-Length": str(len(pdf_bytes)),
+            }
+        )
+    except Exception as e:
+        flash(f"Erreur génération PDF : {e}", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+
+@bp.route("/bulletins/<int:id>/imprimer")
+@login_required
+def bulletin_imprimer(id):
+    if current_user.is_super_admin:
+        b = BulletinPaie.query.get_or_404(id)
+        t = b.salarie.tenant
+    else:
+        t = get_tenant()
+        if not t: return redirect(url_for("auth.login"))
+        b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # Récupérer le modèle avec fallback sécurisé
+    try:
+        modele = t.modele_bulletin or "classique"
+    except Exception:
+        modele = "classique"
+    if modele not in ("classique", "moderne", "minimaliste"):
+        modele = "classique"
+    template_map = {
+        "classique":   "tenant/bulletin_print.html",
+        "moderne":     "tenant/bulletin_print_moderne.html",
+        "minimaliste": "tenant/bulletin_print_minimaliste.html",
+    }
+    import os
+    template = template_map[modele]
+    # Vérifier que le fichier template existe sur le serveur
+    tpl_path = os.path.join(os.path.dirname(__file__), "templates", template)
+    if not os.path.exists(tpl_path):
+        template = "tenant/bulletin_print.html"
+    return render_template(template, bulletin=b, tenant=t)
+
+# ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
+@bp.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
+@login_required
+def bulletin_envoyer_email(id):
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s = b.salarie
+    dest_email = request.form.get("email_dest", "").strip()
+    if not dest_email and s.email:
+        dest_email = s.email
+    if not dest_email:
+        flash(f"{s.nom_complet} n'a pas d'adresse email. Renseignez-en une dans le formulaire.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    if not os.environ.get("MAIL_USERNAME"):
+        flash("Email non configuré sur le serveur (MAIL_USERNAME manquant).", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    try:
+        corps = (f"Bonjour {s.prenom},\n\n"
+                 f"Veuillez trouver votre bulletin de paie pour : {b.periode.libelle_complet}\n\n"
+                 f"Salaire brut : {int(b.salaire_brut or 0)} FCFA\n"
+                 f"Net a payer  : {int(b.net_a_payer or 0)} FCFA\n\n"
+                 f"Cordialement,\n{t.denomination}")
+        msg = Message(
+            subject=f"Bulletin de paie {b.periode.libelle_complet} — {t.denomination}",
+            recipients=[dest_email],
+            body=corps,
+            sender=app.config["MAIL_DEFAULT_SENDER"]
+        )
+        # ✅ Envoi dans un thread séparé → le serveur répond immédiatement
+        send_email_async(current_app.extensions["mail"], msg)
+        flash(f"Email en cours d'envoi à {dest_email}.", "success")
+    except Exception as e:
+        flash(f"Erreur préparation email: {str(e)}", "error")
+    return redirect(url_for("tenant.bulletin_detail", id=id))
+
+@bp.route("/bulletins/envoyer-tous", methods=["POST"])
+@login_required
+def bulletins_envoyer_tous():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    periode_id = request.form.get("periode_id", type=int)
+    if not periode_id: flash("Période manquante.", "error"); return redirect(url_for("tenant.bulletins"))
+    buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode_id).all()
+    nb_ok=0; nb_sans_email=0
+    for b in buls:
+        if not b.salarie.email: nb_sans_email+=1; continue
+        try:
+            corps = (f"Bonjour {b.salarie.prenom},\n\n"
+                     f"Bulletin {b.periode.libelle_complet}\n"
+                     f"Net a payer : {int(b.net_a_payer or 0)} FCFA\n\n"
+                     f"Cordialement, {t.denomination}")
+            msg = Message(subject=f"Bulletin {b.periode.libelle_complet}",
+                recipients=[b.salarie.email], body=corps,
+                sender=app.config["MAIL_DEFAULT_SENDER"])
+            send_email_async(current_app.extensions["mail"], msg)
+            nb_ok+=1
+        except Exception as e:
+            print(f"Erreur email {b.salarie.email}: {e}")
+    flash(f"{nb_ok} email(s) en cours d'envoi. {nb_sans_email} salarié(s) sans email.", "success")
+    return redirect(url_for("tenant.bulletins"))
+
+# ── Périodes ──────────────────────────────────────────────────────────────────
+@bp.route("/periodes")
+@login_required
+def periodes():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t=get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    return render_template("tenant/periodes.html", tenant=t,
+        periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all(),
+        now=datetime.now())
+
+@bp.route("/periodes/nouvelle", methods=["POST"])
+@tenant_required
+@can_edit
+def periode_nouvelle():
+    t=get_tenant(); annee=int(request.form["annee"]); mois=int(request.form["mois"])
+    noms=PeriodePaie.MOIS_NOMS
+    if PeriodePaie.query.filter_by(tenant_id=t.id,annee=annee,mois=mois).first(): flash("Période existante.","warning")
+    else:
+        db.session.add(PeriodePaie(tenant_id=t.id,annee=annee,mois=mois,libelle_mois=noms[mois],
+            trimestre=f"T{(mois-1)//3+1}",statut="OUVERT",date_ouverture=datetime.utcnow()))
+        db.session.commit(); flash(f"Période {noms[mois]} {annee} créée.","success")
+    return redirect(url_for("tenant.periodes"))
+
+@bp.route("/periodes/<int:id>/cloturer", methods=["POST"])
+@tenant_required
+@can_edit
+def periode_cloturer(id):
+    t=get_tenant(); p=PeriodePaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
+    p.statut="CLÔTURÉ"; p.date_cloture=datetime.utcnow(); db.session.commit()
+    flash("Période clôturée.","success"); return redirect(url_for("tenant.periodes"))
+
+# ── Paiement abonnement ───────────────────────────────────────────────────────
+@bp.route("/paiement")
+@login_required
+def paiement():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
+    historique = Paiement.query.filter_by(tenant_id=t.id)\
+        .order_by(Paiement.date_creation.desc()).limit(10).all()
+    return render_template("tenant/paiement.html", tenant=t, plans=plans,
+                           historique=historique)
+
+
+# ── Airtel Money — Initiation ──────────────────────────────────────────────────
+@bp.route("/paiement/airtel/initier", methods=["POST"])
+@login_required
+def paiement_airtel_initier():
+    """
+    Lance une demande de paiement STK Push Airtel Money.
+    Le client reçoit une notification USSD sur son téléphone.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    telephone  = request.form.get("telephone", "").strip()
+    duree      = int(request.form.get("duree", 1) or 1)
+    plan_id    = request.form.get("plan_id", type=int) or (t.plan_id)
+
+    plan = Plan.query.get(plan_id) if plan_id else t.plan
+    if not plan:
+        flash("Plan introuvable.", "error")
+        return redirect(url_for("tenant.paiement"))
+
+    if not telephone:
+        flash("Veuillez saisir votre numéro Airtel Money.", "error")
+        return redirect(url_for("tenant.paiement"))
+
+    montant = float(plan.prix_mensuel) * duree
+
+    # Générer une référence unique
+    import uuid
+    reference = f"AM-{t.id}-{uuid.uuid4().hex[:10].upper()}"
+
+    # Enregistrer la tentative en base
+    p = Paiement(
+        tenant_id=t.id,
+        moyen="AIRTEL_MONEY",
+        montant=montant,
+        duree_mois=duree,
+        plan_id=plan.id,
+        reference_interne=reference,
+        telephone=telephone,
+        statut="EN_ATTENTE",
+    )
+    db.session.add(p)
+    db.session.commit()
+
+    # Appeler l'API Airtel
+    try:
+        from airtel_money import initier_paiement, AirtelConfigError
+        resultat = initier_paiement(
+            reference=reference,
+            telephone=telephone,
+            montant=montant,
+            description=f"Abonnement PaieGabon {plan.nom} — {duree} mois",
+        )
+        p.reference_externe = resultat.get("transaction_id")
+        import json
+        p.reponse_raw = json.dumps(resultat.get("raw", {}))
+
+        if resultat["success"]:
+            db.session.commit()
+            logger.info(f"[Paiement] Airtel initié — ref={reference} tenant={t.id}")
+            flash(
+                f"Demande de paiement envoyée sur le {telephone}. "
+                "Validez sur votre téléphone dans les 2 minutes.",
+                "success"
+            )
+            return redirect(url_for("tenant.paiement_airtel_attente", reference=reference))
+        else:
+            p.statut = "ECHEC"
+            p.notes  = resultat["message"]
+            db.session.commit()
+            flash(f"Échec : {resultat['message']}", "error")
+            return redirect(url_for("tenant.paiement"))
+
+    except Exception as e:
+        p.statut = "ECHEC"
+        p.notes  = str(e)
+        db.session.commit()
+        logger.error(f"[Paiement] Erreur Airtel : {e}")
+        flash(f"Erreur de connexion Airtel Money. Réessayez ou contactez le support.", "error")
+        return redirect(url_for("tenant.paiement"))
+
+
+# ── Airtel Money — Page d'attente ──────────────────────────────────────────────
+@bp.route("/paiement/airtel/attente/<reference>")
+@login_required
+def paiement_airtel_attente(reference):
+    """
+    Page d'attente affichée après l'initiation.
+    Fait un polling automatique toutes les 5 secondes via AJAX.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    p = Paiement.query.filter_by(
+        reference_interne=reference, tenant_id=t.id
+    ).first_or_404()
+    return render_template("tenant/paiement_attente.html", paiement=p, tenant=t)
+
+
+# ── Airtel Money — Vérification statut (AJAX polling) ─────────────────────────
+@bp.route("/paiement/airtel/statut/<reference>")
+@login_required
+def paiement_airtel_statut(reference):
+    """
+    Endpoint JSON pour le polling côté client.
+    Retourne le statut actuel de la transaction.
+    """
+    t = get_tenant()
+    if not t: return jsonify({"statut": "ERREUR", "message": "Non connecté"}), 401
+
+    p = Paiement.query.filter_by(
+        reference_interne=reference, tenant_id=t.id
+    ).first_or_404()
+
+    # Si déjà confirmé en base, retourner directement
+    if p.statut == "SUCCES":
+        return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+    if p.statut == "ECHEC":
+        return jsonify({"statut": "ECHEC", "message": p.notes or "Paiement refusé."})
+    if p.statut == "EXPIRE":
+        return jsonify({"statut": "EXPIRE", "message": "Délai dépassé. Recommencez."})
+
+    # Interroger l'API Airtel si on a un transaction_id
+    if p.reference_externe:
+        try:
+            from airtel_money import verifier_statut
+            r = verifier_statut(p.reference_externe)
+            if r["statut"] == "SUCCESS":
+                _activer_abonnement(p)
+                return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+            elif r["statut"] in ("FAILED", "EXPIRED"):
+                p.statut = "ECHEC" if r["statut"] == "FAILED" else "EXPIRE"
+                p.notes  = r.get("message", "")
+                db.session.commit()
+                return jsonify({"statut": p.statut, "message": p.notes})
+        except Exception as e:
+            logger.warning(f"[Paiement] Polling Airtel erreur : {e}")
+
+    return jsonify({"statut": "EN_ATTENTE", "message": "En attente de confirmation…"})
+
+
+# ── Airtel Money — Webhook (callback automatique d'Airtel) ────────────────────
+@bp.route("/webhook/airtel", methods=["POST"])
+def webhook_airtel():
+    """
+    Reçoit les notifications automatiques d'Airtel après paiement du client.
+    Airtel appelle cette URL avec le résultat de la transaction.
+    """
+    from airtel_money import valider_signature_webhook
+    import json
+
+    payload_bytes = request.get_data()
+    signature     = request.headers.get("X-Airtel-Signature", "")
+
+    # Vérifier la signature si configurée
+    if not valider_signature_webhook(payload_bytes, signature):
+        logger.warning("[Webhook Airtel] Signature invalide — requête ignorée.")
+        return jsonify({"status": "SIGNATURE_INVALIDE"}), 401
+
+    try:
+        data = request.get_json(force=True) or {}
+        logger.info(f"[Webhook Airtel] Reçu : {data}")
+
+        # Extraire les infos de la transaction
+        txn   = data.get("transaction", {}) or data.get("data", {}).get("transaction", {})
+        ref   = txn.get("id") or txn.get("reference") or data.get("reference", "")
+        statut_api = (txn.get("status") or data.get("status", {}).get("code", "")).upper()
+
+        if not ref:
+            logger.warning("[Webhook Airtel] Référence manquante dans le payload.")
+            return jsonify({"status": "REF_MANQUANTE"}), 400
+
+        # Retrouver le paiement
+        p = Paiement.query.filter(
+            (Paiement.reference_interne == ref) |
+            (Paiement.reference_externe == ref)
+        ).first()
+
+        if not p:
+            logger.warning(f"[Webhook Airtel] Paiement introuvable pour ref={ref}")
+            return jsonify({"status": "INTROUVABLE"}), 404
+
+        if p.statut == "SUCCES":
+            # Idempotence — déjà traité
+            return jsonify({"status": "DEJA_TRAITE"}), 200
+
+        p.reponse_raw = json.dumps(data)
+
+        if statut_api in ("TS", "SUCCESS", "200"):
+            _activer_abonnement(p)
+            logger.info(f"[Webhook Airtel] Succès — ref={ref} tenant={p.tenant_id}")
+        else:
+            p.statut = "ECHEC"
+            p.notes  = f"Code Airtel : {statut_api}"
+            db.session.commit()
+            logger.info(f"[Webhook Airtel] Échec — ref={ref} code={statut_api}")
+
+        return jsonify({"status": "OK"}), 200
+
+    except Exception as e:
+        logger.error(f"[Webhook Airtel] Erreur traitement : {e}")
+        db.session.rollback()
+        return jsonify({"status": "ERREUR_INTERNE"}), 500
+
+
+# ── Helper : activer l'abonnement après paiement confirmé ─────────────────────
+def _activer_abonnement(paiement: "Paiement"):
+    """
+    Appelé après confirmation d'un paiement (webhook ou polling).
+    Met à jour le tenant : statut ACTIF, date_expiration prolongée.
+    Envoie un email de confirmation.
+    """
+    from datetime import timezone
+    p = paiement
+    p.statut           = "SUCCES"
+    p.date_confirmation = datetime.utcnow()
+
+    t = p.tenant
+    now = datetime.utcnow()
+
+    # Prolonger depuis aujourd'hui ou depuis la date d'expiration si future
+    base = t.date_expiration if (t.date_expiration and t.date_expiration > now) else now
+    t.date_expiration = base + timedelta(days=30 * p.duree_mois)
+    t.statut = "ACTIF"
+
+    if p.plan_id:
+        t.plan_id = p.plan_id
+
+    db.session.commit()
+    _cache_delete(f"{t.id}:")  # invalider le cache dashboard
+
+    logger.info(
+        f"[Abonnement] Tenant {t.id} activé jusqu'au "
+        f"{t.date_expiration.strftime('%d/%m/%Y')} — "
+        f"{p.duree_mois} mois via {p.moyen}"
+    )
+
+    # Email de confirmation
+    try:
+        msg = Message(
+            subject=f"Abonnement PaieGabon activé — {t.denomination}",
+            recipients=[u.email for u in t.utilisateurs if u.role == "TENANT_ADMIN" and u.email],
+            body=(
+                f"Bonjour,\n\n"
+                f"Votre paiement de {float(p.montant):,.0f} FCFA a été confirmé.\n"
+                f"Abonnement actif jusqu'au : {t.date_expiration.strftime('%d/%m/%Y')}\n"
+                f"Référence : {p.reference_interne}\n\n"
+                f"Merci de votre confiance.\n"
+                f"L'équipe PaieGabon"
+            ),
+        )
+        send_email_async(current_app.extensions["mail"], msg)
+    except Exception as e:
+        logger.warning(f"[Abonnement] Email de confirmation non envoyé : {e}")
+
+
+@bp.route("/paiement/confirmer", methods=["POST"])
+@login_required
+def paiement_confirmer():
+    """Route de compatibilité — paiement manuel (admin valide manuellement)."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    mode      = request.form.get("mode", "MANUEL")
+    reference = request.form.get("reference", "").strip()
+    duree     = int(request.form.get("duree", 1) or 1)
+    if not reference:
+        flash("Veuillez indiquer une référence de transaction.", "error")
+        return redirect(url_for("tenant.paiement"))
+    import uuid
+    ref_interne = f"MAN-{t.id}-{uuid.uuid4().hex[:8].upper()}"
+    p = Paiement(
+        tenant_id=t.id, moyen="MANUEL", montant=float(t.plan.prix_mensuel) * duree if t.plan else 0,
+        duree_mois=duree, plan_id=t.plan_id, reference_interne=ref_interne,
+        reference_externe=reference, statut="EN_ATTENTE",
+        notes=f"Paiement manuel déclaré par {current_user.email}",
+    )
+    db.session.add(p)
+    t.statut = "PAIEMENT_EN_ATTENTE"
+    db.session.commit()
+    flash(f"Paiement {mode} (réf. {reference}) enregistré. Activation sous 48h après vérification.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CINETPAY — Paiement multi-opérateurs (Airtel, Moov, Visa, Mastercard)
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/paiement/cinetpay/initier", methods=["POST"])
+@login_required
+def paiement_cinetpay_initier():
+    """
+    Initie un paiement CinetPay.
+    Crée une session et redirige le client vers la page de paiement CinetPay
+    où il choisit son moyen : Airtel Money, Moov Money ou carte bancaire.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    duree   = int(request.form.get("duree", 1) or 1)
+    plan_id = request.form.get("plan_id", type=int) or t.plan_id
+    plan    = Plan.query.get(plan_id) if plan_id else t.plan
+
+    if not plan:
+        flash("Plan introuvable.", "error")
+        return redirect(url_for("tenant.paiement"))
+
+    montant = float(plan.prix_mensuel) * duree
+
+    import uuid
+    reference = f"CP-{t.id}-{uuid.uuid4().hex[:10].upper()}"
+
+    # Récupérer l'admin du tenant pour pré-remplir les infos client
+    admin = Utilisateur.query.filter_by(tenant_id=t.id, role="TENANT_ADMIN").first()
+    nom_client   = admin.nom_complet if admin else t.denomination
+    email_client = admin.email if admin else ""
+
+    # Enregistrer la tentative
+    p = Paiement(
+        tenant_id=t.id,
+        moyen="CINETPAY",
+        montant=montant,
+        duree_mois=duree,
+        plan_id=plan.id,
+        reference_interne=reference,
+        statut="EN_ATTENTE",
+    )
+    db.session.add(p)
+    db.session.commit()
+
+    try:
+        from cinetpay import initier_paiement, CinetPayConfigError
+        resultat = initier_paiement(
+            reference=reference,
+            montant=montant,
+            description=f"PaieGabon {plan.nom} — {duree} mois — {t.denomination}",
+            nom_client=nom_client,
+            email_client=email_client,
+        )
+
+        import json
+        p.reponse_raw = json.dumps(resultat.get("raw", {}))
+
+        if resultat["success"]:
+            p.reference_externe = resultat.get("payment_token", "")
+            db.session.commit()
+            logger.info(f"[CinetPay] Session créée — ref={reference} tenant={t.id}")
+            # Rediriger directement vers la page CinetPay
+            return redirect(resultat["payment_url"])
+        else:
+            p.statut = "ECHEC"
+            p.notes  = resultat["message"]
+            db.session.commit()
+            flash(f"Erreur CinetPay : {resultat['message']}", "error")
+            return redirect(url_for("tenant.paiement"))
+
+    except Exception as e:
+        p.statut = "ECHEC"
+        p.notes  = str(e)
+        db.session.commit()
+        logger.error(f"[CinetPay] Erreur initiation : {e}")
+        flash("Erreur de connexion CinetPay. Réessayez ou contactez le support.", "error")
+        return redirect(url_for("tenant.paiement"))
+
+
+@bp.route("/paiement/cinetpay/retour")
+@login_required
+def paiement_cinetpay_retour():
+    """
+    Page de retour après la page de paiement CinetPay.
+    CinetPay redirige ici après que le client ait terminé (succès ou annulation).
+    On affiche un message d'attente pendant que le webhook confirme.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    transaction_id = request.args.get("transaction_id", "")
+    # Chercher le paiement par référence interne ou externe
+    p = None
+    if transaction_id:
+        p = Paiement.query.filter(
+            (Paiement.reference_interne == transaction_id) |
+            (Paiement.reference_externe == transaction_id),
+            Paiement.tenant_id == t.id
+        ).first()
+
+    # Vérification immédiate du statut
+    if p and p.statut == "EN_ATTENTE" and (p.reference_interne or p.reference_externe):
+        try:
+            from cinetpay import verifier_statut
+            ref = p.reference_interne
+            r   = verifier_statut(ref)
+            if r["statut"] == "ACCEPTED":
+                _activer_abonnement(p)
+                flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+                return redirect(url_for("tenant.dashboard"))
+            elif r["statut"] in ("REFUSED", "CANCELLED"):
+                p.statut = "ECHEC"
+                p.notes  = r.get("message", "Paiement refusé ou annulé.")
+                db.session.commit()
+        except Exception as e:
+            logger.warning(f"[CinetPay] Vérification retour échouée : {e}")
+
+    if p and p.statut == "SUCCES":
+        flash("Paiement confirmé ! Votre abonnement est actif.", "success")
+        return redirect(url_for("tenant.dashboard"))
+
+    # Afficher la page d'attente (le webhook va confirmer dans quelques secondes)
+    return render_template("tenant/paiement_cinetpay_retour.html",
+                           paiement=p, tenant=t,
+                           transaction_id=transaction_id)
+
+
+@bp.route("/paiement/cinetpay/statut/<reference>")
+@login_required
+def paiement_cinetpay_statut(reference):
+    """Endpoint JSON pour le polling côté client sur la page de retour."""
+    t = get_tenant()
+    if not t: return jsonify({"statut": "ERREUR"}), 401
+
+    p = Paiement.query.filter(
+        (Paiement.reference_interne == reference),
+        Paiement.tenant_id == t.id
+    ).first_or_404()
+
+    if p.statut == "SUCCES":
+        return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+    if p.statut == "ECHEC":
+        return jsonify({"statut": "ECHEC", "message": p.notes or "Paiement refusé."})
+
+    # Vérification active
+    try:
+        from cinetpay import verifier_statut
+        r = verifier_statut(reference)
+        if r["statut"] == "ACCEPTED":
+            _activer_abonnement(p)
+            return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
+        elif r["statut"] in ("REFUSED", "CANCELLED"):
+            p.statut = "ECHEC"
+            p.notes  = r.get("message", "")
+            db.session.commit()
+            return jsonify({"statut": "ECHEC", "message": p.notes})
+    except Exception as e:
+        logger.warning(f"[CinetPay] Polling statut erreur : {e}")
+
+    return jsonify({"statut": "EN_ATTENTE", "message": "Vérification en cours…"})
+
+
+@bp.route("/webhook/cinetpay", methods=["POST"])
+def webhook_cinetpay():
+    """
+    Reçoit les notifications automatiques de CinetPay.
+    Appelé par CinetPay dès que le paiement est confirmé ou refusé.
+    """
+    import json
+    try:
+        data = request.get_json(force=True) or request.form.to_dict()
+        logger.info(f"[Webhook CinetPay] Reçu : {data}")
+
+        from cinetpay import valider_webhook
+        if not valider_webhook(data):
+            return jsonify({"status": "SITE_ID_INVALIDE"}), 401
+
+        # Extraire la référence de transaction
+        ref = (data.get("cpm_trans_id") or data.get("transaction_id")
+               or data.get("metadata", ""))
+        statut_api = (data.get("cpm_result") or data.get("status") or "").upper()
+
+        if not ref:
+            logger.warning("[Webhook CinetPay] Référence manquante.")
+            return jsonify({"status": "REF_MANQUANTE"}), 400
+
+        p = Paiement.query.filter_by(reference_interne=ref).first()
+        if not p:
+            # Essayer avec reference_externe
+            token = data.get("cpm_payment_config") or data.get("payment_token", "")
+            p = Paiement.query.filter_by(reference_externe=token).first() if token else None
+
+        if not p:
+            logger.warning(f"[Webhook CinetPay] Paiement introuvable ref={ref}")
+            return jsonify({"status": "INTROUVABLE"}), 404
+
+        if p.statut == "SUCCES":
+            return jsonify({"status": "DEJA_TRAITE"}), 200
+
+        p.reponse_raw = json.dumps(data)
+
+        # "00" = succès chez CinetPay
+        if statut_api in ("00", "ACCEPTED", "SUCCESS"):
+            _activer_abonnement(p)
+            logger.info(f"[Webhook CinetPay] Succès — ref={ref} tenant={p.tenant_id}")
+        else:
+            p.statut = "ECHEC"
+            p.notes  = f"Code CinetPay : {statut_api}"
+            db.session.commit()
+            logger.info(f"[Webhook CinetPay] Échec — ref={ref} code={statut_api}")
+
+        return jsonify({"status": "OK"}), 200
+
+    except Exception as e:
+        logger.error(f"[Webhook CinetPay] Erreur : {e}")
+        db.session.rollback()
+@bp.route("/parametres")
+@tenant_required
+def parametres():
+    t=get_tenant()
+    # Passer tous les plans actifs pour l'onglet abonnement
+    plans_dispo = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel.asc()).all()
+    return render_template("tenant/parametres.html", tenant=t,
+        rubriques=RubriquePaie.query.filter_by(actif=True).all(),
+        categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
+        users=Utilisateur.query.filter_by(tenant_id=t.id).all(),
+        plans_dispo=plans_dispo)
+
+@bp.route("/parametres/logo", methods=["POST"])
+@login_required
+def parametres_logo():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    logo_file = request.files.get("logo")
+    if logo_file and logo_file.filename:
+        import base64
+        file_data = logo_file.read()
+        if len(file_data) > 1_000_000:
+            flash("Fichier trop volumineux. Maximum 1 Mo.", "error")
+            return redirect(url_for("tenant.parametres"))
+
+        # ── Validation de l'extension ─────────────────────────────────────────
+        ext = logo_file.filename.rsplit(".", 1)[-1].lower() if "." in logo_file.filename else ""
+        EXTENSIONS_AUTORISEES = {"png", "jpg", "jpeg", "gif", "webp"}
+        if ext not in EXTENSIONS_AUTORISEES:
+            flash("Format non autorisé. Utilisez PNG, JPG, JPEG, GIF ou WEBP (pas SVG).", "error")
+            return redirect(url_for("tenant.parametres"))
+
+        # ── Validation du MIME réel (magic bytes) — pas seulement l'extension ─
+        MAGIC = {
+            b"\x89PNG":   "image/png",
+            b"\xff\xd8\xff": "image/jpeg",
+            b"GIF8":      "image/gif",
+            b"RIFF":      None,  # WebP — vérification complémentaire ci-dessous
+        }
+        detected_mime = None
+        for magic, mime in MAGIC.items():
+            if file_data[:len(magic)] == magic:
+                if magic == b"RIFF" and file_data[8:12] == b"WEBP":
+                    detected_mime = "image/webp"
+                else:
+                    detected_mime = mime
+                break
+        if not detected_mime:
+            flash("Le contenu du fichier ne correspond pas à une image valide.", "error")
+            return redirect(url_for("tenant.parametres"))
+
+        b64 = base64.b64encode(file_data).decode("utf-8")
+        logo_data = f"data:{detected_mime};base64,{b64}"
+        try:
+            db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
+            db.session.commit(); db.session.expire(t)
+            flash("Logo mis à jour avec succès.", "success")
+        except Exception as e:
+            db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
+    else:
+        flash("Aucun fichier sélectionné.", "error")
+    return redirect(url_for("tenant.parametres"))
+
+@bp.route("/parametres/logo/supprimer", methods=["POST"])
+@login_required
+def parametres_logo_supprimer():
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    t.logo_url = None; db.session.commit()
+    flash("Logo supprime.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+@bp.route("/parametres/modele-bulletin", methods=["POST"])
+@login_required
+def parametres_modele_bulletin():
+    """Changer le modèle d'impression des bulletins."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    modele = request.form.get("modele_bulletin", "classique")
+    if modele not in ("classique", "moderne", "minimaliste"):
+        modele = "classique"
+    t.modele_bulletin = modele
+    db.session.commit()
+    flash(f"Modèle d'impression « {modele.capitalize()} » appliqué.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+@bp.route("/parametres/societe", methods=["POST"])
+@tenant_required
+@can_edit
+def parametres_societe():
+    if not current_user.can_manage_parametres:
+        flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
+        return redirect(url_for("tenant.parametres"))
+    t=get_tenant()
+    for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
+        try: setattr(t,f,request.form.get(f,"").strip() or None)
+        except: pass
+    # Langue de l'interface
+    langue = request.form.get("langue", "fr")
+    if langue in SUPPORTED_LANGUAGES:
+        t.langue = langue
+        set_language(langue)
+    db.session.commit()
+    flash("Informations mises à jour." if langue == "fr" else "Settings updated.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+
+@bp.route("/langue/<lang>")
+def changer_langue(lang):
+    """Change la langue de l'interface — accessible depuis n'importe quelle page."""
+    set_language(lang)
+    # Sauvegarder sur le tenant si connecté
+    if current_user.is_authenticated and not current_user.is_super_admin:
+        t = get_tenant()
+        if t and lang in SUPPORTED_LANGUAGES:
+            t.langue = lang
+            db.session.commit()
+    # Rediriger vers la page précédente
+    return redirect(request.referrer or url_for("tenant.dashboard"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AUDIT TRAIL — Journal des actions
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/audit")
+@tenant_required
+def audit_trail():
+    """
+    Page du journal d'audit — visible par l'admin du tenant.
+    Affiche qui a fait quoi et quand.
+    """
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.dashboard"))
+
+    page      = request.args.get("page", 1, type=int)
+    action    = request.args.get("action", "")
+    entite    = request.args.get("entite", "")
+    user_id   = request.args.get("user_id", type=int)
+    per_page  = 50
+
+    logs, total = get_audit_logs(
+        tenant_id  = t.id,
+        limit      = per_page,
+        offset     = (page - 1) * per_page,
+        action     = action or None,
+        entite     = entite or None,
+        user_id    = user_id or None,
+    )
+
+    # Liste des utilisateurs pour le filtre
+    users = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).order_by(Utilisateur.nom).all()
+
+    import math
+    nb_pages = math.ceil(total / per_page) if total else 1
+
+    return render_template("tenant/audit_trail.html",
+        tenant=t, logs=logs, total=total,
+        page=page, nb_pages=nb_pages, per_page=per_page,
+        action_filtre=action, entite_filtre=entite, user_filtre=user_id,
+        users=users,
+        ACTIONS=["CREATE","UPDATE","DELETE","VALIDATE","CANCEL","PAY",
+                 "LOGIN","LOGOUT","EXPORT","IMPORT"],
+        ENTITES=["salarie","bulletin","conge","acompte","periode",
+                 "utilisateur","parametres","paiement"],
+    )
+
+
+@bp.route("/audit/export")
+@tenant_required
+def audit_export():
+    """Export CSV du journal d'audit."""
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.audit_trail"))
+
+    logs, _ = get_audit_logs(tenant_id=t.id, limit=5000)
+
+    import csv, io as _io
+    output = _io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["Date","Utilisateur","Rôle","Action","Objet","ID","Description","IP"])
+    for l in logs:
+        writer.writerow([
+            l.date_action.strftime("%d/%m/%Y %H:%M:%S") if l.date_action else "",
+            l.user.nom_complet if l.user else "Système",
+            l.user.role_label  if l.user else "—",
+            l.action, l.entite or "", l.entite_id or "",
+            l.description or "", l.ip_address or "",
+        ])
+
+    log_action("EXPORT", "audit", None, "Export CSV journal d'audit")
+    db.session.commit()
+
+    return send_file(
+        io.BytesIO(("\ufeff" + output.getvalue()).encode("utf-8")),
+        mimetype="text/csv; charset=utf-8",
+        as_attachment=True,
+        download_name=f"audit_{t.sigle or t.id}_{datetime.now().strftime('%Y%m%d')}.csv",
+    )
+
+
+@bp.route("/parametres/demande-changement-plan", methods=["POST"])
+@login_required
+def demande_changement_plan():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin: abort(403)
+    plan_souhaite_id = request.form.get("plan_id", type=int)
+    motif = request.form.get("motif", "").strip()
+    plan_souhaite = Plan.query.get(plan_souhaite_id) if plan_souhaite_id else None
+    if not plan_souhaite:
+        flash("Plan invalide.", "error")
+        return redirect(url_for("tenant.parametres"))
+    # Enregistrer la demande dans les notes + changer statut
+    note_demande = (
+        f"[DEMANDE CHANGEMENT PLAN — {datetime.now().strftime('%d/%m/%Y %H:%M')}] "
+        f"Plan souhaité : {plan_souhaite.nom} ({int(plan_souhaite.prix_mensuel):,} FCFA/mois). "
+        f"Motif : {motif or 'Non précisé'}. "
+        f"Demandé par : {current_user.nom_complet} ({current_user.email})."
+    )
+    # Ajouter à la suite des notes existantes
+    t.notes = (t.notes or "") + ("\n" if t.notes else "") + note_demande
+    t.statut = "PAIEMENT_EN_ATTENTE"
+    db.session.commit()
+    flash(f"Demande de passage au plan « {plan_souhaite.nom} » enregistrée. L'équipe PaieGabon vous contactera sous 24h pour finaliser.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+@bp.route("/parametres/annuler-abonnement", methods=["POST"])
+@login_required
+def annuler_abonnement():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin: abort(403)
+    motif = request.form.get("motif", "").strip()
+    t.statut = "ANNULATION_DEMANDEE"
+    t.notes = f"Annulation demandée le {datetime.now().strftime('%d/%m/%Y')}. Motif: {motif}"
+    db.session.commit()
+    flash("Demande d annulation enregistrée. L equipe PaieGabon vous contactera sous 48h.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+# ── Utilisateurs ──────────────────────────────────────────────────────────────
+@bp.route("/utilisateurs")
+@login_required
+def utilisateurs():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    liste = Utilisateur.query.filter_by(tenant_id=t.id).order_by(Utilisateur.nom).all()
+    return render_template("tenant/utilisateurs.html", tenant=t, utilisateurs=liste, users=liste)
+
+@bp.route("/utilisateurs/nouveau", methods=["GET","POST"])
+@login_required
+def utilisateur_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l administrateur.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+    # ── Vérifier la limite dès le GET (bloquer l'accès au formulaire) ───────
+    if t.plan and t.plan.max_utilisateurs:
+        nb_actuel = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        if nb_actuel >= t.plan.max_utilisateurs:
+            flash(
+                f"Limite atteinte — Plan « {t.plan.nom} » : "
+                f"{t.plan.max_utilisateurs} utilisateur(s) maximum "
+                f"(vous en avez {nb_actuel}). "
+                f"Passez au plan supérieur pour en ajouter d'autres.",
+                "error"
+            )
+            return redirect(url_for("tenant.utilisateurs"))
+
+    if request.method == "GET":
+        nb_utilisateurs = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        return render_template("tenant/utilisateur_form.html", tenant=t,
+            nb_utilisateurs=nb_utilisateurs)
+    email = request.form.get("email", "").strip().lower()
+    nom = request.form.get("nom", "").strip().upper()
+    prenom = request.form.get("prenom", "").strip()
+    password = request.form.get("password", "")
+    role = request.form.get("role", "GESTIONNAIRE")
+    if not email or not nom or not password:
+        flash("Veuillez remplir tous les champs.", "error")
+        return render_template("tenant/utilisateur_form.html", tenant=t)
+    if Utilisateur.query.filter_by(email=email).first():
+        flash("Email déjà utilisé.", "error")
+        return render_template("tenant/utilisateur_form.html", tenant=t)
+    u = Utilisateur(nom=nom, prenom=prenom, email=email, role=role, tenant_id=t.id, actif=True)
+    u.set_password(password)
+    db.session.add(u); db.session.commit()
+    flash(f"Utilisateur {u.nom_complet} créé.", "success")
+    return redirect(url_for("tenant.utilisateurs"))
+
+@bp.route("/utilisateurs/<int:id>/toggle", methods=["POST"])
+@login_required
+def utilisateur_toggle(id):
+    """Activer / désactiver un utilisateur."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if u.id == current_user.id:
+        flash("Vous ne pouvez pas vous désactiver vous-même.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+    u.actif = not u.actif
+    db.session.commit()
+    etat = "activé" if u.actif else "désactivé"
+    log_action("UPDATE", "utilisateur", u.id,
+               f"Utilisateur {u.nom_complet} {etat} par {current_user.nom_complet}")
+    db.session.commit()
+    flash(f"Utilisateur {u.nom_complet} {etat}.", "success")
+    return redirect(url_for("tenant.utilisateurs"))
+
+
+@bp.route("/utilisateurs/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def utilisateur_modifier(id):
+    """Modifier le rôle et les infos d'un utilisateur."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    if request.method == "POST":
+        ancien_role = u.role
+        nouveau_role = request.form.get("role", u.role)
+
+        # Empêcher de retirer son propre rôle admin
+        if u.id == current_user.id and nouveau_role != "TENANT_ADMIN":
+            flash("Vous ne pouvez pas changer votre propre rôle.", "error")
+            return redirect(url_for("tenant.utilisateurs"))
+
+        u.nom    = request.form.get("nom", u.nom).strip().upper()
+        u.prenom = request.form.get("prenom", u.prenom).strip()
+        u.role   = nouveau_role
+
+        # Changer le mot de passe si fourni
+        nouveau_mdp = request.form.get("nouveau_mdp", "").strip()
+        if nouveau_mdp:
+            if len(nouveau_mdp) < 8:
+                flash("Le mot de passe doit faire au moins 8 caractères.", "error")
+                return render_template("tenant/utilisateur_form.html",
+                                       utilisateur=u, tenant=t, mode="modifier")
+            u.set_password(nouveau_mdp)
+
+        db.session.commit()
+        log_action("UPDATE", "utilisateur", u.id,
+                   f"Modification {u.nom_complet} — rôle : {ancien_role} → {nouveau_role}")
+        db.session.commit()
+        flash(f"Utilisateur {u.nom_complet} mis à jour.", "success")
+        return redirect(url_for("tenant.utilisateurs"))
+
+    return render_template("tenant/utilisateur_form.html",
+                           utilisateur=u, tenant=t, mode="modifier")
+
+
+@bp.route("/utilisateurs/<int:id>/supprimer", methods=["POST"])
+@login_required
+def utilisateur_supprimer(id):
+    """
+    Supprime définitivement un utilisateur.
+    Règles :
+      - Seul l'admin du tenant peut supprimer
+      - On ne peut pas se supprimer soi-même
+      - On ne peut pas supprimer le dernier admin
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+
+    u = Utilisateur.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Règle 1 : pas de suicide
+    if u.id == current_user.id:
+        flash("Vous ne pouvez pas supprimer votre propre compte.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
+
+    # Règle 2 : conserver au moins un admin actif
+    if u.role == "TENANT_ADMIN":
+        nb_admins = Utilisateur.query.filter_by(
+            tenant_id=t.id, role="TENANT_ADMIN", actif=True
+        ).filter(Utilisateur.id != u.id).count()
+        if nb_admins == 0:
+            flash("Impossible de supprimer le seul administrateur actif du compte. "
+                  "Activez ou désignez d'abord un autre administrateur.", "error")
+            return redirect(url_for("tenant.utilisateurs"))
+
+    nom_sauvegarde = u.nom_complet
+    log_action("DELETE", "utilisateur", u.id,
+               f"Suppression définitive de {nom_sauvegarde} ({u.role_label})")
+    db.session.delete(u)
+    db.session.commit()
+    flash(f"Utilisateur {nom_sauvegarde} supprimé définitivement.", "success")
+    return redirect(url_for("tenant.utilisateurs"))
+
+# ── Journaliers ───────────────────────────────────────────────────────────────
+@bp.route("/journaliers")
+@login_required
+def journaliers():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    q    = request.args.get("q", "")
+    page = request.args.get("page", 1, type=int)
+    query = Journalier.query.filter_by(tenant_id=t.id)
+    if q: query = query.filter(db.or_(Journalier.nom.ilike(f"%{q}%"), Journalier.prenom.ilike(f"%{q}%"), Journalier.profession.ilike(f"%{q}%")))
+    pagination = query.order_by(Journalier.nom).paginate(page=page, per_page=25, error_out=False)
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
+    return render_template("tenant/journaliers.html",
+        tenant=t, journaliers=pagination.items, pagination=pagination, q=q,
+        pagination_base=_base + _sep)
+
+@bp.route("/journaliers/nouveau", methods=["GET","POST"])
+@login_required
+def journalier_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    # Vérifier quota dès le GET
+    q = t.quota_employes_info
+    if q["max"] and q["plein"]:
+        flash(
+            f"Limite atteinte — Plan « {t.plan.nom} » : {q['max']} employé(s) maximum "
+            f"({q['salaries']} salarié(s) + {q['journaliers']} journalier(s)). "
+            f"Passez au plan supérieur.", "error"
+        )
+        return redirect(url_for("tenant.journaliers"))
+    if request.method == "POST":
+        if not t.peut_ajouter_employe:
+            flash(f"Limite atteinte ({t.plan.max_salaries} employés). Passez au plan supérieur.","error")
+            return redirect(url_for("tenant.journaliers"))
+        j = Journalier(tenant_id=t.id,
+            nom=request.form["nom"].strip().upper(),
+            prenom=request.form["prenom"].strip(),
+            telephone=request.form.get("telephone","").strip(),
+            profession=request.form.get("profession","").strip().upper(),
+            taux_horaire=float(request.form.get("taux_horaire",0) or 0),
+            date_embauche=_parse_date(request.form.get("date_embauche")),
+            date_debut=   _parse_date(request.form.get("date_debut")),
+            date_fin=     _parse_date(request.form.get("date_fin")),
+            nationalite=  request.form.get("nationalite","").strip() or None,
+            statut="ACTIF")
+        db.session.add(j); db.session.commit()
+        flash(f"Journalier {j.nom_complet} créé.", "success")
+        return redirect(url_for("tenant.journaliers"))
+    return render_template("tenant/journalier_form.html", tenant=t, journalier=None)
+
+@bp.route("/journaliers/<int:id>")
+@login_required
+def journalier_detail(id):
+    """Fiche détail d'un journalier avec historique de pointage."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Feuilles de paie
+    feuilles = FeuillePaieJournalier.query.filter_by(
+        journalier_id=id, tenant_id=t.id
+    ).order_by(FeuillePaieJournalier.date_fin.desc()).all()
+    total_percu = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "PAYÉ")
+
+    # Affectation site courante
+    aff = AffectationSite.query.filter_by(
+        journalier_id=id, tenant_id=t.id, actif=True).first()
+
+    # ── Historique des pointages ──────────────────────────────────────────────
+    nb_jours = request.args.get("nb_jours", type=int, default=30)
+    nb_jours = min(max(nb_jours, 7), 90)
+    date_fin   = datetime.now().date()
+    date_debut = date_fin - timedelta(days=nb_jours - 1)
+
+    pts_hist = Pointage.query.filter_by(tenant_id=t.id, journalier_id=id)        .filter(Pointage.date_pointage >= date_debut,
+                Pointage.date_pointage <= date_fin)        .order_by(Pointage.date_pointage.desc()).all()
+
+    nb_presences   = sum(1 for p in pts_hist if p.present)
+    nb_absences    = sum(1 for p in pts_hist if p.absent)
+    nb_non_pointes = nb_jours - len(pts_hist)
+    h_normales_tot = round(sum(float(p.heures_normales or 0) for p in pts_hist if p.present), 1)
+    h_sup_tot      = round(sum(float(p.heures_sup or 0) for p in pts_hist if p.present), 1)
+    taux_presence  = round(nb_presences / (nb_presences + nb_absences) * 100
+                           ) if (nb_presences + nb_absences) > 0 else 0
+
+    return render_template("tenant/journalier_detail.html",
+        journalier=j, tenant=t, feuilles=feuilles,
+        total_percu=total_percu, aff=aff,
+        pts_hist=pts_hist, nb_jours=nb_jours,
+        nb_presences=nb_presences, nb_absences=nb_absences,
+        nb_non_pointes=nb_non_pointes,
+        h_normales_tot=h_normales_tot, h_sup_tot=h_sup_tot,
+        taux_presence=taux_presence,
+        date_debut_hist=date_debut, date_fin_hist=date_fin)
+
+@bp.route("/journaliers/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def journalier_modifier(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.method == "POST":
+        j.nom=request.form["nom"].strip().upper(); j.prenom=request.form["prenom"].strip()
+        j.telephone=request.form.get("telephone","").strip()
+        j.profession=request.form.get("profession","").strip().upper()
+        j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
+        j.date_embauche=_parse_date(request.form.get("date_embauche"))
+        j.date_debut=   _parse_date(request.form.get("date_debut"))
+        j.date_fin=     _parse_date(request.form.get("date_fin"))
+        j.nationalite=  request.form.get("nationalite","").strip() or None
+        j.statut=request.form.get("statut","ACTIF")
+        # ── Affectation site ──────────────────────────────────────────────
+        site_id = request.form.get("site_id", type=int)
+        if site_id:
+            aff_prev = AffectationSite.query.filter_by(
+                journalier_id=j.id, tenant_id=t.id, actif=True).first()
+            if aff_prev and aff_prev.site_id != site_id:
+                aff_prev.actif    = False
+                aff_prev.date_fin = date.today()
+                aff_prev.motif    = "Réaffecté via formulaire journalier"
+            if not aff_prev or aff_prev.site_id != site_id:
+                db.session.add(AffectationSite(
+                    tenant_id=t.id, site_id=site_id, journalier_id=j.id,
+                    date_debut=date.today(), actif=True,
+                    cree_par=current_user.email))
+        elif request.form.get("retirer_site"):
+            aff = AffectationSite.query.filter_by(
+                journalier_id=j.id, tenant_id=t.id, actif=True).first()
+            if aff:
+                aff.actif    = False
+                aff.date_fin = date.today()
+                aff.motif    = "Retiré via formulaire journalier"
+        db.session.commit()
+        flash("Journalier mis à jour.", "success")
+        return redirect(url_for("tenant.journaliers"))
+    aff_actuelle = AffectationSite.query.filter_by(
+        journalier_id=id, tenant_id=t.id, actif=True).first()
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    return render_template("tenant/journalier_form.html", tenant=t, journalier=j,
+        sites=sites, aff_actuelle=aff_actuelle)
+
+# ── Pointage ──────────────────────────────────────────────────────────────────
+@bp.route("/pointage")
+@login_required
+def pointage():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    now = datetime.now()
+    date_str = request.args.get("date", now.strftime("%Y-%m-%d"))
+    try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_sel = now.date()
+    # ── Filtre par site ───────────────────────────────────────────────────────
+    site_filtre_id = request.args.get("site_id", type=int)
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_filtre = Site.query.get(site_filtre_id) if site_filtre_id else None
+
+    if site_filtre_id:
+        # Salariés affectés à ce site
+        ids_sal = [a.salarie_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id, actif=True
+        ).filter(AffectationSite.salarie_id.isnot(None)).all()]
+        ids_jour = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id, actif=True
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        salaries_list   = Salarie.query.filter(
+            Salarie.tenant_id==t.id, Salarie.statut=="ACTIF",
+            Salarie.id.in_(ids_sal)
+        ).order_by(Salarie.nom).all()
+        journaliers_list = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+            Journalier.id.in_(ids_jour)
+        ).order_by(Journalier.nom).all()
+    else:
+        salaries_list    = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    pts_salaries    = {p.salarie_id:    p for p in Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.salarie_id.isnot(None)).all()}
+    pts_journaliers = {p.journalier_id: p for p in Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_sel).filter(Pointage.journalier_id.isnot(None)).all()}
+    nb_presents_sal  = sum(1 for p in pts_salaries.values()    if p.present)
+    nb_presents_jour = sum(1 for p in pts_journaliers.values() if p.present)
+    nb_absents       = sum(1 for p in list(pts_salaries.values())+list(pts_journaliers.values()) if p.absent)
+    lundi   = date_sel - timedelta(days=date_sel.weekday())
+    semaine = [lundi + timedelta(days=i) for i in range(6)]
+
+    # Affectation site de chaque travailleur pour affichage dans le pointage
+    aff_sal  = {a.salarie_id:    a.site for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(AffectationSite.salarie_id.isnot(None)).all()}
+    aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(AffectationSite.journalier_id.isnot(None)).all()}
+
+    return render_template("tenant/pointage.html",
+        tenant=t, date_sel=date_sel, semaine=semaine,
+        date_hier=(date_sel  - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
+        salaries=salaries_list, journaliers=journaliers_list,
+        pts_salaries=pts_salaries, pts_journaliers=pts_journaliers,
+        nb_presents_sal=nb_presents_sal, nb_presents_jour=nb_presents_jour,
+        nb_absents=nb_absents, now=now,
+        sites=sites_list, site_filtre=site_filtre,
+        aff_sal=aff_sal, aff_jour=aff_jour)
+
+@bp.route("/pointage/individuel", methods=["GET","POST"])
+@login_required
+def pointage_individuel():
+    """Pointage d'un seul salarié ou journalier."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    date_str  = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    type_w    = request.args.get("type", "sal")   # "sal" ou "jour"
+    worker_id = request.args.get("id", type=int)
+
+    try:   date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_sel = datetime.now().date()
+
+    if request.method == "POST":
+        # Sauvegarder le pointage individuel
+        date_p = datetime.strptime(
+            request.form.get("date_pointage", date_str), "%Y-%m-%d").date()
+        wtype  = request.form.get("worker_type", "sal")
+        wid    = int(request.form.get("worker_id", 0))
+        present = request.form.get("present") == "1"
+        absent  = not present
+        def _hm(val):
+            """Valider et retourner un horaire HH:MM ou None."""
+            v = (val or "").strip()
+            if not v: return None
+            import re
+            return v if re.match(r"^\d{1,2}:\d{2}$", v) else None
+
+        def _diff_hm(debut, fin):
+            """Calculer la différence en heures entre deux horaires HH:MM."""
+            try:
+                h1,m1 = map(int, debut.split(":")); h2,m2 = map(int, fin.split(":"))
+                diff = (h2*60+m2 - h1*60-m1) / 60
+                return max(0.0, round(diff, 2))
+            except: return 0.0
+
+        # Horaires saisis
+        em = _hm(request.form.get("entree_matin"))
+        sm = _hm(request.form.get("sortie_matin"))
+        ea = _hm(request.form.get("entree_apmidi"))
+        sa = _hm(request.form.get("sortie_apmidi"))
+        es = _hm(request.form.get("entree_sup"))
+        ss = _hm(request.form.get("sortie_sup"))
+
+        # Calcul auto des heures normales depuis les horaires
+        h_normales_auto = 0.0
+        if em and sm: h_normales_auto += _diff_hm(em, sm)
+        if ea and sa: h_normales_auto += _diff_hm(ea, sa)
+        h_normales_man = float(request.form.get("heures_normales", 0) or 0)
+        # Priorité aux horaires si saisis, sinon saisie manuelle
+        heures_normales_final = round(h_normales_auto, 2) if h_normales_auto > 0 else h_normales_man or 8
+
+        # Heures sup depuis horaires
+        h_sup_horaire = _diff_hm(es, ss) if (es and ss) else 0.0
+
+        type_jour = request.form.get("type_jour", "NORMAL")
+
+        # Reclasser les heures selon le type de jour
+        h_sup_10_man = float(request.form.get("heures_sup_10",0) or 0)
+        h_sup_30_man = float(request.form.get("heures_sup_30",0) or 0)
+        h_sup_40_man = float(request.form.get("heures_sup_40",0) or 0)
+        h_sup_70_man = float(request.form.get("heures_sup_70",0) or 0)
+
+        if type_jour == "DIMANCHE":
+            # Tout va en +40% (dimanche)
+            h_sup_40_final = round(h_sup_horaire + heures_normales_final, 2)
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_70_final = 0
+            heures_normales_final = 0
+        elif type_jour == "FERIE":
+            # Tout va en +70% (jour férié)
+            h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
+            heures_normales_final = 0
+        elif type_jour in ("CHOME_PAYE", "CHOME_RECUPERABLE"):
+            # Présent mais jour chômé → heures normales conservées, pas de sup
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0; h_sup_70_final = 0
+        else:
+            # NORMAL
+            h_sup_10_final = round(h_sup_horaire, 2) if h_sup_horaire > 0 else h_sup_10_man
+            h_sup_30_final = h_sup_30_man
+            h_sup_40_final = h_sup_40_man
+            h_sup_70_final = h_sup_70_man
+
+        kwargs = dict(
+            heures_normales = heures_normales_final,
+            motif_absence   = request.form.get("motif_absence","") if absent else None,
+            entree_matin    = em, sortie_matin  = sm,
+            entree_apmidi   = ea, sortie_apmidi = sa,
+            entree_sup      = es, sortie_sup    = ss,
+            type_jour       = type_jour,
+        )
+        if wtype == "sal":
+            kwargs.update(dict(
+                heures_sup_10 = h_sup_10_final,
+                heures_sup_30 = h_sup_30_final,
+                heures_sup_40 = h_sup_40_final,
+                heures_sup_70 = h_sup_70_final,
+            ))
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, salarie_id=wid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=wid)
+                db.session.add(pt)
+        else:
+            # Journalier : gérer heures_sup selon type_jour
+            if type_jour in ("DIMANCHE", "FERIE"):
+                kwargs["heures_sup"]      = round(h_sup_horaire + heures_normales_final, 2)
+                kwargs["heures_normales"] = 0
+            else:
+                kwargs["heures_sup"] = float(request.form.get("heures_sup",0) or 0)
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, journalier_id=wid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=wid)
+                db.session.add(pt)
+        pt.present = present
+        pt.absent  = absent
+        for k, v in kwargs.items():
+            setattr(pt, k, v)
+        db.session.commit()
+        worker_name = (Salarie.query.get(wid) or Journalier.query.get(wid)).nom_complet
+        flash(f"✅ Pointage de {worker_name} enregistré.", "success")
+        # Rester sur la même page pour pointer la personne suivante
+        redir = request.form.get("next_url") or f"/pointage/individuel?date={date_p}&type={wtype}&id={wid}"
+        return redirect(redir)
+
+    # GET : charger le travailleur sélectionné
+    worker = pt_existant = None
+    historique_30j = []
+    stats_30j = {"presences": 0, "absences": 0, "h_normales": 0.0,
+                 "h_sup": 0.0, "taux": 0}
+
+    if worker_id:
+        if type_w == "sal":
+            worker = Salarie.query.filter_by(id=worker_id, tenant_id=t.id).first()
+            pt_existant = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_sel, salarie_id=worker_id).first()
+            if worker:
+                date_debut_30 = date_sel - timedelta(days=29)
+                historique_30j = Pointage.query.filter_by(
+                    tenant_id=t.id, salarie_id=worker_id
+                ).filter(
+                    Pointage.date_pointage >= date_debut_30,
+                    Pointage.date_pointage <= date_sel
+                ).order_by(Pointage.date_pointage.desc()).all()
+        else:
+            worker = Journalier.query.filter_by(id=worker_id, tenant_id=t.id).first()
+            pt_existant = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_sel, journalier_id=worker_id).first()
+            if worker:
+                date_debut_30 = date_sel - timedelta(days=29)
+                historique_30j = Pointage.query.filter_by(
+                    tenant_id=t.id, journalier_id=worker_id
+                ).filter(
+                    Pointage.date_pointage >= date_debut_30,
+                    Pointage.date_pointage <= date_sel
+                ).order_by(Pointage.date_pointage.desc()).all()
+
+        # Stats sur les 30 jours
+        if historique_30j:
+            nb_p = sum(1 for p in historique_30j if p.present)
+            nb_a = sum(1 for p in historique_30j if p.absent)
+            hn   = round(sum(float(p.heures_normales or 0) for p in historique_30j if p.present), 1)
+            if type_w == "sal":
+                hs = round(sum(
+                    float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                    float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0)
+                    for p in historique_30j if p.present), 1)
+            else:
+                hs = round(sum(float(p.heures_sup or 0) for p in historique_30j if p.present), 1)
+            total_ptg = nb_p + nb_a
+            stats_30j = {
+                "presences": nb_p, "absences": nb_a,
+                "h_normales": hn, "h_sup": hs,
+                "taux": round(nb_p / total_ptg * 100) if total_ptg > 0 else 0
+            }
+
+    # Listes pour la recherche
+    salaries_list    = Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    journaliers_list = Journalier.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    return render_template("tenant/pointage_individuel.html",
+        tenant=t, date_sel=date_sel,
+        date_hier=(date_sel - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_sel + timedelta(days=1)).strftime("%Y-%m-%d"),
+        type_w=type_w, worker=worker, pt_existant=pt_existant,
+        historique_30j=historique_30j, stats_30j=stats_30j,
+        salaries=salaries_list, journaliers=journaliers_list,
+        now=datetime.now())
+
+@bp.route("/pointage/supprimer/<int:ptg_id>", methods=["POST"])
+@login_required
+def pointage_supprimer(ptg_id):
+    """Supprimer un pointage individuel."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    pt = Pointage.query.filter_by(id=ptg_id, tenant_id=t.id).first_or_404()
+    # Mémoriser le contexte pour rediriger au bon endroit
+    next_url = request.form.get("next_url", "/pointage")
+    date_str = str(pt.date_pointage)
+    type_w   = "sal" if pt.salarie_id else "jour"
+    wid      = pt.salarie_id or pt.journalier_id
+    db.session.delete(pt)
+    db.session.commit()
+    flash("🗑️ Pointage supprimé.", "success")
+    return redirect(next_url or f"/pointage/individuel?date={date_str}&type={type_w}&id={wid}")
+
+@bp.route("/pointage/sauvegarder", methods=["POST"])
+@login_required
+def pointage_sauvegarder():
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    date_str = request.form.get("date_pointage")
+    try: date_p = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: flash("Date invalide.", "error"); return redirect(url_for("tenant.pointage"))
+    nb = 0
+    sel_sal  = {v for k,v in request.form.items() if k.startswith("sel_sal_")}
+    sel_jour = {v for k,v in request.form.items() if k.startswith("sel_jour_")}
+    for key, val in request.form.items():
+        if key.startswith("sal_present_"):
+            sid_str = key.replace("sal_present_","")
+            if sid_str not in sel_sal: continue
+            sid = int(sid_str); present = val == "1"; absent = not present
+            pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, salarie_id=sid).first()
+            if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, salarie_id=sid); db.session.add(pt)
+            pt.present=present; pt.absent=absent
+            pt.heures_normales = float(request.form.get(f"sal_heures_{sid}", 8) or 8)
+            pt.heures_sup_10   = float(request.form.get(f"sal_sup10_{sid}", 0) or 0)
+            pt.heures_sup_30   = float(request.form.get(f"sal_sup30_{sid}", 0) or 0)
+            pt.heures_sup_40   = float(request.form.get(f"sal_sup40_{sid}", 0) or 0)
+            pt.heures_sup_70   = float(request.form.get(f"sal_sup70_{sid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
+            nb += 1
+        if key.startswith("jour_present_"):
+            jid_str = key.replace("jour_present_","")
+            if jid_str not in sel_jour: continue
+            jid = int(jid_str); present = val == "1"; absent = not present
+            pt = Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_p, journalier_id=jid).first()
+            if not pt: pt = Pointage(tenant_id=t.id, date_pointage=date_p, journalier_id=jid); db.session.add(pt)
+            pt.present=present; pt.absent=absent
+            pt.heures_normales = float(request.form.get(f"jour_heures_{jid}", 8) or 8)
+            pt.heures_sup      = float(request.form.get(f"jour_sup_{jid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"jour_motif_{jid}", "") if absent else None
+            nb += 1
+    db.session.commit()
+    flash(f"Pointage du {date_p.strftime('%d/%m/%Y')} sauvegardé ({nb} lignes).", "success")
+    return redirect(url_for("tenant.pointage", date=date_str))
+
+# ── Paie journaliers ──────────────────────────────────────────────────────────
+@bp.route("/journaliers/paie")
+@login_required
+def journaliers_paie():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    # ── Filtre par site ──────────────────────────────────────────────────────
+    site_filtre_id = request.args.get("site_id", type=int)
+    sites_list     = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_filtre    = Site.query.get(site_filtre_id) if site_filtre_id else None
+    statut_filtre  = request.args.get("statut", "")
+
+    if site_filtre_id:
+        ids_jour = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id, actif=True
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        journaliers_list = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+            Journalier.id.in_(ids_jour)
+        ).order_by(Journalier.nom).all()
+    else:
+        journaliers_list = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    # ── Feuilles filtrées ────────────────────────────────────────────────────
+    q_feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
+    if site_filtre_id:
+        ids_jour_all = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_filtre_id
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        q_feuilles = q_feuilles.filter(FeuillePaieJournalier.journalier_id.in_(ids_jour_all))
+    if statut_filtre:
+        q_feuilles = q_feuilles.filter_by(statut=statut_filtre)
+    page_f      = request.args.get("page", 1, type=int)
+    # KPIs sur toutes les feuilles (sans pagination)
+    feuilles_tous    = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).all()
+    total_en_attente = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "EN_ATTENTE")
+    total_paye       = sum(float(f.montant_brut or 0) for f in feuilles_tous if f.statut == "PAYÉ")
+    nb_en_attente    = sum(1 for f in feuilles_tous if f.statut == "EN_ATTENTE")
+    q_feuilles = q_feuilles.options(joinedload(FeuillePaieJournalier.journalier))
+    pagination_f     = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).paginate(page=page_f, per_page=25, error_out=False)
+    feuilles         = pagination_f.items
+
+    # Affectation site de chaque journalier (pour affichage dans la liste)
+    aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(
+        tenant_id=t.id, actif=True
+    ).filter(AffectationSite.journalier_id.isnot(None)).all()}
+
+    _args = {k: v for k, v in request.args.items() if k != 'page'}
+    _base = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
+    _sep  = '&' if _args else '?'
+    return render_template("tenant/journaliers_paie.html",
+        tenant=t, feuilles=feuilles, journaliers=journaliers_list,
+        sites=sites_list, site_filtre=site_filtre, statut_filtre=statut_filtre,
+        total_en_attente=total_en_attente, total_paye=total_paye,
+        nb_en_attente=nb_en_attente, aff_jour=aff_jour,
+        pagination=pagination_f, pagination_base=_base + _sep,
+        now=datetime.now())
+
+@bp.route("/journaliers/paie/generer", methods=["POST"])
+@login_required
+def journaliers_paie_generer():
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    date_debut = _parse_date(request.form.get("date_debut"))
+    date_fin   = _parse_date(request.form.get("date_fin"))
+    if not date_debut or not date_fin: flash("Dates invalides.", "error"); return redirect(url_for("tenant.journaliers_paie"))
+    site_id      = request.form.get("site_id", type=int)
+    taux_custom  = {}  # taux personnalisés par journalier
+    heures_custom = {} # heures manuelles par journalier
+    ids_coches   = request.form.getlist("journalier_ids")
+
+    for key, val in request.form.items():
+        if key.startswith("taux_") and val:
+            try: taux_custom[int(key[5:])] = float(val)
+            except: pass
+        if key.startswith("heures_") and val:
+            try: heures_custom[int(key[7:])] = float(val)
+            except: pass
+
+    if ids_coches:
+        journaliers_a_payer = Journalier.query.filter(
+            Journalier.tenant_id==t.id,
+            Journalier.id.in_([int(i) for i in ids_coches])
+        ).all()
+    elif site_id:
+        ids_site = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_id, actif=True
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        journaliers_a_payer = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+            Journalier.id.in_(ids_site)
+        ).all()
+    else:
+        journaliers_a_payer = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").all()
+
+    nb = 0
+    for j in journaliers_a_payer:
+        if str(j.id) not in ids_coches and ids_coches:
+            continue
+        taux = taux_custom.get(j.id, float(j.taux_horaire or 0))
+        if j.id in heures_custom:
+            total_h  = heures_custom[j.id]
+            nb_jours = 1  # heures manuelles = considéré comme 1 entrée
+        else:
+            pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
+                          Pointage.present==True).all()
+            total_h  = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
+            nb_jours = len(pts)
+        if total_h <= 0 and nb_jours == 0: continue
+        if FeuillePaieJournalier.query.filter_by(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin).first(): continue
+        db.session.add(FeuillePaieJournalier(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin,
+            nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=taux, montant_brut=round(total_h*taux, 2),
+            statut="EN_ATTENTE"))
+        nb += 1
+    db.session.commit()
+    flash(f"{nb} feuille(s) générée(s).", "success")
+    redirect_url = url_for("tenant.journaliers_paie")
+    if site_id:
+        redirect_url += f"?site_id={site_id}"
+    return redirect(redirect_url)
+
+@bp.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
+@login_required
+def journalier_payer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    f.statut="PAYÉ"; f.date_paiement=datetime.now().date(); db.session.commit()
+    flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
+    return redirect(url_for("tenant.journaliers_paie"))
+
+@bp.route("/journaliers/paie/<int:id>/modifier", methods=["POST"])
+@login_required
+def journalier_feuille_modifier(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    f.montant_brut = float(request.form.get("montant_brut", f.montant_brut) or f.montant_brut)
+    f.observation  = request.form.get("observation", "").strip()
+    db.session.commit(); flash("Feuille modifiée.", "success")
+    return redirect(url_for("tenant.journaliers_paie"))
+
+@bp.route("/journaliers/paie/<int:id>/supprimer", methods=["POST"])
+@login_required
+def journalier_feuille_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(f); db.session.commit()
+    flash("Feuille supprimée.", "success")
+    return redirect(url_for("tenant.journaliers_paie"))
+
+@bp.route("/journaliers/paie/export")
+@login_required
+def journaliers_paie_export():
+    """Export Excel des feuilles de paie journalier — filtré par site et/ou période."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side, numbers
+    import io, calendar
+
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    # ── Paramètres de filtre ──────────────────────────────────────────────────
+    site_id    = request.args.get("site_id",    type=int)
+    statut_f   = request.args.get("statut",     "")
+    date_debut = _parse_date(request.args.get("date_debut", ""))
+    date_fin   = _parse_date(request.args.get("date_fin",   ""))
+    site       = Site.query.get(site_id) if site_id else None
+
+    # ── Requête ───────────────────────────────────────────────────────────────
+    q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
+    if site_id:
+        ids_j = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_id
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        q = q.filter(FeuillePaieJournalier.journalier_id.in_(ids_j))
+    if date_debut:
+        q = q.filter(FeuillePaieJournalier.date_debut >= date_debut)
+    if date_fin:
+        q = q.filter(FeuillePaieJournalier.date_fin   <= date_fin)
+    if statut_f:
+        q = q.filter_by(statut=statut_f)
+    feuilles = q.order_by(
+        FeuillePaieJournalier.date_fin.desc(),
+        FeuillePaieJournalier.journalier_id
+    ).all()
+
+    # ── Affectation site de chaque journalier ─────────────────────────────────
+    aff_map = {}
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).filter(
+            AffectationSite.journalier_id.isnot(None)).all():
+        if a.journalier_id not in aff_map:
+            aff_map[a.journalier_id] = a.site.nom if a.site else "—"
+
+    # ── Styles communs ────────────────────────────────────────────────────────
+    HDR_FONT   = Font(bold=True, color="FFFFFF", size=9)
+    HDR_FILL   = PatternFill("solid", fgColor="1a2332")
+    HDR_ALIGN  = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    BODY_FONT  = Font(size=9)
+    EVEN_FILL  = PatternFill("solid", fgColor="F7F8FA")
+    TOTAL_FONT = Font(bold=True, size=10, color="FFFFFF")
+    TOTAL_FILL = PatternFill("solid", fgColor="1a2332")
+    MONEY_FMT  = '#,##0'
+    thin       = Side(style="thin", color="D1D5DB")
+    BORDER     = Border(left=thin, right=thin, top=thin, bottom=thin)
+    CENTER     = Alignment(horizontal="center")
+    RIGHT      = Alignment(horizontal="right")
+
+    wb = Workbook()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 1 — Détail complet
+    # ══════════════════════════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = "Détail"
+    ws.freeze_panes = "A4"
+
+    # Titre
+    titre = (f"PAIE JOURNALIERS — {t.denomination}"
+             + (f" — {site.nom}" if site else "")
+             + (f" — {date_debut.strftime('%d/%m/%Y')} au {date_fin.strftime('%d/%m/%Y')}" if date_debut and date_fin else "")
+             + f" — Édité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}")
+    ws.merge_cells("A1:K1")
+    ws["A1"] = titre
+    ws["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="1a2332")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 22
+
+    ws.append([])  # ligne vide
+
+    # En-têtes
+    hdrs = ["Journalier","Profession","Site","Période du","au",
+            "Nb jours","Total heures","Taux/h (FCFA)","Montant brut (FCFA)","Statut","Date paiement"]
+    ws.append(hdrs)
+    for c_idx, h in enumerate(hdrs, 1):
+        cell = ws.cell(row=3, column=c_idx, value=h)
+        cell.font  = HDR_FONT
+        cell.fill  = HDR_FILL
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+    ws.row_dimensions[3].height = 18
+
+    # Données
+    total_montant  = 0
+    total_jours    = 0
+    total_heures   = 0
+    for row_idx, f in enumerate(feuilles, 4):
+        site_nom  = aff_map.get(f.journalier_id, "—")
+        montant   = float(f.montant_brut  or 0)
+        heures    = float(f.total_heures  or 0)
+        jours     = int(f.nb_jours or 0)
+        total_montant += montant
+        total_jours   += jours
+        total_heures  += heures
+        row_data = [
+            f.journalier.nom_complet,
+            f.journalier.profession or "—",
+            site_nom,
+            f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
+            f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+            jours,
+            round(heures, 2),
+            float(f.taux_horaire or 0),
+            montant,
+            f.statut,
+            f.date_paiement.strftime("%d/%m/%Y") if f.date_paiement else "",
+        ]
+        ws.append(row_data)
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            # Formats numériques
+            if c_idx in (6, 7):   cell.alignment = CENTER
+            if c_idx in (8, 9):
+                cell.number_format = MONEY_FMT
+                cell.alignment     = RIGHT
+            # Statut coloré
+            if c_idx == 10:
+                cell.alignment = CENTER
+                if val == "PAYÉ":
+                    cell.font = Font(bold=True, color="065F46", size=9)
+                else:
+                    cell.font = Font(bold=True, color="92400E", size=9)
+
+    # Ligne totaux
+    ws.append([])
+    tr = ws.max_row + 1
+    totals = ["", "", "", "", "TOTAL", total_jours, round(total_heures,2),
+              "", total_montant, "", ""]
+    ws.append(totals)
+    for c_idx, val in enumerate(totals, 1):
+        cell = ws.cell(row=tr, column=c_idx)
+        cell.font   = TOTAL_FONT
+        cell.fill   = TOTAL_FILL
+        cell.border = BORDER
+        if c_idx in (8, 9):
+            cell.number_format = MONEY_FMT
+            cell.alignment     = RIGHT
+        if c_idx == 5:
+            cell.alignment = RIGHT
+
+    # Largeurs colonnes
+    col_widths = [28, 18, 20, 13, 13, 10, 13, 16, 20, 14, 15]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[ws.cell(1, i).column_letter].width = w
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 2 — Récap par site
+    # ══════════════════════════════════════════════════════════════════════════
+    ws2 = wb.create_sheet("Récap par site")
+    ws2.freeze_panes = "A3"
+
+    ws2.merge_cells("A1:F1")
+    ws2["A1"] = f"RÉCAPITULATIF PAR SITE — {t.denomination}"
+    ws2["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws2["A1"].fill = PatternFill("solid", fgColor="374151")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 20
+
+    hdrs2 = ["Site","Nb journaliers","Nb jours total","Total heures","Montant brut (FCFA)","Statut"]
+    ws2.append(hdrs2)
+    for c_idx, h in enumerate(hdrs2, 1):
+        cell = ws2.cell(row=2, column=c_idx, value=h)
+        cell.font  = HDR_FONT
+        cell.fill  = PatternFill("solid", fgColor="374151")
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+
+    # Grouper par site
+    from collections import defaultdict
+    by_site = defaultdict(lambda: {"journaliers": set(), "jours": 0, "heures": 0.0,
+                                    "montant": 0.0, "nb_payes": 0, "nb_total": 0})
+    for f in feuilles:
+        s_nom = aff_map.get(f.journalier_id, "Sans site")
+        by_site[s_nom]["journaliers"].add(f.journalier_id)
+        by_site[s_nom]["jours"]    += int(f.nb_jours or 0)
+        by_site[s_nom]["heures"]   += float(f.total_heures or 0)
+        by_site[s_nom]["montant"]  += float(f.montant_brut or 0)
+        by_site[s_nom]["nb_total"] += 1
+        if f.statut == "PAYÉ": by_site[s_nom]["nb_payes"] += 1
+
+    grand_total = 0
+    for row_idx, (s_nom, data) in enumerate(sorted(by_site.items()), 3):
+        pct_paye = int(data["nb_payes"] / data["nb_total"] * 100) if data["nb_total"] else 0
+        statut_txt = f"{data['nb_payes']}/{data['nb_total']} payé(s) ({pct_paye}%)"
+        row_data = [
+            s_nom,
+            len(data["journaliers"]),
+            data["jours"],
+            round(data["heures"], 2),
+            round(data["montant"], 2),
+            statut_txt,
+        ]
+        ws2.append(row_data)
+        grand_total += data["montant"]
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws2.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            if c_idx == 5:
+                cell.number_format = MONEY_FMT
+                cell.alignment     = RIGHT
+            if c_idx in (2, 3, 4):
+                cell.alignment = CENTER
+
+    # Total récap
+    ws2.append([])
+    tr2 = ws2.max_row + 1
+    ws2.append(["TOTAL GÉNÉRAL", "", "", "", grand_total, ""])
+    for c_idx in range(1, 7):
+        cell = ws2.cell(row=tr2, column=c_idx)
+        cell.font   = TOTAL_FONT
+        cell.fill   = PatternFill("solid", fgColor="374151")
+        cell.border = BORDER
+        if c_idx == 5:
+            cell.number_format = MONEY_FMT
+            cell.alignment     = RIGHT
+
+    for i, w in enumerate([28, 16, 14, 14, 22, 22], 1):
+        ws2.column_dimensions[ws2.cell(1, i).column_letter].width = w
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 3 — Récap par journalier
+    # ══════════════════════════════════════════════════════════════════════════
+    ws3 = wb.create_sheet("Récap par journalier")
+    ws3.freeze_panes = "A3"
+
+    ws3.merge_cells("A1:G1")
+    ws3["A1"] = f"RÉCAPITULATIF PAR JOURNALIER — {t.denomination}"
+    ws3["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+    ws3["A1"].fill = PatternFill("solid", fgColor="065F46")
+    ws3["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws3.row_dimensions[1].height = 20
+
+    hdrs3 = ["Journalier","Profession","Site","Nb périodes","Nb jours","Total heures","Total perçu (FCFA)"]
+    ws3.append(hdrs3)
+    for c_idx, h in enumerate(hdrs3, 1):
+        cell = ws3.cell(row=2, column=c_idx, value=h)
+        cell.font  = HDR_FONT
+        cell.fill  = PatternFill("solid", fgColor="065F46")
+        cell.alignment = HDR_ALIGN
+        cell.border = BORDER
+
+    by_jour = defaultdict(lambda: {"nom":"","profession":"","site":"","periodes":0,"jours":0,"heures":0.0,"montant":0.0})
+    for f in feuilles:
+        jid = f.journalier_id
+        by_jour[jid]["nom"]       = f.journalier.nom_complet
+        by_jour[jid]["profession"]= f.journalier.profession or "—"
+        by_jour[jid]["site"]      = aff_map.get(jid, "—")
+        by_jour[jid]["periodes"]  += 1
+        by_jour[jid]["jours"]     += int(f.nb_jours or 0)
+        by_jour[jid]["heures"]    += float(f.total_heures or 0)
+        by_jour[jid]["montant"]   += float(f.montant_brut or 0)
+
+    grand_total3 = 0
+    for row_idx, (jid, d) in enumerate(sorted(by_jour.items(), key=lambda x: x[1]["nom"]), 3):
+        row_data = [d["nom"], d["profession"], d["site"],
+                    d["periodes"], d["jours"], round(d["heures"],2), round(d["montant"],2)]
+        ws3.append(row_data)
+        grand_total3 += d["montant"]
+        is_even = (row_idx % 2 == 0)
+        for c_idx, val in enumerate(row_data, 1):
+            cell = ws3.cell(row=row_idx, column=c_idx)
+            cell.font   = BODY_FONT
+            cell.border = BORDER
+            if is_even: cell.fill = EVEN_FILL
+            if c_idx == 7:
+                cell.number_format = MONEY_FMT; cell.alignment = RIGHT
+            if c_idx in (4, 5, 6): cell.alignment = CENTER
+
+    ws3.append([])
+    tr3 = ws3.max_row + 1
+    ws3.append(["TOTAL GÉNÉRAL","","","","","", grand_total3])
+    for c_idx in range(1, 8):
+        cell = ws3.cell(row=tr3, column=c_idx)
+        cell.font = TOTAL_FONT
+        cell.fill = PatternFill("solid", fgColor="065F46")
+        cell.border = BORDER
+        if c_idx == 7:
+            cell.number_format = MONEY_FMT; cell.alignment = RIGHT
+
+    for i, w in enumerate([28, 18, 20, 12, 11, 13, 22], 1):
+        ws3.column_dimensions[ws3.cell(1, i).column_letter].width = w
+
+    # ── Export ────────────────────────────────────────────────────────────────
+    out = io.BytesIO()
+    wb.save(out); out.seek(0)
+
+    parts = ["Paie_Journaliers"]
+    if site:       parts.append(site.nom.replace(" ", "_"))
+    if date_debut: parts.append(date_debut.strftime("%Y%m%d"))
+    if date_fin:   parts.append("au" + date_fin.strftime("%Y%m%d"))
+    parts.append(datetime.now().strftime("%Y%m%d"))
+    fname = "_".join(parts) + ".xlsx"
+
+    return send_file(out,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True, download_name=fname)
+
+@bp.route("/journaliers/paie/payer-selection", methods=["POST"])
+@login_required
+def journaliers_payer_selection():
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    ids = [int(i) for i in request.form.get("feuille_ids","").split(",") if i.strip().isdigit()]
+    nb = 0
+    for fid in ids:
+        f = FeuillePaieJournalier.query.filter_by(id=fid, tenant_id=t.id, statut="EN_ATTENTE").first()
+        if f: f.statut="PAYÉ"; f.date_paiement=datetime.now().date(); nb+=1
+    db.session.commit()
+    flash(f"{nb} journalier(s) payé(s).", "success")
+    return redirect(url_for("tenant.journaliers_paie"))
+
+# ── Acomptes ──────────────────────────────────────────────────────────────────
+@bp.route("/acomptes")
+@login_required
+def acomptes():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    now = datetime.now()
+    mois = request.args.get("mois", now.month, type=int)
+    annee = request.args.get("annee", now.year, type=int)
+    salarie_id = request.args.get("salarie_id", type=int)
+    try:
+        query = Acompte.query.filter_by(tenant_id=t.id, annee=annee, mois=mois)
+        if salarie_id: query = query.filter_by(salarie_id=salarie_id)
+        liste = query.order_by(Acompte.date_acompte.desc()).all()
+    except Exception:
+        db.create_all(); db.session.rollback(); liste = []
+    total_mois       = sum(float(a.montant) for a in liste if a.statut != "ANNULE")
+    total_en_attente = sum(float(a.montant) for a in liste if a.statut == "EN_ATTENTE")
+    total_deduit     = sum(float(a.montant) for a in liste if a.statut == "DEDUIT")
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    return render_template("tenant/acomptes.html", tenant=t, liste=liste, salaries=salaries_list,
+        mois=mois, annee=annee, now=now, total_mois=total_mois,
+        total_en_attente=total_en_attente, total_deduit=total_deduit, MOIS_NOMS=PeriodePaie.MOIS_NOMS)
+
+@bp.route("/acomptes/nouveau", methods=["GET","POST"])
+@login_required
+def acompte_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit: abort(403)
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    if request.method == "POST":
+        salarie_id = request.form.get("salarie_id", type=int)
+        montant    = float(request.form.get("montant", 0) or 0)
+        date_ac    = _parse_date(request.form.get("date_acompte"))
+        mois       = request.form.get("mois", type=int)
+        annee      = request.form.get("annee", type=int)
+        motif      = request.form.get("motif", "").strip()
+        if not salarie_id or montant <= 0 or not date_ac:
+            flash("Veuillez remplir tous les champs.", "error")
+        else:
+            contrat = Contrat.query.filter_by(salarie_id=salarie_id, tenant_id=t.id, actif=True).first()
+            if contrat and montant > float(contrat.salaire_base) * 0.5:
+                flash(f"Acompte maximum 50% du salaire de base ({float(contrat.salaire_base)*0.5:,.0f} FCFA).".replace(",", " "), "error")
+                return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+            db.session.add(Acompte(tenant_id=t.id, salarie_id=salarie_id, montant=montant,
+                date_acompte=date_ac, mois=mois, annee=annee, motif=motif, statut="EN_ATTENTE"))
+            db.session.commit()
+            flash(f"Acompte de {montant:,.0f} FCFA enregistré.".replace(",", " "), "success")
+            return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
+    return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+
+@bp.route("/acomptes/<int:id>/valider", methods=["POST"])
+@login_required
+def acompte_valider(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    a.statut = "DEDUIT"; db.session.commit()
+    flash("Acompte marqué comme déduit.", "success")
+    return redirect(url_for("tenant.acomptes", mois=a.mois, annee=a.annee))
+
+@bp.route("/acomptes/<int:id>/annuler", methods=["POST"])
+@login_required
+def acompte_annuler(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    a.statut = "ANNULE"; db.session.commit()
+    flash("Acompte annulé.", "success")
+    return redirect(url_for("tenant.acomptes", mois=a.mois, annee=a.annee))
+
+@bp.route("/acomptes/<int:id>/supprimer", methods=["POST"])
+@login_required
+def acompte_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    mois, annee = a.mois, a.annee
+    db.session.delete(a); db.session.commit()
+    flash("Acompte supprimé.", "success")
+    return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
+
+# ── Congés avancés ────────────────────────────────────────────────────────────
+
+@bp.route("/conges/bilan")
+@tenant_required
+def conges_bilan():
+    """Bilan congés de tous les salariés actifs avec jours acquis, pris, restants."""
+    t = get_tenant()
+    annee = request.args.get("annee", date.today().year, type=int)
+    salaries_actifs = Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF"
+    ).options(
+        joinedload(Salarie.conges),
+        joinedload(Salarie.contrats),
+    ).order_by(Salarie.nom).all()
+
+    from conges_avance import bilan_conges_tenant
+    bilan = bilan_conges_tenant(salaries_actifs, annee)
+
+    # Stats globales
+    total_acquis   = sum(b["jours_acquis"]   for b in bilan)
+    total_pris     = sum(b["jours_pris"]     for b in bilan)
+    total_restants = sum(b["jours_restants"] for b in bilan)
+    nb_alertes     = sum(1 for b in bilan if b["alerte"])
+
+    return render_template("tenant/conges_bilan.html",
+        tenant=t, bilan=bilan, annee=annee,
+        total_acquis=total_acquis, total_pris=total_pris,
+        total_restants=total_restants, nb_alertes=nb_alertes,
+        annees=list(range(date.today().year - 2, date.today().year + 2)),
+    )
+
+
+@bp.route("/conges/planning")
+@tenant_required
+def conges_planning():
+    """Planning visuel des congés — vue calendrier mensuel."""
+    t    = get_tenant()
+    mois = request.args.get("mois", date.today().month, type=int)
+    annee= request.args.get("annee", date.today().year,  type=int)
+
+    tous_conges = Conge.query.filter_by(tenant_id=t.id)\
+        .options(joinedload(Conge.salarie))\
+        .filter(Conge.statut.in_(["APPROUVÉ","APPROUVE","DEMANDÉ","DEMANDE","PRIS"]))\
+        .all()
+
+    from conges_avance import planning_absences
+    planning = planning_absences(tous_conges, annee, mois)
+
+    # Infos du mois pour le calendrier
+    import calendar
+    cal = calendar.monthcalendar(annee, mois)
+    nb_jours = calendar.monthrange(annee, mois)[1]
+    MOIS_FR = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+               "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    return render_template("tenant/conges_planning.html",
+        tenant=t, planning=planning, mois=mois, annee=annee,
+        mois_nom=MOIS_FR[mois], cal=cal, nb_jours=nb_jours,
+        MOIS_FR=MOIS_FR,
+    )
+
+
+@bp.route("/salaries/<int:sal_id>/solde-tout-compte")
+@tenant_required
+def solde_tout_compte(sal_id):
+    """Calcul du solde de tout compte (indemnité congés + licenciement)."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id)\
+        .options(joinedload(Salarie.conges),
+                 joinedload(Salarie.contrats)).first_or_404()
+
+    date_cessation_str = request.args.get("date_cessation", "")
+    try:
+        date_cessation = datetime.strptime(date_cessation_str, "%Y-%m-%d").date() \
+            if date_cessation_str else date.today()
+    except ValueError:
+        date_cessation = date.today()
+
+    # 12 derniers bulletins
+    bulletins_12 = BulletinPaie.query.filter_by(
+        tenant_id=t.id, salarie_id=sal_id
+    ).filter(
+        BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"])
+    ).order_by(BulletinPaie.date_creation.desc()).limit(12).all()
+
+    from conges_avance import calculer_solde_tout_compte
+    solde = calculer_solde_tout_compte(s, bulletins_12, date_cessation)
+
+    return render_template("tenant/solde_tout_compte.html",
+        tenant=t, salarie=s, solde=solde, date_cessation=date_cessation,
+    )
+
+
+@bp.route("/api/conges/jours-acquis/<int:sal_id>")
+@login_required
+def api_jours_acquis(sal_id):
+    """Retourne les jours acquis d'un salarié (JSON)."""
+    t = get_tenant()
+    if not t: return jsonify({"error": "non authentifié"}), 401
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+
+    from conges_avance import calculer_jours_acquis
+    result = calculer_jours_acquis(s.date_embauche)
+    # Sérialiser les dates
+    for k in ["periode_debut","periode_fin"]:
+        if result.get(k):
+            result[k] = str(result[k])
+    return jsonify(result)
+
+
+# ── Congés ────────────────────────────────────────────────────────────────────
+@bp.route("/conges")
+@login_required
+def conges():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    now   = datetime.now()
+    annee = request.args.get("annee", now.year, type=int)
+    q     = request.args.get("q", "")
+
+    # ── Calcul du solde — Code du Travail gabonais ───────────────────────────
+    # Art. 213 : 2 j/mois pour ≥ 18 ans | 2,5 j/mois pour < 18 ans
+    # Allocation = max(Σ bruts 12 mois, dernier brut×12) / 288 × jours acquis
+    # Exclusion : prime de transport (Art. 213 al. 3)
+
+    def age_au_31_dec(salarie, annee_ref):
+        """Âge du salarié au 31 décembre de l'année de référence."""
+        if not salarie.date_naissance:
+            return 99  # inconnu → adulte par défaut
+        return annee_ref - salarie.date_naissance.year - (
+            1 if salarie.date_naissance.replace(year=annee_ref) > datetime(annee_ref,12,31).date() else 0
+        )
+
+    def taux_conge(salarie, annee_ref):
+        """2.5 j/mois si < 18 ans, sinon 2 j/mois."""
+        return 2.5 if age_au_31_dec(salarie, annee_ref) < 18 else 2.0
+
+    def calculer_solde_auto(salarie, annee_ref):
+        """Jours acquis proratisés selon le taux applicable."""
+        tx = taux_conge(salarie, annee_ref)
+        if not salarie.date_embauche:
+            return round(12 * tx, 1)
+        emb         = salarie.date_embauche
+        debut_annee = datetime(annee_ref, 1, 1).date()
+        fin_annee   = datetime(annee_ref, 12, 31).date()
+        debut_acq   = max(emb, debut_annee)
+        fin_acq     = min(datetime.now().date(), fin_annee)
+        if fin_acq < debut_acq:
+            return 0.0
+        mois_trav = min(round((fin_acq - debut_acq).days / 30.44, 1), 12)
+        return round(mois_trav * tx, 1)
+
+    def calculer_allocation_conge(salarie, jours_acquis, annee_ref):
+        """
+        Allocation congés = max(Σbruts12mois, dernierBrut×12) / 288 × jours_acquis
+        Prime de transport exclue de la base (Art. 213 al. 3).
+        """
+        if jours_acquis <= 0:
+            return 0.0, 0.0
+        # Bulletins des 12 derniers mois
+        from datetime import timedelta
+        limite = datetime(annee_ref, 12, 31).date()
+        debut  = (datetime(annee_ref, 12, 31) - timedelta(days=365)).date()
+        buls   = BulletinPaie.query.filter(
+            BulletinPaie.tenant_id  == salarie.tenant_id,
+            BulletinPaie.salarie_id == salarie.id,
+        ).join(PeriodePaie).filter(
+            PeriodePaie.annee >= debut.year,
+        ).order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).limit(12).all()
+
+        if not buls:
+            # Pas de bulletins → estimer depuis le contrat actif
+            contrat = next((c for c in salarie.contrats if c.actif), None)
+            if not contrat: return 0.0, 0.0
+            last_brut = float(contrat.salaire_base or 0)
+            somme_12  = last_brut * 12
+        else:
+            # Exclure prime_transport de chaque bulletin
+            somme_12  = sum(
+                float(b.salaire_brut or 0) - float(b.prime_transport or 0)
+                for b in buls
+            )
+            last_brut = float(buls[0].salaire_brut or 0) - float(buls[0].prime_transport or 0)
+
+        # Prendre le plus favorable
+        base_methode1 = somme_12  / 288        # Σ 12 mois / 288
+        base_methode2 = (last_brut * 12) / 288 # dernier × 12 / 288
+        base          = max(base_methode1, base_methode2)
+        allocation    = round(base * jours_acquis, 0)
+        return round(base, 2), allocation
+
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
+
+    soldes = []
+    for s in salaries_list:
+        if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower():
+            continue
+        solde_db = Conge.query.filter_by(
+            tenant_id=t.id, salarie_id=s.id, annee=annee
+        ).filter(Conge.date_depart == None).first()
+
+        jours_auto = calculer_solde_auto(s, annee)
+
+        if solde_db:
+            acquis    = float(solde_db.jours_acquis or jours_auto)
+            pris      = float(solde_db.jours_pris   or 0)
+        else:
+            acquis    = jours_auto
+            pris      = sum(
+                float(c.jours_pris or 0)
+                for c in Conge.query.filter_by(
+                    tenant_id=t.id, salarie_id=s.id, annee=annee, statut="APPROUVÉ"
+                ).all()
+            )
+
+        taux_j    = taux_conge(s, annee)
+        base_all, allocation = calculer_allocation_conge(s, acquis, annee)
+        soldes.append({
+            "salarie":        s,
+            "solde_db":       solde_db,
+            "jours_auto":     jours_auto,
+            "jours_acquis":   acquis,
+            "jours_pris":     pris,
+            "jours_restants": round(acquis - pris, 1),
+            "alerte":         (acquis - pris) < 5,
+            "taux_j":         taux_j,
+            "base_allocation":base_all,
+            "allocation":     allocation,
+            "mineur":         taux_j == 2.5,
+        })
+
+    # Demandes (avec date_depart renseignée)
+    demandes = Conge.query.filter_by(tenant_id=t.id)        .filter(Conge.date_depart.isnot(None))        .options(joinedload(Conge.salarie))        .order_by(Conge.date_depart.desc()).all()
+
+    annees_dispo = sorted(set(
+        [now.year, now.year-1, now.year+1]
+        + [c.annee for c in Conge.query.filter_by(tenant_id=t.id).all()]
+    ), reverse=True)
+
+    return render_template("tenant/conges.html",
+        tenant=t, soldes=soldes, demandes=demandes,
+        annee=annee, annees_dispo=annees_dispo, now=now, q=q,
+        salaries=salaries_list)
+
+@bp.route("/conges/nouveau", methods=["GET","POST"])
+@login_required
+def conge_nouveau():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    if request.method == "POST":
+        salarie_id = request.form.get("salarie_id", type=int)
+        annee = request.form.get("annee", datetime.now().year, type=int)
+        date_dep = _parse_date(request.form.get("date_depart"))
+        date_ret = _parse_date(request.form.get("date_retour"))
+        type_c = request.form.get("type_conge", "ANNUEL")
+        jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
+        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
+        if not conge:
+            s = Salarie.query.get(salarie_id)
+            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
+            conge = Conge(tenant_id=t.id, salarie_id=salarie_id, annee=annee,
+                jours_acquis=round(min(mois,12)*2.0,1), jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
+            db.session.add(conge)
+        conge.date_depart  = date_dep
+        conge.date_retour  = date_ret
+        conge.type_conge   = type_c
+        conge.statut       = "DEMANDÉ"
+        conge.jours_pris   = float(conge.jours_pris or 0)  # ne pas écraser les jours déjà pris
+        db.session.commit()
+        flash(f"✅ Demande de congé enregistrée ({jours} jour(s)).", "success")
+        return redirect(url_for("tenant.conges"))
+    return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+
+@bp.route("/conges/<int:id>/modifier", methods=["GET","POST"])
+@login_required
+def conge_modifier(id):
+    """Modifier une demande de congé existante."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+
+    if request.method == "POST":
+        old_jours = (c.date_retour - c.date_depart).days + 1 if c.date_depart and c.date_retour else 0
+        date_dep  = _parse_date(request.form.get("date_depart"))
+        date_ret  = _parse_date(request.form.get("date_retour"))
+        type_c    = request.form.get("type_conge", "ANNUEL")
+        new_jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
+
+        # Si congé APPROUVÉ → ajuster les jours_pris
+        if c.statut == "APPROUVÉ":
+            c.jours_pris = max(0, float(c.jours_pris or 0) - old_jours + new_jours)
+
+        c.date_depart = date_dep
+        c.date_retour = date_ret
+        c.type_conge  = type_c
+        c.statut      = request.form.get("statut", c.statut)
+        db.session.commit()
+        flash(f"✅ Congé modifié ({new_jours} jour(s)).", "success")
+        return redirect(url_for("tenant.conges"))
+
+    return render_template("tenant/conge_form.html",
+        tenant=t, salaries=salaries_list,
+        conge=c, now=datetime.now(), mode="modifier")
+
+
+@bp.route("/conges/<int:id>/approuver", methods=["POST"])
+@login_required
+def conge_approuver(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if c.date_depart and c.date_retour:
+        jours = (c.date_retour - c.date_depart).days + 1
+        # Mettre à jour le solde de l'année
+        solde = Conge.query.filter_by(
+            tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee
+        ).filter(Conge.date_depart == None).first()
+        if not solde:
+            s = Salarie.query.get(c.salarie_id)
+            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
+            solde = Conge(tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee,
+                          jours_acquis=round(min(mois,12)*2.5, 1), jours_pris=0)
+            db.session.add(solde)
+        solde.jours_pris = float(solde.jours_pris or 0) + jours
+        c.jours_pris     = float(c.jours_pris or 0) + jours
+    c.statut = "APPROUVÉ"
+    db.session.commit()
+    flash(f"✅ Congé de {c.salarie.nom_complet} approuvé.", "success")
+    return redirect(url_for("tenant.conges"))
+
+@bp.route("/conges/<int:id>/refuser", methods=["POST"])
+@login_required
+def conge_refuser(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    c.statut="REFUSÉ"; db.session.commit()
+    flash("Congé refusé.", "success")
+    return redirect(url_for("tenant.conges"))
+
+@bp.route("/conges/<int:id>/supprimer", methods=["POST"])
+@login_required
+def conge_supprimer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(c); db.session.commit()
+    flash("Demande supprimée.", "success")
+    return redirect(url_for("tenant.conges"))
+
+
+@bp.route("/salaries/imprimer")
+@login_required
+def salaries_imprimer():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant(); 
+    if not t: return redirect(url_for("auth.login"))
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
+    for s in salaries_list:
+        s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
+    return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
+
+
+
+@bp.route("/api/travailleur/stats-sans-site")
+@tenant_required
+def api_stats_sans_site():
+    t = get_tenant()
+    # Salariés actifs sans affectation active
+    sal_ids_affectes = {a.salarie_id for a in 
+        AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all() if a.salarie_id}
+    jour_ids_affectes = {a.journalier_id for a in 
+        AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all() if a.journalier_id}
+    nb_sal  = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    nb_jour = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").count()
+    sans_site = (nb_sal - len(sal_ids_affectes)) + (nb_jour - len(jour_ids_affectes))
+    return jsonify({"total": max(0, sans_site)})
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── SITES & AFFECTATIONS ──────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/sites")
+@tenant_required
+def sites():
+    t = get_tenant()
+    sites_list = Site.query.filter_by(tenant_id=t.id).order_by(Site.nom).all()
+    return render_template("tenant/sites.html", tenant=t, sites=sites_list)
+
+@bp.route("/sites/nouveau", methods=["GET","POST"])
+@tenant_required
+def site_nouveau():
+    t = get_tenant()
+    if request.method == "POST":
+        s = Site(
+            tenant_id   = t.id,
+            nom         = request.form["nom"].strip(),
+            code        = request.form.get("code","").strip().upper() or None,
+            adresse     = request.form.get("adresse","").strip() or None,
+            ville       = request.form.get("ville","").strip() or None,
+            responsable = request.form.get("responsable","").strip() or None,
+            telephone   = request.form.get("telephone","").strip() or None,
+            description = request.form.get("description","").strip() or None,
+        )
+        db.session.add(s)
+        db.session.commit()
+        flash(f"Site « {s.nom} » créé avec succès.", "success")
+        return redirect(url_for("tenant.sites"))
+    return render_template("tenant/site_form.html", tenant=t, site=None)
+
+@bp.route("/sites/<int:id>/modifier", methods=["GET","POST"])
+@tenant_required
+def site_modifier(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.method == "POST":
+        s.nom         = request.form["nom"].strip()
+        s.code        = request.form.get("code","").strip().upper() or None
+        s.adresse     = request.form.get("adresse","").strip() or None
+        s.ville       = request.form.get("ville","").strip() or None
+        s.responsable = request.form.get("responsable","").strip() or None
+        s.telephone   = request.form.get("telephone","").strip() or None
+        s.description = request.form.get("description","").strip() or None
+        db.session.commit()
+        flash(f"Site « {s.nom} » modifié.", "success")
+        return redirect(url_for("tenant.sites"))
+    return render_template("tenant/site_form.html", tenant=t, site=s)
+
+@bp.route("/sites/<int:id>/toggle", methods=["POST"])
+@tenant_required
+def site_toggle(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    s.actif = not s.actif
+    db.session.commit()
+    flash(f"Site « {s.nom} » {'activé' if s.actif else 'désactivé'}.", "success")
+    return redirect(url_for("tenant.sites"))
+
+@bp.route("/sites/<int:id>")
+@tenant_required
+def site_detail(id):
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    # Date sélectionnée pour le pointage rapide
+    date_str = request.args.get("date_ptg", date.today().strftime("%Y-%m-%d"))
+    try:    date_ptg = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_ptg = date.today()
+
+    # Affectations actives
+    affectations = AffectationSite.query.filter_by(site_id=id, actif=True)        .order_by(AffectationSite.date_debut.desc()).all()
+
+    # Séparer salariés et journaliers affectés
+    ids_sal  = [a.salarie_id    for a in affectations if a.salarie_id]
+    ids_jour = [a.journalier_id for a in affectations if a.journalier_id]
+
+    salaries_site    = Salarie.query.filter(
+        Salarie.tenant_id==t.id, Salarie.statut=="ACTIF",
+        Salarie.id.in_(ids_sal)
+    ).order_by(Salarie.nom).all() if ids_sal else []
+
+    journaliers_site = Journalier.query.filter(
+        Journalier.tenant_id==t.id, Journalier.statut=="ACTIF",
+        Journalier.id.in_(ids_jour)
+    ).order_by(Journalier.nom).all() if ids_jour else []
+
+    # Pointages du jour pour ce site
+    pts_sal  = {p.salarie_id:    p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_ptg)
+        .filter(Pointage.salarie_id.in_(ids_sal)).all()} if ids_sal else {}
+    pts_jour = {p.journalier_id: p for p in
+        Pointage.query.filter_by(tenant_id=t.id, date_pointage=date_ptg)
+        .filter(Pointage.journalier_id.in_(ids_jour)).all()} if ids_jour else {}
+
+    # Stats pointage du jour
+    nb_presents  = sum(1 for p in list(pts_sal.values())+list(pts_jour.values()) if p.present)
+    nb_absents   = sum(1 for p in list(pts_sal.values())+list(pts_jour.values()) if p.absent)
+    nb_non_pointes = (len(salaries_site)+len(journaliers_site)) - len(pts_sal) - len(pts_jour)
+
+    # Historique complet
+    historique = AffectationSite.query.filter_by(site_id=id)        .order_by(AffectationSite.date_creation.desc()).limit(50).all()
+
+    # Travailleurs disponibles (non affectés à ce site)
+    ids_sal_aff  = {a.salarie_id    for a in affectations if a.salarie_id}
+    ids_jour_aff = {a.journalier_id for a in affectations if a.journalier_id}
+    salaries_dispo    = [x for x in Salarie.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+        if x.id not in ids_sal_aff]
+    journaliers_dispo = [x for x in Journalier.query.filter_by(
+        tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+        if x.id not in ids_jour_aff]
+
+    # ── KPIs tableau de bord ─────────────────────────────────────────────────
+    from datetime import date as _date
+    import calendar
+
+    now_d       = _date.today()
+    mois_debut  = _date(now_d.year, now_d.month, 1)
+    mois_fin    = _date(now_d.year, now_d.month,
+                        calendar.monthrange(now_d.year, now_d.month)[1])
+    lundi_sem   = now_d - timedelta(days=now_d.weekday())
+    samedi_sem  = lundi_sem + timedelta(days=5)
+
+    # Tous les pointages du mois pour ce site (salariés + journaliers)
+    ids_all = ids_sal + ids_jour
+    pts_mois_sal = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.salarie_id.in_(ids_sal),
+                Pointage.date_pointage >= mois_debut,
+                Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+    pts_mois_jour = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.journalier_id.in_(ids_jour),
+                Pointage.date_pointage >= mois_debut,
+                Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+    pts_mois_tous = pts_mois_sal + pts_mois_jour
+
+    # Pointages de la semaine
+    pts_sem_sal  = [p for p in pts_mois_sal  if lundi_sem <= p.date_pointage <= samedi_sem]
+    pts_sem_jour = [p for p in pts_mois_jour if lundi_sem <= p.date_pointage <= samedi_sem]
+
+    # KPI — Jours pointés (présences) ce mois
+    nb_jours_pointes_mois = sum(1 for p in pts_mois_tous if p.present)
+    nb_absences_mois      = sum(1 for p in pts_mois_tous if p.absent)
+
+    # KPI — Taux de présence semaine
+    nb_pres_sem = sum(1 for p in pts_sem_sal + pts_sem_jour if p.present)
+    nb_abs_sem  = sum(1 for p in pts_sem_sal + pts_sem_jour if p.absent)
+    total_ptg_sem = nb_pres_sem + nb_abs_sem
+    taux_presence_semaine = round(nb_pres_sem / total_ptg_sem * 100) if total_ptg_sem > 0 else 0
+
+    # KPI — Heures totales semaine
+    def total_heures_pt(p):
+        return (float(p.heures_normales or 8) +
+                float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+                float(p.heures_sup or 0))
+
+    heures_semaine = sum(total_heures_pt(p) for p in pts_sem_sal + pts_sem_jour if p.present)
+
+    # KPI — Masse journalière (feuilles de paie journaliers ce mois)
+    feuilles_mois = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)        .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                FeuillePaieJournalier.date_debut >= mois_debut,
+                FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+    masse_journaliere_mois    = sum(float(f.montant_brut or 0) for f in feuilles_mois)
+    feuilles_attente = sum(1 for f in feuilles_mois if f.statut == "EN_ATTENTE")
+    feuilles_payees  = sum(1 for f in feuilles_mois if f.statut == "PAYÉ")
+
+    # KPI — Bulletins salariés du mois (dernière période active)
+    periode_courante = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=now_d.year, mois=now_d.month).first()
+    bulletins_site = []
+    masse_mensuelle = 0
+    if periode_courante and ids_sal:
+        bulletins_site = BulletinPaie.query.filter_by(
+            tenant_id=t.id, periode_id=periode_courante.id
+        ).filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+        masse_mensuelle = sum(float(b.net_a_payer or 0) for b in bulletins_site)
+
+    # Évolution présence 7 derniers jours (pour mini-graphique)
+    evolution_7j = []
+    for i in range(6, -1, -1):
+        d = now_d - timedelta(days=i)
+        p_d = [p for p in pts_mois_tous if p.date_pointage == d]
+        nb_p = sum(1 for p in p_d if p.present)
+        nb_a = sum(1 for p in p_d if p.absent)
+        evolution_7j.append({
+            "date":    d.strftime("%d/%m"),
+            "jour":    ["L","Ma","Me","J","V","Sa","Di"][d.weekday()],
+            "presents": nb_p,
+            "absents":  nb_a,
+            "heures":   round(sum(total_heures_pt(p) for p in p_d if p.present), 1),
+        })
+
+    return render_template("tenant/site_detail.html",
+        tenant=t, site=s,
+        affectations=affectations, historique=historique,
+        salaries_dispo=salaries_dispo, journaliers_dispo=journaliers_dispo,
+        salaries_site=salaries_site, journaliers_site=journaliers_site,
+        pts_sal=pts_sal, pts_jour=pts_jour,
+        date_ptg=date_ptg,
+        date_hier=(date_ptg - timedelta(days=1)).strftime("%Y-%m-%d"),
+        date_demain=(date_ptg + timedelta(days=1)).strftime("%Y-%m-%d"),
+        nb_presents=nb_presents, nb_absents=nb_absents,
+        nb_non_pointes=nb_non_pointes,
+        # KPIs tableau de bord
+        nb_sal_site=len(salaries_site), nb_jour_site=len(journaliers_site),
+        nb_jours_pointes_mois=nb_jours_pointes_mois,
+        nb_absences_mois=nb_absences_mois,
+        taux_presence_semaine=taux_presence_semaine,
+        heures_semaine=round(heures_semaine, 1),
+        masse_journaliere_mois=masse_journaliere_mois,
+        feuilles_attente=feuilles_attente, feuilles_payees=feuilles_payees,
+        masse_mensuelle=masse_mensuelle,
+        nb_bulletins_site=len(bulletins_site),
+        evolution_7j=evolution_7j,
+        mois_nom=["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"][now_d.month],
+        today=str(date.today()))
+
+@bp.route("/sites/<int:id>/pointage-rapide", methods=["POST"])
+@tenant_required
+def site_pointage_rapide(id):
+    """Sauvegarder le pointage rapide depuis la page d'un site."""
+    t = get_tenant()
+    s = Site.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    date_str = request.form.get("date_pointage")
+    try:    date_p = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_p = date.today()
+
+    nb = 0
+    for key, val in request.form.items():
+        # Salariés
+        if key.startswith("sal_present_"):
+            sid = int(key.replace("sal_present_", ""))
+            present = (val == "1"); absent = not present
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, salarie_id=sid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p,
+                              salarie_id=sid, site_id=id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = float(request.form.get(f"sal_h_{sid}", 8) or 8)
+            pt.heures_sup_10   = float(request.form.get(f"sal_s10_{sid}", 0) or 0)
+            pt.heures_sup_30   = float(request.form.get(f"sal_s30_{sid}", 0) or 0)
+            pt.heures_sup_40   = float(request.form.get(f"sal_s40_{sid}", 0) or 0)
+            pt.heures_sup_70   = float(request.form.get(f"sal_s70_{sid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
+            nb += 1
+        # Journaliers
+        elif key.startswith("jour_present_"):
+            jid = int(key.replace("jour_present_", ""))
+            present = (val == "1"); absent = not present
+            pt = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=date_p, journalier_id=jid).first()
+            if not pt:
+                pt = Pointage(tenant_id=t.id, date_pointage=date_p,
+                              journalier_id=jid, site_id=id)
+                db.session.add(pt)
+            pt.present = present; pt.absent = absent
+            pt.heures_normales = float(request.form.get(f"jour_h_{jid}", 8) or 8)
+            pt.heures_sup      = float(request.form.get(f"jour_s_{jid}", 0) or 0)
+            pt.motif_absence   = request.form.get(f"jour_motif_{jid}", "") if absent else None
+            nb += 1
+
+    db.session.commit()
+    flash(f"✅ Pointage du {date_p.strftime('%d/%m/%Y')} sauvegardé — {nb} travailleur(s).", "success")
+    return redirect(url_for("tenant.site_detail", id=id) + f"?date_ptg={date_str}")
+
+@bp.route("/sites/<int:site_id>/affecter", methods=["POST"])
+@tenant_required
+def site_affecter(site_id):
+    """Affecter un ou plusieurs travailleurs à un site."""
+    t  = get_tenant()
+    s  = Site.query.filter_by(id=site_id, tenant_id=t.id).first_or_404()
+    date_debut = request.form.get("date_debut") or str(date.today())
+    motif      = request.form.get("motif","").strip() or None
+    nb         = 0
+
+    for key in request.form:
+        if key.startswith("sal_"):
+            sal_id = int(key[4:])
+            sal = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first()
+            if not sal: continue
+            # Désactiver toute affectation active précédente sur un AUTRE site
+            prev = AffectationSite.query.filter_by(
+                salarie_id=sal_id, actif=True, tenant_id=t.id).first()
+            if prev and prev.site_id != site_id:
+                prev.actif    = False
+                prev.date_fin = date.today()
+                prev.motif    = f"Transféré vers {s.nom}"
+            elif prev and prev.site_id == site_id:
+                continue  # Déjà sur ce site
+            a = AffectationSite(
+                tenant_id=t.id, site_id=site_id, salarie_id=sal_id,
+                date_debut=date_debut, actif=True, motif=motif,
+                cree_par=current_user.email)
+            db.session.add(a); nb += 1
+
+        elif key.startswith("jour_"):
+            jour_id = int(key[5:])
+            jour = Journalier.query.filter_by(id=jour_id, tenant_id=t.id).first()
+            if not jour: continue
+            prev = AffectationSite.query.filter_by(
+                journalier_id=jour_id, actif=True, tenant_id=t.id).first()
+            if prev and prev.site_id != site_id:
+                prev.actif    = False
+                prev.date_fin = date.today()
+                prev.motif    = f"Transféré vers {s.nom}"
+            elif prev and prev.site_id == site_id:
+                continue
+            a = AffectationSite(
+                tenant_id=t.id, site_id=site_id, journalier_id=jour_id,
+                date_debut=date_debut, actif=True, motif=motif,
+                cree_par=current_user.email)
+            db.session.add(a); nb += 1
+
+    db.session.commit()
+    flash(f"{nb} travailleur(s) affecté(s) à « {s.nom} ».", "success")
+    return redirect(url_for("tenant.site_detail", id=site_id))
+
+@bp.route("/sites/affecter-travailleur/<int:affectation_id>/retirer", methods=["POST"])
+@tenant_required
+def site_retirer(affectation_id):
+    """Retirer un travailleur de son site (fin d'affectation)."""
+    t = get_tenant()
+    a = AffectationSite.query.filter_by(id=affectation_id, tenant_id=t.id).first_or_404()
+    motif = request.form.get("motif","").strip() or "Retrait manuel"
+    a.actif    = False
+    a.date_fin = date.today()
+    a.motif    = motif
+    db.session.commit()
+    flash(f"Affectation terminée pour {a.nom_travailleur}.", "success")
+    return redirect(url_for("tenant.site_detail", id=a.site_id))
+
+@bp.route("/sites/permuter", methods=["POST"])
+@tenant_required
+def site_permuter():
+    """Permuter un travailleur d'un site vers un autre."""
+    t         = get_tenant()
+    aff_id    = request.form.get("affectation_id", type=int)
+    nouveau_site_id = request.form.get("site_destination_id", type=int)
+    motif     = request.form.get("motif","Permutation").strip()
+
+    aff_old = AffectationSite.query.filter_by(id=aff_id, tenant_id=t.id, actif=True).first_or_404()
+    site_dest = Site.query.filter_by(id=nouveau_site_id, tenant_id=t.id).first_or_404()
+
+    # Fermer l'affectation actuelle
+    aff_old.actif    = False
+    aff_old.date_fin = date.today()
+    aff_old.motif    = f"Permuté vers {site_dest.nom} — {motif}"
+
+    # Créer la nouvelle affectation
+    aff_new = AffectationSite(
+        tenant_id     = t.id,
+        site_id       = nouveau_site_id,
+        salarie_id    = aff_old.salarie_id,
+        journalier_id = aff_old.journalier_id,
+        date_debut    = date.today(),
+        actif         = True,
+        motif         = f"Permuté depuis {aff_old.site.nom} — {motif}",
+        cree_par      = current_user.email,
+    )
+    db.session.add(aff_new)
+    db.session.commit()
+    flash(f"{aff_old.nom_travailleur} permuté vers « {site_dest.nom} ».", "success")
+    return redirect(url_for("tenant.site_detail", id=nouveau_site_id))
+
+@bp.route("/api/travailleur/<string:type>/<int:id>/site")
+@tenant_required
+def api_travailleur_site(type, id):
+    """API : retourne le site actuel d'un travailleur."""
+    t = get_tenant()
+    if type == "salarie":
+        a = AffectationSite.query.filter_by(
+            salarie_id=id, tenant_id=t.id, actif=True).first()
+    else:
+        a = AffectationSite.query.filter_by(
+            journalier_id=id, tenant_id=t.id, actif=True).first()
+    if a:
+        return jsonify({"site_id": a.site_id, "site_nom": a.site.nom,
+                        "date_debut": str(a.date_debut)})
+    return jsonify({"site_id": None, "site_nom": None})
+
+
+@bp.route("/journaliers/imprimer")
+@login_required
+def journaliers_imprimer():
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    return render_template("tenant/journaliers_print.html", journaliers=Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all(), tenant=t, now=datetime.now())
+
+# ── Export & API ──────────────────────────────────────────────────────────────
+@bp.route("/bulletins/export/<int:periode_id>")
+@tenant_required
+def export_journal(periode_id):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    t=get_tenant()
+    p=PeriodePaie.query.filter_by(id=periode_id,tenant_id=t.id).first_or_404()
+    buls=BulletinPaie.query.filter_by(periode_id=periode_id,tenant_id=t.id).join(Salarie).order_by(Salarie.nom).all()
+    wb=Workbook(); ws=wb.active; ws.title=f"Journal {p.libelle_complet}"
+    ws.merge_cells("A1:R1"); ws["A1"]=f"JOURNAL DE PAIE — {p.libelle_complet} — {t.denomination}"
+    ws["A1"].font=Font(bold=True,size=13); ws["A1"].alignment=Alignment(horizontal="center")
+    hdrs=["Matricule","Nom","Prénom","Emploi","Cat.","Base","Brut","CNSS Sal.","CNAMGS Sal.","TCS","IRPP","Net","Net à Payer","CNSS Pat.","CNAMGS Pat.","FNH","CFP","Statut"]
+    for col,h in enumerate(hdrs,1):
+        c=ws.cell(row=3,column=col,value=h); c.font=Font(bold=True,color="FFFFFF")
+        c.fill=PatternFill("solid",fgColor="1a2332"); c.alignment=Alignment(horizontal="center")
+    for row,b in enumerate(buls,4):
+        s=b.salarie
+        vals=[s.matricule,s.nom,s.prenom,s.emploi,s.categorie.code if s.categorie else "",
+              float(b.salaire_base or 0),float(b.salaire_brut or 0),float(b.cnss_salarie or 0),
+              float(b.cnamgs_salarie or 0),float(b.tcs or 0),float(b.irpp or 0),
+              float(b.salaire_net or 0),float(b.net_a_payer or 0),float(b.cnss_patronale or 0),
+              float(b.cnamgs_patronale or 0),float(b.fnh or 0),float(b.cfp or 0),b.statut]
+        for col,v in enumerate(vals,1):
+            cell=ws.cell(row=row,column=col,value=v)
+            if isinstance(v,float): cell.number_format='#,##0'
+            if row%2==0: cell.fill=PatternFill("solid",fgColor="F5F5F5")
+    out=io.BytesIO(); wb.save(out); out.seek(0)
+    return send_file(out,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True,download_name=f"Journal_{p.libelle_mois}_{p.annee}_{t.slug}.xlsx")
+
+@bp.route("/api/calculer-bulletin", methods=["POST"])
+@login_required
+def api_calculer():
+    try:
+        t = get_tenant()
+        data = request.get_json() or {}
+        sid = data.pop("salarie_id", None)
+        nb_parts = 1.0
+        if sid and t:
+            s = Salarie.query.filter_by(id=sid, tenant_id=t.id).first()
+            if s: nb_parts = float(s.nombre_parts or 1)
+        mois  = data.pop("mois_periode", None)
+        annee = data.pop("annee_periode", None)
+        total_acomptes = 0.0
+        if sid and t and mois and annee:
+            total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))
+                .filter_by(tenant_id=t.id, salarie_id=int(sid), mois=int(mois),
+                           annee=int(annee), statut="EN_ATTENTE").scalar() or 0)
+        if total_acomptes > 0:
+            data["acompte"] = max(float(data.get("acompte", 0)), total_acomptes)
+        res = calculer_bulletin(data, nb_parts=nb_parts)
+        res["acompte_auto"] = total_acomptes
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@bp.route("/api/salarie/<int:id>/contrat")
+@login_required
+def api_contrat(id):
+    t=get_tenant()
+    s=Salarie.query.filter_by(id=id,tenant_id=t.id).first()
+    if not s: return jsonify({})
+    c=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first()
+    base={"nom":s.nom_complet,"poste":s.emploi,"matricule":s.matricule,"nombre_parts":float(s.nombre_parts or 1)}
+    if c: base["salaire_base"]=float(c.salaire_base); base["poste"]=c.poste or s.emploi
+    return jsonify(base)
+
+@bp.route("/api/salarie/<int:id>/pointage-mois")
+@login_required
+def api_pointage_mois(id):
+    """Retourne le cumul des heures du pointage pour un salarié sur un mois donné."""
+    t = get_tenant()
+    if not t: return jsonify({})
+    mois  = request.args.get("mois",  type=int)
+    annee = request.args.get("annee", type=int)
+    if not mois or not annee:
+        return jsonify({"erreur": "mois et annee requis"})
+    import calendar
+    dernier_jour = calendar.monthrange(annee, mois)[1]
+    debut = date(annee, mois, 1)
+    fin   = date(annee, mois, dernier_jour)
+    pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
+                Pointage.present == True).all()
+    if not pts:
+        return jsonify({"nb_jours": 0, "nb_absences": 0,
+            "heures_sup_10": 0, "heures_sup_30": 0, "heures_sup_40": 0, "heures_sup_70": 0,
+            "heures_normales_total": 0, "total_sup": 0,
+            "message": "Aucun pointage pour cette période"})
+    nb_jours        = len(pts)
+    heures_normales = sum(float(p.heures_normales or 8) for p in pts)
+    heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts)
+    heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts)
+    heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts)
+    heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts)
+    pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
+                Pointage.absent == True).all()
+    return jsonify({
+        "nb_jours":              nb_jours,
+        "nb_absences":           len(pts_absents),
+        "heures_normales_total": round(heures_normales, 2),
+        "heures_sup_10":         round(heures_sup_10, 2),
+        "heures_sup_30":         round(heures_sup_30, 2),
+        "heures_sup_40":         round(heures_sup_40, 2),
+        "heures_sup_70":         round(heures_sup_70, 2),
+        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_40+heures_sup_70, 2),
+        "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
+    })
+
+@bp.route("/api/cache/clear", methods=["POST"])
+@login_required
+def api_cache_clear():
+    """Vider le cache du dashboard (bouton rafraîchir)."""
+    t = get_tenant()
+    if not t: return jsonify({"ok": False})
+    _cache_delete(f"{t.id}:")
+    return jsonify({"ok": True, "msg": "Cache vidé"})
+
+
+@bp.route("/api/semaine-btp")
+@login_required
+def api_semaine_btp():
+    """
+    Calcule la distribution BTP des heures pour un travailleur sur une semaine.
+    Params : type (sal|jour), id, date (n'importe quel jour de la semaine)
+    """
+    t = get_tenant()
+    if not t: return jsonify({"erreur": "non connecté"})
+
+    type_w    = request.args.get("type", "sal")
+    worker_id = request.args.get("id", type=int)
+    date_str  = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+
+    try:
+        date_ref = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except:
+        date_ref = datetime.now().date()
+
+    lundi  = date_ref - timedelta(days=date_ref.weekday())
+    samedi = lundi + timedelta(days=5)
+
+    if type_w == "sal":
+        pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=worker_id)            .filter(Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi,
+                    Pointage.present == True).all()
+    else:
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=worker_id)            .filter(Pointage.date_pointage >= lundi,
+                    Pointage.date_pointage <= samedi,
+                    Pointage.present == True).all()
+
+    if not pts:
+        return jsonify({
+            "semaine": f"{lundi.strftime('%d/%m')} → {samedi.strftime('%d/%m/%Y')}",
+            "nb_jours": 0, "heures_normales": 0,
+            "heures_sup_10": 0, "heures_sup_30": 0,
+            "heures_sup_40": 0, "heures_sup_70": 0,
+            "message": "Aucun pointage cette semaine"
+        })
+
+    from calculs_paie import distribuer_heures_semaine_btp
+    jours_data = []
+    for p in pts:
+        h_norm = float(p.heures_normales or 0)
+        if type_w == "sal":
+            h_nuit = float(p.heures_sup_40 or 0)
+        else:
+            h_nuit = 0
+        jours_data.append({
+            "heures_normales": h_norm,
+            "heures_sup_nuit": h_nuit,
+            "type_jour": p.type_jour or "NORMAL"
+        })
+
+    dist = distribuer_heures_semaine_btp(jours_data)
+    dist["semaine"]  = f"{lundi.strftime('%d/%m')} → {samedi.strftime('%d/%m/%Y')}"
+    dist["nb_jours"] = len(pts)
+    dist["jours_detail"] = [
+        {
+            "date":     str(p.date_pointage),
+            "jour_fr":  ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"][p.date_pointage.weekday()],
+            "heures":   float(p.heures_normales or 0),
+            "type_jour": p.type_jour or "NORMAL",
+        } for p in sorted(pts, key=lambda x: x.date_pointage)
+    ]
+
+    # Montants si salaire connu
+    salaire_base = request.args.get("salaire", type=float)
+    if salaire_base:
+        from calculs_paie import calculer_taux_horaire, COEFF_SUP_10, COEFF_SUP_30
+        th = calculer_taux_horaire(salaire_base)
+        dist["taux_horaire"]    = round(th, 2)
+        dist["montant_10"]      = round(dist["heures_sup_10"] * th * COEFF_SUP_10, 2)
+        dist["montant_30"]      = round(dist["heures_sup_30"] * th * COEFF_SUP_30, 2)
+        dist["montant_total_sup"] = round(dist["montant_10"] + dist["montant_30"]
+                                         + dist["heures_sup_40"] * th * 1.40
+                                         + dist["heures_sup_70"] * th * 1.70, 2)
+
+    return jsonify(dist)
+
+
+@bp.route("/api/salarie/<int:id>/acomptes-mois")
+@login_required
+def api_acomptes_mois(id):
+    t = get_tenant()
+    mois=request.args.get("mois",type=int); annee=request.args.get("annee",type=int)
+    if not t or not mois or not annee: return jsonify({"total":0})
+    total = db.session.query(db.func.sum(Acompte.montant))\
+            .filter_by(tenant_id=t.id,salarie_id=id,mois=mois,annee=annee,statut="EN_ATTENTE").scalar() or 0
+    return jsonify({"total":float(total)})
+
+@bp.route("/pointage/recap-semaine")
+@login_required
+def pointage_recap_semaine():
+    """Récapitulatif de présence hebdomadaire par site."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    # Semaine sélectionnée
+    date_str = request.args.get("date", datetime.now().strftime("%Y-%m-%d"))
+    try:    date_ref = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_ref = datetime.now().date()
+
+    lundi  = date_ref - timedelta(days=date_ref.weekday())
+    jours  = [lundi + timedelta(days=i) for i in range(6)]  # lundi→samedi
+    samedi = jours[-1]
+
+    # Sites actifs
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+
+    # Tous les pointages de la semaine
+    pts_semaine = Pointage.query.filter_by(tenant_id=t.id)        .filter(Pointage.date_pointage >= lundi,
+                Pointage.date_pointage <= samedi).all()
+
+    # Affectations actives (site → workers)
+    aff_sal  = {}  # salarie_id  → site_id
+    aff_jour = {}  # journalier_id → site_id
+    for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all():
+        if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+        if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    # ── Construire les données par site et par jour ───────────────────────────
+    # Structure : { site_id: { date: { presents, absents, heures, h_sup, non_pointes } } }
+    JOURS_FR = ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi"]
+
+    # Nb de travailleurs affectés à chaque site
+    effectif_site = {}
+    for s in sites_list:
+        nb_sal  = sum(1 for v in aff_sal.values()  if v == s.id)
+        nb_jour = sum(1 for v in aff_jour.values() if v == s.id)
+        effectif_site[s.id] = nb_sal + nb_jour
+
+    recap = {}
+    for s in sites_list:
+        recap[s.id] = {
+            "site": s,
+            "effectif": effectif_site.get(s.id, 0),
+            "jours": {},
+            "totaux": {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0},
+        }
+        for j in jours:
+            recap[s.id]["jours"][str(j)] = {
+                "date":        j,
+                "jour_fr":     JOURS_FR[j.weekday()],
+                "presents":    0,
+                "absents":     0,
+                "non_pointes": effectif_site.get(s.id, 0),
+                "heures":      0.0,
+                "h_sup":       0.0,
+            }
+
+    # Sac sans site
+    recap["sans_site"] = {
+        "site": None,
+        "effectif": 0,
+        "jours": {},
+        "totaux": {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0},
+    }
+    for j in jours:
+        recap["sans_site"]["jours"][str(j)] = {
+            "date": j, "jour_fr": JOURS_FR[j.weekday()],
+            "presents": 0, "absents": 0, "non_pointes": 0,
+            "heures": 0.0, "h_sup": 0.0,
+        }
+
+    # Remplir avec les pointages réels
+    for p in pts_semaine:
+        d = str(p.date_pointage)
+        site_id = aff_sal.get(p.salarie_id) or aff_jour.get(p.journalier_id)
+        key = site_id if site_id and site_id in recap else "sans_site"
+
+        if d not in recap[key]["jours"]:
+            continue
+
+        cell = recap[key]["jours"][d]
+        if p.present:
+            cell["presents"]    += 1
+            h_norm = float(p.heures_normales or 8)
+            h_sup  = (float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+                      float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+                      float(p.heures_sup or 0))
+            cell["heures"] += h_norm
+            cell["h_sup"]  += h_sup
+        else:
+            cell["absents"] += 1
+        # Recalcul non_pointés
+        cell["non_pointes"] = max(0,
+            recap[key]["effectif"] - cell["presents"] - cell["absents"])
+
+    # Calculer les totaux semaine par site
+    for key in recap:
+        tot = recap[key]["totaux"]
+        for d, cell in recap[key]["jours"].items():
+            tot["presents"] += cell["presents"]
+            tot["absents"]  += cell["absents"]
+            tot["heures"]   += cell["heures"]
+            tot["h_sup"]    += cell["h_sup"]
+
+    # Totaux globaux tous sites
+    totaux_globaux = {"presents": 0, "absents": 0, "heures": 0.0, "h_sup": 0.0}
+    for key in recap:
+        t2 = recap[key]["totaux"]
+        totaux_globaux["presents"] += t2["presents"]
+        totaux_globaux["absents"]  += t2["absents"]
+        totaux_globaux["heures"]   += t2["heures"]
+        totaux_globaux["h_sup"]    += t2["h_sup"]
+
+    # Filtrer "sans_site" si vide
+    if recap["sans_site"]["totaux"]["presents"] == 0 and recap["sans_site"]["totaux"]["absents"] == 0:
+        del recap["sans_site"]
+
+    return render_template("tenant/pointage_recap_semaine.html",
+        tenant=t,
+        jours=jours,
+        jours_fr=JOURS_FR,
+        recap=recap,
+        sites_list=sites_list,
+        totaux_globaux=totaux_globaux,
+        lundi=lundi,
+        samedi=samedi,
+        date_ref=date_ref,
+        semaine_prec=(lundi - timedelta(days=7)).strftime("%Y-%m-%d"),
+        semaine_suiv=(lundi + timedelta(days=7)).strftime("%Y-%m-%d"),
+        now=datetime.now())
+
+@bp.route("/api/pointage/semaine")
+@login_required
+def api_pointage_semaine():
+    t = get_tenant()
+    if not t: return jsonify({})
+    date_str = request.args.get("date")
+    try: date_sel = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except: date_sel = datetime.now().date()
+    lundi=date_sel-timedelta(days=date_sel.weekday()); samedi=lundi+timedelta(days=5)
+    pts = Pointage.query.filter_by(tenant_id=t.id).filter(Pointage.date_pointage>=lundi,Pointage.date_pointage<=samedi).all()
+    stats={}
+    for p in pts:
+        key=str(p.date_pointage)
+        if key not in stats: stats[key]={"presents":0,"absents":0,"heures":0}
+        if p.present: stats[key]["presents"]+=1; stats[key]["heures"]+=p.total_heures
+        else: stats[key]["absents"]+=1
+    return jsonify(stats)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RAPPORT MENSUEL PAR SITE
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/rapports/mensuel-site")
+@login_required
+def rapport_mensuel_site():
+    """Page rapport mensuel par site : pointage + paie journalier + masse salariale."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    # Paramètres
+    now_d  = datetime.now()
+    mois   = request.args.get("mois",  type=int, default=now_d.month)
+    annee  = request.args.get("annee", type=int, default=now_d.year)
+    site_id= request.args.get("site_id", type=int)
+
+    import calendar
+    _, nb_jours_mois = calendar.monthrange(annee, mois)
+    mois_debut = date(annee, mois, 1)
+    mois_fin   = date(annee, mois, nb_jours_mois)
+
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_sel   = Site.query.get(site_id) if site_id else None
+
+    # Affectations actives pour ce mois
+    aff_sal  = {}   # salarie_id  → site_id
+    aff_jour = {}   # journalier_id → site_id
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).all():
+        if a.actif or (a.date_fin and a.date_fin >= mois_debut):
+            if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+            if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    def _build_rapport_site(s):
+        """Construit le rapport complet pour un site donné."""
+        sid = s.id
+        # Travailleurs affectés à ce site
+        ids_sal  = [k for k,v in aff_sal.items()  if v == sid]
+        ids_jour = [k for k,v in aff_jour.items() if v == sid]
+
+        salaries_aff    = Salarie.query.filter(
+            Salarie.tenant_id==t.id, Salarie.id.in_(ids_sal)
+        ).order_by(Salarie.nom).all() if ids_sal else []
+        journaliers_aff = Journalier.query.filter(
+            Journalier.tenant_id==t.id, Journalier.id.in_(ids_jour)
+        ).order_by(Journalier.nom).all() if ids_jour else []
+
+        # ── Pointage mensuel ─────────────────────────────────────────────────
+        pts_sal  = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.salarie_id.in_(ids_sal),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+        pts_jour = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.journalier_id.in_(ids_jour),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+        pts_tous = pts_sal + pts_jour
+
+        nb_presences  = sum(1 for p in pts_tous if p.present)
+        nb_absences   = sum(1 for p in pts_tous if p.absent)
+        taux_pres = round(nb_presences / (nb_presences + nb_absences) * 100
+                         ) if (nb_presences + nb_absences) > 0 else 0
+
+        # Heures totales
+        heures_normales = sum(float(p.heures_normales or 8) for p in pts_tous if p.present)
+        heures_sup = sum(
+            float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0) +
+            float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0) +
+            float(p.heures_sup or 0)
+            for p in pts_tous if p.present)
+
+        # Détail par travailleur (pointage)
+        detail_sal = []
+        for sal in salaries_aff:
+            pts_s = [p for p in pts_sal if p.salarie_id == sal.id]
+            nb_p  = sum(1 for p in pts_s if p.present)
+            nb_a  = sum(1 for p in pts_s if p.absent)
+            h_n   = sum(float(p.heures_normales or 8) for p in pts_s if p.present)
+            h_s   = sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                        float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)
+                        for p in pts_s if p.present)
+            detail_sal.append({
+                "nom": sal.nom_complet, "matricule": sal.matricule,
+                "emploi": sal.emploi or "—", "type": "MENSUEL",
+                "nb_presences": nb_p, "nb_absences": nb_a,
+                "heures_normales": round(h_n, 1), "heures_sup": round(h_s, 1),
+                "taux": round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0,
+            })
+
+        detail_jour = []
+        for jour in journaliers_aff:
+            pts_j = [p for p in pts_jour if p.journalier_id == jour.id]
+            nb_p  = sum(1 for p in pts_j if p.present)
+            nb_a  = sum(1 for p in pts_j if p.absent)
+            h_n   = sum(float(p.heures_normales or 8) for p in pts_j if p.present)
+            h_s   = sum(float(p.heures_sup or 0) for p in pts_j if p.present)
+            detail_jour.append({
+                "nom": jour.nom_complet, "profession": jour.profession or "—",
+                "taux_horaire": float(jour.taux_horaire or 0), "type": "JOURNALIER",
+                "nb_presences": nb_p, "nb_absences": nb_a,
+                "heures_normales": round(h_n, 1), "heures_sup": round(h_s, 1),
+                "taux": round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0,
+            })
+
+        # ── Paie journaliers ─────────────────────────────────────────────────
+        feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)            .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                    FeuillePaieJournalier.date_debut >= mois_debut,
+                    FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+        masse_jour_brut   = sum(float(f.montant_brut or 0) for f in feuilles)
+        feuilles_payees   = sum(1 for f in feuilles if f.statut == "PAYÉ")
+        feuilles_attente  = sum(1 for f in feuilles if f.statut == "EN_ATTENTE")
+
+        detail_feuilles = [{
+            "nom":         f.journalier.nom_complet,
+            "profession":  f.journalier.profession or "—",
+            "date_debut":  f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
+            "date_fin":    f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+            "nb_jours":    f.nb_jours,
+            "heures":      round(float(f.total_heures or 0), 1),
+            "taux":        round(float(f.taux_horaire or 0)),
+            "montant":     round(float(f.montant_brut or 0)),
+            "statut":      f.statut,
+        } for f in feuilles]
+
+        # ── Bulletins salariés ────────────────────────────────────────────────
+        periode = PeriodePaie.query.filter_by(
+            tenant_id=t.id, annee=annee, mois=mois).first()
+        bulletins_site = []
+        masse_mensuelle = {}
+        detail_bulletins = []
+        if periode and ids_sal:
+            bulletins_site = BulletinPaie.query.filter_by(
+                tenant_id=t.id, periode_id=periode.id
+            ).filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+            masse_mensuelle = calculer_masse_salariale(bulletins_site)
+            detail_bulletins = [{
+                "nom":        b.salarie.nom_complet,
+                "matricule":  b.salarie.matricule,
+                "emploi":     b.salarie.emploi or "—",
+                "brut":       round(float(b.salaire_brut  or 0)),
+                "net":        round(float(b.net_a_payer   or 0)),
+                "cnss":       round(float(b.cnss_salarie  or 0)),
+                "irpp":       round(float(b.irpp          or 0)),
+                "statut":     b.statut,
+            } for b in sorted(bulletins_site, key=lambda x: x.salarie.nom)]
+
+        return {
+            "site": s,
+            "effectif_sal":   len(salaries_aff),
+            "effectif_jour":  len(journaliers_aff),
+            "effectif_total": len(salaries_aff) + len(journaliers_aff),
+            # Pointage
+            "nb_presences": nb_presences, "nb_absences": nb_absences,
+            "taux_presence": taux_pres,
+            "heures_normales": round(heures_normales, 1),
+            "heures_sup": round(heures_sup, 1),
+            "detail_sal": detail_sal,
+            "detail_jour": detail_jour,
+            # Paie journaliers
+            "feuilles": detail_feuilles,
+            "masse_jour_brut": round(masse_jour_brut),
+            "feuilles_payees": feuilles_payees,
+            "feuilles_attente": feuilles_attente,
+            # Bulletins mensuels
+            "bulletins": detail_bulletins,
+            "masse_mensuelle": masse_mensuelle,
+        }
+
+    # Construire rapport(s)
+    if site_sel:
+        rapports = [_build_rapport_site(site_sel)]
+    else:
+        rapports = [_build_rapport_site(s) for s in sites_list]
+
+    # Totaux globaux
+    totaux = {
+        "effectif": sum(r["effectif_total"] for r in rapports),
+        "presences": sum(r["nb_presences"]   for r in rapports),
+        "absences":  sum(r["nb_absences"]    for r in rapports),
+        "h_normales": round(sum(r["heures_normales"] for r in rapports), 1),
+        "h_sup":      round(sum(r["heures_sup"]     for r in rapports), 1),
+        "masse_jour": sum(r["masse_jour_brut"]  for r in rapports),
+        "masse_men":  sum(r["masse_mensuelle"].get("total_net", 0) for r in rapports),
+    }
+
+    return render_template("tenant/rapport_mensuel_site.html",
+        tenant=t, rapports=rapports, totaux=totaux,
+        sites=sites_list, site_sel=site_sel,
+        mois=mois, annee=annee,
+        mois_nom=MOIS_NOMS_LONG[mois],
+        MOIS_NOMS=MOIS_NOMS_LONG,
+        now=datetime.now())
+
+
+@bp.route("/rapports/mensuel-site/export")
+@login_required
+def rapport_mensuel_site_export():
+    """Export Excel du rapport mensuel par site."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    import io, calendar
+
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    MOIS_NOMS_LONG = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                      "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    mois   = request.args.get("mois",  type=int, default=datetime.now().month)
+    annee  = request.args.get("annee", type=int, default=datetime.now().year)
+    site_id= request.args.get("site_id", type=int)
+    mois_nom = MOIS_NOMS_LONG[mois]
+    _, nb_jours_mois = calendar.monthrange(annee, mois)
+    mois_debut = date(annee, mois, 1)
+    mois_fin   = date(annee, mois, nb_jours_mois)
+
+    # Reconstruire le rapport (même logique que la route GET)
+    # On rappelle simplement la route interne via redirect vers export dédié
+    # Pour éviter la duplication, on re-calcule ici directement
+
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    site_sel   = Site.query.get(site_id) if site_id else None
+    sites_a_traiter = [site_sel] if site_sel else sites_list
+
+    aff_sal  = {}
+    aff_jour = {}
+    for a in AffectationSite.query.filter_by(tenant_id=t.id).all():
+        if a.actif or (a.date_fin and a.date_fin >= mois_debut):
+            if a.salarie_id:    aff_sal[a.salarie_id]    = a.site_id
+            if a.journalier_id: aff_jour[a.journalier_id] = a.site_id
+
+    # Styles
+    def hdr(ws, row, cols, texts, fill_color="1a2332"):
+        for i, txt in enumerate(texts, 1):
+            c = ws.cell(row, i, txt)
+            c.font      = Font(bold=True, color="FFFFFF", size=9)
+            c.fill      = PatternFill("solid", fgColor=fill_color)
+            c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            c.border    = Border(**{s: Side(style="thin", color="D1D5DB")
+                                    for s in ["left","right","top","bottom"]})
+        ws.row_dimensions[row].height = 20
+
+    def titre_section(ws, row, txt, color="374151", ncols=10):
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
+        c = ws.cell(row, 1, txt)
+        c.font = Font(bold=True, color="FFFFFF", size=10)
+        c.fill = PatternFill("solid", fgColor=color)
+        c.alignment = Alignment(horizontal="left", vertical="center")
+        ws.row_dimensions[row].height = 18
+
+    MONEY = "#,##0"
+    thin  = {s: Side(style="thin", color="E5E7EB") for s in ["left","right","top","bottom"]}
+    EVEN  = PatternFill("solid", fgColor="F8FAFC")
+
+    wb = Workbook()
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLET 1 — SYNTHÈSE GLOBALE
+    # ══════════════════════════════════════════════════════════════════════════
+    ws = wb.active
+    ws.title = "Synthèse"
+    ws.freeze_panes = "A4"
+
+    # Titre principal
+    titre_doc = f"RAPPORT MENSUEL — {mois_nom.upper()} {annee} — {t.denomination}"
+    if site_sel: titre_doc += f" — {site_sel.nom}"
+    ws.merge_cells("A1:K1")
+    ws["A1"] = titre_doc
+    ws["A1"].font = Font(bold=True, size=13, color="FFFFFF")
+    ws["A1"].fill = PatternFill("solid", fgColor="1a2332")
+    ws["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 24
+    ws.append([f"Édité le {datetime.now().strftime('%d/%m/%Y à %H:%M')}"])
+    ws.append([])
+
+    hdr(ws, 3, 11,
+        ["Site","Effectif","Mensuels","Journaliers","Présences","Absences",
+         "Taux prés.","H.normales","H.sup","Masse journaliers (FCFA)","Net mensuels (FCFA)"])
+
+    grand_tot = {"eff":0,"pres":0,"abs":0,"hn":0,"hs":0,"mj":0,"mn":0}
+    for row_i, s in enumerate(sites_a_traiter, 4):
+        ids_sal  = [k for k,v in aff_sal.items()  if v == s.id]
+        ids_jour = [k for k,v in aff_jour.items() if v == s.id]
+        pts = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin)            .filter(db.or_(
+                Pointage.salarie_id.in_(ids_sal)    if ids_sal  else db.false(),
+                Pointage.journalier_id.in_(ids_jour) if ids_jour else db.false()
+            )).all()
+        nb_p  = sum(1 for p in pts if p.present)
+        nb_a  = sum(1 for p in pts if p.absent)
+        taux  = round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0
+        hn    = round(sum(float(p.heures_normales or 8) for p in pts if p.present), 1)
+        hs    = round(sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                          float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)+
+                          float(p.heures_sup or 0) for p in pts if p.present), 1)
+        feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)            .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                    FeuillePaieJournalier.date_debut >= mois_debut,
+                    FeuillePaieJournalier.date_fin   <= mois_fin).all() if ids_jour else []
+        mj = round(sum(float(f.montant_brut or 0) for f in feuilles))
+        per= PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee, mois=mois).first()
+        mn = 0
+        if per and ids_sal:
+            buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=per.id)                .filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+            mn = round(sum(float(b.net_a_payer or 0) for b in buls))
+        eff = len(ids_sal) + len(ids_jour)
+        row_data = [s.nom, eff, len(ids_sal), len(ids_jour),
+                    nb_p, nb_a, f"{taux}%", hn, hs, mj, mn]
+        ws.append(row_data)
+        for ci, v in enumerate(row_data, 1):
+            c = ws.cell(row_i, ci)
+            c.border = Border(**thin)
+            if row_i % 2 == 0: c.fill = EVEN
+            if ci in (10, 11): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+            if ci in (5,6,7,8,9): c.alignment = Alignment(horizontal="center")
+        grand_tot["eff"]+=eff; grand_tot["pres"]+=nb_p; grand_tot["abs"]+=nb_a
+        grand_tot["hn"]+=hn; grand_tot["hs"]+=hs; grand_tot["mj"]+=mj; grand_tot["mn"]+=mn
+
+    # Total
+    tr = ws.max_row + 1
+    ws.append(["TOTAL", grand_tot["eff"], "", "", grand_tot["pres"], grand_tot["abs"],
+                "", round(grand_tot["hn"],1), round(grand_tot["hs"],1),
+                grand_tot["mj"], grand_tot["mn"]])
+    for ci in range(1, 12):
+        c = ws.cell(tr, ci)
+        c.font = Font(bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="1a2332")
+        if ci in (10, 11): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+
+    for i, w in enumerate([24,10,10,12,10,10,10,12,10,22,22], 1):
+        ws.column_dimensions[ws.cell(1,i).column_letter].width = w
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # ONGLETS PAR SITE
+    # ══════════════════════════════════════════════════════════════════════════
+    for s in sites_a_traiter:
+        ws_s = wb.create_sheet(s.nom[:28])
+        ws_s.freeze_panes = "A4"
+        ids_sal  = [k for k,v in aff_sal.items()  if v == s.id]
+        ids_jour = [k for k,v in aff_jour.items() if v == s.id]
+
+        # Titre
+        ws_s.merge_cells("A1:I1")
+        ws_s["A1"] = f"{s.nom} — {mois_nom} {annee} — {t.denomination}"
+        ws_s["A1"].font = Font(bold=True, size=12, color="FFFFFF")
+        ws_s["A1"].fill = PatternFill("solid", fgColor="1a2332")
+        ws_s["A1"].alignment = Alignment(horizontal="center", vertical="center")
+        ws_s.row_dimensions[1].height = 20
+        ws_s.append([])
+        row_cur = 2
+
+        # ── Section pointage ──────────────────────────────────────────────────
+        row_cur += 1
+        titre_section(ws_s, row_cur, f"📅 POINTAGE — {mois_nom} {annee}", "065f46", 9)
+        row_cur += 1
+        hdr(ws_s, row_cur, 9,
+            ["Nom","Type","Emploi/Profession","Présences","Absences","Taux %","H.norm.","H.sup","Total h."],
+            "065f46")
+        row_cur += 1
+
+        pts_sal  = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.salarie_id.in_(ids_sal),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+        pts_jour = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.journalier_id.in_(ids_jour),
+                    Pointage.date_pointage >= mois_debut,
+                    Pointage.date_pointage <= mois_fin).all() if ids_jour else []
+
+        salaries_aff    = Salarie.query.filter(Salarie.id.in_(ids_sal)).order_by(Salarie.nom).all() if ids_sal else []
+        journaliers_aff = Journalier.query.filter(Journalier.id.in_(ids_jour)).order_by(Journalier.nom).all() if ids_jour else []
+
+        for trv_list, pts_list, typ in [
+            (salaries_aff, pts_sal, "Mensuel"),
+            (journaliers_aff, pts_jour, "Journalier")
+        ]:
+            for trv in trv_list:
+                if typ == "Mensuel":
+                    pts_t = [p for p in pts_list if p.salarie_id == trv.id]
+                    emploi = trv.emploi or "—"
+                else:
+                    pts_t = [p for p in pts_list if p.journalier_id == trv.id]
+                    emploi = trv.profession or "—"
+                nb_p = sum(1 for p in pts_t if p.present)
+                nb_a = sum(1 for p in pts_t if p.absent)
+                hn   = round(sum(float(p.heures_normales or 8) for p in pts_t if p.present), 1)
+                hs   = round(sum(float(p.heures_sup_10 or 0)+float(p.heures_sup_30 or 0)+
+                                 float(p.heures_sup_40 or 0)+float(p.heures_sup_70 or 0)+
+                                 float(p.heures_sup or 0) for p in pts_t if p.present), 1)
+                taux = round(nb_p/(nb_p+nb_a)*100) if (nb_p+nb_a) > 0 else 0
+                row_d = [trv.nom_complet, typ, emploi, nb_p, nb_a, f"{taux}%", hn, hs, round(hn+hs,1)]
+                ws_s.append(row_d)
+                for ci, v in enumerate(row_d, 1):
+                    c = ws_s.cell(row_cur, ci)
+                    c.border = Border(**thin)
+                    if row_cur % 2 == 0: c.fill = EVEN
+                    if ci in (4,5,6,7,8,9): c.alignment = Alignment(horizontal="center")
+                row_cur += 1
+
+        ws_s.append([])
+        row_cur += 1
+
+        # ── Section paie journaliers ──────────────────────────────────────────
+        if ids_jour:
+            titre_section(ws_s, row_cur, f"🦺 PAIE JOURNALIERS — {mois_nom} {annee}", "92400e", 9)
+            row_cur += 1
+            hdr(ws_s, row_cur, 9,
+                ["Journalier","Profession","Période du","au","Nb jours","Heures","Taux/h","Montant (FCFA)","Statut"],
+                "92400e")
+            row_cur += 1
+            feuilles = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)                .filter(FeuillePaieJournalier.journalier_id.in_(ids_jour),
+                        FeuillePaieJournalier.date_debut >= mois_debut,
+                        FeuillePaieJournalier.date_fin   <= mois_fin).all()
+            total_feuilles = 0
+            for f in feuilles:
+                m = round(float(f.montant_brut or 0)); total_feuilles += m
+                row_d = [f.journalier.nom_complet, f.journalier.profession or "—",
+                         f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
+                         f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
+                         f.nb_jours, round(float(f.total_heures or 0),1),
+                         round(float(f.taux_horaire or 0)), m, f.statut]
+                ws_s.append(row_d)
+                for ci, v in enumerate(row_d, 1):
+                    c = ws_s.cell(row_cur, ci)
+                    c.border = Border(**thin)
+                    if row_cur % 2 == 0: c.fill = EVEN
+                    if ci == 8: c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+                    if ci in (5,6,7): c.alignment = Alignment(horizontal="center")
+                row_cur += 1
+            # Total
+            ws_s.append(["TOTAL JOURNALIERS", "", "", "", "", "", "", total_feuilles, ""])
+            for ci in range(1, 10):
+                c = ws_s.cell(row_cur, ci)
+                c.font = Font(bold=True, color="FFFFFF")
+                c.fill = PatternFill("solid", fgColor="92400e")
+                if ci == 8: c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+            row_cur += 2; ws_s.append([])
+
+        # ── Section bulletins mensuels ────────────────────────────────────────
+        if ids_sal:
+            per = PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee, mois=mois).first()
+            if per:
+                buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=per.id)                    .filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
+                if buls:
+                    titre_section(ws_s, row_cur,
+                        f"📄 BULLETINS DE PAIE — {mois_nom} {annee}", "1e40af", 9)
+                    row_cur += 1
+                    hdr(ws_s, row_cur, 9,
+                        ["Salarié","Matricule","Emploi","Brut (FCFA)","CNSS sal.",
+                         "TCS","IRPP","Net à payer (FCFA)","Statut"], "1e40af")
+                    row_cur += 1
+                    total_brut = total_net = 0
+                    for b in sorted(buls, key=lambda x: x.salarie.nom):
+                        brut = round(float(b.salaire_brut or 0))
+                        net  = round(float(b.net_a_payer  or 0))
+                        total_brut += brut; total_net += net
+                        row_d = [b.salarie.nom_complet, b.salarie.matricule,
+                                 b.salarie.emploi or "—", brut,
+                                 round(float(b.cnss_salarie or 0)),
+                                 round(float(b.tcs  or 0)),
+                                 round(float(b.irpp or 0)), net, b.statut]
+                        ws_s.append(row_d)
+                        for ci, v in enumerate(row_d, 1):
+                            c = ws_s.cell(row_cur, ci)
+                            c.border = Border(**thin)
+                            if row_cur % 2 == 0: c.fill = EVEN
+                            if ci in (4,5,6,7,8): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+                        row_cur += 1
+                    ws_s.append(["TOTAL SALARIÉS","","",total_brut,"","","",total_net,""])
+                    for ci in range(1, 10):
+                        c = ws_s.cell(row_cur, ci)
+                        c.font = Font(bold=True, color="FFFFFF")
+                        c.fill = PatternFill("solid", fgColor="1e40af")
+                        if ci in (4,8): c.number_format = MONEY; c.alignment = Alignment(horizontal="right")
+
+        for i, w in enumerate([28,12,20,10,10,10,10,20,12], 1):
+            ws_s.column_dimensions[ws_s.cell(1,i).column_letter].width = w
+
+    # Export
+    out = io.BytesIO(); wb.save(out); out.seek(0)
+    fname_parts = [f"Rapport_{mois_nom}_{annee}"]
+    if site_sel: fname_parts.append(site_sel.nom.replace(" ","_"))
+    fname_parts.append(datetime.now().strftime("%Y%m%d"))
+    return send_file(out,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        as_attachment=True, download_name="_".join(fname_parts)+".xlsx")
+
+
+
+
+
+def _gen_excel_cnss(tenant, trim_label, annee, mois_labels,
+                    sal_data, total_base_cnss, total_base_cnamgs,
+                    tot_cnss_m):
+    """
+    Génère la feuille CNSS conforme au formulaire officiel gabonais.
+    sal_data : liste de dicts {nom_complet, matricule, numero_cnss,
+               date_embauche, m1_base_cnss, m2_base_cnss, m3_base_cnss}
+    N_HRS = 8 (constante légale)
+    """
+    import openpyxl, io
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    BD2=Border(left=Side(style="thin",color="E5E7EB"),right=Side(style="thin",color="E5E7EB"),
+               top=Side(style="thin",color="E5E7EB"),bottom=Side(style="thin",color="E5E7EB"))
+    CTR2=Alignment(horizontal="center",vertical="center",wrap_text=True)
+    LFT2=Alignment(horizontal="left",  vertical="center",wrap_text=True)
+    RGT2=Alignment(horizontal="right", vertical="center")
+    HF=PatternFill("solid",fgColor="1a2332"); HN=Font(bold=True,color="FFFFFF",size=9)
+    TF=PatternFill("solid",fgColor="D6EAF8"); GF=PatternFill("solid",fgColor="E8F4FD")
+    AF=PatternFill("solid",fgColor="EBF5FB")
+
+    def Cx(ws,r,c,val,font=None,fill=None,align=None,fmt=None,span=None):
+        if span and span>1:
+            ws.merge_cells(start_row=r,start_column=c,end_row=r,end_column=c+span-1)
+        cell=ws.cell(r,c)
+        if val  is not None: cell.value=val
+        if font is not None: cell.font=font
+        if fill is not None: cell.fill=fill
+        if align is not None: cell.alignment=align
+        if fmt  is not None: cell.number_format=fmt
+        cell.border=BD2; return cell
+
+    wb=openpyxl.Workbook(); ws=wb.active; ws.title="CNSS"
+    for i,w in enumerate([5,14,12,28,8,12,12,16,14,4,16,14,4,16,14,4,10,10],1):
+        ws.column_dimensions[get_column_letter(i)].width=w
+
+    def rh(r,h): ws.row_dimensions[r].height=h
+
+    # ── En-tête employeur ─────────────────────────────────────────────────────
+    rh(10,18)
+    Cx(ws,10,1,"Matricule employeur",Font(bold=True,size=9),align=LFT2)
+    Cx(ws,10,2,tenant.numero_cnss or "—",Font(size=9),align=LFT2)
+    Cx(ws,10,5,"Période",Font(bold=True,size=9),align=CTR2)
+    Cx(ws,10,6,trim_label,Font(bold=True,size=11),align=CTR2)
+    Cx(ws,10,7,"Année",Font(bold=True,size=9),align=CTR2)
+    Cx(ws,10,8,annee,Font(bold=True,size=11),align=CTR2)
+    Cx(ws,10,13,"CACHET ET SIGNATURE",HN,HF,CTR2,span=4)
+
+    rh(12,20)
+    Cx(ws,12,1,"Nom ou Raison Sociale",Font(bold=True,size=9),align=LFT2)
+    Cx(ws,12,2,tenant.denomination,Font(bold=True,size=9),align=LFT2,span=3)
+
+    rh(15,16); Cx(ws,15,1,"B.P :",Font(size=9),align=LFT2)
+    Cx(ws,15,3,f"VILLE : {getattr(tenant,'ville','Libreville')}",Font(size=9),align=LFT2,span=2)
+    rh(17,16); Cx(ws,17,1,"TEL :",Font(size=9),align=LFT2)
+    Cx(ws,17,2,getattr(tenant,"telephone",""),Font(size=9),align=LFT2)
+    Cx(ws,17,9,"Effectif total",Font(bold=True,size=9),align=CTR2)
+    Cx(ws,17,10,len(sal_data),Font(bold=True,size=11),TF,CTR2)
+    rh(19,16); Cx(ws,19,1,"Email :",Font(size=9),align=LFT2)
+
+    # ── Résumé cotisations ────────────────────────────────────────────────────
+    rh(20,32)
+    Cx(ws,20,2,"Rémunération totale plafonnée CNSS",Font(bold=True,size=8),GF,CTR2,span=3)
+    Cx(ws,20,5,"Montant déduction Alloc. Familiales",Font(size=8),GF,CTR2,span=3)
+    Cx(ws,20,9,"Rémunération totale plafonnée CNAMGS",Font(bold=True,size=8),GF,CTR2,span=3)
+    Cx(ws,20,13,"DATE DE RECEPTION",HN,HF,CTR2,span=4)
+    rh(21,18)
+    Cx(ws,21,2,total_base_cnss,Font(bold=True,size=10),TF,RGT2,"#,##0",span=3)
+    Cx(ws,21,5,0,Font(size=9),TF,RGT2,"#,##0",span=3)
+    Cx(ws,21,9,total_base_cnamgs,Font(bold=True,size=10),TF,RGT2,"#,##0",span=3)
+    rh(22,18)
+    Cx(ws,22,2,"Cotisations brutes dues CNSS",Font(bold=True,size=8),align=CTR2,span=3)
+    Cx(ws,22,5,"Cotisations nettes dues CNSS",Font(bold=True,size=8),align=CTR2,span=3)
+    Cx(ws,22,9,"Cotisations nettes dues CNAMGS",Font(bold=True,size=8),align=CTR2,span=3)
+    rh(23,18)
+    cot_cnss   = round(total_base_cnss   * 0.23)
+    cot_cnamgs = round(total_base_cnamgs * 0.061)
+    Cx(ws,23,2,cot_cnss,  Font(bold=True,size=10),TF,RGT2,"#,##0",span=3)
+    Cx(ws,23,5,cot_cnss,  Font(bold=True,size=10),TF,RGT2,"#,##0",span=3)
+    Cx(ws,23,9,cot_cnamgs,Font(bold=True,size=10),TF,RGT2,"#,##0",span=3)
+
+    # ── En-têtes mois ─────────────────────────────────────────────────────────
+    rh(25,14)
+    for col,lbl in [(8,mois_labels[0]),(11,mois_labels[1]),(14,mois_labels[2])]:
+        Cx(ws,25,col,lbl,HN,HF,CTR2)
+    rh(26,36)
+    for col,lbl in [(1,"N°"),(2,"N°CNSS /\nN°CNAMGS"),(3,"N° Paie"),
+                    (4,"NOM ET PRENOM"),(5,"Taux CNSS"),(6,"EMBAUCHE"),(7,"CESSATION"),
+                    (8,"SALAIRE\nPLAFONNE"),(9,"SALAIRE\nDEPLAFONNE"),(10,"Nbre\nHrs"),
+                    (11,"SALAIRE\nPLAFONNE"),(12,"SALAIRE\nDEPLAFONNE"),(13,"Nbre\nHrs"),
+                    (14,"SALAIRE\nPLAFONNE"),(15,"SALAIRE\nDEPLAFONNE"),(16,"Nbre\nHrs")]:
+        Cx(ws,26,col,lbl,HN,HF,CTR2)
+
+    # ── 2 lignes par employé ──────────────────────────────────────────────────
+    N_HRS_CNSS = 8  # toujours 8
+    dr = 27
+    for i, sal in enumerate(sal_data, 1):
+        r1 = dr + (i-1)*2
+        r2 = dr + (i-1)*2 + 1
+        bg = AF if i%2==0 else None
+        rh(r1,16); rh(r2,16)
+
+        # Ligne impaire : numéro + taux + données BASE CNSS + heures
+        Cx(ws,r1,1,i,Font(size=9),bg,CTR2)
+        Cx(ws,r1,5,23,Font(size=9),bg,CTR2)  # Taux CNSS = 23%
+        emb = sal.get("date_embauche","")
+        Cx(ws,r1,6,emb,Font(size=8),bg,CTR2)
+        Cx(ws,r1,7,"",None,bg,CTR2)
+        # Mois 1, 2, 3 — BASE CNSS (plafonnée), N_HRS=8
+        Cx(ws,r1,8, sal.get("m1_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r1,9, sal.get("m1_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")  # déplafonné = même valeur
+        Cx(ws,r1,10,N_HRS_CNSS,Font(size=9),bg,CTR2)
+        Cx(ws,r1,11,sal.get("m2_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r1,12,sal.get("m2_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r1,13,N_HRS_CNSS,Font(size=9),bg,CTR2)
+        Cx(ws,r1,14,sal.get("m3_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r1,15,sal.get("m3_base_cnss",0), Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r1,16,N_HRS_CNSS,Font(size=9),bg,CTR2)
+
+        # Ligne paire : N°CNSS + Matricule + NOM
+        Cx(ws,r2,2,sal.get("numero_cnss",""),Font(size=9),bg,CTR2)
+        Cx(ws,r2,3,sal.get("matricule",""),  Font(size=9),bg,CTR2)
+        Cx(ws,r2,4,sal.get("nom_complet",""),Font(bold=True,size=9),bg,LFT2)
+        for c in [1,5,6,7,8,9,10,11,12,13,14,15,16]:
+            Cx(ws,r2,c,"",None,bg,None)
+
+    # ── Sous-total ────────────────────────────────────────────────────────────
+    rst = dr + len(sal_data)*2; rh(rst,18)
+    Cx(ws,rst,1,"SOUS TOTAL À REPORTER PAGE SUIVANTE",Font(bold=True,size=9),TF,LFT2,span=7)
+    for col,val in [(8,tot_cnss_m[0]),(11,tot_cnss_m[1]),(14,tot_cnss_m[2])]:
+        Cx(ws,rst,col,val,Font(bold=True),TF,RGT2,"#,##0")
+        for cc in [col+1,col+2]: Cx(ws,rst,cc,"",None,TF,None)
+
+    # ── RECAP ─────────────────────────────────────────────────────────────────
+    rr = rst+2; rh(rr,18)
+    Cx(ws,rr,1,"RECAP",HN,HF,CTR2,span=2)
+    Cx(ws,rr,3,"TAUX",HN,HF,CTR2)
+    Cx(ws,rr,4,23,Font(bold=True,size=10),TF,CTR2)
+    Cx(ws,rr,5,"MASSE SALARIALE PLAFONNEE CNSS",Font(bold=True,size=8),TF,LFT2,span=3)
+    for col,val in [(8,tot_cnss_m[0]),(11,tot_cnss_m[1]),(14,tot_cnss_m[2])]:
+        Cx(ws,rr,col,val,Font(bold=True),TF,RGT2,"#,##0")
+        for cc in [col+1,col+2]: Cx(ws,rr,cc,"",None,TF,None)
+
+    rcot = rr+1; rh(rcot,24)
+    Cx(ws,rcot,1,"COTISATION GLOBALE DUE (CNSS)",Font(bold=True,size=11),HF,LFT2,span=13)
+    Cx(ws,rcot,14,cot_cnss,Font(bold=True,size=13),TF,RGT2,"#,##0",span=3)
+
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf.getvalue()
+
+
+def _gen_excel_cnamgs(tenant, trim_label, annee, mois_labels,
+                      sal_data, total_base_cnamgs, tot_cnamgs_m):
+    """
+    Génère la feuille CNAMGS conforme au formulaire officiel gabonais.
+    sal_data : liste de dicts {nom_complet, matricule, numero_cnamgs,
+               date_embauche, m1_base_cnamgs, m2_base_cnamgs, m3_base_cnamgs}
+    N_HRS = 8 (constante légale)
+    """
+    import openpyxl, io
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    BD2=Border(left=Side(style="thin",color="E5E7EB"),right=Side(style="thin",color="E5E7EB"),
+               top=Side(style="thin",color="E5E7EB"),bottom=Side(style="thin",color="E5E7EB"))
+    CTR2=Alignment(horizontal="center",vertical="center",wrap_text=True)
+    LFT2=Alignment(horizontal="left",  vertical="center",wrap_text=True)
+    RGT2=Alignment(horizontal="right", vertical="center")
+    HF=PatternFill("solid",fgColor="1a2332"); HN=Font(bold=True,color="FFFFFF",size=9)
+    T2=PatternFill("solid",fgColor="D5F5E3"); G2=PatternFill("solid",fgColor="E8F8F5")
+    YF=PatternFill("solid",fgColor="FEF9E7")
+
+    def Cx(ws,r,c,val,font=None,fill=None,align=None,fmt=None,span=None):
+        if span and span>1:
+            ws.merge_cells(start_row=r,start_column=c,end_row=r,end_column=c+span-1)
+        cell=ws.cell(r,c)
+        if val  is not None: cell.value=val
+        if font is not None: cell.font=font
+        if fill is not None: cell.fill=fill
+        if align is not None: cell.alignment=align
+        if fmt  is not None: cell.number_format=fmt
+        cell.border=BD2; return cell
+
+    wb=openpyxl.Workbook(); ws=wb.active; ws.title="CNAMGS"
+    for i,w in enumerate([5,18,28,14,14,18,10,18,10,18,10],1):
+        ws.column_dimensions[get_column_letter(i)].width=w
+
+    def rh(r,h): ws.row_dimensions[r].height=h
+
+    # ── Titre ─────────────────────────────────────────────────────────────────
+    rh(5,22)
+    Cx(ws,5,4,"DECLARATION TRIMESTRIELLE DE SALAIRES",
+       Font(bold=True,size=13,color="1a2332"),None,CTR2,span=6)
+
+    # ── En-tête ───────────────────────────────────────────────────────────────
+    rh(8,16)
+    Cx(ws,8,4,"Période :",Font(bold=True,size=9),align=CTR2)
+    Cx(ws,8,5,trim_label,Font(bold=True,size=11),align=CTR2)
+    Cx(ws,8,6,annee,Font(bold=True,size=11),align=CTR2)
+    rh(9,16)
+    Cx(ws,9,1,"Matricule employeur CNAMGS",Font(bold=True,size=9),align=LFT2)
+    Cx(ws,9,2,getattr(tenant,"numero_cnamgs","—"),Font(size=9),align=LFT2,span=2)
+    rh(11,20)
+    Cx(ws,11,1,"Nom ou Raison Sociale",Font(bold=True,size=9),align=LFT2)
+    Cx(ws,11,2,tenant.denomination,Font(bold=True,size=9),align=LFT2,span=3)
+    Cx(ws,11,5,trim_label,Font(bold=True,size=11,color="1a2332"),align=CTR2)
+    Cx(ws,11,6,annee,Font(bold=True,size=11),align=CTR2)
+    Cx(ws,11,8,"CACHET ET SIGNATURE",HN,HF,CTR2,span=4)
+
+    # Taux (sur lignes séparées pour éviter conflits merge)
+    rh(13,16)
+    Cx(ws,13,4,"Taux de cotisation",Font(bold=True,size=9),T2,LFT2,span=2)
+    rh(14,16)
+    Cx(ws,14,1,"B.P :",Font(size=9),align=LFT2)
+    Cx(ws,14,2,getattr(tenant,"adresse",""),Font(size=9),align=LFT2,span=2)
+    Cx(ws,14,4,"Employeur",Font(bold=True,size=9),T2,CTR2)
+    Cx(ws,14,5,0.041,Font(bold=True,size=9),T2,RGT2,fmt="0.0%")
+    rh(15,16)
+    Cx(ws,15,1,"VILLE :",Font(size=9),align=LFT2)
+    Cx(ws,15,2,getattr(tenant,"ville","Libreville"),Font(size=9),align=LFT2)
+    Cx(ws,15,4,"Travailleur",Font(bold=True,size=9),T2,CTR2)
+    Cx(ws,15,5,0.02,Font(bold=True,size=9),T2,RGT2,fmt="0.0%")
+    rh(16,16)
+    Cx(ws,16,1,"TEL :",Font(size=9),align=LFT2)
+    Cx(ws,16,2,getattr(tenant,"telephone",""),Font(size=9),align=LFT2)
+    rh(18,16)
+    Cx(ws,18,4,"Plafond mensuel CNAMGS",Font(bold=True,size=9),T2,LFT2)
+    Cx(ws,18,5,2500000,Font(bold=True,size=9),T2,RGT2,fmt="#,##0")
+
+    # ── Cotisations nettes dues ───────────────────────────────────────────────
+    rh(19,16)
+    Cx(ws,19,2,"Cotisations nettes dues CNAMGS",Font(bold=True,size=9),align=LFT2,span=4)
+    Cx(ws,19,8,"DATE DE RECEPTION",HN,HF,CTR2,span=4)
+    rh(20,20)
+    Cx(ws,20,2,round(total_base_cnamgs*0.061),Font(bold=True,size=12,color="1e40af"),T2,RGT2,"#,##0",span=4)
+    rh(21,16)
+    Cx(ws,21,2,"Cotisations payées à la CNAMGS",Font(italic=True,size=9),align=LFT2,span=4)
+
+    # ── RECAP ─────────────────────────────────────────────────────────────────
+    rh(24,18)
+    Cx(ws,24,1,"Recap.",HN,HF,CTR2)
+    Cx(ws,24,2,"Effectif",HN,HF,CTR2)
+    Cx(ws,24,3,len(sal_data),Font(bold=True,size=11),T2,CTR2)
+    Cx(ws,24,4,"MASSE SALARIALE SOUMISE À COTISATION :",Font(bold=True,size=8),T2,LFT2,span=2)
+    Cx(ws,24,6,total_base_cnamgs,Font(bold=True,size=10),T2,RGT2,"#,##0")
+    Cx(ws,24,8,"COTISATIONS SOCIALES:",Font(bold=True,size=9),T2,LFT2)
+    Cx(ws,24,10,round(total_base_cnamgs*0.061),Font(bold=True,size=10),T2,RGT2,"#,##0")
+    rh(25,16)
+    Cx(ws,25,8,"Part patronale (4.1%)",Font(size=9),G2,LFT2)
+    Cx(ws,25,10,round(total_base_cnamgs*0.041),Font(bold=True,size=9),G2,RGT2,"#,##0")
+    rh(26,16)
+    Cx(ws,26,8,"Part salariale (2%)",Font(size=9),G2,LFT2)
+    Cx(ws,26,10,round(total_base_cnamgs*0.02),Font(bold=True,size=9),G2,RGT2,"#,##0")
+    rh(27,18)
+    Cx(ws,27,1,"TOTAL À REPORTER PAGE SUIVANTE",HN,HF,LFT2,span=5)
+    for col,val in [(6,tot_cnamgs_m[0]),(8,tot_cnamgs_m[1]),(10,tot_cnamgs_m[2])]:
+        Cx(ws,27,col,val,Font(bold=True),T2,RGT2,"#,##0")
+
+    # ── Labels mois ───────────────────────────────────────────────────────────
+    rh(28,14)
+    for col,lbl in [(6,mois_labels[0]),(8,mois_labels[1]),(10,mois_labels[2])]:
+        Cx(ws,28,col,lbl,HN,HF,CTR2,span=2)
+
+    # ── En-têtes colonnes employés ────────────────────────────────────────────
+    rh(38,14)
+    Cx(ws,38,4,"Date",HN,HF,CTR2,span=2)
+    for col,lbl in [(6,mois_labels[0]),(8,mois_labels[1]),(10,mois_labels[2])]:
+        Cx(ws,38,col,lbl,HN,HF,CTR2,span=2)
+    rh(39,36)
+    for col,lbl in [(1,"N°"),(2,"Matricule"),(3,"NOM ET PRENOM"),
+                    (4,"EMBAUCHE"),(5,"CESSATION"),
+                    (6,"Assiette soumise\nà cotisation"),(7,"Nbre\nHrs/Jrs"),
+                    (8,"Assiette soumise\nà cotisation"),(9,"Nbre\nHrs/Jrs"),
+                    (10,"Assiette soumise\nà cotisation"),(11,"Nbre\nHrs/Jrs")]:
+        Cx(ws,39,col,lbl,HN,HF,CTR2)
+
+    # ── 1 ligne par employé — BASE CNAMGS, N_HRS=8 ───────────────────────────
+    N_HRS_CNAMGS = 8  # toujours 8
+    for i, sal in enumerate(sal_data, 1):
+        r = 39 + i; rh(r,18)
+        bg = PatternFill("solid",fgColor="E8F8F5") if i%2==0 else None
+        Cx(ws,r,1,i,Font(size=9),bg,CTR2)
+        Cx(ws,r,2,sal.get("matricule",""),Font(size=9),bg,CTR2)
+        Cx(ws,r,3,sal.get("nom_complet",""),Font(bold=True,size=9),bg,LFT2)
+        Cx(ws,r,4,sal.get("date_embauche",""),Font(size=8),bg,CTR2)
+        Cx(ws,r,5,"",None,bg,CTR2)
+        # BASE CNAMGS + toujours 8h
+        Cx(ws,r,6, sal.get("m1_base_cnamgs",0),Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r,7, N_HRS_CNAMGS,Font(size=9),bg,CTR2)
+        Cx(ws,r,8, sal.get("m2_base_cnamgs",0),Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r,9, N_HRS_CNAMGS,Font(size=9),bg,CTR2)
+        Cx(ws,r,10,sal.get("m3_base_cnamgs",0),Font(size=9),bg,RGT2,"#,##0")
+        Cx(ws,r,11,N_HRS_CNAMGS,Font(size=9),bg,CTR2)
+
+    # ── Note pénalités ────────────────────────────────────────────────────────
+    r_note = 39 + len(sal_data) + 2; rh(r_note,60)
+    Cx(ws,r_note,1,
+       "Au-delà de la date limite, une pénalité est appliquée conformément à la loi :\n"
+       "- 25% pour non dépôt de la DTS calculé sur le montant de la DTS du dernier trimestre déclaré ;\n"
+       "- 2% pour non paiement des cotisations par mois de retard cumulable au prorata temporis.",
+       Font(italic=True,size=8), YF,
+       Alignment(horizontal="left",vertical="top",wrap_text=True), span=11)
+
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DÉCLARATIONS SOCIALES & FISCALES
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/declaration-cnss")
+@login_required
+def declaration_cnss():
+    """Déclarations sociales : CNSS/CNAMGS (trimestrielles) + CFP/FNH/TCS/IRPP (mensuelles)."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    periodes = PeriodePaie.query.filter_by(tenant_id=t.id)        .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
+
+    # Période sélectionnée
+    pid     = request.args.get("periode_id", type=int)
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first() if pid else               (periodes[0] if periodes else None)
+
+    # Mode : mensuel (CFP/FNH/TCS/IRPP) ou trimestriel (CNSS/CNAMGS)
+    mode    = request.args.get("mode", "mensuel")  # mensuel | trimestriel
+
+    bulletins_mois = []
+    bulletins_trim = []
+    stats_mensuel  = {}
+    stats_trim     = {}
+
+    if periode:
+        def s(buls, field): return round(sum(float(getattr(b, field) or 0) for b in buls), 2)
+
+        # ── Bulletins du mois sélectionné (CFP, FNH, TCS, IRPP) ─────────────
+        bulletins_mois = BulletinPaie.query.filter_by(
+            tenant_id=t.id, periode_id=periode.id
+        ).options(joinedload(BulletinPaie.salarie)).all()
+
+        stats_mensuel = {
+            "nb":           len(bulletins_mois),
+            "total_brut":   s(bulletins_mois, "salaire_brut"),
+            "total_cfp":    s(bulletins_mois, "cfp"),
+            "total_fnh":    s(bulletins_mois, "fnh"),
+            "total_tcs":    s(bulletins_mois, "tcs"),
+            "total_irpp":   s(bulletins_mois, "irpp"),
+        }
+        stats_mensuel["total_mensuel"] = (stats_mensuel["total_cfp"]  +
+                                          stats_mensuel["total_fnh"]  +
+                                          stats_mensuel["total_tcs"]  +
+                                          stats_mensuel["total_irpp"])
+
+        # ── Bulletins du trimestre (CNSS/CNAMGS) ─────────────────────────────
+        # Trimestre : T1=Jan-Mar, T2=Avr-Jun, T3=Jul-Sep, T4=Oct-Dec
+        mois = periode.mois
+        trim_debut = ((mois - 1) // 3) * 3 + 1   # 1, 4, 7, 10
+        trim_fin   = trim_debut + 2                # 3, 6, 9, 12
+        trim_num   = (mois - 1) // 3 + 1          # 1, 2, 3, 4
+        trim_label = f"T{trim_num} {periode.annee} ({['Jan-Mar','Avr-Jun','Jul-Sep','Oct-Déc'][trim_num-1]})"
+
+        periodes_trim = PeriodePaie.query.filter_by(
+            tenant_id=t.id, annee=periode.annee
+        ).filter(
+            PeriodePaie.mois >= trim_debut,
+            PeriodePaie.mois <= trim_fin
+        ).all()
+        ids_trim = [p.id for p in periodes_trim]
+
+        bulletins_trim = BulletinPaie.query.filter(
+            BulletinPaie.tenant_id == t.id,
+            BulletinPaie.periode_id.in_(ids_trim)
+        ).options(joinedload(BulletinPaie.salarie),
+                  joinedload(BulletinPaie.periode)).all()
+
+        # Regrouper par salarié pour le trimestre
+        from collections import defaultdict
+        sal_trim = defaultdict(lambda: {
+            "salarie": None, "brut": 0, "base_cnss": 0,
+            "cnss_sal": 0, "cnss_pat": 0,
+            "base_cnamgs": 0, "cnamgs_sal": 0, "cnamgs_pat": 0,
+            "mois_list": []
+        })
+        for b in bulletins_trim:
+            k = b.salarie_id
+            sal_trim[k]["salarie"]    = b.salarie
+            sal_trim[k]["brut"]      += float(b.salaire_brut   or 0)
+            sal_trim[k]["base_cnss"] += float(b.base_cnss      or 0)
+            sal_trim[k]["cnss_sal"]  += float(b.cnss_salarie   or 0)
+            sal_trim[k]["cnss_pat"]  += float(b.cnss_patronale or 0)
+            sal_trim[k]["base_cnamgs"]+= float(b.base_cnamgs   or 0)
+            sal_trim[k]["cnamgs_sal"]+= float(b.cnamgs_salarie  or 0)
+            sal_trim[k]["cnamgs_pat"]+= float(b.cnamgs_patronale or 0)
+            sal_trim[k]["mois_list"].append(b.periode.mois if b.periode else 0)
+
+        lignes_trim = sorted(sal_trim.values(), key=lambda x: x["salarie"].nom if x["salarie"] else "")
+
+        stats_trim = {
+            "trim_label":    trim_label,
+            "trim_num":      trim_num,
+            "nb":            len(lignes_trim),
+            "mois_couverts": sorted(set(
+                m for lg in lignes_trim for m in lg["mois_list"]
+            )),
+            "total_brut":    sum(lg["brut"]       for lg in lignes_trim),
+            "total_cnss_sal":sum(lg["cnss_sal"]   for lg in lignes_trim),
+            "total_cnss_pat":sum(lg["cnss_pat"]   for lg in lignes_trim),
+            "total_cnamgs_sal":sum(lg["cnamgs_sal"]  for lg in lignes_trim),
+            "total_cnamgs_pat":sum(lg["cnamgs_pat"]  for lg in lignes_trim),
+        }
+        stats_trim["total_cnss"]     = stats_trim["total_cnss_sal"]   + stats_trim["total_cnss_pat"]
+        stats_trim["total_cnamgs"]   = stats_trim["total_cnamgs_sal"] + stats_trim["total_cnamgs_pat"]
+        stats_trim["total_a_verser"] = stats_trim["total_cnss"] + stats_trim["total_cnamgs"]
+
+    else:
+        lignes_trim = []
+
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+
+    return render_template("tenant/declaration_cnss.html",
+        tenant=t, periodes=periodes, periode=periode, mode=mode,
+        bulletins_mois=bulletins_mois, stats_mensuel=stats_mensuel,
+        lignes_trim=lignes_trim, stats_trim=stats_trim,
+        MOIS_FR=MOIS_FR)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EXPORT COMPTABLE SAGE 100
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/export/sage/journal/<int:periode_id>")
+@tenant_required
+def export_sage_journal(periode_id):
+    if not current_user.can_export_sage:
+        flash("Accès refusé. Seuls les Administrateurs et Comptables peuvent exporter vers Sage.", "error")
+        return redirect(url_for("tenant.bulletins"))
+    """
+    Export du journal de paie mensuel au format Sage 100 (.txt).
+    Importable dans Sage 100 Comptabilité via Fichier → Importer → Journal.
+    Seuls les bulletins VALIDE sont inclus.
+    """
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant l'export.", "warning")
+        return redirect(url_for("tenant.bulletins"))
+
+    try:
+        from export_comptable import generer_journal_paie, ExportVide
+        contenu = generer_journal_paie(bulletins, periode, t)
+        nom_fichier = f"journal_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.txt"
+        logger.info(f"[Export Sage] Journal paie — tenant={t.id} période={periode.libelle_complet}")
+        log_action("EXPORT", "bulletin", periode_id,
+                   f"Export Sage Journal de paie — {periode.libelle_complet} ({len(bulletins)} bulletins)")
+        db.session.commit()
+        return send_file(
+            io.BytesIO(contenu),
+            mimetype="text/plain",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur journal : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+
+@bp.route("/export/sage/livre/<int:periode_id>")
+@tenant_required
+def export_sage_livre(periode_id):
+    """
+    Export du livre de paie détaillé par salarié au format CSV (.csv).
+    Compatible Excel et importable dans Sage 100.
+    Seuls les bulletins VALIDE sont inclus.
+    """
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période. Validez les bulletins avant l'export.", "warning")
+        return redirect(url_for("tenant.bulletins"))
+
+    try:
+        from export_comptable import generer_livre_paie, ExportVide
+        contenu = generer_livre_paie(bulletins, periode, t)
+        nom_fichier = f"livre_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.csv"
+        logger.info(f"[Export Sage] Livre paie — tenant={t.id} période={periode.libelle_complet}")
+        return send_file(
+            io.BytesIO(contenu),
+            mimetype="text/csv; charset=utf-8",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur livre : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+
+@bp.route("/export/sage/les-deux/<int:periode_id>")
+@tenant_required
+def export_sage_les_deux(periode_id):
+    """
+    Export des deux fichiers (journal + livre) dans une archive ZIP.
+    Pratique pour envoyer tout au comptable en une fois.
+    """
+    import zipfile
+    t = get_tenant()
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .join(Salarie)
+                 .order_by(Salarie.nom)
+                 .all())
+
+    if not bulletins:
+        flash("Aucun bulletin validé pour cette période.", "warning")
+        return redirect(url_for("tenant.bulletins"))
+
+    try:
+        from export_comptable import generer_journal_paie, generer_livre_paie
+        journal = generer_journal_paie(bulletins, periode, t)
+        livre   = generer_livre_paie(bulletins, periode, t)
+
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(
+                f"journal_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.txt",
+                journal
+            )
+            zf.writestr(
+                f"livre_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.csv",
+                livre
+            )
+        zip_buffer.seek(0)
+
+        nom_zip = f"export_sage_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.zip"
+        logger.info(f"[Export Sage] ZIP généré — tenant={t.id}")
+        return send_file(
+            zip_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=nom_zip,
+        )
+    except Exception as e:
+        logger.error(f"[Export Sage] Erreur ZIP : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RAPPORT PDF MENSUEL
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/rapport/pdf/<int:periode_id>")
+@tenant_required
+def rapport_pdf(periode_id):
+    """
+    Génère le rapport PDF mensuel complet organisé par site :
+      - Salariés + journaliers regroupés par site
+      - Récapitulatif global et charges à verser
+    """
+    t = get_tenant()
+    if not current_user.can_export and not current_user.is_tenant_admin:
+        flash("Accès non autorisé.", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+
+    # ── Bulletins salariés validés ────────────────────────────────────────────
+    bulletins = (BulletinPaie.query
+        .filter(BulletinPaie.periode_id == periode_id,
+                BulletinPaie.tenant_id  == t.id,
+                BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"]))
+        .options(joinedload(BulletinPaie.salarie))
+        .join(Salarie).order_by(Salarie.nom).all())
+
+    # ── Feuilles de paie journaliers du même mois ─────────────────────────────
+    from datetime import date as _date
+    debut_mois = _date(periode.annee, periode.mois, 1)
+    import calendar
+    dernier_jour = calendar.monthrange(periode.annee, periode.mois)[1]
+    fin_mois = _date(periode.annee, periode.mois, dernier_jour)
+
+    feuilles = (FeuillePaieJournalier.query
+        .filter_by(tenant_id=t.id)
+        .filter(FeuillePaieJournalier.date_debut >= debut_mois,
+                FeuillePaieJournalier.date_fin   <= fin_mois)
+        .options(joinedload(FeuillePaieJournalier.journalier))
+        .all())
+
+    if not bulletins and not feuilles:
+        flash("Aucun bulletin ni feuille de paie pour cette période.", "warning")
+        return redirect(url_for("tenant.bulletins"))
+
+    # ── Sites et affectations ─────────────────────────────────────────────────
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    affectations = AffectationSite.query.filter_by(tenant_id=t.id, actif=True).all()
+
+    # ── Évolution 6 mois ──────────────────────────────────────────────────────
+    MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
+    evolution = []
+    for i in range(5, -1, -1):
+        mois  = (periode.mois - i - 1) % 12 + 1
+        annee = periode.annee - ((i + 12 - periode.mois) // 12) if i >= periode.mois else periode.annee
+        buls_m = BulletinPaie.query.join(PeriodePaie).filter(
+            BulletinPaie.tenant_id == t.id,
+            PeriodePaie.mois == mois, PeriodePaie.annee == annee,
+        ).all()
+        evolution.append({
+            "mois":  MOIS_FR[mois],
+            "annee": annee,
+            "brut":  sum(float(b.salaire_brut or 0) for b in buls_m),
+            "net":   sum(float(b.net_a_payer  or 0) for b in buls_m),
+        })
+
+    try:
+        from rapport_pdf import generer_rapport_mensuel
+        pdf_bytes = generer_rapport_mensuel(
+            bulletins            = bulletins,
+            periode              = periode,
+            tenant               = t,
+            feuilles_journaliers = feuilles,
+            sites                = sites,
+            affectations         = affectations,
+            evolution            = evolution,
+        )
+
+        nom_fichier = f"rapport_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.pdf"
+        log_action("EXPORT", "rapport", periode_id,
+                   f"Rapport PDF — {periode.libelle_complet} — "
+                   f"{len(bulletins)} salariés, {len(feuilles)} journaliers, "
+                   f"{len(sites)} sites")
+        db.session.commit()
+        logger.info(f"[Rapport PDF] Généré — tenant={t.id} période={periode.libelle_complet}")
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=nom_fichier,
+        )
+    except Exception as e:
+        logger.error(f"[Rapport PDF] Erreur : {e}")
+        flash(f"Erreur lors de la génération du PDF : {e}", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+
+@bp.route("/rapport/pdf/<int:periode_id>/envoyer-email", methods=["POST"])
+@tenant_required
+def rapport_pdf_email(periode_id):
+    """
+    Génère le rapport PDF et l'envoie par email aux admins et directeurs du tenant.
+    Peut être déclenché manuellement ou automatiquement en fin de mois.
+    """
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+    periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins_p = (BulletinPaie.query
+        .filter(BulletinPaie.periode_id == periode_id,
+                BulletinPaie.tenant_id  == t.id,
+                BulletinPaie.statut.in_(["VALIDÉ","VALIDE","PAYÉ"]))
+        .options(joinedload(BulletinPaie.salarie))
+        .join(Salarie).order_by(Salarie.nom).all())
+
+    if not bulletins_p:
+        flash("Aucun bulletin validé — rapport non envoyé.", "warning")
+        return redirect(url_for("tenant.bulletins"))
+
+    # Destinataires : admins et directeurs actifs
+    destinataires = [
+        u.email for u in Utilisateur.query.filter_by(tenant_id=t.id, actif=True).all()
+        if u.email and u.role in ("TENANT_ADMIN", "DIRECTEUR")
+    ]
+    email_extra = request.form.get("email_extra", "").strip()
+    if email_extra:
+        destinataires.append(email_extra)
+
+    if not destinataires:
+        flash("Aucun destinataire configuré.", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+    try:
+        from rapport_pdf import generer_rapport_mensuel
+        evolution = []  # Simplifié pour l'envoi auto
+        pdf_bytes = generer_rapport_mensuel(bulletins_p, periode, t, evolution)
+        nom_fichier = f"rapport_paie_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.pdf"
+
+        from calculs_paie import calculer_masse_salariale
+        masse = calculer_masse_salariale(bulletins_p)
+
+        msg = Message(
+            subject=f"[PaieGabon] Rapport mensuel — {t.denomination} — {periode.libelle_complet}",
+            recipients=destinataires,
+            body=(
+                f"Bonjour,\n\n"
+                f"Veuillez trouver en pièce jointe le rapport mensuel de paie de {t.denomination} "
+                f"pour la période {periode.libelle_complet} {periode.annee}.\n\n"
+                f"Résumé :\n"
+                f"  • Nombre de bulletins : {len(bulletins_p)}\n"
+                f"  • Masse salariale brute : {int(masse.get('total_brut',0)):,} FCFA\n"
+                f"  • Net total à payer : {int(masse.get('total_net',0)):,} FCFA\n"
+                f"  • Coût total employeur : {int(masse.get('total_brut',0) + masse.get('total_charges_pat',0)):,} FCFA\n\n"
+                f"Ce rapport est confidentiel et destiné à usage interne uniquement.\n\n"
+                f"Cordialement,\nPaieGabon SaaS"
+            ),
+        )
+        msg.attach(nom_fichier, "application/pdf", pdf_bytes)
+        send_email_async(current_app.extensions["mail"], msg)
+
+        log_action("EXPORT", "rapport", periode_id,
+                   f"Rapport PDF envoyé par email à {len(destinataires)} destinataire(s)")
+        db.session.commit()
+
+        flash(f"Rapport envoyé par email à {len(destinataires)} destinataire(s).", "success")
+        logger.info(f"[Rapport PDF Email] Envoyé à {destinataires} — tenant={t.id}")
+
+    except Exception as e:
+        logger.error(f"[Rapport PDF Email] Erreur : {e}")
+        flash(f"Erreur lors de l'envoi : {e}", "error")
+
+    return redirect(url_for("tenant.bulletins", periode_id=periode_id))
+
+
+@bp.route("/declaration-cnss/export-excel")
+@login_required
+def declaration_cnss_excel():
+    """Export Excel déclarations : mensuel (CFP/FNH/TCS/IRPP) ou trimestriel (CNSS/CNAMGS)."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    pid     = request.args.get("periode_id", type=int)
+    mode    = request.args.get("mode", "mensuel")
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+
+    MOIS_FR2 = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    if mode == "trimestriel":
+        # ── Trimestre : récupérer les 3 mois ─────────────────────────────────
+        mois=periode.mois; trim_num=(mois-1)//3+1
+        trim_debut=((mois-1)//3)*3+1; trim_fin=trim_debut+2
+        trim_label=f"T {trim_num}"
+        mois_labels=[MOIS_FR2[m] for m in range(trim_debut, trim_fin+1)]
+
+        periodes_trim=PeriodePaie.query.filter_by(tenant_id=t.id, annee=periode.annee)            .filter(PeriodePaie.mois>=trim_debut, PeriodePaie.mois<=trim_fin).all()
+        mois_map={p.mois: p.id for p in periodes_trim}
+
+        buls_trim=BulletinPaie.query.filter(
+            BulletinPaie.tenant_id==t.id,
+            BulletinPaie.periode_id.in_([p.id for p in periodes_trim])
+        ).options(joinedload(BulletinPaie.salarie), joinedload(BulletinPaie.periode)).all()
+
+        # Regrouper par salarié
+        from collections import defaultdict
+        sal_map = defaultdict(lambda: {
+            "nom_complet":"","matricule":"","numero_cnss":"","numero_cnamgs":"",
+            "date_embauche":"",
+            "m1_base_cnss":0,"m2_base_cnss":0,"m3_base_cnss":0,
+            "m1_base_cnamgs":0,"m2_base_cnamgs":0,"m3_base_cnamgs":0,
+        })
+        for b in buls_trim:
+            k=b.salarie_id
+            sal=b.salarie
+            sal_map[k]["nom_complet"]   = sal.nom_complet
+            sal_map[k]["matricule"]     = sal.matricule or ""
+            sal_map[k]["numero_cnss"]   = sal.numero_cnss or ""
+            sal_map[k]["numero_cnamgs"] = sal.numero_cnamgs or ""
+            if sal.date_embauche:
+                sal_map[k]["date_embauche"] = sal.date_embauche.strftime("%d/%m/%Y")
+            m = b.periode.mois if b.periode else 0
+            if m == trim_debut:
+                sal_map[k]["m1_base_cnss"]   = float(b.base_cnss   or 0)
+                sal_map[k]["m1_base_cnamgs"] = float(b.base_cnamgs or 0)
+            elif m == trim_debut+1:
+                sal_map[k]["m2_base_cnss"]   = float(b.base_cnss   or 0)
+                sal_map[k]["m2_base_cnamgs"] = float(b.base_cnamgs or 0)
+            elif m == trim_fin:
+                sal_map[k]["m3_base_cnss"]   = float(b.base_cnss   or 0)
+                sal_map[k]["m3_base_cnamgs"] = float(b.base_cnamgs or 0)
+
+        sal_data = sorted(sal_map.values(), key=lambda x: x["nom_complet"])
+
+        tot_cnss_m  = [sum(s["m1_base_cnss"]   for s in sal_data),
+                       sum(s["m2_base_cnss"]   for s in sal_data),
+                       sum(s["m3_base_cnss"]   for s in sal_data)]
+        tot_cnamgs_m= [sum(s["m1_base_cnamgs"] for s in sal_data),
+                       sum(s["m2_base_cnamgs"] for s in sal_data),
+                       sum(s["m3_base_cnamgs"] for s in sal_data)]
+        total_base_cnss   = sum(tot_cnss_m)
+        total_base_cnamgs = sum(tot_cnamgs_m)
+
+        # Générer les deux fichiers et les zip
+        import zipfile, io
+        cnss_bytes   = _gen_excel_cnss(t, trim_label, periode.annee, mois_labels,
+                                       sal_data, total_base_cnss, total_base_cnamgs, tot_cnss_m)
+        cnamgs_bytes = _gen_excel_cnamgs(t, trim_label, periode.annee, mois_labels,
+                                         sal_data, total_base_cnamgs, tot_cnamgs_m)
+
+        zip_buf = io.BytesIO()
+        nom_base = t.denomination.replace(" ","_")[:20]
+        with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"CNSS_{nom_base}_{trim_label.replace(' ','')}_{periode.annee}.xlsx",   cnss_bytes)
+            zf.writestr(f"CNAMGS_{nom_base}_{trim_label.replace(' ','')}_{periode.annee}.xlsx", cnamgs_bytes)
+        zip_buf.seek(0)
+
+        from flask import Response
+        nom_zip = f"declarations_trimestrielles_{nom_base}_{trim_label.replace(' ','')}_{periode.annee}.zip"
+        return Response(zip_buf.read(), mimetype="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{nom_zip}"'})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DÉCLARATION CNSS/CNAMGS — Export CSV portail électronique
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/declaration-cnss/export-csv")
+@login_required
+def declaration_cnss_csv():
+    """
+    Export CSV uploadable directement sur le portail CNSS Gabon (cnss.ga)
+    et CNAMGS. Génère une archive ZIP avec les deux fichiers CSV.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+
+    pid     = request.args.get("periode_id", type=int)
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+
+    # ── Calculer le trimestre ──────────────────────────────────────────────
+    from declaration_cnss import calculer_trimestre, generer_csv_cnss, generer_csv_cnamgs
+    trim_num, trim_debut, trim_fin, trim_label = calculer_trimestre(periode.mois)
+
+    periodes_trim = PeriodePaie.query.filter_by(
+        tenant_id=t.id, annee=periode.annee
+    ).filter(
+        PeriodePaie.mois >= trim_debut,
+        PeriodePaie.mois <= trim_fin
+    ).all()
+
+    if not periodes_trim:
+        flash("Aucune période trouvée pour ce trimestre.", "warning")
+        return redirect(url_for("tenant.declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+    buls_trim = BulletinPaie.query.filter(
+        BulletinPaie.tenant_id == t.id,
+        BulletinPaie.periode_id.in_([p.id for p in periodes_trim])
+    ).options(
+        joinedload(BulletinPaie.salarie),
+        joinedload(BulletinPaie.periode)
+    ).all()
+
+    if not buls_trim:
+        flash("Aucun bulletin pour ce trimestre. Saisissez et validez les bulletins d'abord.", "warning")
+        return redirect(url_for("tenant.declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+    # ── Regrouper par salarié ──────────────────────────────────────────────
+    from collections import defaultdict
+    sal_map = defaultdict(lambda: {
+        "nom_complet": "", "matricule": "", "numero_cnss": "",
+        "numero_cnamgs": "", "date_embauche": "",
+        "m1_base_cnss": 0, "m2_base_cnss": 0, "m3_base_cnss": 0,
+        "m1_base_cnamgs": 0, "m2_base_cnamgs": 0, "m3_base_cnamgs": 0,
+    })
+
+    for b in buls_trim:
+        k   = b.salarie_id
+        sal = b.salarie
+        sal_map[k]["nom_complet"]   = sal.nom_complet
+        sal_map[k]["matricule"]     = sal.matricule or ""
+        sal_map[k]["numero_cnss"]   = sal.numero_cnss or ""
+        sal_map[k]["numero_cnamgs"] = sal.numero_cnamgs or ""
+        if sal.date_embauche:
+            sal_map[k]["date_embauche"] = sal.date_embauche.strftime("%d/%m/%Y")
+        m = b.periode.mois if b.periode else 0
+        if m == trim_debut:
+            sal_map[k]["m1_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m1_base_cnamgs"] = float(b.base_cnamgs or 0)
+        elif m == trim_debut + 1:
+            sal_map[k]["m2_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m2_base_cnamgs"] = float(b.base_cnamgs or 0)
+        elif m == trim_fin:
+            sal_map[k]["m3_base_cnss"]   = float(b.base_cnss   or 0)
+            sal_map[k]["m3_base_cnamgs"] = float(b.base_cnamgs or 0)
+
+    sal_data = list(sal_map.values())
+
+    # ── Générer les deux CSV ───────────────────────────────────────────────
+    try:
+        csv_cnss   = generer_csv_cnss(sal_data, periode, t, trim_debut, trim_fin)
+        csv_cnamgs = generer_csv_cnamgs(sal_data, periode, t, trim_debut, trim_fin)
+
+        import zipfile
+        zip_buf  = io.BytesIO()
+        nom_base = (t.sigle or t.denomination[:15]).replace(" ", "_")
+        trim_str = f"T{trim_num}_{periode.annee}"
+
+        with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"CNSS_{nom_base}_{trim_str}.csv",   csv_cnss)
+            zf.writestr(f"CNAMGS_{nom_base}_{trim_str}.csv", csv_cnamgs)
+            # Ajouter un fichier README avec les instructions d'upload
+            zf.writestr(
+                "INSTRUCTIONS_UPLOAD.txt",
+                _instructions_upload(t, trim_label, periode.annee, len(sal_data))
+            )
+        zip_buf.seek(0)
+
+        nom_zip = f"declarations_CNSS_CNAMGS_{nom_base}_{trim_str}.zip"
+        logger.info(f"[CNSS CSV] Export {trim_str} — {len(sal_data)} salariés — tenant={t.id}")
+
+        return send_file(
+            zip_buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=nom_zip,
+        )
+
+    except Exception as e:
+        logger.error(f"[CNSS CSV] Erreur export : {e}")
+        flash(f"Erreur lors de la génération : {e}", "error")
+        return redirect(url_for("tenant.declaration_cnss", periode_id=pid, mode="trimestriel"))
+
+
+def _instructions_upload(tenant, trim_label, annee, nb_salaries) -> str:
+    """Génère un fichier texte d'instructions pour l'upload sur les portails."""
+    return f"""
+INSTRUCTIONS D'UPLOAD — DÉCLARATIONS TRIMESTRIELLES
+====================================================
+Entreprise : {tenant.denomination}
+NIF        : {tenant.nif or "—"}
+Trimestre  : {trim_label} {annee}
+Salariés   : {nb_salaries}
+Généré le  : {datetime.now().strftime("%d/%m/%Y à %H:%M")}
+
+
+FICHIER CNSS : CNSS_*.csv
+─────────────────────────
+1. Connectez-vous sur https://cnss.ga
+2. Allez dans : Mon Espace → Déclarations → Nouvelle déclaration
+3. Choisissez : Déclaration trimestrielle de salaires
+4. Cliquez sur "Importer un fichier"
+5. Sélectionnez le fichier CNSS_*.csv
+6. Vérifiez les montants affichés
+7. Validez et téléchargez le reçu
+
+
+FICHIER CNAMGS : CNAMGS_*.csv
+──────────────────────────────
+1. Connectez-vous sur le portail CNAMGS
+2. Allez dans : Déclarations → Déclaration trimestrielle
+3. Importez le fichier CNAMGS_*.csv
+4. Vérifiez et validez
+
+
+MONTANTS À VERSER (rappel) :
+────────────────────────────
+CNSS  : cotisations salariales (5%) + patronales (18%) = 23% de la base
+CNAMGS: cotisations salariales (1,5%) + patronales (6%) = 7,5% de la base
+
+Date limite de dépôt : dernier jour du mois suivant la fin du trimestre
+  T1 (Jan-Mar) → 30 Avril
+  T2 (Avr-Jun) → 31 Juillet
+  T3 (Jul-Sep) → 31 Octobre
+  T4 (Oct-Déc) → 31 Janvier
+
+
+IMPORTANT :
+──────────
+- Utilisez le fichier CSV, pas le fichier Excel, pour l'upload portail
+- Le fichier Excel (généré séparément) est pour vos archives papier
+- Gardez le reçu de dépôt comme justificatif
+
+En cas de problème : support@paiegalon.com
+""".strip()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# API REST v1 — Intégration grandes entreprises
+# ══════════════════════════════════════════════════════════════════════════════
+# Authentification : X-API-Key: <token>  ou  Authorization: Bearer <oauth_token>
+# Tous les endpoints retournent JSON. Préfixe : /api/v1/
+# ══════════════════════════════════════════════════════════════════════════════
+
+from api_rest import (api_auth_required, _ok, _err, _paginate,
+                      _salarie_dict, _bulletin_dict, _periode_dict,
+                      _oauth_tokens, OAUTH_TOKEN_TTL)
+
+
