@@ -49,10 +49,13 @@ if _db_url.startswith("postgres://"):
     _db_url = _db_url.replace("postgres://", "postgresql://", 1)
 app.config["SQLALCHEMY_DATABASE_URI"]        = _db_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_size": 5, "max_overflow": 10,
-    "pool_timeout": 30, "pool_recycle": 1800, "pool_pre_ping": True,
-}
+# Les options de pool ne s'appliquent qu'à PostgreSQL/MySQL.
+# SQLite (tests, dev local) ne les supporte pas.
+if _db_url.startswith("postgresql://") or _db_url.startswith("mysql"):
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+        "pool_size": 5, "max_overflow": 10,
+        "pool_timeout": 30, "pool_recycle": 1800, "pool_pre_ping": True,
+    }
 db.init_app(app)
 
 # ── Email ─────────────────────────────────────────────────────────────────────
