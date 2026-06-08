@@ -768,5 +768,41 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') naviguerWorker(1);
   if (e.key === 'ArrowLeft')  naviguerWorker(-1);
 });
+// ── Détection automatique des jours fériés / dimanches ──────────────────────
+// Au chargement, interroge l'API pour savoir si la date est un jour férié.
+// Si oui et qu'aucun type n'a encore été choisi manuellement, le suggère.
+(function detecterJourFerie() {
+  const dateSel = "{{ date_sel.strftime('%Y-%m-%d') }}";
+  const dejaPointe = {{ 'true' if pt_existant else 'false' }};
+  // On ne suggère que si le pointage n'existe pas encore (sinon on respecte la saisie)
+  if (dejaPointe) return;
+  fetch("/api/jour-ferie?date=" + encodeURIComponent(dateSel))
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (!data || data.type_jour === "NORMAL") return;
+      // Cocher automatiquement le bon type de jour
+      const radio = document.querySelector('input[name="type_jour"][value="' + data.type_jour + '"]');
+      if (radio && !radio.checked) {
+        radio.checked = true;
+        if (typeof onTypeJourChange === "function") {
+          onTypeJourChange(data.type_jour);
+        }
+      }
+      // Afficher une bannière d'information
+      const infoEl = document.getElementById('info-type-jour');
+      if (infoEl && data.est_ferie) {
+        infoEl.textContent = "🎉 " + data.nom + " — jour férié détecté automatiquement (majoration +70%). Vous pouvez changer si besoin.";
+        infoEl.style.display    = '';
+        infoEl.style.background  = '#d1fae5';
+        infoEl.style.color       = '#065f46';
+      } else if (infoEl && data.est_dimanche) {
+        infoEl.textContent = "🌅 Dimanche détecté automatiquement (majoration +40%). Vous pouvez changer si besoin.";
+        infoEl.style.display    = '';
+        infoEl.style.background  = '#dbeafe';
+        infoEl.style.color       = '#1e40af';
+      }
+    })
+    .catch(() => {});  // En cas d'erreur, on ne bloque rien
+})();
 </script>
 {% endblock %}

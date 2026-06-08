@@ -605,23 +605,3 @@ def admin_backup_run():
     else:
         flash(f"❌ Échec de la sauvegarde : {message}", "error")
     return redirect(url_for("admin.admin_backups"))
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MONITORING — Test de capture Sentry
-# ══════════════════════════════════════════════════════════════════════════════
-@bp.route("/admin/monitoring/test")
-@super_admin_required
-def admin_monitoring_test():
-    """
-    Déclenche volontairement une erreur pour vérifier que Sentry la capture.
-    À utiliser une fois après configuration, puis ignorer.
-    """
-    import os
-    if not os.environ.get("SENTRY_DSN", "").strip():
-        flash("Sentry n'est pas configuré (SENTRY_DSN absent). "
-              "Définissez SENTRY_DSN sur Railway pour activer le monitoring.", "error")
-        return redirect(url_for("admin.admin_dashboard"))
-    # Erreur volontaire — Sentry doit la capturer et envoyer une alerte
-    raise RuntimeError("Test Sentry déclenché manuellement depuis /admin/monitoring/test — "
-                       "si vous recevez cette alerte par email, le monitoring fonctionne.")

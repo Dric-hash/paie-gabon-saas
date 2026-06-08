@@ -371,3 +371,77 @@ class TestMonitoring:
         set_user_context(object())
         # Si on arrive ici, c'est bon
         assert True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — JOURS FÉRIÉS GABONAIS
+# ══════════════════════════════════════════════════════════════════════════════
+class TestJoursFeries:
+    def test_calcul_paques(self):
+        """L'algorithme de Computus doit donner les bonnes dates de Pâques."""
+        from jours_feries import _dimanche_paques
+        from datetime import date
+        assert _dimanche_paques(2024) == date(2024, 3, 31)
+        assert _dimanche_paques(2025) == date(2025, 4, 20)
+        assert _dimanche_paques(2026) == date(2026, 4, 5)
+
+    def test_jours_fixes_presents(self):
+        """Les jours fériés fixes gabonais doivent être détectés."""
+        from jours_feries import est_jour_ferie
+        from datetime import date
+        assert est_jour_ferie(date(2026, 1, 1))    # Nouvel An
+        assert est_jour_ferie(date(2026, 5, 1))    # Fête du Travail
+        assert est_jour_ferie(date(2026, 8, 17))   # Indépendance
+        assert est_jour_ferie(date(2026, 12, 25))  # Noël
+
+    def test_jour_normal_non_ferie(self):
+        """Un jour ordinaire ne doit pas être férié."""
+        from jours_feries import est_jour_ferie
+        from datetime import date
+        assert not est_jour_ferie(date(2026, 6, 9))  # mardi ordinaire
+
+    def test_type_jour_auto(self):
+        """La détection automatique du type de jour."""
+        from jours_feries import type_jour_auto
+        from datetime import date
+        assert type_jour_auto(date(2026, 8, 17)) == "FERIE"     # Indépendance
+        assert type_jour_auto(date(2026, 6, 7))  == "DIMANCHE"  # dimanche
+        assert type_jour_auto(date(2026, 6, 9))  == "NORMAL"    # mardi
+
+    def test_api_jour_ferie(self, client):
+        """L'API doit renvoyer le type de jour correct."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/api/jour-ferie?date=2026-08-17")
+        assert r.status_code == 200
+        data = r.get_json()
+        assert data["type_jour"] == "FERIE"
+        assert data["est_ferie"] is True
+
+    def test_page_jours_feries(self, client):
+        """La page calendrier doit s'afficher."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/jours-feries")
+        assert r.status_code == 200
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — PAGINATION
+# ══════════════════════════════════════════════════════════════════════════════
+class TestPagination:
+    def test_salaries_pagine(self, client):
+        """La liste des salariés accepte le paramètre page."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/salaries?page=1")
+        assert r.status_code == 200
+
+    def test_conges_pagine(self, client):
+        """La liste des congés accepte le paramètre page."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/conges?page=1")
+        assert r.status_code == 200
+
+    def test_page_inexistante_pas_erreur(self, client):
+        """Une page hors limites ne doit pas planter (error_out=False)."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/salaries?page=9999")
+        assert r.status_code == 200

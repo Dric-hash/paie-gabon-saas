@@ -1,0 +1,68 @@
+{% extends "tenant/base.html" %}
+{% block title %}Jours fériés — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">📅 Jours fériés du Gabon</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      Les jours fériés sont automatiquement détectés lors du pointage
+      (majoration +70% sur les heures travaillées).
+    </p>
+  </div>
+  <form method="GET" style="display:flex;align-items:center;gap:.5rem">
+    <label style="font-size:.8rem;color:#6b7280;font-weight:600">Année :</label>
+    <select name="annee" onchange="this.form.submit()"
+            style="padding:.4rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.85rem;font-weight:700">
+      {% for a in annees_dispo %}
+      <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- Tableau des jours fériés -->
+<div class="card overflow-hidden">
+  <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6">
+    <h2 style="font-weight:900;font-size:.9rem;color:#111827">
+      {{ feries|length }} jour(s) férié(s) en {{ annee }}
+    </h2>
+  </div>
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.625rem 1.25rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #f3f4f6">Date</th>
+        <th style="text-align:left;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #f3f4f6">Jour</th>
+        <th style="text-align:left;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid #f3f4f6">Fête</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in feries %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.625rem 1.25rem;font-size:.85rem;font-weight:700;color:#111827">
+          {{ f.date.strftime('%d/%m/%Y') }}
+        </td>
+        <td style="padding:.625rem 1rem;font-size:.82rem;color:#6b7280">
+          {{ f.jour_sem }}
+          {% if f.est_we %}
+          <span style="background:#fef3c7;color:#92400e;font-size:.65rem;font-weight:700;padding:.1rem .4rem;border-radius:9999px;margin-left:.25rem">week-end</span>
+          {% endif %}
+        </td>
+        <td style="padding:.625rem 1rem;font-size:.82rem;color:#374151;font-weight:600">{{ f.nom }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card p-4 mt-4" style="background:#fffbeb;border-color:#fde68a">
+  <p style="font-size:.78rem;color:#92400e;line-height:1.5">
+    ⚠️ <strong>Fêtes musulmanes</strong> (Aïd el-Fitr, Aïd el-Kebir) : les dates
+    affichées sont approximatives car elles dépendent de l'observation lunaire.
+    Vérifiez le calendrier officiel publié par les autorités gabonaises et
+    ajustez le type de jour manuellement dans le pointage si nécessaire.
+  </p>
+</div>
+
+{% endblock %}

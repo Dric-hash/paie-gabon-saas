@@ -159,6 +159,9 @@
       <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">
         📋 <span>{{ "Pointage" if lang == "fr" else "Attendance" }}</span>
       </a>
+      <a href="/jours-feries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='jours_feries_page' else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
+        📅 <span>{{ "Jours fériés" if lang == "fr" else "Holidays" }}</span>
+      </a>
       <a href="/sites" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='sites' else 'text-white/80 hover:bg-white/10' }}">
         🏗️ <span>{{ T.nav.sites }}</span>
       </a>

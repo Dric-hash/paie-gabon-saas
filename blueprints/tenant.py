@@ -31,6 +31,8 @@ from core import (get_tenant, tenant_required, can_edit, admin_only,
                   send_email_async,
                   TTL_KPIS_DASH, TTL_EVOLUTION, TTL_CATS_STATS, TTL_ALERTES)
 from i18n import SUPPORTED_LANGUAGES, set_language
+from jours_feries import (jours_feries_annee, est_jour_ferie,
+                          nom_jour_ferie, type_jour_auto)
 
 logger = logging.getLogger("paiegalon")
 
@@ -3719,8 +3721,18 @@ def conges():
             "mineur":         taux_j == 2.5,
         })
 
-    # Demandes (avec date_depart renseignée)
-    demandes = Conge.query.filter_by(tenant_id=t.id)        .filter(Conge.date_depart.isnot(None))        .options(joinedload(Conge.salarie))        .order_by(Conge.date_depart.desc()).all()
+    # Demandes (avec date_depart renseignée) — paginées
+    page_conges = request.args.get("page", 1, type=int)
+    q_demandes = (Conge.query.filter_by(tenant_id=t.id)
+                  .filter(Conge.date_depart.isnot(None))
+                  .options(joinedload(Conge.salarie))
+                  .order_by(Conge.date_depart.desc()))
+    pagination = q_demandes.paginate(page=page_conges, per_page=25, error_out=False)
+    demandes = pagination.items
+
+    _args = {k: v for k, v in request.args.items() if k != "page"}
+    _base = request.path + "?" + "&".join(f"{k}={v}" for k, v in _args.items())
+    _sep  = "&" if _args else "?"
 
     annees_dispo = sorted(set(
         [now.year, now.year-1, now.year+1]
@@ -3729,6 +3741,7 @@ def conges():
 
     return render_template("tenant/conges.html",
         tenant=t, soldes=soldes, demandes=demandes,
+        pagination=pagination, pagination_base=_base + _sep,
         annee=annee, annees_dispo=annees_dispo, now=now, q=q,
         salaries=salaries_list)
 
@@ -4378,6 +4391,57 @@ def api_cache_clear():
     if not t: return jsonify({"ok": False})
     _cache_delete(f"{t.id}:")
     return jsonify({"ok": True, "msg": "Cache vidé"})
+
+
+@bp.route("/api/jour-ferie")
+@login_required
+def api_jour_ferie():
+    """
+    Indique si une date est un jour férié / dimanche, pour pré-remplir
+    automatiquement le type de jour dans le pointage.
+    Param : date (format YYYY-MM-DD)
+    Retour : {type_jour, est_ferie, nom, est_dimanche}
+    """
+    t = get_tenant()
+    if not t:
+        return jsonify({"erreur": "non connecté"}), 401
+    date_str = request.args.get("date", "")
+    d = _parse_date(date_str)
+    if not d:
+        return jsonify({"erreur": "date invalide"}), 400
+    nom = nom_jour_ferie(d)
+    return jsonify({
+        "date":         d.strftime("%Y-%m-%d"),
+        "type_jour":    type_jour_auto(d),
+        "est_ferie":    nom is not None,
+        "nom":          nom,
+        "est_dimanche": d.weekday() == 6,
+    })
+
+
+@bp.route("/jours-feries")
+@login_required
+def jours_feries_page():
+    """Affiche le calendrier des jours fériés gabonais pour une année."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    annee = request.args.get("annee", datetime.now().year, type=int)
+    feries = sorted(jours_feries_annee(annee).items())
+    jours_sem = ["Lundi", "Mardi", "Mercredi", "Jeudi",
+                 "Vendredi", "Samedi", "Dimanche"]
+    feries_fmt = [{
+        "date":      d,
+        "nom":       nom,
+        "jour_sem":  jours_sem[d.weekday()],
+        "est_we":    d.weekday() >= 5,
+    } for d, nom in feries]
+    annees_dispo = list(range(datetime.now().year - 1, datetime.now().year + 3))
+    return render_template("tenant/jours_feries.html",
+                           tenant=t, annee=annee, feries=feries_fmt,
+                           annees_dispo=annees_dispo)
 
 
 @bp.route("/api/semaine-btp")

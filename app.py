@@ -217,6 +217,7 @@ csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
 _CSRF_EXEMPT_ENDPOINTS = [
     "tenant.api_calculer",
     "tenant.api_semaine_btp",
+    "tenant.api_jour_ferie",
     "tenant.api_simuler_paie",
     "tenant.api_simuler_scenarios",
     "tenant.api_simuler_net_vers_brut",
