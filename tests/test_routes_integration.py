@@ -445,3 +445,62 @@ class TestPagination:
         auth_session(client, "admin@a.ga")
         r = client.get("/salaries?page=9999")
         assert r.status_code == 200
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — MODULE PRESTATAIRES
+# ══════════════════════════════════════════════════════════════════════════════
+class TestPrestataires:
+    def test_liste_prestataires(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.get("/prestataires")
+        assert r.status_code == 200
+
+    def test_page_nouveau_prestataire(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.get("/prestataires/nouveau")
+        assert r.status_code == 200
+
+    def test_etat_annuel(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.get("/prestataires/etat-annuel?annee=2026")
+        assert r.status_code == 200
+
+    def test_calcul_facture_correct(self):
+        """Le calcul TVA + retenue à la source doit être exact."""
+        from models import FacturePrestataire
+        from datetime import date
+        f = FacturePrestataire(tenant_id=1, prestataire_id=1, numero="T1",
+                               date_facture=date.today(),
+                               montant_ht=2000000, taux_tva=18, taux_retenue=9.5)
+        f.calculer()
+        assert f.montant_tva == 360000          # 18% de 2M
+        assert f.montant_ttc == 2360000         # 2M + TVA
+        assert f.montant_retenue == 190000      # 9.5% de 2M
+        assert f.montant_net_a_payer == 2170000 # TTC - retenue
+
+    def test_api_calculer_facture(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.post("/api/prestataire/calculer-facture",
+                        json={"montant_ht": 1000000, "taux_tva": 18, "taux_retenue": 5})
+        assert r.status_code == 200
+        d = r.get_json()
+        assert d["montant_tva"] == 180000
+        assert d["montant_net_a_payer"] == 1130000  # 1.18M - 50k
+
+    def test_creation_prestataire_isole_par_tenant(self, client):
+        """Un prestataire créé par le tenant A n'est pas visible par le tenant B."""
+        from models import Prestataire
+        # Créer un prestataire pour le tenant A directement
+        with flask_app.app_context():
+            from models import Tenant
+            ta = Tenant.query.filter_by(slug="entreprise-a").first()
+            p = Prestataire(tenant_id=ta.id, code="PREA1",
+                            raison_sociale="FOURNISSEUR A", categorie="FOURNISSEUR")
+            db.session.add(p)
+            db.session.commit()
+            pid = p.id
+        # Le tenant B ne doit pas y accéder
+        auth_session(client, "admin@b.ga")
+        r = client.get(f"/prestataires/{pid}", follow_redirects=False)
+        assert r.status_code == 404  # introuvable pour le tenant B

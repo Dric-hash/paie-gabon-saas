@@ -1,0 +1,270 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ p.raison_sociale }} — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:1.25rem">
+  <a href="/prestataires" style="font-size:.85rem;color:#9ca3af;text-decoration:none">← Tous les prestataires</a>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.75rem;margin-top:.5rem">
+    <div>
+      <h1 class="text-2xl font-black">{{ p.raison_sociale }}</h1>
+      <p class="text-gray-500 text-sm mt-1">
+        {{ p.code }} · {{ p.categorie_label }}
+        {% if p.statut == 'INACTIF' %}<span style="background:#f3f4f6;color:#6b7280;font-size:.7rem;font-weight:700;padding:.1rem .5rem;border-radius:9999px;margin-left:.5rem">Inactif</span>{% endif %}
+      </p>
+    </div>
+    <a href="/prestataires/{{ p.id }}/modifier" class="btn-secondary">✏️ Modifier</a>
+  </div>
+</div>
+
+<!-- Totaux financiers -->
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+  <div class="card p-4">
+    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total facturé (net)</div>
+    <div style="font-size:1.4rem;font-weight:900;color:#111827;margin-top:.25rem">{{ "{:,.0f}".format(total_facture).replace(",", " ") }} XAF</div>
+  </div>
+  <div class="card p-4">
+    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total payé</div>
+    <div style="font-size:1.4rem;font-weight:900;color:#065f46;margin-top:.25rem">{{ "{:,.0f}".format(total_paye).replace(",", " ") }} XAF</div>
+  </div>
+  <div class="card p-4">
+    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Reste dû</div>
+    <div style="font-size:1.4rem;font-weight:900;color:{{ '#92400e' if total_du > 0 else '#9ca3af' }};margin-top:.25rem">{{ "{:,.0f}".format(total_du).replace(",", " ") }} XAF</div>
+  </div>
+</div>
+
+<!-- Infos -->
+<div class="card p-5 mb-5">
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;font-size:.85rem">
+    <div><span style="color:#9ca3af">NIF :</span> <strong>{{ p.nif or '—' }}</strong></div>
+    <div><span style="color:#9ca3af">RCCM :</span> <strong>{{ p.rccm or '—' }}</strong></div>
+    <div><span style="color:#9ca3af">Activité :</span> <strong>{{ p.activite or '—' }}</strong></div>
+    <div><span style="color:#9ca3af">Téléphone :</span> <strong>{{ p.telephone or '—' }}</strong></div>
+    <div><span style="color:#9ca3af">Email :</span> <strong>{{ p.email or '—' }}</strong></div>
+    <div><span style="color:#9ca3af">Mode paiement :</span> <strong>{{ p.mode_paiement }}</strong></div>
+    <div><span style="color:#9ca3af">TVA :</span> <strong>{{ "Assujetti (18%)" if p.assujetti_tva else "Non assujetti" }}</strong></div>
+    <div><span style="color:#9ca3af">Retenue source :</span> <strong>{{ p.taux_retenue_source }}%</strong></div>
+    <div><span style="color:#9ca3af">Résident :</span> <strong>{{ "Oui" if p.resident else "Non" }}</strong></div>
+  </div>
+</div>
+
+<!-- Factures -->
+<div class="card overflow-hidden mb-5">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6">
+    <h2 style="font-weight:900;font-size:.95rem;color:#111827">Factures ({{ factures|length }})</h2>
+    <button onclick="document.getElementById('modal-facture').style.display='flex'" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle facture</button>
+  </div>
+  {% if factures %}
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">N°</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Date</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">HT</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Net à payer</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Reste</th>
+        <th style="text-align:center;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Statut</th>
+        <th style="border-bottom:1px solid #f3f4f6"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for f in factures %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1.25rem;font-weight:700;font-size:.83rem">{{ f.numero }}</td>
+        <td style="padding:.6rem 1rem;font-size:.8rem;color:#6b7280">{{ f.date_facture.strftime('%d/%m/%Y') }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem">{{ "{:,.0f}".format(f.montant_ht).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(f.montant_net_a_payer).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if f.reste_a_payer > 0 else '#9ca3af' }}">{{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:center">
+          {% set st_bg = {'PAYEE':'#d1fae5','PARTIELLE':'#fef3c7','EN_ATTENTE':'#fee2e2','ANNULEE':'#f3f4f6'} %}
+          {% set st_col = {'PAYEE':'#065f46','PARTIELLE':'#92400e','EN_ATTENTE':'#991b1b','ANNULEE':'#9ca3af'} %}
+          <span style="background:{{ st_bg.get(f.statut,'#f3f4f6') }};color:{{ st_col.get(f.statut,'#374151') }};font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:9999px">{{ f.statut_label }}</span>
+        </td>
+        <td style="padding:.6rem 1rem;text-align:right;white-space:nowrap">
+          {% if f.statut not in ('PAYEE','ANNULEE') %}
+          <button onclick="ouvrirPaiement({{ f.id }}, '{{ f.numero }}', {{ f.reste_a_payer }})" style="background:#1a2332;color:white;border:none;font-size:.72rem;font-weight:700;padding:.25rem .6rem;border-radius:.4rem;cursor:pointer">Payer</button>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.85rem">Aucune facture enregistrée.</div>
+  {% endif %}
+</div>
+
+<!-- Contrats -->
+<div class="card overflow-hidden mb-5">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6">
+    <h2 style="font-weight:900;font-size:.95rem;color:#111827">Contrats de prestation ({{ contrats|length }})</h2>
+    <button onclick="document.getElementById('modal-contrat').style.display='flex'" class="btn-secondary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouveau contrat</button>
+  </div>
+  {% if contrats %}
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Objet</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Type</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Montant</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Période</th>
+        <th style="text-align:center;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contrats %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1.25rem;font-size:.83rem">{{ c.objet }}{% if c.reference %}<div style="font-size:.7rem;color:#9ca3af">{{ c.reference }}</div>{% endif %}</td>
+        <td style="padding:.6rem 1rem;font-size:.8rem;color:#6b7280">{{ c.type_remuneration_label }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(c.montant).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;font-size:.78rem;color:#6b7280">{{ c.date_debut.strftime('%d/%m/%y') }}{% if c.date_fin %} → {{ c.date_fin.strftime('%d/%m/%y') }}{% endif %}</td>
+        <td style="padding:.6rem 1rem;text-align:center">
+          {% set c_bg = {'EN_COURS':'#dbeafe','TERMINE':'#d1fae5','SUSPENDU':'#fef3c7','ANNULE':'#f3f4f6'} %}
+          {% set c_col = {'EN_COURS':'#1e40af','TERMINE':'#065f46','SUSPENDU':'#92400e','ANNULE':'#9ca3af'} %}
+          <span style="background:{{ c_bg.get(c.statut,'#f3f4f6') }};color:{{ c_col.get(c.statut,'#374151') }};font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:9999px">{{ c.statut.replace('_',' ').title() }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.85rem">Aucun contrat enregistré.</div>
+  {% endif %}
+</div>
+
+{% if p.statut == 'INACTIF' or factures|length == 0 %}
+<form method="POST" action="/prestataires/{{ p.id }}/supprimer" onsubmit="return confirm('Supprimer définitivement ce prestataire ?')" style="text-align:right">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.8rem;font-weight:700;cursor:pointer">🗑️ Supprimer ce prestataire</button>
+</form>
+{% endif %}
+
+<!-- ═══ MODAL FACTURE ═══ -->
+<div id="modal-facture" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:1rem;max-width:520px;width:100%;padding:1.5rem;max-height:90vh;overflow:auto">
+    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:1rem">Nouvelle facture</h2>
+    <form method="POST" action="/prestataires/{{ p.id }}/factures/nouvelle">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">N° facture *</label>
+          <input type="text" name="numero" required style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date facture *</label>
+          <input type="date" name="date_facture" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description</label>
+          <input type="text" name="description" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant HT *</label>
+          <input type="number" name="montant_ht" id="f_ht" required step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">TVA (%)</label>
+          <input type="number" name="taux_tva" id="f_tva" value="{{ 18 if p.assujetti_tva else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Retenue source (%)</label>
+          <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Échéance</label>
+          <input type="date" name="date_echeance" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+      </div>
+      <div id="f_recap" style="background:#f9fafb;border-radius:.5rem;padding:.75rem;margin-top:.75rem;font-size:.8rem;display:none">
+        <div style="display:flex;justify-content:space-between"><span>TVA :</span><strong id="r_tva">0</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>TTC :</span><strong id="r_ttc">0</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>Retenue :</span><strong id="r_ret" style="color:#dc2626">0</strong></div>
+        <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;margin-top:.4rem;padding-top:.4rem"><span style="font-weight:700">Net à payer :</span><strong id="r_net" style="font-size:1rem">0</strong></div>
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" onclick="document.getElementById('modal-facture').style.display='none'" class="btn-secondary">Annuler</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ MODAL CONTRAT ═══ -->
+<div id="modal-contrat" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:1rem;max-width:520px;width:100%;padding:1.5rem;max-height:90vh;overflow:auto">
+    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:1rem">Nouveau contrat de prestation</h2>
+    <form method="POST" action="/prestataires/{{ p.id }}/contrats/nouveau">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Objet de la mission *</label>
+          <input type="text" name="objet" required style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Référence</label>
+          <input type="text" name="reference" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Type</label>
+          <select name="type_remuneration" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="FORFAIT">Forfait</option><option value="JOURNALIER">Taux journalier</option>
+            <option value="HORAIRE">Taux horaire</option><option value="MENSUEL">Mensuel</option>
+          </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant *</label>
+          <input type="number" name="montant" required step="0.01" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Site (optionnel)</label>
+          <select name="site_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="">—</option>
+            {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
+          </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date début *</label>
+          <input type="date" name="date_debut" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date fin</label>
+          <input type="date" name="date_fin" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Conditions</label>
+          <textarea name="conditions" rows="2" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"></textarea></div>
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" onclick="document.getElementById('modal-contrat').style.display='none'" class="btn-secondary">Annuler</button>
+        <button type="submit" class="btn-primary">Enregistrer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ═══ MODAL PAIEMENT ═══ -->
+<div id="modal-paiement" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:1rem;max-width:440px;width:100%;padding:1.5rem">
+    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:.5rem">Enregistrer un paiement</h2>
+    <p id="pay_info" style="font-size:.82rem;color:#6b7280;margin-bottom:1rem"></p>
+    <form method="POST" id="form-paiement">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant *</label>
+          <input type="number" name="montant" id="pay_montant" required step="0.01" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date *</label>
+          <input type="date" name="date_paiement" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Mode</label>
+          <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="VIREMENT">Virement</option><option value="MOBILE_MONEY">Mobile Money</option>
+            <option value="CHEQUE">Chèque</option><option value="ESPECES">Espèces</option>
+          </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Référence</label>
+          <input type="text" name="reference" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" onclick="document.getElementById('modal-paiement').style.display='none'" class="btn-secondary">Annuler</button>
+        <button type="submit" class="btn-primary">Valider le paiement</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function calculerFacture() {
+  const ht  = parseFloat(document.getElementById('f_ht').value) || 0;
+  const tva = parseFloat(document.getElementById('f_tva').value) || 0;
+  const ret = parseFloat(document.getElementById('f_ret').value) || 0;
+  if (ht <= 0) { document.getElementById('f_recap').style.display = 'none'; return; }
+  fetch('/api/prestataire/calculer-facture', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({montant_ht: ht, taux_tva: tva, taux_retenue: ret})
+  }).then(r => r.json()).then(d => {
+    const fmt = n => Math.round(n).toLocaleString('fr-FR').replace(/,/g, ' ');
+    document.getElementById('r_tva').textContent = fmt(d.montant_tva) + ' XAF';
+    document.getElementById('r_ttc').textContent = fmt(d.montant_ttc) + ' XAF';
+    document.getElementById('r_ret').textContent = '- ' + fmt(d.montant_retenue) + ' XAF';
+    document.getElementById('r_net').textContent = fmt(d.montant_net_a_payer) + ' XAF';
+    document.getElementById('f_recap').style.display = 'block';
+  }).catch(() => {});
+}
+function ouvrirPaiement(fid, numero, reste) {
+  document.getElementById('form-paiement').action = '/prestataires/factures/' + fid + '/payer';
+  document.getElementById('pay_info').textContent = 'Facture ' + numero + ' — reste à payer : ' + Math.round(reste).toLocaleString('fr-FR').replace(/,/g, ' ') + ' XAF';
+  document.getElementById('pay_montant').value = reste;
+  document.getElementById('pay_montant').max = reste;
+  document.getElementById('modal-paiement').style.display = 'flex';
+}
+</script>
+
+{% endblock %}

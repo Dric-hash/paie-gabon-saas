@@ -1,0 +1,90 @@
+{% extends "tenant/base.html" %}
+{% block title %}État annuel prestataires — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <a href="/prestataires" style="font-size:.85rem;color:#9ca3af;text-decoration:none">← Prestataires</a>
+    <h1 class="text-2xl font-black mt-1">📊 État récapitulatif annuel</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      Sommes versées aux prestataires en {{ annee }} — utile pour les déclarations fiscales
+    </p>
+  </div>
+  <form method="GET" style="display:flex;align-items:center;gap:.5rem">
+    <label style="font-size:.8rem;color:#6b7280;font-weight:600">Année :</label>
+    <select name="annee" onchange="this.form.submit()" style="padding:.4rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.85rem;font-weight:700">
+      {% for a in annees_dispo %}
+      <option value="{{ a }}" {% if a == annee %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- Totaux globaux -->
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.75rem;margin-bottom:1.5rem">
+  <div class="card p-3"><div style="font-size:.68rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total HT</div><div style="font-size:1.05rem;font-weight:900;margin-top:.2rem">{{ "{:,.0f}".format(totaux.ht).replace(",", " ") }}</div></div>
+  <div class="card p-3"><div style="font-size:.68rem;color:#9ca3af;font-weight:700;text-transform:uppercase">TVA</div><div style="font-size:1.05rem;font-weight:900;margin-top:.2rem">{{ "{:,.0f}".format(totaux.tva).replace(",", " ") }}</div></div>
+  <div class="card p-3"><div style="font-size:.68rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Retenue source</div><div style="font-size:1.05rem;font-weight:900;margin-top:.2rem;color:#dc2626">{{ "{:,.0f}".format(totaux.retenue).replace(",", " ") }}</div></div>
+  <div class="card p-3"><div style="font-size:.68rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Net facturé</div><div style="font-size:1.05rem;font-weight:900;margin-top:.2rem">{{ "{:,.0f}".format(totaux.net).replace(",", " ") }}</div></div>
+  <div class="card p-3"><div style="font-size:.68rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Payé</div><div style="font-size:1.05rem;font-weight:900;margin-top:.2rem;color:#065f46">{{ "{:,.0f}".format(totaux.paye).replace(",", " ") }}</div></div>
+</div>
+
+<div class="card overflow-hidden">
+  {% if lignes %}
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.6rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Prestataire</th>
+        <th style="text-align:left;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">NIF</th>
+        <th style="text-align:center;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Fact.</th>
+        <th style="text-align:right;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Total HT</th>
+        <th style="text-align:right;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">TVA</th>
+        <th style="text-align:right;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Retenue</th>
+        <th style="text-align:right;padding:.6rem .75rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Net</th>
+        <th style="text-align:right;padding:.6rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Payé</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.55rem 1.25rem;font-size:.83rem;font-weight:700">
+          <a href="/prestataires/{{ l.prestataire.id }}" style="color:#111827;text-decoration:none">{{ l.prestataire.raison_sociale }}</a>
+        </td>
+        <td style="padding:.55rem .75rem;font-size:.78rem;color:#6b7280">{{ l.prestataire.nif or '—' }}</td>
+        <td style="padding:.55rem .75rem;text-align:center;font-size:.8rem;color:#6b7280">{{ l.nb_factures }}</td>
+        <td style="padding:.55rem .75rem;text-align:right;font-size:.81rem">{{ "{:,.0f}".format(l.total_ht).replace(",", " ") }}</td>
+        <td style="padding:.55rem .75rem;text-align:right;font-size:.81rem;color:#6b7280">{{ "{:,.0f}".format(l.total_tva).replace(",", " ") }}</td>
+        <td style="padding:.55rem .75rem;text-align:right;font-size:.81rem;color:#dc2626">{{ "{:,.0f}".format(l.total_retenue).replace(",", " ") }}</td>
+        <td style="padding:.55rem .75rem;text-align:right;font-size:.82rem;font-weight:700">{{ "{:,.0f}".format(l.total_net).replace(",", " ") }}</td>
+        <td style="padding:.55rem 1.25rem;text-align:right;font-size:.81rem;color:#065f46">{{ "{:,.0f}".format(l.total_paye).replace(",", " ") }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#f9fafb;font-weight:900">
+        <td colspan="3" style="padding:.6rem 1.25rem;font-size:.82rem">TOTAL ({{ lignes|length }} prestataire(s))</td>
+        <td style="padding:.6rem .75rem;text-align:right;font-size:.82rem">{{ "{:,.0f}".format(totaux.ht).replace(",", " ") }}</td>
+        <td style="padding:.6rem .75rem;text-align:right;font-size:.82rem">{{ "{:,.0f}".format(totaux.tva).replace(",", " ") }}</td>
+        <td style="padding:.6rem .75rem;text-align:right;font-size:.82rem;color:#dc2626">{{ "{:,.0f}".format(totaux.retenue).replace(",", " ") }}</td>
+        <td style="padding:.6rem .75rem;text-align:right;font-size:.82rem">{{ "{:,.0f}".format(totaux.net).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1.25rem;text-align:right;font-size:.82rem;color:#065f46">{{ "{:,.0f}".format(totaux.paye).replace(",", " ") }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">📊</div>
+    <p style="font-weight:700;color:#374151">Aucune facture en {{ annee }}</p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card p-4 mt-4" style="background:#eff6ff;border-color:#bfdbfe">
+  <p style="font-size:.78rem;color:#1e40af;line-height:1.5">
+    💡 Le montant des <strong>retenues à la source</strong> doit être reversé à l'administration
+    fiscale gabonaise selon les échéances en vigueur. Cet état vous aide à suivre les montants
+    collectés par prestataire sur l'année.
+  </p>
+</div>
+
+{% endblock %}

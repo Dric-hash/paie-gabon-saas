@@ -1,0 +1,127 @@
+{% extends "tenant/base.html" %}
+{% block title %}Prestataires — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">🤝 Prestataires</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      {{ actifs }} actif(s) sur {{ total }} prestataire(s)
+    </p>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    <a href="/prestataires/etat-annuel" class="btn-secondary">📊 État annuel</a>
+    <a href="/prestataires/nouveau" class="btn-primary">+ Nouveau prestataire</a>
+  </div>
+</div>
+
+<!-- Filtres -->
+<div class="card p-4 mb-5">
+  <form method="GET" style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:end">
+    <div style="flex:1;min-width:200px">
+      <label style="font-size:.73rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.25rem">Recherche</label>
+      <input type="text" name="q" value="{{ q }}" placeholder="Nom, code, NIF, activité…"
+        style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+    </div>
+    <div>
+      <label style="font-size:.73rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.25rem">Catégorie</label>
+      <select name="categorie" style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+        <option value="">Toutes</option>
+        <option value="FREELANCE"     {% if categorie=='FREELANCE' %}selected{% endif %}>Freelance</option>
+        <option value="SOUS_TRAITANT" {% if categorie=='SOUS_TRAITANT' %}selected{% endif %}>Sous-traitant</option>
+        <option value="FOURNISSEUR"   {% if categorie=='FOURNISSEUR' %}selected{% endif %}>Fournisseur</option>
+      </select>
+    </div>
+    <div>
+      <label style="font-size:.73rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.25rem">Statut</label>
+      <select name="statut" style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+        <option value="">Tous</option>
+        <option value="ACTIF"   {% if statut=='ACTIF' %}selected{% endif %}>Actif</option>
+        <option value="INACTIF" {% if statut=='INACTIF' %}selected{% endif %}>Inactif</option>
+      </select>
+    </div>
+    <button type="submit" class="btn-secondary">Filtrer</button>
+  </form>
+</div>
+
+<!-- Liste -->
+<div class="card overflow-hidden">
+  {% if prestataires %}
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.625rem 1.25rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Prestataire</th>
+        <th style="text-align:left;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Catégorie</th>
+        <th style="text-align:left;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">NIF</th>
+        <th style="text-align:left;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Contact</th>
+        <th style="text-align:center;padding:.625rem 1rem;font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Statut</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in prestataires %}
+      <tr style="border-bottom:1px solid #f9fafb;cursor:pointer" onclick="window.location='/prestataires/{{ p.id }}'">
+        <td style="padding:.7rem 1.25rem">
+          <div style="font-weight:700;color:#111827;font-size:.88rem">{{ p.raison_sociale }}</div>
+          <div style="font-size:.73rem;color:#9ca3af">{{ p.code }}{% if p.activite %} · {{ p.activite }}{% endif %}</div>
+        </td>
+        <td style="padding:.7rem 1rem">
+          {% set cat_bg = {'FREELANCE':'#eff6ff','SOUS_TRAITANT':'#f0fdf4','FOURNISSEUR':'#fef3c7'} %}
+          {% set cat_col = {'FREELANCE':'#1e40af','SOUS_TRAITANT':'#166534','FOURNISSEUR':'#92400e'} %}
+          <span style="background:{{ cat_bg.get(p.categorie,'#f3f4f6') }};color:{{ cat_col.get(p.categorie,'#374151') }};font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">
+            {{ p.categorie_label }}
+          </span>
+        </td>
+        <td style="padding:.7rem 1rem;font-size:.82rem;color:#6b7280">{{ p.nif or '—' }}</td>
+        <td style="padding:.7rem 1rem;font-size:.82rem;color:#6b7280">
+          {{ p.telephone or '—' }}
+          {% if p.email %}<div style="font-size:.7rem;color:#9ca3af">{{ p.email }}</div>{% endif %}
+        </td>
+        <td style="padding:.7rem 1rem;text-align:center">
+          {% if p.statut == 'ACTIF' %}
+          <span style="background:#d1fae5;color:#065f46;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">Actif</span>
+          {% else %}
+          <span style="background:#f3f4f6;color:#6b7280;font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">Inactif</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  {% if pagination and pagination.pages > 1 %}
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-top:1px solid #f3f4f6;background:#fafafa;flex-wrap:wrap;gap:.5rem">
+    <span style="font-size:.75rem;color:#6b7280;font-weight:600">
+      Page {{ pagination.page }}/{{ pagination.pages }} — {{ pagination.total }} prestataire(s)
+    </span>
+    <div style="display:flex;gap:.25rem;align-items:center">
+      {% if pagination.has_prev %}
+      <a href="{{ pagination_base }}page={{ pagination.prev_num }}" style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">‹ Préc.</a>
+      {% endif %}
+      {% for num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+        {% if num %}
+          {% if num == pagination.page %}
+          <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+          {% else %}
+          <a href="{{ pagination_base }}page={{ num }}" style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>
+          {% endif %}
+        {% else %}
+        <span style="padding:.3rem .375rem;font-size:.75rem;color:#9ca3af">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <a href="{{ pagination_base }}page={{ pagination.next_num }}" style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">Suiv. ›</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% else %}
+  <div style="text-align:center;padding:3rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.75rem">🤝</div>
+    <p style="font-weight:700;color:#374151;margin-bottom:.375rem">Aucun prestataire</p>
+    <p style="font-size:.875rem">Ajoutez votre premier prestataire avec le bouton ci-dessus.</p>
+  </div>
+  {% endif %}
+</div>
+
+{% endblock %}

@@ -844,3 +844,216 @@ class AuditLog(db.Model):
             "ip_address":  self.ip_address,
             "date_action": self.date_action.strftime("%d/%m/%Y %H:%M:%S") if self.date_action else "—",
         }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MODULE PRESTATAIRES — gestion des prestataires, contrats, factures, paiements
+# ══════════════════════════════════════════════════════════════════════════════
+class Prestataire(db.Model):
+    """
+    Prestataire : freelance, entreprise sous-traitante ou fournisseur.
+    Polyvalent — gère personnes physiques et morales.
+    """
+    __tablename__ = "prestataires"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    code          = db.Column(db.String(50), nullable=False)   # référence interne
+
+    # Type : PHYSIQUE (freelance) ou MORALE (entreprise)
+    type_personne = db.Column(db.String(10), default="MORALE")  # PHYSIQUE | MORALE
+    # Catégorie : FREELANCE | SOUS_TRAITANT | FOURNISSEUR
+    categorie     = db.Column(db.String(20), default="FREELANCE")
+
+    # Identité
+    raison_sociale = db.Column(db.String(200), nullable=False)  # nom ou raison sociale
+    sigle          = db.Column(db.String(50))
+    nom_contact    = db.Column(db.String(200))   # personne à contacter (si morale)
+
+    # Coordonnées
+    telephone     = db.Column(db.String(30))
+    email         = db.Column(db.String(200))
+    adresse       = db.Column(db.String(300))
+    ville         = db.Column(db.String(100), default="Libreville")
+    pays          = db.Column(db.String(100), default="Gabon")
+
+    # Identifiants légaux
+    nif           = db.Column(db.String(50))     # Numéro d'Identification Fiscale
+    rccm          = db.Column(db.String(50))     # Registre de Commerce
+    cnss_employeur = db.Column(db.String(30))    # si applicable
+
+    # Domaine d'activité
+    activite      = db.Column(db.String(200))
+
+    # Coordonnées de paiement
+    mode_paiement = db.Column(db.String(30), default="VIREMENT")  # VIREMENT | MOBILE_MONEY | CHEQUE | ESPECES
+    rib           = db.Column(db.String(50))
+    banque        = db.Column(db.String(100))
+    numero_mobile_money = db.Column(db.String(30))
+
+    # Fiscalité
+    resident      = db.Column(db.Boolean, default=True)   # résident fiscal Gabon ?
+    assujetti_tva = db.Column(db.Boolean, default=True)
+    taux_retenue_source = db.Column(db.Numeric(5,2), default=0)  # % retenue à la source
+
+    statut        = db.Column(db.String(20), default="ACTIF")  # ACTIF | INACTIF
+    notes         = db.Column(db.Text)
+    date_creation     = db.Column(db.DateTime, default=datetime.utcnow)
+    date_modification = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    contrats = db.relationship("ContratPrestation", backref="prestataire", lazy=True)
+    factures = db.relationship("FacturePrestataire", backref="prestataire", lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "code"),
+        db.Index("idx_prestataires_tenant_statut", "tenant_id", "statut"),
+        db.Index("idx_prestataires_tenant_cat", "tenant_id", "categorie"),
+    )
+
+    @property
+    def nom_affiche(self):
+        return self.raison_sociale
+
+    @property
+    def categorie_label(self):
+        return {"FREELANCE": "Freelance / Indépendant",
+                "SOUS_TRAITANT": "Sous-traitant",
+                "FOURNISSEUR": "Fournisseur"}.get(self.categorie, self.categorie)
+
+    def to_dict(self):
+        d = {}
+        for c in self.__table__.columns:
+            val = getattr(self, c.name)
+            d[c.name] = (str(val) if isinstance(val, (date, datetime))
+                         else (float(val) if hasattr(val, "__float__") and val is not None else val))
+        d["nom_affiche"] = self.nom_affiche
+        d["categorie_label"] = self.categorie_label
+        return d
+
+
+class ContratPrestation(db.Model):
+    """Contrat de prestation entre le tenant et un prestataire."""
+    __tablename__ = "contrats_prestation"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    prestataire_id = db.Column(db.Integer, db.ForeignKey("prestataires.id"), nullable=False)
+
+    reference      = db.Column(db.String(50))    # numéro de contrat
+    objet          = db.Column(db.String(300), nullable=False)  # objet de la mission
+    type_remuneration = db.Column(db.String(20), default="FORFAIT")  # FORFAIT | JOURNALIER | HORAIRE | MENSUEL
+
+    montant        = db.Column(db.Numeric(15,2), nullable=False)  # montant ou taux
+    devise         = db.Column(db.String(5), default="XAF")
+
+    date_debut     = db.Column(db.Date, nullable=False)
+    date_fin       = db.Column(db.Date)
+    site_id        = db.Column(db.Integer, db.ForeignKey("sites.id"))
+
+    statut         = db.Column(db.String(20), default="EN_COURS")  # EN_COURS | TERMINE | SUSPENDU | ANNULE
+    conditions     = db.Column(db.Text)
+    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("idx_contrats_prest_tenant", "tenant_id", "prestataire_id"),
+    )
+
+    @property
+    def type_remuneration_label(self):
+        return {"FORFAIT": "Forfait", "JOURNALIER": "Taux journalier",
+                "HORAIRE": "Taux horaire", "MENSUEL": "Mensuel"}.get(
+                    self.type_remuneration, self.type_remuneration)
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for k in ("date_debut", "date_fin", "date_creation"):
+            if d.get(k): d[k] = str(d[k])
+        if d.get("montant"): d["montant"] = float(d["montant"])
+        return d
+
+
+class FacturePrestataire(db.Model):
+    """Facture reçue d'un prestataire, avec calcul TVA et retenue à la source."""
+    __tablename__ = "factures_prestataire"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    prestataire_id = db.Column(db.Integer, db.ForeignKey("prestataires.id"), nullable=False)
+    contrat_id     = db.Column(db.Integer, db.ForeignKey("contrats_prestation.id"))
+
+    numero         = db.Column(db.String(50), nullable=False)  # n° de facture
+    date_facture   = db.Column(db.Date, nullable=False)
+    date_echeance  = db.Column(db.Date)
+    description    = db.Column(db.String(300))
+
+    # Montants
+    montant_ht     = db.Column(db.Numeric(15,2), nullable=False)
+    taux_tva       = db.Column(db.Numeric(5,2), default=18)     # TVA Gabon = 18%
+    montant_tva    = db.Column(db.Numeric(15,2), default=0)
+    taux_retenue   = db.Column(db.Numeric(5,2), default=0)      # retenue à la source
+    montant_retenue = db.Column(db.Numeric(15,2), default=0)
+    montant_ttc    = db.Column(db.Numeric(15,2), default=0)     # HT + TVA
+    montant_net_a_payer = db.Column(db.Numeric(15,2), default=0)  # TTC - retenue
+
+    statut         = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | PAYEE | PARTIELLE | ANNULEE
+    montant_paye   = db.Column(db.Numeric(15,2), default=0)
+    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    paiements = db.relationship("PaiementPrestataire", backref="facture", lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "prestataire_id", "numero"),
+        db.Index("idx_factures_tenant_statut", "tenant_id", "statut"),
+        db.Index("idx_factures_tenant_date", "tenant_id", "date_facture"),
+    )
+
+    def calculer(self):
+        """Recalcule TVA, retenue, TTC et net à payer à partir du HT."""
+        ht = float(self.montant_ht or 0)
+        self.montant_tva = round(ht * float(self.taux_tva or 0) / 100, 2)
+        self.montant_ttc = round(ht + float(self.montant_tva), 2)
+        self.montant_retenue = round(ht * float(self.taux_retenue or 0) / 100, 2)
+        self.montant_net_a_payer = round(float(self.montant_ttc) - float(self.montant_retenue), 2)
+        return self
+
+    @property
+    def reste_a_payer(self):
+        return round(float(self.montant_net_a_payer or 0) - float(self.montant_paye or 0), 2)
+
+    @property
+    def statut_label(self):
+        return {"EN_ATTENTE": "En attente", "PAYEE": "Payée",
+                "PARTIELLE": "Partielle", "ANNULEE": "Annulée"}.get(self.statut, self.statut)
+
+    def to_dict(self):
+        d = {}
+        for c in self.__table__.columns:
+            val = getattr(self, c.name)
+            d[c.name] = (str(val) if isinstance(val, (date, datetime))
+                         else (float(val) if hasattr(val, "__float__") and val is not None else val))
+        d["reste_a_payer"] = self.reste_a_payer
+        d["statut_label"] = self.statut_label
+        return d
+
+
+class PaiementPrestataire(db.Model):
+    """Paiement effectué sur une facture de prestataire."""
+    __tablename__ = "paiements_prestataire"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    facture_id     = db.Column(db.Integer, db.ForeignKey("factures_prestataire.id"), nullable=False)
+
+    montant        = db.Column(db.Numeric(15,2), nullable=False)
+    date_paiement  = db.Column(db.Date, nullable=False)
+    mode_paiement  = db.Column(db.String(30), default="VIREMENT")
+    reference      = db.Column(db.String(100))   # n° de transaction / chèque
+    notes          = db.Column(db.String(300))
+    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("idx_paiements_prest_tenant", "tenant_id", "facture_id"),
+    )
+
+    def to_dict(self):
+        d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+        for k in ("date_paiement", "date_creation"):
+            if d.get(k): d[k] = str(d[k])
+        if d.get("montant"): d["montant"] = float(d["montant"])
+        return d

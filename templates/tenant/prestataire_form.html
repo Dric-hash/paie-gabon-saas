@@ -1,0 +1,175 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ "Modifier" if p else "Nouveau" }} prestataire — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="margin-bottom:1.5rem">
+  <a href="{{ '/prestataires/' ~ p.id if p else '/prestataires' }}" style="font-size:.85rem;color:#9ca3af;text-decoration:none">← Retour</a>
+  <h1 class="text-2xl font-black mt-1">{{ "Modifier le prestataire" if p else "Nouveau prestataire" }}</h1>
+</div>
+
+<form method="POST" action="{{ '/prestataires/' ~ p.id ~ '/modifier' if p else '/prestataires/nouveau' }}">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+  <!-- Type et catégorie -->
+  <div class="card p-5 mb-4">
+    <h2 style="font-weight:900;font-size:.9rem;margin-bottom:1rem;color:#111827">Type</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Type de personne</label>
+        <select name="type_personne" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+          <option value="MORALE"   {% if p and p.type_personne=='MORALE' %}selected{% endif %}>Personne morale (entreprise)</option>
+          <option value="PHYSIQUE" {% if p and p.type_personne=='PHYSIQUE' %}selected{% endif %}>Personne physique (individu)</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Catégorie</label>
+        <select name="categorie" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+          <option value="FREELANCE"     {% if p and p.categorie=='FREELANCE' %}selected{% endif %}>Freelance / Indépendant</option>
+          <option value="SOUS_TRAITANT" {% if p and p.categorie=='SOUS_TRAITANT' %}selected{% endif %}>Sous-traitant</option>
+          <option value="FOURNISSEUR"   {% if p and p.categorie=='FOURNISSEUR' %}selected{% endif %}>Fournisseur</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- Identité -->
+  <div class="card p-5 mb-4">
+    <h2 style="font-weight:900;font-size:.9rem;margin-bottom:1rem;color:#111827">Identité</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div style="grid-column:span 2">
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Raison sociale / Nom complet *</label>
+        <input type="text" name="raison_sociale" required value="{{ p.raison_sociale if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Sigle</label>
+        <input type="text" name="sigle" value="{{ p.sigle if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Personne à contacter</label>
+        <input type="text" name="nom_contact" value="{{ p.nom_contact if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Activité / Domaine</label>
+        <input type="text" name="activite" value="{{ p.activite if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      {% if p %}
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Statut</label>
+        <select name="statut" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+          <option value="ACTIF"   {% if p.statut=='ACTIF' %}selected{% endif %}>Actif</option>
+          <option value="INACTIF" {% if p.statut=='INACTIF' %}selected{% endif %}>Inactif</option>
+        </select>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Coordonnées -->
+  <div class="card p-5 mb-4">
+    <h2 style="font-weight:900;font-size:.9rem;margin-bottom:1rem;color:#111827">Coordonnées</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Téléphone</label>
+        <input type="text" name="telephone" value="{{ p.telephone if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Email</label>
+        <input type="email" name="email" value="{{ p.email if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div style="grid-column:span 2">
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Adresse</label>
+        <input type="text" name="adresse" value="{{ p.adresse if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Ville</label>
+        <input type="text" name="ville" value="{{ p.ville if p else 'Libreville' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Identifiants légaux -->
+  <div class="card p-5 mb-4">
+    <h2 style="font-weight:900;font-size:.9rem;margin-bottom:1rem;color:#111827">Identifiants légaux</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">NIF (N° Identification Fiscale)</label>
+        <input type="text" name="nif" value="{{ p.nif if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">RCCM (Registre de Commerce)</label>
+        <input type="text" name="rccm" value="{{ p.rccm if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paiement et fiscalité -->
+  <div class="card p-5 mb-4">
+    <h2 style="font-weight:900;font-size:.9rem;margin-bottom:1rem;color:#111827">Paiement & fiscalité</h2>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Mode de paiement</label>
+        <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+          <option value="VIREMENT"     {% if p and p.mode_paiement=='VIREMENT' %}selected{% endif %}>Virement bancaire</option>
+          <option value="MOBILE_MONEY" {% if p and p.mode_paiement=='MOBILE_MONEY' %}selected{% endif %}>Mobile Money</option>
+          <option value="CHEQUE"       {% if p and p.mode_paiement=='CHEQUE' %}selected{% endif %}>Chèque</option>
+          <option value="ESPECES"      {% if p and p.mode_paiement=='ESPECES' %}selected{% endif %}>Espèces</option>
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">RIB</label>
+        <input type="text" name="rib" value="{{ p.rib if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Banque</label>
+        <input type="text" name="banque" value="{{ p.banque if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">N° Mobile Money</label>
+        <input type="text" name="numero_mobile_money" value="{{ p.numero_mobile_money if p else '' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Taux retenue à la source (%)</label>
+        <input type="number" name="taux_retenue_source" step="0.01" min="0" max="100"
+          value="{{ p.taux_retenue_source if p else '0' }}"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+      </div>
+    </div>
+    <div style="display:flex;gap:1.5rem;margin-top:1rem">
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:#374151;cursor:pointer">
+        <input type="checkbox" name="assujetti_tva" {% if not p or p.assujetti_tva %}checked{% endif %}/>
+        Assujetti à la TVA (18%)
+      </label>
+      <label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:#374151;cursor:pointer">
+        <input type="checkbox" name="resident" {% if not p or p.resident %}checked{% endif %}/>
+        Résident fiscal au Gabon
+      </label>
+    </div>
+  </div>
+
+  <!-- Notes -->
+  <div class="card p-5 mb-4">
+    <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Notes internes</label>
+    <textarea name="notes" rows="3"
+      style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">{{ p.notes if p else '' }}</textarea>
+  </div>
+
+  <div style="display:flex;gap:.75rem;justify-content:flex-end">
+    <a href="{{ '/prestataires/' ~ p.id if p else '/prestataires' }}" class="btn-secondary">Annuler</a>
+    <button type="submit" class="btn-primary">{{ "Enregistrer les modifications" if p else "Créer le prestataire" }}</button>
+  </div>
+</form>
+
+{% endblock %}
