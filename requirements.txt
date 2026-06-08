@@ -15,3 +15,7 @@ redis==5.0.1
 # Compression Gzip automatique des réponses HTTP (réduit la taille de 60-80%)
 flask-compress==1.14
 flask-limiter==3.5.0
+# Sauvegarde automatique vers Backblaze B2 (API compatible S3)
+boto3==1.34.69
+# Monitoring des erreurs en production (alertes + stack traces)
+sentry-sdk[flask]==2.61.1

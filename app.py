@@ -31,6 +31,10 @@ logger = logging.getLogger("paiegalon")
 if os.environ.get("SQLALCHEMY_ECHO") != "1":
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
 
+# ── Monitoring Sentry (le plus tôt possible) ──────────────────────────────────
+from monitoring import init_sentry, set_user_context
+init_sentry()
+
 app = Flask(__name__)
 
 # ── SECRET_KEY ────────────────────────────────────────────────────────────────
@@ -125,6 +129,8 @@ def gerer_session_inactivite():
                 pass
         session["derniere_activite"] = now.isoformat()
         session.permanent = True
+        # Attacher le contexte tenant/utilisateur à Sentry pour le débogage
+        set_user_context(current_user)
 
 # ── Headers sécurité ─────────────────────────────────────────────────────────
 @app.after_request

@@ -1,0 +1,8 @@
+# nixpacks.toml — Configuration de build Railway
+#
+# Ajoute le client PostgreSQL (pg_dump) nécessaire aux sauvegardes automatiques.
+# Sans ce fichier, pg_dump n'est pas disponible et backup.py échoue avec
+# "pg_dump introuvable".
+
+[phases.setup]
+nixPkgs = ["...", "postgresql"]

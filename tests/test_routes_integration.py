@@ -298,3 +298,76 @@ class TestPermissionsRoutes:
         # Le mot de passe faible doit être signalé
         assert b"caract" in r.data.lower() or b"majuscule" in r.data.lower() \
             or b"chiffre" in r.data.lower()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — SAUVEGARDE BASE DE DONNÉES
+# ══════════════════════════════════════════════════════════════════════════════
+class TestBackup:
+    def test_page_backups_super_admin(self, client):
+        """Le super-admin accède à la page des sauvegardes."""
+        # Créer un super-admin dans la base de test
+        with flask_app.app_context():
+            from models import Utilisateur
+            sa = Utilisateur(nom="SUPER", prenom="Admin", email="super@test.ga",
+                             role="SUPER_ADMIN", actif=True, email_verifie=True)
+            sa.set_password("MotDePasse1")
+            db.session.add(sa)
+            db.session.commit()
+            sa_id = sa.id
+        with client.session_transaction() as sess:
+            sess["_user_id"] = str(sa_id); sess["_fresh"] = True
+        r = client.get("/admin/backups")
+        assert r.status_code == 200
+
+    def test_page_backups_interdite_tenant(self, client):
+        """Un admin de tenant ne peut PAS accéder aux sauvegardes."""
+        auth_session(client, "admin@a.ga")
+        r = client.get("/admin/backups", follow_redirects=False)
+        assert r.status_code == 403
+
+    def test_backup_sans_config_message_clair(self):
+        """Sans config B2, run_backup renvoie un échec propre (pas un crash)."""
+        import backup
+        ok, message = backup.run_backup()
+        # En environnement de test sans B2, doit échouer proprement
+        assert isinstance(ok, bool)
+        assert isinstance(message, str)
+        assert len(message) > 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — MONITORING SENTRY
+# ══════════════════════════════════════════════════════════════════════════════
+class TestMonitoring:
+    def test_scrub_filtre_mots_de_passe(self):
+        """Les champs sensibles doivent être filtrés."""
+        from monitoring import _scrub
+        data = {"password": "secret", "email": "u@test.ga", "salaire": 500000}
+        result = _scrub(data)
+        assert result["password"] == "[FILTRÉ]"
+        assert result["email"] == "u@test.ga"      # non sensible
+        assert result["salaire"] == 500000          # donnée métier conservée
+
+    def test_scrub_recursif_imbrique(self):
+        """Le filtrage doit fonctionner en profondeur."""
+        from monitoring import _scrub
+        data = {"niveau1": {"token_api": "x", "nom": "NDONG"}}
+        result = _scrub(data)
+        assert result["niveau1"]["token_api"] == "[FILTRÉ]"
+        assert result["niveau1"]["nom"] == "NDONG"
+
+    def test_init_sentry_sans_dsn_desactive(self, monkeypatch):
+        """Sans SENTRY_DSN, l'init retourne False sans erreur."""
+        monkeypatch.delenv("SENTRY_DSN", raising=False)
+        from monitoring import init_sentry
+        assert init_sentry() is False
+
+    def test_set_user_context_ne_casse_pas(self):
+        """set_user_context ne doit jamais lever d'exception."""
+        from monitoring import set_user_context
+        # Avec None, un objet vide, un objet bizarre — aucune exception attendue
+        set_user_context(None)
+        set_user_context(object())
+        # Si on arrive ici, c'est bon
+        assert True
