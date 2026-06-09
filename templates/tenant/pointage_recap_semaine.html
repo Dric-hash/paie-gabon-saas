@@ -13,7 +13,7 @@
       ← Pointage
     </a>
     <button onclick="window.print()"
-      style="font-size:.8rem;font-weight:700;color:white;background:#1a2332;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
+      style="font-size:.8rem;font-weight:700;color:white;background:#0f3d36;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
       🖨️ Imprimer
     </button>
   </div>
@@ -26,13 +26,13 @@
     ← Semaine précédente
   </a>
   <div style="text-align:center">
-    <div style="font-size:1rem;font-weight:900;color:#1a2332">
+    <div style="font-size:1rem;font-weight:900;color:#0f3d36">
       Semaine du {{ lundi.strftime('%d %B') }} au {{ samedi.strftime('%d %B %Y') }}
     </div>
     <div style="display:flex;gap:.375rem;margin-top:.375rem;justify-content:center">
       {% for j in jours %}
       <span style="font-size:.7rem;padding:.2rem .5rem;border-radius:.375rem;font-weight:700;
-        {{ 'background:#1a2332;color:white' if j == date_ref else 'background:#f3f4f6;color:#6b7280' }}">
+        {{ 'background:#0f3d36;color:white' if j == date_ref else 'background:#f3f4f6;color:#6b7280' }}">
         {{ ['L','Ma','Me','J','V','S'][loop.index0] }} {{ j.strftime('%d') }}
       </span>
       {% endfor %}
@@ -71,7 +71,7 @@
 
 <div class="card overflow-hidden mb-4">
   <!-- En-tête site -->
-  <div style="background:{% if site %}#1a2332{% else %}#374151{% endif %};color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+  <div style="background:{% if site %}#0f3d36{% else %}#374151{% endif %};color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
     <div style="display:flex;align-items:center;gap:.75rem">
       <span style="font-size:1.1rem">🏗️</span>
       <div>
@@ -124,7 +124,7 @@
         {% for j in jours %}
         {% set is_today = j == date_ref %}
         <th style="padding:.5rem .5rem;text-align:center;font-size:.75rem;font-weight:700;
-          color:{{ '#1a2332' if is_today else '#6b7280' }};min-width:90px;
+          color:{{ '#0f3d36' if is_today else '#6b7280' }};min-width:90px;
           {% if is_today %}background:#eff6ff;border-bottom:2px solid #2563eb;{% endif %}">
           <div>{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'][loop.index0] }}</div>
           <div style="font-size:.8rem;font-weight:900;color:{{ '#2563eb' if is_today else '#374151' }}">
@@ -308,8 +308,8 @@
 {% endfor %}
 
 <!-- ── Synthèse globale ─────────────────────────────────────────────────────── -->
-<div class="card overflow-hidden mt-4" style="border:2px solid #1a2332">
-  <div style="background:#1a2332;color:white;padding:.875rem 1.25rem">
+<div class="card overflow-hidden mt-4" style="border:2px solid #0f3d36">
+  <div style="background:#0f3d36;color:white;padding:.875rem 1.25rem">
     <span style="font-weight:900;font-size:.9rem">📈 Synthèse globale de la semaine — tous sites</span>
   </div>
   <div style="overflow-x:auto">
@@ -363,7 +363,7 @@
       {% endfor %}
     </tbody>
     <tfoot>
-      <tr style="background:#1a2332;color:white;font-weight:900">
+      <tr style="background:#0f3d36;color:white;font-weight:900">
         <td style="padding:.625rem .875rem;font-size:.875rem" colspan="2">TOTAL GÉNÉRAL</td>
         {% for j in jours %}
         {% set tot_j_p = namespace(v=0) %}{% set tot_j_t = namespace(v=0) %}

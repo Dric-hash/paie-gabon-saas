@@ -24,7 +24,7 @@
     </a>
     {% endif %}
     <button onclick="window.print()"
-       style="display:flex;align-items:center;gap:.5rem;background:#1a2332;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+       style="display:flex;align-items:center;gap:.5rem;background:#0f3d36;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
       🖨️ Imprimer
     </button>
   </div>
@@ -51,12 +51,12 @@
     <div style="display:flex;gap:.375rem">
       <a href="?periode_id={{ periode.id if periode else '' }}&mode=mensuel"
          style="font-size:.8rem;font-weight:700;padding:.5rem 1rem;border-radius:.75rem;text-decoration:none;
-         {% if mode == 'mensuel' %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
+         {% if mode == 'mensuel' %}background:#0f3d36;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
         📅 Mensuel <span style="font-size:.7rem;opacity:.7">(CFP·FNH·TCS·IRPP)</span>
       </a>
       <a href="?periode_id={{ periode.id if periode else '' }}&mode=trimestriel"
          style="font-size:.8rem;font-weight:700;padding:.5rem 1rem;border-radius:.75rem;text-decoration:none;
-         {% if mode == 'trimestriel' %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
+         {% if mode == 'trimestriel' %}background:#0f3d36;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
         📆 Trimestriel <span style="font-size:.7rem;opacity:.7">(CNSS·CNAMGS)</span>
       </a>
     </div>
@@ -100,7 +100,7 @@
     ("IRPP",     stats_mensuel.total_irpp,    "#7c3aed","#f3e8ff"),
     ("CFP 0.5%", stats_mensuel.total_cfp,     "#065f46","#f0fdf4"),
     ("FNH 3%",   stats_mensuel.total_fnh,     "#92400e","#fffbeb"),
-    ("TOTAL DÛ", stats_mensuel.total_mensuel, "#1a2332","#f8fafc"),
+    ("TOTAL DÛ", stats_mensuel.total_mensuel, "#0f3d36","#f8fafc"),
   ] %}
   <div style="background:{{ bg }};border:1px solid {{ color }}33;border-radius:.875rem;padding:.875rem 1rem">
     <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:{{ color }};opacity:.8;margin-bottom:.3rem">{{ label }}</div>
@@ -121,7 +121,7 @@
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:.8rem">
     <thead>
-      <tr style="background:#1a2332;color:white;font-size:.7rem;text-transform:uppercase">
+      <tr style="background:#0f3d36;color:white;font-size:.7rem;text-transform:uppercase">
         <th style="padding:.625rem .875rem;text-align:left;font-weight:700" data-i18n="bul.employee">Salarié</th>
         <th style="padding:.5rem;text-align:right;font-weight:700;white-space:nowrap">Salaire brut</th>
         <th style="padding:.5rem;text-align:right;font-weight:700;white-space:nowrap">Base TCS</th>
@@ -146,7 +146,7 @@
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#7c3aed;font-weight:600">{{ b.irpp|int|fcfa }}</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#065f46">{{ b.cfp|int|fcfa }}</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#92400e">{{ b.fnh|int|fcfa }}</td>
-        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:900;color:#1a2332">{{ total_m|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:900;color:#0f3d36">{{ total_m|int|fcfa }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -179,7 +179,7 @@
 <!-- ══════════════════════ DÉCLARATION TRIMESTRIELLE ═════════════════════ -->
 
 <!-- En-tête employeur -->
-<div class="card p-5 mb-5" style="background:linear-gradient(135deg,#1a2332,#374151);color:white">
+<div class="card p-5 mb-5" style="background:linear-gradient(135deg,#0f3d36,#374151);color:white">
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem">
     <div>
       <div style="font-size:.7rem;font-weight:700;text-transform:uppercase;opacity:.7;margin-bottom:.3rem">Entreprise</div>
@@ -209,7 +209,7 @@
     ("CNSS patronal 18%",  stats_trim.total_cnss_pat,   "#dc2626","#fef2f2"),
     ("CNAMGS salarié 2%",  stats_trim.total_cnamgs_sal, "#1e40af","#eff6ff"),
     ("CNAMGS patronal 4.1%",stats_trim.total_cnamgs_pat,"#dc2626","#fef2f2"),
-    ("TOTAL TRIMESTRIEL",  stats_trim.total_a_verser,   "#1a2332","#f8fafc"),
+    ("TOTAL TRIMESTRIEL",  stats_trim.total_a_verser,   "#0f3d36","#f8fafc"),
   ] %}
   <div style="background:{{ bg }};border:1px solid {{ color }}33;border-radius:.875rem;padding:.875rem 1rem">
     <div style="font-size:.65rem;font-weight:700;text-transform:uppercase;color:{{ color }};opacity:.8;margin-bottom:.3rem">{{ label }}</div>
@@ -230,7 +230,7 @@
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:.8rem">
     <thead>
-      <tr style="background:#1a2332;color:white;font-size:.7rem;text-transform:uppercase">
+      <tr style="background:#0f3d36;color:white;font-size:.7rem;text-transform:uppercase">
         <th style="padding:.625rem .875rem;text-align:left;font-weight:700" data-i18n="bul.employee">Salarié</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">N° CNSS</th>
         <th style="padding:.5rem;text-align:right;font-weight:700;white-space:nowrap">Brut trim.</th>
@@ -257,12 +257,12 @@
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#dc2626;font-weight:600">{{ lg.cnss_pat|int|fcfa }}</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#1e40af">{{ lg.cnamgs_sal|int|fcfa }}</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace;color:#dc2626">{{ lg.cnamgs_pat|int|fcfa }}</td>
-        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:900;color:#1a2332">{{ total_t|int|fcfa }}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:900;color:#0f3d36">{{ total_t|int|fcfa }}</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
-      <tr style="background:#1a2332;color:white;font-weight:700">
+      <tr style="background:#0f3d36;color:white;font-weight:700">
         <td style="padding:.75rem .875rem" colspan="2">TOTAL ({{ stats_trim.nb }} salariés)</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace">{{ stats_trim.total_brut|int|fcfa }}</td>
         <td style="padding:.5rem;text-align:right;font-family:monospace">—</td>
@@ -279,7 +279,7 @@
 {% endif %}
 
 <!-- Total final trimestriel -->
-<div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1.25rem;padding:1.25rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem">
+<div style="background:linear-gradient(135deg,#0f3d36,#374151);border-radius:1.25rem;padding:1.25rem 1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem">
   <div>
     <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:rgba(255,255,255,.7);margin-bottom:.25rem">TOTAL TRIMESTRIEL À VERSER — {{ stats_trim.trim_label }}</div>
     <div style="font-size:.75rem;color:rgba(255,255,255,.5)">CNSS (salarié + patronal) + CNAMGS (salarié + patronal)</div>

@@ -83,7 +83,7 @@
         <option value="INACTIF" {{ 'selected' if statut=='INACTIF' }}>Inactif</option>
       </select>
     </div>
-    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-bold">Filtrer</button>
+    <button type="submit" class="text-white px-4 py-2 rounded-xl text-sm font-bold" style="background:#0f3d36">Filtrer</button>
     <a href="/salaries" class="text-gray-500 text-sm font-bold py-2 px-3 hover:text-gray-700">Réinitialiser</a>
   </form>
 
@@ -133,7 +133,7 @@
             <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(s.statut,'bg-gray-100 text-gray-500') }}">{{ s.statut }}</span>
           </td>
           <td class="px-4 py-3 text-center">
-            <a href="/salaries/{{ s.id }}" class="text-blue-600 font-bold text-xs hover:underline mr-2">Voir</a>
+            <a href="/salaries/{{ s.id }}" class="font-bold text-xs hover:underline" style="color:#0f3d36 mr-2">Voir</a>
             <a href="/bulletins/saisie?salarie_id={{ s.id }}" class="text-emerald-600 font-bold text-xs hover:underline">Bulletin</a>
           </td>
         </tr>
@@ -161,7 +161,7 @@
     {% for num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
       {% if num %}
         {% if num == pagination.page %}
-        <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+        <span style="padding:.3rem .75rem;border:2px solid #0f3d36;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#0f3d36">{{ num }}</span>
         {% else %}
         <a href="{{ pagination_base }}page={{ num }}"
            style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>

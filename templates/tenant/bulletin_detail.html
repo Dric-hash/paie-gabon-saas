@@ -24,7 +24,7 @@
     </div>
     <div style="text-align:right">
       <div class="text-xs text-gray-400 uppercase tracking-widest mb-1">{{ T.payslip.net_salary }}</div>
-      <div class="text-3xl font-black" style="color:#1a2332">{{ bulletin.net_a_payer|fcfa }}</div>
+      <div class="text-3xl font-black" style="color:#0f3d36">{{ bulletin.net_a_payer|fcfa }}</div>
     </div>
   </div>
 </div>
@@ -87,7 +87,7 @@
     </div>
 
     <!-- Résultat net -->
-    <div style="background:#1a2332;border-radius:1rem;padding:1.25rem;color:white">
+    <div style="background:#0f3d36;border-radius:1rem;padding:1.25rem;color:white">
       <div style="font-size:.75rem;font-weight:700;opacity:.6;margin-bottom:.75rem;text-transform:uppercase;letter-spacing:.05em">Calcul final</div>
       <div style="display:flex;justify-content:space-between;font-size:.875rem;margin-bottom:.375rem">
         <span style="opacity:.7">Salaire brut</span><span class="font-bold">{{ bulletin.salaire_brut|fcfa }}</span>
@@ -176,7 +176,7 @@
       {% if bulletin.statut == 'VALIDÉ' %}
       <form method="POST" action="/bulletins/{{ bulletin.id }}/paye">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">💳 Marquer comme payé</button>
+        <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">💳 Marquer comme payé</button>
       </form>
       {% endif %}
     </div>

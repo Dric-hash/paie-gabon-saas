@@ -48,7 +48,7 @@
   <div style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse">
     <thead>
-      <tr style="background:#1a2332;color:white;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">
+      <tr style="background:#0f3d36;color:white;font-size:.7rem;text-transform:uppercase;letter-spacing:.04em">
         <th style="padding:.625rem 1rem;text-align:left;font-weight:700" data-i18n="bul.employee">Salarié</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap">Taux</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;white-space:nowrap" data-i18n="con.acquired">Jours acquis</th>
@@ -273,7 +273,7 @@
       {% for num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
         {% if num %}
           {% if num == pagination.page %}
-          <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+          <span style="padding:.3rem .75rem;border:2px solid #0f3d36;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#0f3d36">{{ num }}</span>
           {% else %}
           <a href="{{ pagination_base }}page={{ num }}"
              style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>

@@ -4,7 +4,7 @@
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
-    <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">🏖️ Bilan congés {{ annee }}</h1>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🏖️ Bilan congés {{ annee }}</h1>
     <p style="color:#6b7280;font-size:.875rem;margin:.25rem 0 0">{{ bilan|length }} salarié(s) actif(s)</p>
   </div>
   <div style="display:flex;gap:.625rem;align-items:center;flex-wrap:wrap">
@@ -14,7 +14,7 @@
         <option value="{{ a }}" {{ 'selected' if a == annee }}>{{ a }}</option>
         {% endfor %}
       </select>
-      <button type="submit" style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">Filtrer</button>
+      <button type="submit" style="background:#0f3d36;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">Filtrer</button>
     </form>
     <a href="/conges/planning" style="background:#059669;color:white;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">📅 Planning</a>
     <a href="/conges" style="background:#f3f4f6;color:#374151;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">← Congés</a>
@@ -24,7 +24,7 @@
 <!-- KPIs -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.25rem">
   {% for label, val, color, icon in [
-    ('Jours acquis (total)', total_acquis|round(1), '#1a2332', '📊'),
+    ('Jours acquis (total)', total_acquis|round(1), '#0f3d36', '📊'),
     ('Jours pris', total_pris|round(1), '#059669', '✅'),
     ('Solde restant', total_restants|round(1), '#2563eb', '💰'),
     ('Alertes', nb_alertes, '#dc2626', '⚠️'),
@@ -58,13 +58,13 @@
         {% set pct_pris = (b.jours_pris / b.jours_acquis * 100)|int if b.jours_acquis > 0 else 0 %}
         <tr style="border-bottom:1px solid #f3f4f6">
           <td style="padding:.625rem 1rem">
-            <div style="font-weight:600;color:#1a2332">{{ b.salarie.nom_complet }}</div>
+            <div style="font-weight:600;color:#0f3d36">{{ b.salarie.nom_complet }}</div>
             <div style="font-size:.72rem;color:#9ca3af">{{ b.salarie.emploi or '—' }}</div>
           </td>
           <td style="padding:.625rem .75rem;text-align:center;font-size:.8rem;color:#6b7280">
             {{ b.anciennete_annees }}a {{ b.anciennete_mois }}m
           </td>
-          <td style="padding:.625rem .75rem;text-align:center;font-weight:700;color:#1a2332">
+          <td style="padding:.625rem .75rem;text-align:center;font-weight:700;color:#0f3d36">
             {{ b.jours_acquis|round(1) }}j
           </td>
           <td style="padding:.625rem .75rem;text-align:center;font-size:.8rem">

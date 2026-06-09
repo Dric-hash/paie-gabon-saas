@@ -26,13 +26,13 @@
   <span style="font-size:.75rem;font-weight:700;color:#6b7280;white-space:nowrap">🏗️ Site :</span>
   <a href="/journaliers/paie"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {{ 'background:#1a2332;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
+     {{ 'background:#0f3d36;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
     Tous les sites
   </a>
   {% for s in sites %}
   <a href="/journaliers/paie?site_id={{ s.id }}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {{ 'background:#1a2332;color:white' if site_filtre and site_filtre.id == s.id else 'background:#f3f4f6;color:#374151' }}">
+     {{ 'background:#0f3d36;color:white' if site_filtre and site_filtre.id == s.id else 'background:#f3f4f6;color:#374151' }}">
     {{ s.nom }}
     <span style="opacity:.6;font-size:.65rem">({{ s.nb_actifs }})</span>
   </a>
@@ -49,7 +49,7 @@
 <!-- ── KPIs ────────────────────────────────────────────────────────────────── -->
 <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
   <div class="card p-4" style="text-align:center">
-    <div style="font-size:1.5rem;font-weight:900;color:#1a2332">{{ journaliers|length }}</div>
+    <div style="font-size:1.5rem;font-weight:900;color:#0f3d36">{{ journaliers|length }}</div>
     <div style="font-size:.75rem;color:#6b7280;font-weight:600;margin-top:.25rem">
       Journaliers{% if site_filtre %} sur ce site{% endif %}
     </div>
@@ -192,7 +192,7 @@
         {% for st, label, color in [('','Tous','#6b7280'),('EN_ATTENTE','En attente','#d97706'),('PAYÉ','Payés','#059669')] %}
         <a href="/journaliers/paie?{% if site_filtre %}site_id={{ site_filtre.id }}&{% endif %}statut={{ st }}"
            style="font-size:.75rem;font-weight:700;padding:.3rem .625rem;border-radius:.5rem;text-decoration:none;
-           {{ 'background:#1a2332;color:white' if statut_filtre == st else 'background:#f3f4f6;color:' + color }}">
+           {{ 'background:#0f3d36;color:white' if statut_filtre == st else 'background:#f3f4f6;color:' + color }}">
           {{ label }}
         </a>
         {% endfor %}
@@ -299,7 +299,7 @@
     <tfoot>
       <tr style="background:#f9fafb;font-weight:900">
         <td style="padding:.5rem .75rem;font-size:.8rem" colspan="6">TOTAL ({{ feuilles|length }} feuilles)</td>
-        <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.875rem;color:#1a2332">
+        <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.875rem;color:#0f3d36">
           {{ feuilles|sum(attribute='montant_brut')|int|fcfa }}
         </td>
         <td colspan="2"></td>
@@ -319,7 +319,7 @@
     {% endif %}
     {% for num in pagination.iter_pages(left_edge=1,right_edge=1,left_current=2,right_current=2) %}
       {% if num %}
-        {% if num == pagination.page %}<span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+        {% if num == pagination.page %}<span style="padding:.3rem .75rem;border:2px solid #0f3d36;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#0f3d36">{{ num }}</span>
         {% else %}<a href="{{ pagination_base }}page={{ num }}" style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>{% endif %}
       {% else %}<span style="color:#9ca3af;font-size:.75rem">…</span>{% endif %}
     {% endfor %}

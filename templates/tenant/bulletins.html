@@ -61,13 +61,13 @@
   <span style="font-size:.75rem;font-weight:700;color:#6b7280">🏗️ Site :</span>
   <a href="/bulletins?periode_id={{ periode_sel.id }}{% if statut_filtre %}&statut={{ statut_filtre }}{% endif %}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {{ 'background:#1a2332;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
+     {{ 'background:#0f3d36;color:white' if not site_filtre else 'background:#f3f4f6;color:#374151' }}">
     Tous
   </a>
   {% for s in sites %}
   <a href="/bulletins?periode_id={{ periode_sel.id }}&site_id={{ s.id }}{% if statut_filtre %}&statut={{ statut_filtre }}{% endif %}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {{ 'background:#1a2332;color:white' if site_filtre and site_filtre.id==s.id else 'background:#f3f4f6;color:#374151' }}">
+     {{ 'background:#0f3d36;color:white' if site_filtre and site_filtre.id==s.id else 'background:#f3f4f6;color:#374151' }}">
     {{ s.nom }}
   </a>
   {% endfor %}
@@ -77,7 +77,7 @@
 <!-- ── KPIs ── -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
   {% for label, val, color in [
-    ("Bulletins" ~ (" — " ~ site_filtre.nom if site_filtre else ""), bulletins|length, "#1a2332"),
+    ("Bulletins" ~ (" — " ~ site_filtre.nom if site_filtre else ""), bulletins|length, "#0f3d36"),
     ("Masse brute",  masse.get('total_brut',0)|int|fcfa,               "#d97706"),
     ("Net total",    masse.get('total_net',0)|int|fcfa,                "#059669"),
     ("Charges pat.", masse.get('total_charges_patronales',0)|int|fcfa, "#2563eb"),
@@ -108,7 +108,7 @@
     <div style="display:flex;align-items:center;gap:.75rem">
       <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;font-size:.8rem;font-weight:700;color:#374151">
         <input type="checkbox" id="cb-all" onchange="toggleAll(this.checked)"
-          style="width:16px;height:16px;cursor:pointer;accent-color:#1a2332">
+          style="width:16px;height:16px;cursor:pointer;accent-color:#0f3d36">
         <span id="lbl-all" data-i18n="common.select_all">Tout sélectionner</span>
       </label>
       <span style="font-size:.75rem;color:#9ca3af" id="cpt-sel">0 sélectionné(s)</span>
@@ -134,7 +134,7 @@
       </button>
       <!-- Export Excel (dans le formulaire, simple lien) -->
       <a href="/bulletins/export/{{ periode_sel.id }}{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}"
-         style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+         style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
         📥 Export Excel
       </a>
       <a href="/bulletins/export-zip/{{ periode_sel.id }}"
@@ -177,7 +177,7 @@
       <tr>
         <th style="width:36px;text-align:center;padding:.5rem">
           <input type="checkbox" onchange="toggleAll(this.checked)"
-            style="width:15px;height:15px;cursor:pointer;accent-color:#1a2332">
+            style="width:15px;height:15px;cursor:pointer;accent-color:#0f3d36">
         </th>
         <th data-i18n="bul.employee">Salarié</th>
         {% if sites %}<th>Site</th>{% endif %}
@@ -202,7 +202,7 @@
             data-id="{{ b.id }}" data-statut="{{ b.statut }}"
             class="cb-bulletin"
             onchange="onCbChange()"
-            style="width:15px;height:15px;cursor:pointer;accent-color:#1a2332">
+            style="width:15px;height:15px;cursor:pointer;accent-color:#0f3d36">
         </td>
         <td>
           <div style="font-weight:700;font-size:.875rem">{{ b.salarie.nom_complet }}</div>
@@ -224,7 +224,7 @@
         <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.cnss_salarie|fcfa }}</td>
         <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.tcs|fcfa }}</td>
         <td style="text-align:right;font-family:monospace;font-size:.75rem;color:#dc2626">{{ b.irpp|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace;font-weight:900;color:#1a2332">{{ b.net_a_payer|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900;color:#0f3d36">{{ b.net_a_payer|fcfa }}</td>
         <td style="text-align:center" onclick="event.stopPropagation()">
           <span class="badge-{{ b.statut|lower }}">{{ b.statut }}</span>
         </td>
@@ -272,7 +272,7 @@
 
   <!-- Barre flottante de sélection -->
   <div id="barre-flottante" style="display:none;position:sticky;bottom:0;left:0;right:0;
-    background:#1a2332;color:white;padding:.75rem 1.25rem;
+    background:#0f3d36;color:white;padding:.75rem 1.25rem;
     display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem;
     border-top:2px solid #374151;z-index:10">
     <div style="display:flex;align-items:center;gap:.75rem">
@@ -316,7 +316,7 @@
     {% for num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
       {% if num %}
         {% if num == pagination.page %}
-        <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+        <span style="padding:.3rem .75rem;border:2px solid #0f3d36;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#0f3d36">{{ num }}</span>
         {% else %}
         <a href="{{ pagination_base }}page={{ num }}"
            style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>
@@ -354,12 +354,12 @@
         Bulletins VALIDÉS uniquement
       </div>
       <a href="/export/sage/journal/{{ periode_sel.id }}"
-        style="display:block;padding:.65rem 1rem;font-size:.82rem;color:#1a2332;text-decoration:none">
+        style="display:block;padding:.65rem 1rem;font-size:.82rem;color:#0f3d36;text-decoration:none">
         📄 Journal de paie <span style="font-size:.7rem;color:#7c3aed;font-weight:700">.txt</span>
         <span style="display:block;font-size:.68rem;color:#6b7280;margin-top:.1rem">Import direct Sage 100 Comptabilité</span>
       </a>
       <a href="/export/sage/livre/{{ periode_sel.id }}"
-        style="display:block;padding:.65rem 1rem;font-size:.82rem;color:#1a2332;text-decoration:none;border-top:1px solid #f3f4f6">
+        style="display:block;padding:.65rem 1rem;font-size:.82rem;color:#0f3d36;text-decoration:none;border-top:1px solid #f3f4f6">
         📋 Livre de paie <span style="font-size:.7rem;color:#7c3aed;font-weight:700">.csv</span>
         <span style="display:block;font-size:.68rem;color:#6b7280;margin-top:.1rem">Détail par salarié — compatible Excel</span>
       </a>
@@ -396,7 +396,7 @@
   <div id="modal-email-rapport"
     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center">
     <div style="background:white;border-radius:1rem;padding:1.5rem;max-width:420px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.2)">
-      <h3 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 .75rem">Envoyer le rapport par email</h3>
+      <h3 style="font-size:1rem;font-weight:700;color:#0f3d36;margin:0 0 .75rem">Envoyer le rapport par email</h3>
       <p style="font-size:.8rem;color:#6b7280;margin:0 0 .75rem">
         Le rapport sera envoyé aux administrateurs et directeurs du compte.
       </p>

@@ -60,7 +60,7 @@
 <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.875rem;margin-bottom:1.75rem">
   {% set taux_g = ((totaux.presences / (totaux.presences + totaux.absences) * 100)|int) if (totaux.presences + totaux.absences) > 0 else 0 %}
   {% for label, val, color, icon in [
-    ("Effectif total",       totaux.effectif,                         "#1a2332", "👷"),
+    ("Effectif total",       totaux.effectif,                         "#0f3d36", "👷"),
     ("Présences",            totaux.presences,                        "#065f46", "✅"),
     ("Absences",             totaux.absences,                         "#991b1b", "❌"),
     ("Masse journaliers",    totaux.masse_jour|int|fcfa,               "#92400e", "🦺"),
@@ -80,7 +80,7 @@
 <div class="card overflow-hidden mb-6" id="site-{{ s.id }}">
 
   <!-- En-tête site -->
-  <div style="background:#1a2332;color:white;padding:1rem 1.25rem">
+  <div style="background:#0f3d36;color:white;padding:1rem 1.25rem">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
       <div>
         <div style="font-size:1rem;font-weight:900">🏗️ {{ s.nom }}{% if s.ville %} <span style="opacity:.6;font-size:.875rem">· {{ s.ville }}</span>{% endif %}</div>

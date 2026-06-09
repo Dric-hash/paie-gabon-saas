@@ -4,7 +4,7 @@
 
 <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
   <a href="/salaries/{{ salarie.id }}/contrats" style="color:#6b7280;font-size:.875rem;text-decoration:none">← Contrats</a>
-  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">
+  <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">
     {{ '✏️ Modifier le contrat' if contrat else '+ Nouveau contrat' }}
   </h1>
 </div>
@@ -93,7 +93,7 @@
       </div>
 
       <button type="submit"
-        style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+        style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
         💾 {{ 'Enregistrer les modifications' if contrat else 'Créer le contrat' }}
       </button>
     </form>
@@ -151,9 +151,9 @@ function updateBadges() {
   document.querySelectorAll('.radio-contrat').forEach(r => {
     const badge = r.parentElement.querySelector('.badge-contrat');
     if (r.checked) {
-      badge.style.background = '#1a2332';
+      badge.style.background = '#0f3d36';
       badge.style.color = 'white';
-      badge.style.borderColor = '#1a2332';
+      badge.style.borderColor = '#0f3d36';
     } else {
       badge.style.background = 'white';
       badge.style.color = '#374151';

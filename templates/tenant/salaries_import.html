@@ -25,7 +25,7 @@
       <div id="drop-zone"
         style="border:2px dashed #e5e7eb;border-radius:1rem;padding:2.5rem;text-align:center;cursor:pointer;transition:.2s;margin-bottom:1.25rem"
         onclick="document.getElementById('fichier').click()"
-        ondragover="event.preventDefault();this.style.borderColor='#1a2332';this.style.background='#f0f9ff'"
+        ondragover="event.preventDefault();this.style.borderColor='#0f3d36';this.style.background='#f0f9ff'"
         ondragleave="this.style.borderColor='#e5e7eb';this.style.background=''"
         ondrop="dropFichier(event)">
         <div style="font-size:2.5rem;margin-bottom:.75rem">📊</div>
@@ -47,7 +47,7 @@
           <label style="flex:1;cursor:pointer">
             <input type="radio" name="mode" value="ignorer" checked style="display:none" class="radio-mode">
             <div class="mode-btn" data-val="ignorer"
-              style="padding:.75rem;border:2px solid #1a2332;border-radius:.875rem;text-align:center;background:#eff6ff">
+              style="padding:.75rem;border:2px solid #0f3d36;border-radius:.875rem;text-align:center;background:#eff6ff">
               <div style="font-size:1rem;margin-bottom:.25rem">⏭️</div>
               <div style="font-size:.8rem;font-weight:700;color:#1e40af">Ignorer</div>
               <div style="font-size:.7rem;color:#6b7280;margin-top:.15rem">Conserver l'existant</div>
@@ -67,7 +67,7 @@
 
       <!-- Bouton -->
       <button type="submit" id="btn-import"
-        style="width:100%;background:#1a2332;color:white;padding:.875rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
+        style="width:100%;background:#0f3d36;color:white;padding:.875rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
         <span>📥</span><span>Lancer l'import</span>
       </button>
     </form>
@@ -169,7 +169,7 @@ document.querySelectorAll('.radio-mode').forEach(radio => {
   radio.addEventListener('change', () => {
     document.querySelectorAll('.mode-btn').forEach(btn => {
       const selected = btn.dataset.val === radio.value;
-      btn.style.borderColor = selected ? '#1a2332' : '#e5e7eb';
+      btn.style.borderColor = selected ? '#0f3d36' : '#e5e7eb';
       btn.style.background  = selected ? '#eff6ff' : '#f9fafb';
       btn.querySelector('div:nth-child(2)').style.color = selected ? '#1e40af' : '#374151';
     });

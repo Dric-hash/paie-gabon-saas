@@ -3,7 +3,7 @@
 {% block content %}
 
 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
-  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">📅 Planning — {{ mois_nom }} {{ annee }}</h1>
+  <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">📅 Planning — {{ mois_nom }} {{ annee }}</h1>
   <div style="display:flex;gap:.5rem;align-items:center">
     {% set mois_prev = mois - 1 if mois > 1 else 12 %}
     {% set annee_prev = annee if mois > 1 else annee - 1 %}
@@ -14,7 +14,7 @@
     <a href="?mois={{ mois_next }}&annee={{ annee_next }}"
       style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">Suiv. →</a>
     <a href="/conges/bilan" style="background:#f3f4f6;color:#374151;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;text-decoration:none">📊 Bilan</a>
-    <a href="/conges" style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;text-decoration:none">← Congés</a>
+    <a href="/conges" style="background:#0f3d36;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;text-decoration:none">← Congés</a>
   </div>
 </div>
 
@@ -22,7 +22,7 @@
 <!-- Liste des congés du mois -->
 <div class="card" style="overflow:hidden;margin-bottom:1.25rem">
   <div style="padding:.75rem 1rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
-    <h2 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0">Absences en {{ mois_nom }}</h2>
+    <h2 style="font-size:.9rem;font-weight:700;color:#0f3d36;margin:0">Absences en {{ mois_nom }}</h2>
     <span style="font-size:.75rem;color:#6b7280">{{ planning|length }} absence(s)</span>
   </div>
   <div style="overflow-x:auto">
@@ -40,7 +40,7 @@
       <tbody>
         {% for p in planning %}
         <tr style="border-bottom:1px solid #f3f4f6">
-          <td style="padding:.5rem 1rem;font-weight:600;color:#1a2332">{{ p.salarie_nom }}</td>
+          <td style="padding:.5rem 1rem;font-weight:600;color:#0f3d36">{{ p.salarie_nom }}</td>
           <td style="padding:.5rem .75rem;text-align:center;color:#374151">
             {{ p.date_depart | replace('-', '/') }}
           </td>
@@ -70,7 +70,7 @@
 
 <!-- Visualisation calendrier -->
 <div class="card p-5">
-  <h2 style="font-size:.9rem;font-weight:700;color:#1a2332;margin:0 0 1rem">Calendrier {{ mois_nom }} {{ annee }}</h2>
+  <h2 style="font-size:.9rem;font-weight:700;color:#0f3d36;margin:0 0 1rem">Calendrier {{ mois_nom }} {{ annee }}</h2>
   <div style="overflow-x:auto">
     <table style="width:100%;border-collapse:collapse;font-size:.72rem;min-width:700px">
       <thead>

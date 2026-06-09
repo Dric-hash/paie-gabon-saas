@@ -4,7 +4,7 @@
 
 <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
   <a href="/salaries/{{ salarie.id }}" style="color:#6b7280;font-size:.875rem;text-decoration:none">← {{ salarie.nom_complet }}</a>
-  <h1 style="font-size:1.5rem;font-weight:900;color:#1a2332;margin:0">💼 Solde de tout compte</h1>
+  <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">💼 Solde de tout compte</h1>
 </div>
 
 <!-- Sélecteur date cessation -->
@@ -16,7 +16,7 @@
         value="{{ date_cessation.strftime('%Y-%m-%d') }}"
         style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.875rem"/>
     </div>
-    <button type="submit" style="background:#1a2332;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+    <button type="submit" style="background:#0f3d36;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
       Recalculer
     </button>
   </form>
@@ -27,7 +27,7 @@
 
   <!-- Détail calcul congés -->
   <div class="card p-5">
-    <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">🏖️ Indemnité compensatrice de congés</h2>
+    <h2 style="font-size:1rem;font-weight:700;color:#0f3d36;margin:0 0 1rem">🏖️ Indemnité compensatrice de congés</h2>
     {% macro ligne(label, val, color='#374151', bold=False) %}
     <div style="display:flex;justify-content:space-between;padding:.4rem 0;border-bottom:1px solid #f3f4f6;font-size:.875rem">
       <span style="color:#6b7280">{{ label }}</span>
@@ -46,11 +46,11 @@
     {{ ligne("Nb bulletins analysés", solde.nb_bulletins|string) }}
     {{ ligne("Moy. 12 derniers bruts", solde.moyenne_12_mois|int|fcfa) }}
     {{ ligne("Dernier salaire brut",   solde.dernier_brut|int|fcfa) }}
-    {{ ligne("Base retenue (max)",     solde.base_calcul|int|fcfa, '#1a2332', True) }}
+    {{ ligne("Base retenue (max)",     solde.base_calcul|int|fcfa, '#0f3d36', True) }}
     {{ ligne("Base journalière (÷30)", solde.base_journaliere|round(2)|string + " FCFA") }}
-    <div style="padding:.75rem 0;border-top:2px solid #1a2332;margin-top:.5rem">
+    <div style="padding:.75rem 0;border-top:2px solid #0f3d36;margin-top:.5rem">
       <div style="display:flex;justify-content:space-between;font-size:1rem">
-        <span style="font-weight:700;color:#1a2332">Indemnité congés</span>
+        <span style="font-weight:700;color:#0f3d36">Indemnité congés</span>
         <span style="font-weight:900;font-size:1.1rem;color:#059669">{{ solde.indemnite_conges|int|fcfa }}</span>
       </div>
       <div style="font-size:.72rem;color:#9ca3af;margin-top:.25rem">
@@ -62,7 +62,7 @@
   <!-- Indemnité licenciement + total -->
   <div>
     <div class="card p-5" style="margin-bottom:1rem">
-      <h2 style="font-size:1rem;font-weight:700;color:#1a2332;margin:0 0 1rem">⚖️ Indemnité de services rendus</h2>
+      <h2 style="font-size:1rem;font-weight:700;color:#0f3d36;margin:0 0 1rem">⚖️ Indemnité de services rendus</h2>
       <p style="font-size:.78rem;color:#6b7280;margin:0 0 .75rem">Convention BTP Gabon Art. A.32 — applicable après 2 ans de présence</p>
       {% if solde.anciennete_annees >= 2 %}
       <div style="display:flex;justify-content:space-between;font-size:.875rem;padding:.4rem 0;border-bottom:1px solid #f3f4f6">
@@ -78,7 +78,7 @@
         <span>{{ solde.moyenne_12_mois|int|fcfa }}</span>
       </div>
       <div style="display:flex;justify-content:space-between;padding:.625rem 0;margin-top:.25rem;font-size:1rem">
-        <span style="font-weight:700;color:#1a2332">Indemnité services rendus</span>
+        <span style="font-weight:700;color:#0f3d36">Indemnité services rendus</span>
         <span style="font-weight:900;color:#f59e0b">{{ solde.indem_licenciement|int|fcfa }}</span>
       </div>
       {% else %}
@@ -89,7 +89,7 @@
     </div>
 
     <!-- Total à payer -->
-    <div style="background:#1a2332;border-radius:1rem;padding:1.25rem;color:white">
+    <div style="background:#0f3d36;border-radius:1rem;padding:1.25rem;color:white">
       <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.5rem">TOTAL À PAYER</div>
       <div style="font-size:2rem;font-weight:900;color:#34d399">{{ solde.total_a_payer|int|fcfa }}</div>
       <div style="font-size:.75rem;color:rgba(255,255,255,.5);margin-top:.5rem">

@@ -9,7 +9,7 @@
 <div class="card overflow-hidden mt-5">
 
   <!-- En-tête -->
-  <div style="background:#1a2332;color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
+  <div style="background:#0f3d36;color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
     <div>
       <span style="font-size:.875rem;font-weight:900">📅 Historique des pointages</span>
       <span style="font-size:.75rem;opacity:.65;margin-left:.625rem">
@@ -21,7 +21,7 @@
       {% for n, label in [(7,"7j"),(14,"14j"),(30,"30j"),(60,"60j"),(90,"90j")] %}
       <a href="{{ url_base }}?nb_jours={{ n }}"
          style="font-size:.75rem;font-weight:700;padding:.275rem .625rem;border-radius:.5rem;text-decoration:none;
-         {{ 'background:white;color:#1a2332' if nb_jours == n else 'background:rgba(255,255,255,.15);color:white' }}">
+         {{ 'background:white;color:#0f3d36' if nb_jours == n else 'background:rgba(255,255,255,.15);color:white' }}">
         {{ label }}
       </a>
       {% endfor %}
@@ -91,7 +91,7 @@
       <tr style="border-bottom:1px solid #f9fafb;
         {% if p.absent %}background:#fff5f5;{% elif loop.index0 % 2 == 0 %}background:#fafafa;{% endif %}">
         <td style="padding:.5rem .875rem">
-          <div style="font-weight:700;font-size:.875rem;color:#1a2332">
+          <div style="font-weight:700;font-size:.875rem;color:#0f3d36">
             {{ jours_fr[p.date_pointage.weekday()] }} {{ p.date_pointage.strftime('%d/%m/%Y') }}
           </div>
           {% if p.site %}
@@ -131,7 +131,7 @@
         {% endif %}
         <!-- Total heures -->
         <td style="text-align:center;font-family:monospace;font-size:.825rem;font-weight:700;
-          color:{% if p.present %}#1a2332{% else %}#e5e7eb{% endif %}">
+          color:{% if p.present %}#0f3d36{% else %}#e5e7eb{% endif %}">
           {% if p.present %}
             {{ (p.heures_normales|float + h_sup_total)|round(1) }}h
           {% else %}—{% endif %}
@@ -218,7 +218,7 @@
     {% for num in p.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
       {% if num %}
         {% if num == p.page %}
-        <span style="padding:.3rem .75rem;border:2px solid #1a2332;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#1a2332">{{ num }}</span>
+        <span style="padding:.3rem .75rem;border:2px solid #0f3d36;border-radius:.5rem;font-size:.75rem;font-weight:900;color:white;background:#0f3d36">{{ num }}</span>
         {% else %}
         <a href="?{{ request.query_string.decode().split('&')|reject('startswith','page=')|list|join('&') }}{% if request.query_string and not request.query_string.decode().startswith('page=') %}&{% endif %}page={{ num }}"
            style="padding:.3rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.75rem;font-weight:700;color:#374151;text-decoration:none;background:white">{{ num }}</a>

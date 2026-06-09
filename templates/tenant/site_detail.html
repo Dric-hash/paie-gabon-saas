@@ -35,7 +35,7 @@
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1rem">
 
   <!-- Effectif -->
-  <div style="background:linear-gradient(135deg,#1a2332,#374151);border-radius:1rem;padding:1.25rem;color:white;position:relative;overflow:hidden">
+  <div style="background:linear-gradient(135deg,#0f3d36,#374151);border-radius:1rem;padding:1.25rem;color:white;position:relative;overflow:hidden">
     <div style="font-size:.65rem;font-weight:700;opacity:.6;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.375rem">👥 Effectif</div>
     <div style="font-size:2rem;font-weight:900;line-height:1">{{ (nb_sal_site + nb_jour_site) }}</div>
     <div style="font-size:.7rem;opacity:.7;margin-top:.375rem">
@@ -237,7 +237,7 @@
 <!-- ══════════════════════════════════════════════════════════════════════ -->
 <div class="card overflow-hidden mb-5">
   <!-- En-tête navigation -->
-  <div style="background:#1a2332;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
+  <div style="background:#0f3d36;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.625rem">
     <div style="display:flex;align-items:center;gap:.75rem">
       <span style="font-size:1rem;font-weight:900;color:white">📋 Pointage rapide</span>
       <span style="font-size:.8rem;color:rgba(255,255,255,.6)">{{ site.nom }}</span>
@@ -477,7 +477,7 @@
         {{ (salaries_site|length + journaliers_site|length) }} travailleur(s) sur ce site
       </span>
       <button type="submit" id="btn-sauver-ptg"
-        style="background:#1a2332;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+        style="background:#0f3d36;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
         💾 Sauvegarder le pointage
       </button>
     </div>
@@ -680,7 +680,7 @@
 
         <button type="submit"
           onclick="return document.querySelectorAll('.cb-sal:checked,.cb-jour:checked').length > 0 || (alert('Sélectionnez au moins un travailleur') || false)"
-          style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
+          style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
           ✅ Affecter la sélection
         </button>
       </form>

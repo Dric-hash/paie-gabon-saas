@@ -50,7 +50,7 @@
   {% for s in sites %}
   <div class="card overflow-hidden {{ '' if s.actif else 'opacity-60' }}">
     <!-- En-tête coloré -->
-    <div style="background:{% if s.actif %}#1a2332{% else %}#9ca3af{% endif %};padding:1rem 1.25rem;color:white">
+    <div style="background:{% if s.actif %}#0f3d36{% else %}#9ca3af{% endif %};padding:1rem 1.25rem;color:white">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
         <span style="font-size:.7rem;font-weight:700;opacity:.6;text-transform:uppercase;letter-spacing:.05em">
           {{ s.code or '—' }}
@@ -69,7 +69,7 @@
     <div style="padding:1rem 1.25rem">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.875rem">
         <div style="background:#f9fafb;border-radius:.625rem;padding:.5rem .75rem;text-align:center">
-          <div style="font-size:1.5rem;font-weight:900;color:#1a2332">{{ s.nb_actifs }}</div>
+          <div style="font-size:1.5rem;font-weight:900;color:#0f3d36">{{ s.nb_actifs }}</div>
           <div style="font-size:.65rem;color:#9ca3af;font-weight:600;text-transform:uppercase">Affectés</div>
         </div>
         <div style="background:#f9fafb;border-radius:.625rem;padding:.5rem .75rem;text-align:center">
@@ -86,7 +86,7 @@
 
       <div style="display:flex;gap:.5rem">
         <a href="/sites/{{ s.id }}"
-           style="flex:1;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-align:center;text-decoration:none">
+           style="flex:1;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-align:center;text-decoration:none">
           👥 Gérer les affectations
         </a>
         <a href="/sites/{{ s.id }}/modifier"

@@ -52,8 +52,8 @@
               <div onclick="selectLang('fr')"
                 id="lbl-fr"
                 style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
-                       border-color:{{ '#1a2332' if tenant.langue == 'fr' or not tenant.langue else '#e5e7eb' }};
-                       background:{{ '#1a2332' if tenant.langue == 'fr' or not tenant.langue else 'white' }};
+                       border-color:{{ '#0f3d36' if tenant.langue == 'fr' or not tenant.langue else '#e5e7eb' }};
+                       background:{{ '#0f3d36' if tenant.langue == 'fr' or not tenant.langue else 'white' }};
                        color:{{ 'white' if tenant.langue == 'fr' or not tenant.langue else '#374151' }}">
                 🇫🇷 Français
               </div>
@@ -63,8 +63,8 @@
               <div onclick="selectLang('en')"
                 id="lbl-en"
                 style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
-                       border-color:{{ '#1a2332' if tenant.langue == 'en' else '#e5e7eb' }};
-                       background:{{ '#1a2332' if tenant.langue == 'en' else 'white' }};
+                       border-color:{{ '#0f3d36' if tenant.langue == 'en' else '#e5e7eb' }};
+                       background:{{ '#0f3d36' if tenant.langue == 'en' else 'white' }};
                        color:{{ 'white' if tenant.langue == 'en' else '#374151' }}">
                 🇬🇧 English
               </div>
@@ -77,14 +77,14 @@
               <div onclick="selectLang('ar')"
                 id="lbl-ar"
                 style="text-align:center;padding:.625rem;border-radius:.75rem;font-size:.875rem;font-weight:700;cursor:pointer;border:2px solid;
-                       border-color:{{ '#1a2332' if tenant.langue == 'ar' else '#e5e7eb' }};
-                       background:{{ '#1a2332' if tenant.langue == 'ar' else 'white' }};
+                       border-color:{{ '#0f3d36' if tenant.langue == 'ar' else '#e5e7eb' }};
+                       background:{{ '#0f3d36' if tenant.langue == 'ar' else 'white' }};
                        color:{{ 'white' if tenant.langue == 'ar' else '#374151' }}">
                 🇸🇦 عربي
               </div>
             </label>
 
-        <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
+        <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;margin-top:.5rem">
           💾 {{ T.parametres.save_changes }}
         </button>
       </form>
@@ -95,8 +95,8 @@
       ['fr','en','ar'].forEach(l => {
         document.getElementById('lang-' + l).checked = (l === lang);
         const lbl = document.getElementById('lbl-' + l);
-        lbl.style.borderColor = (l === lang) ? '#1a2332' : '#e5e7eb';
-        lbl.style.background  = (l === lang) ? '#1a2332' : 'white';
+        lbl.style.borderColor = (l === lang) ? '#0f3d36' : '#e5e7eb';
+        lbl.style.background  = (l === lang) ? '#0f3d36' : 'white';
         lbl.style.color       = (l === lang) ? 'white'   : '#374151';
       });
     }
@@ -129,7 +129,7 @@
           <input type="hidden" name="telephone" value="{{ tenant.telephone or '' }}"/>
           <input type="hidden" name="ville" value="{{ tenant.ville or '' }}"/>
           <input type="hidden" name="region" value="{{ tenant.region or '' }}"/>
-          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
             💾 Enregistrer
           </button>
         </form>
@@ -163,7 +163,7 @@
           <input type="hidden" name="nif" value="{{ tenant.nif or '' }}"/>
           <input type="hidden" name="numero_cnss" value="{{ tenant.numero_cnss or '' }}"/>
           <input type="hidden" name="numero_cnamgs" value="{{ tenant.numero_cnamgs or '' }}"/>
-          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
             💾 Enregistrer
           </button>
         </form>
@@ -207,7 +207,7 @@
           <div style="font-size:.7rem;color:#9ca3af;margin-bottom:.75rem">
             Formats : PNG, JPG, SVG · Maximum 500 Ko · Recommandé : fond transparent (PNG)
           </div>
-          <button type="submit" style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
             📤 Uploader le logo
           </button>
         </form>
@@ -230,7 +230,7 @@
   </div>
 
   <!-- Aperçu bulletin -->
-  <div class="card p-5 mt-5" style="background:linear-gradient(135deg,#1a2332,#374151);color:white">
+  <div class="card p-5 mt-5" style="background:linear-gradient(135deg,#0f3d36,#374151);color:white">
     <div class="text-xs font-bold mb-3" style="opacity:.6;text-transform:uppercase;letter-spacing:.05em">Aperçu — En-tête bulletin de paie</div>
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <div>
@@ -262,7 +262,7 @@
         {% if r.taux_salarie %}
         <div style="background:#fafafa;border-radius:.75rem;padding:.75rem 1rem;display:flex;justify-content:space-between;align-items:center">
           <div>
-            <span style="background:#1a2332;color:white;font-size:.7rem;font-weight:900;padding:.125rem .5rem;border-radius:.375rem">{{ r.code }}</span>
+            <span style="background:#0f3d36;color:white;font-size:.7rem;font-weight:900;padding:.125rem .5rem;border-radius:.375rem">{{ r.code }}</span>
             <div style="font-size:.75rem;color:#6b7280;margin-top:.25rem">{{ r.libelle }}</div>
           </div>
           <div style="text-align:right">
@@ -321,8 +321,8 @@
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem">
           {% for nom, titre, desc, gradient in [
-            ('classique',   'Classique',   'Mise en page traditionnelle, compatible tous supports', 'background:#1a2332'),
-            ('moderne',     'Moderne',     'Design contemporain avec bandes colorées', 'background:linear-gradient(135deg,#1a2332,#2563eb)'),
+            ('classique',   'Classique',   'Mise en page traditionnelle, compatible tous supports', 'background:#0f3d36'),
+            ('moderne',     'Moderne',     'Design contemporain avec bandes colorées', 'background:linear-gradient(135deg,#0f3d36,#2563eb)'),
             ('minimaliste', 'Minimaliste', 'Épuré et sobre, idéal pour impression économique', 'background:white;border:1px solid #e5e7eb'),
           ] %}
           <label style="cursor:pointer">
@@ -344,7 +344,7 @@
           {% endfor %}
         </div>
         <div style="display:flex;align-items:center;gap:1rem">
-          <button type="submit" style="background:#1a2332;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+          <button type="submit" style="background:#0f3d36;color:white;padding:.625rem 1.5rem;border-radius:.875rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
             💾 Appliquer
           </button>
           <span style="font-size:.8rem;color:#6b7280">
@@ -386,7 +386,7 @@
       {% endif %}
     </div>
     <a href="/profil/changer-email"
-       style="background:#1a2332;color:white;padding:.625rem 1.25rem;border-radius:.875rem;font-weight:700;font-size:.8rem;text-decoration:none;white-space:nowrap">
+       style="background:#0f3d36;color:white;padding:.625rem 1.25rem;border-radius:.875rem;font-weight:700;font-size:.8rem;text-decoration:none;white-space:nowrap">
       📧 Changer mon email
     </a>
   </div>
@@ -408,7 +408,7 @@
       </div>
       {% for u in users %}
       <div style="display:flex;align-items:center;gap:.75rem;padding:.75rem 1.25rem;border-bottom:1px solid #f9fafb">
-        <div style="width:2.25rem;height:2.25rem;border-radius:50%;background:#1a2332;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
+        <div style="width:2.25rem;height:2.25rem;border-radius:50%;background:#0f3d36;color:white;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;flex-shrink:0">
           {{ u.prenom[0] }}{{ u.nom[0] }}
         </div>
         <div style="flex:1;min-width:0">
@@ -523,7 +523,7 @@
         <tbody>
           {% for c in categories %}
           <tr>
-            <td><span style="background:#1a2332;color:white;font-size:.75rem;font-weight:900;padding:.125rem .625rem;border-radius:.375rem">{{ c.code }}</span></td>
+            <td><span style="background:#0f3d36;color:white;font-size:.75rem;font-weight:900;padding:.125rem .625rem;border-radius:.375rem">{{ c.code }}</span></td>
             <td style="font-weight:600">{{ c.libelle }}</td>
             <td style="text-align:right;font-family:monospace;color:#6b7280">{{ c.salaire_minimum|fcfa if c.salaire_minimum else '—' }}</td>
           </tr>
@@ -538,19 +538,19 @@
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Grille salariale Gabon</h2>
       <div style="font-size:.875rem;color:#6b7280;space-y:.5rem">
         <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
-          <span>SMIG Gabon</span><strong style="color:#1a2332">150 000 FCFA/mois</strong>
+          <span>SMIG Gabon</span><strong style="color:#0f3d36">150 000 FCFA/mois</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
-          <span>Heures sup +10%</span><strong style="color:#1a2332">Nuit semaine</strong>
+          <span>Heures sup +10%</span><strong style="color:#0f3d36">Nuit semaine</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
-          <span>Heures sup +30%</span><strong style="color:#1a2332">Dimanche</strong>
+          <span>Heures sup +30%</span><strong style="color:#0f3d36">Dimanche</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-bottom:1px solid #f3f4f6">
-          <span>Heures sup +40%</span><strong style="color:#1a2332">Nuit dimanche</strong>
+          <span>Heures sup +40%</span><strong style="color:#0f3d36">Nuit dimanche</strong>
         </div>
         <div style="display:flex;justify-content:space-between;padding:.5rem 0">
-          <span>Heures sup +70%</span><strong style="color:#1a2332">Jours fériés</strong>
+          <span>Heures sup +70%</span><strong style="color:#0f3d36">Jours fériés</strong>
         </div>
       </div>
       <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:.75rem;padding:.75rem;margin-top:1rem;font-size:.75rem;color:#92400e">
@@ -583,7 +583,7 @@
     <div class="card p-6">
       <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Votre abonnement actuel</h2>
       {% if tenant.plan %}
-      <div style="background:#1a2332;border-radius:1rem;padding:1.5rem;color:white;margin-bottom:1.25rem">
+      <div style="background:#0f3d36;border-radius:1rem;padding:1.5rem;color:white;margin-bottom:1.25rem">
         <div style="font-size:.75rem;font-weight:700;color:rgba(255,255,255,.5);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.25rem">Plan actif</div>
         <div style="font-size:1.75rem;font-weight:900">{{ tenant.plan.nom }}</div>
         <div style="font-size:2rem;font-weight:900;color:#fbbf24;margin:.25rem 0">
@@ -724,7 +724,7 @@
 
           <button type="submit" id="btn-demande" disabled
             onclick="return confirm('Envoyer la demande de changement de plan ?')"
-            style="width:100%;background:#1a2332;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;opacity:.4;transition:opacity .2s">
+            style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer;opacity:.4;transition:opacity .2s">
             📨 Envoyer la demande
           </button>
         </form>
@@ -765,7 +765,7 @@
         <div style="font-size:.75rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.625rem">Besoin d'aide ?</div>
         <div style="display:flex;gap:.5rem">
           <a href="mailto:contact@paiegalon.ga"
-            style="flex:1;display:flex;align-items:center;justify-content:center;gap:.375rem;background:#1a2332;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-decoration:none">
+            style="flex:1;display:flex;align-items:center;justify-content:center;gap:.375rem;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.75rem;text-decoration:none">
             📧 Email
           </a>
           <a href="https://wa.me/24177000000" target="_blank"
@@ -817,7 +817,7 @@ function showTab(id) {
   document.getElementById('content-' + id).style.display = 'block';
   // Activer le bouton sélectionné
   var btn = document.getElementById('tab-' + id);
-  btn.style.background = '#1a2332';
+  btn.style.background = '#0f3d36';
   btn.style.color = 'white';
 }
 // Activer le premier onglet par défaut

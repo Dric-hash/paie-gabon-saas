@@ -36,7 +36,7 @@
   {% for j in semaine %}
   <a href="/pointage?date={{ j.strftime('%Y-%m-%d') }}"
      style="flex:1;min-width:70px;text-align:center;padding:.625rem;border-radius:.75rem;text-decoration:none;font-size:.75rem;font-weight:700;
-     {% if j == date_sel %}background:#1a2332;color:white{% elif j.weekday()==5 %}background:#fef3c7;color:#92400e{% else %}background:#f9fafb;color:#374151{% endif %}">
+     {% if j == date_sel %}background:#0f3d36;color:white{% elif j.weekday()==5 %}background:#fef3c7;color:#92400e{% else %}background:#f9fafb;color:#374151{% endif %}">
     <div>{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][j.weekday()] }}</div>
     <div style="font-size:1rem;font-weight:900;margin-top:.125rem">{{ j.day }}</div>
   </a>
@@ -49,13 +49,13 @@
   <span style="font-size:.75rem;font-weight:700;color:#6b7280;white-space:nowrap">🏗️ Site :</span>
   <a href="/pointage?date={{ date_sel.strftime('%Y-%m-%d') }}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {% if not site_filtre %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
+     {% if not site_filtre %}background:#0f3d36;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
     Tous ({{ (salaries|length + journaliers|length) if not site_filtre else '' }})
   </a>
   {% for s in sites %}
   <a href="/pointage?date={{ date_sel.strftime('%Y-%m-%d') }}&site_id={{ s.id }}"
      style="font-size:.75rem;font-weight:700;padding:.3rem .75rem;border-radius:.625rem;text-decoration:none;
-     {% if site_filtre and site_filtre.id == s.id %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
+     {% if site_filtre and site_filtre.id == s.id %}background:#0f3d36;color:white{% else %}background:#f3f4f6;color:#374151{% endif %}">
     {{ s.nom }}{% if s.ville %} · {{ s.ville }}{% endif %}
     <span style="opacity:.6">({{ s.nb_actifs }})</span>
   </a>
@@ -85,7 +85,7 @@
     <div style="font-size:.75rem;color:#6b7280;font-weight:600">Absences</div>
   </div>
   <div class="card p-4 text-center">
-    <div style="font-size:1.75rem;font-weight:900;color:#1a2332">{{ salaries|length + journaliers|length }}</div>
+    <div style="font-size:1.75rem;font-weight:900;color:#0f3d36">{{ salaries|length + journaliers|length }}</div>
     <div style="font-size:.75rem;color:#6b7280;font-weight:600">Total effectif</div>
   </div>
 </div>
@@ -97,7 +97,7 @@
 
     <!-- ═══ MENSUELS ═══ -->
     <div class="card overflow-hidden">
-      <div style="background:#1a2332;color:white;padding:.75rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
+      <div style="background:#0f3d36;color:white;padding:.75rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
         <h2 style="font-size:.8rem;font-weight:900;text-transform:uppercase">👔 Salariés Mensuels ({{ salaries|length }})</h2>
         <div style="display:flex;gap:.5rem;align-items:center">
           <!-- ✅ Sélection rapide mensuels -->
@@ -124,7 +124,7 @@
               <input type="checkbox" name="sel_sal_{{ s.id }}" value="{{ s.id }}"
                 class="cb-sel-sal" checked
                 onchange="toggleBlocSal({{ s.id }}, this.checked)"
-                style="width:1rem;height:1rem;accent-color:#1a2332;cursor:pointer;flex-shrink:0"
+                style="width:1rem;height:1rem;accent-color:#0f3d36;cursor:pointer;flex-shrink:0"
                 title="Inclure dans le pointage"/>
               <div>
                 <div style="font-weight:700;font-size:.875rem">{{ s.nom }} {{ s.prenom }}</div>
@@ -312,7 +312,7 @@
 
   <div style="margin-top:1.5rem;text-align:center">
     <button type="submit" id="btn-sauver-pointage"
-      style="background:#1a2332;color:white;padding:1rem 3rem;border-radius:.75rem;font-weight:900;font-size:1rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.3)">
+      style="background:#0f3d36;color:white;padding:1rem 3rem;border-radius:.75rem;font-weight:900;font-size:1rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.3)">
       💾 Sauvegarder le pointage du {{ date_sel.strftime('%d/%m/%Y') }}
     </button>
   </div>

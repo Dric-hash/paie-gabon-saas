@@ -46,7 +46,7 @@
     <input type="text" id="search-worker"
       placeholder="Taper un nom, prénom ou profession..."
       style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem .75rem .75rem 2.75rem;font-size:.9rem"
-      onfocus="this.style.borderColor='#1a2332'" onblur="this.style.borderColor='#e5e7eb'"
+      onfocus="this.style.borderColor='#0f3d36'" onblur="this.style.borderColor='#e5e7eb'"
       oninput="filtrerWorkers(this.value)"
       autocomplete="off"/>
   </div>
@@ -55,12 +55,12 @@
   <div style="display:flex;gap:.375rem;margin-bottom:.875rem" id="tabs-type">
     <button onclick="setTab('sal')" id="tab-sal"
       style="font-size:.8rem;font-weight:700;padding:.375rem 1rem;border-radius:.625rem;border:none;cursor:pointer;
-      {{ 'background:#1a2332;color:white' if type_w == 'sal' else 'background:#f3f4f6;color:#374151' }}">
+      {{ 'background:#0f3d36;color:white' if type_w == 'sal' else 'background:#f3f4f6;color:#374151' }}">
       👤 Salariés ({{ salaries|length }})
     </button>
     <button onclick="setTab('jour')" id="tab-jour"
       style="font-size:.8rem;font-weight:700;padding:.375rem 1rem;border-radius:.625rem;border:none;cursor:pointer;
-      {{ 'background:#1a2332;color:white' if type_w == 'jour' else 'background:#f3f4f6;color:#374151' }}">
+      {{ 'background:#0f3d36;color:white' if type_w == 'jour' else 'background:#f3f4f6;color:#374151' }}">
       🦺 Journaliers ({{ journaliers|length }})
     </button>
   </div>
@@ -73,7 +73,7 @@
          class="worker-item"
          data-search="{{ s.nom_complet|lower }} {{ s.emploi|lower if s.emploi else '' }}"
          style="display:flex;align-items:center;gap:.75rem;padding:.625rem 1rem;text-decoration:none;border-bottom:1px solid #f9fafb;
-         {% if worker and type_w=='sal' and worker.id==s.id %}background:#eff6ff;border-left:3px solid #1a2332;{% endif %}"
+         {% if worker and type_w=='sal' and worker.id==s.id %}background:#eff6ff;border-left:3px solid #0f3d36;{% endif %}"
          onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
         <div style="width:34px;height:34px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:900;color:#1e40af;flex-shrink:0">
           {{ s.nom[0] }}{{ s.prenom[0] if s.prenom else '' }}
@@ -85,7 +85,7 @@
         <!-- Badge pointage du jour -->
         {% set pt_j = none %}
         <span style="font-size:.7rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px;flex-shrink:0;
-          {% if worker and type_w=='sal' and worker.id==s.id %}background:#1a2332;color:white{% else %}background:#f3f4f6;color:#9ca3af{% endif %}">
+          {% if worker and type_w=='sal' and worker.id==s.id %}background:#0f3d36;color:white{% else %}background:#f3f4f6;color:#9ca3af{% endif %}">
           {% if worker and type_w=='sal' and worker.id==s.id %}📍 Sélectionné{% else %}→{% endif %}
         </span>
       </a>
@@ -125,7 +125,7 @@
 <div class="card overflow-hidden">
 
   <!-- En-tête travailleur -->
-  <div style="background:{% if type_w=='sal' %}linear-gradient(135deg,#1a2332,#374151){% else %}linear-gradient(135deg,#92400e,#d97706){% endif %};color:white;padding:1.25rem">
+  <div style="background:{% if type_w=='sal' %}linear-gradient(135deg,#0f3d36,#374151){% else %}linear-gradient(135deg,#92400e,#d97706){% endif %};color:white;padding:1.25rem">
     <div style="display:flex;align-items:center;gap:1rem">
       <div style="width:3rem;height:3rem;border-radius:.75rem;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.25rem;font-weight:900;flex-shrink:0">
         {{ worker.nom[0] }}{{ worker.prenom[0] if worker.prenom else '' }}
@@ -219,7 +219,7 @@
         <!-- Onglet mode saisie -->
         <div style="display:flex;gap:.375rem;margin-bottom:.875rem">
           <button type="button" id="btn-mode-horaires" onclick="setMode('horaires')"
-            style="font-size:.75rem;font-weight:700;padding:.375rem .875rem;border-radius:.625rem;border:none;cursor:pointer;background:#1a2332;color:white">
+            style="font-size:.75rem;font-weight:700;padding:.375rem .875rem;border-radius:.625rem;border:none;cursor:pointer;background:#0f3d36;color:white">
             🕐 Horaires entrée/sortie
           </button>
           <button type="button" id="btn-mode-manuel" onclick="setMode('manuel')"
@@ -395,7 +395,7 @@
         {% endif %}
       </div>
       <button type="submit" id="btn-save-indiv"
-        style="background:#1a2332;color:white;padding:.75rem 2rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.2)">
+        style="background:#0f3d36;color:white;padding:.75rem 2rem;border-radius:.875rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.2)">
         💾 Enregistrer le pointage
       </button>
     </div>
@@ -413,7 +413,7 @@
 <div class="card overflow-hidden mt-5">
 
   <!-- En-tête -->
-  <div style="background:#1a2332;color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+  <div style="background:#0f3d36;color:white;padding:.875rem 1.25rem;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
     <div>
       <span style="font-size:.875rem;font-weight:900">📅 Historique des 30 derniers jours</span>
       <span style="font-size:.75rem;opacity:.6;margin-left:.625rem">{{ worker.nom_complet }}</span>
@@ -472,9 +472,9 @@
       {% set is_today = p.date_pointage == date_sel %}
       <tr style="border-bottom:1px solid #f9fafb;{% if p.absent %}background:#fff5f5;{% elif is_today %}background:#eff6ff;{% elif loop.index0 % 2 == 0 %}background:#fafafa;{% endif %}">
         <td style="padding:.5rem .875rem">
-          <div style="font-weight:{% if is_today %}900{% else %}600{% endif %};font-size:.825rem;color:{% if is_today %}#1a2332{% else %}#374151{% endif %}">
+          <div style="font-weight:{% if is_today %}900{% else %}600{% endif %};font-size:.825rem;color:{% if is_today %}#0f3d36{% else %}#374151{% endif %}">
             {{ jours_fr[p.date_pointage.weekday()] }} {{ p.date_pointage.strftime('%d/%m/%Y') }}
-            {% if is_today %}<span style="font-size:.65rem;background:#1a2332;color:white;padding:.1rem .4rem;border-radius:9999px;margin-left:.375rem">Auj.</span>{% endif %}
+            {% if is_today %}<span style="font-size:.65rem;background:#0f3d36;color:white;padding:.1rem .4rem;border-radius:9999px;margin-left:.375rem">Auj.</span>{% endif %}
           </div>
           {% if p.type_jour and p.type_jour != 'NORMAL' %}
           {% set tj_styles = {
@@ -510,7 +510,7 @@
           {% if p.present and p.heures_sup|float > 0 %}{{ p.heures_sup|float|round(1) }}h{% else %}—{% endif %}
         </td>
         {% endif %}
-        <td style="text-align:center;font-family:monospace;font-size:.825rem;font-weight:700;color:{% if p.present %}#1a2332{% else %}#e5e7eb{% endif %}">
+        <td style="text-align:center;font-family:monospace;font-size:.825rem;font-weight:700;color:{% if p.present %}#0f3d36{% else %}#e5e7eb{% endif %}">
           {% if p.present %}{{ total_h|round(1) }}h{% else %}—{% endif %}
         </td>
         <td style="padding:.5rem .625rem;font-size:.75rem;color:#6b7280">
@@ -586,9 +586,9 @@ function setTab(type) {
   document.getElementById('liste-jour').style.display = type === 'jour' ? '' : 'none';
   const ts = document.getElementById('tab-sal');
   const tj = document.getElementById('tab-jour');
-  ts.style.background = type==='sal'  ? '#1a2332' : '#f3f4f6';
+  ts.style.background = type==='sal'  ? '#0f3d36' : '#f3f4f6';
   ts.style.color      = type==='sal'  ? 'white'   : '#374151';
-  tj.style.background = type==='jour' ? '#1a2332' : '#f3f4f6';
+  tj.style.background = type==='jour' ? '#0f3d36' : '#f3f4f6';
   tj.style.color      = type==='jour' ? 'white'   : '#374151';
   // Vider la recherche
   document.getElementById('search-worker').value = '';
@@ -731,14 +731,14 @@ function setMode(mode) {
   if (mode === 'horaires') {
     if (mh) mh.style.display = '';
     if (mm) mm.style.display = 'none';
-    if (bh) { bh.style.background='#1a2332'; bh.style.color='white'; }
+    if (bh) { bh.style.background='#0f3d36'; bh.style.color='white'; }
     if (bm) { bm.style.background='#f3f4f6'; bm.style.color='#374151'; }
     // Vider les champs hidden pour ne pas polluer
     mm?.querySelectorAll('input[type="hidden"]').forEach(i => i.value='');
   } else {
     if (mh) mh.style.display = 'none';
     if (mm) mm.style.display = '';
-    if (bm) { bm.style.background='#1a2332'; bm.style.color='white'; }
+    if (bm) { bm.style.background='#0f3d36'; bm.style.color='white'; }
     if (bh) { bh.style.background='#f3f4f6'; bh.style.color='#374151'; }
     // Vider les time inputs pour ne pas polluer
     ['inp_em','inp_sm','inp_ea','inp_sa','inp_es','inp_ss'].forEach(id => {
