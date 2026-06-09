@@ -117,13 +117,17 @@
     /* ── Sidebar : harmoniser l'état actif avec le vert de marque ────────── */
     aside nav a.bg-white, aside > div a.bg-white { color: var(--brand) !important; }
     aside nav a .text-slate-900 { color: var(--brand) !important; }
-    /* ── Responsive : sidebar repliable sous 1024px ──────────────────────── */
+    /* ── Sidebar repliable via le bouton ☰ ───────────────────────────────── */
+    aside { transition: transform .25s ease; }
+    main  { transition: margin-left .25s ease; }
+    /* Grand écran : ouverte par défaut, repliable avec le bouton */
+    body.sidebar-collapsed aside { transform: translateX(-100%); }
+    body.sidebar-collapsed main  { margin-left: 0 !important; }
+    /* Mobile/tablette (<1024px) : repliée par défaut, s'ouvre par-dessus le contenu */
     @media (max-width: 1023px) {
-      aside { transform: translateX(-100%); transition: transform .25s ease; }
-      main { margin-left: 0 !important; }
-    }
-    @media (min-width: 1024px) {
-      aside { transform: translateX(0) !important; }
+      aside { transform: translateX(-100%); }
+      main  { margin-left: 0 !important; }
+      body.sidebar-open aside { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.3); }
     }
   </style>
 </head>
@@ -316,8 +320,8 @@
       style="background:rgba(246,246,243,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)">
       <!-- Bouton menu (visible si sidebar masquée / mobile) -->
       <button onclick="toggleSidebar()" id="btn-burger"
-        class="lg:hidden" aria-label="Menu"
-        style="background:var(--bg-card);border:1px solid var(--border);border-radius:.625rem;padding:.4rem .6rem;cursor:pointer;font-size:1rem;color:var(--text-main)">☰</button>
+        aria-label="Afficher ou masquer le menu"
+        style="background:var(--bg-card);border:1px solid var(--border);border-radius:.625rem;padding:.4rem .65rem;cursor:pointer;font-size:1.05rem;color:var(--text-main);line-height:1">☰</button>
 
       <!-- Recherche rapide -->
       <div class="relative flex-1" style="max-width:420px">
@@ -369,14 +373,40 @@
 </div>
 
 <script>
-// ── Sidebar responsive : afficher/masquer sur mobile ────────────────────────
+// ── Sidebar : bouton ☰ pour replier/déplier le menu ─────────────────────────
 function toggleSidebar() {
-  const aside = document.querySelector('aside');
-  if (!aside) return;
-  const shown = aside.style.transform === 'translateX(0px)' || aside.dataset.shown === '1';
-  aside.style.transform = shown ? 'translateX(-100%)' : 'translateX(0px)';
-  aside.dataset.shown = shown ? '0' : '1';
+  if (window.innerWidth >= 1024) {
+    // Grand écran : on replie/déplie (sidebar visible par défaut)
+    document.body.classList.toggle('sidebar-collapsed');
+    try {
+      localStorage.setItem('paie_sidebar_collapsed',
+        document.body.classList.contains('sidebar-collapsed') ? '1' : '0');
+    } catch(e) {}
+  } else {
+    // Mobile : on ouvre/ferme par-dessus le contenu
+    document.body.classList.toggle('sidebar-open');
+  }
 }
+// Restaurer l'état choisi sur grand écran
+(function() {
+  try {
+    if (window.innerWidth >= 1024 &&
+        localStorage.getItem('paie_sidebar_collapsed') === '1') {
+      document.body.classList.add('sidebar-collapsed');
+    }
+  } catch(e) {}
+})();
+// Fermer la sidebar mobile quand on clique sur le contenu
+document.addEventListener('click', function(e) {
+  if (window.innerWidth < 1024 &&
+      document.body.classList.contains('sidebar-open')) {
+    const aside = document.querySelector('aside');
+    const burger = document.getElementById('btn-burger');
+    if (aside && !aside.contains(e.target) && e.target !== burger && !burger.contains(e.target)) {
+      document.body.classList.remove('sidebar-open');
+    }
+  }
+});
 </script>
 {% block scripts %}{% endblock %}
 
