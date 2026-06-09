@@ -49,6 +49,19 @@
        style="background:#f59e0b;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">
       📄 Nouveau bulletin
     </a>
+    <div style="position:relative;display:inline-block" id="docs-menu">
+      <button type="button" onclick="document.getElementById('docs-list').classList.toggle('hidden')"
+        style="background:#7c3aed;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+        📑 Documents ▾
+      </button>
+      <div id="docs-list" class="hidden"
+        style="position:absolute;right:0;top:calc(100% + .25rem);background:white;border:1px solid #e5e7eb;border-radius:.75rem;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:20;min-width:240px;overflow:hidden">
+        <a href="/salaries/{{ salarie.id }}/document/attestation-travail" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-bottom:1px solid #f3f4f6">📃 Attestation de travail</a>
+        <a href="/salaries/{{ salarie.id }}/document/attestation-salaire" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-bottom:1px solid #f3f4f6">💰 Attestation de salaire</a>
+        <a href="/salaries/{{ salarie.id }}/document/certificat-travail" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-bottom:1px solid #f3f4f6">📜 Certificat de travail</a>
+        <a href="/salaries/{{ salarie.id }}/document/solde-tout-compte" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none">🧾 Solde de tout compte</a>
+      </div>
+    </div>
     {% if current_user.is_tenant_admin %}
     <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="margin:0"
       onsubmit="return confirm('⚠️ Supprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données (bulletins brouillon, contrats, pointages, acomptes, congés) seront effacées.\n\nCette action est IRRÉVERSIBLE.')">

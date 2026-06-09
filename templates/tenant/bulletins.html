@@ -137,6 +137,10 @@
          style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
         📥 Export Excel
       </a>
+      <a href="/bulletins/export-zip/{{ periode_sel.id }}"
+         style="background:#059669;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+        📦 Tous les PDF (ZIP)
+      </a>
       {% set nb_brouillons_total = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
       {% set nb_valides_total = bulletins|selectattr('statut','in',['VALIDÉ','VALIDE'])|list|length %}
       {% if nb_brouillons_total > 0 %}

@@ -1400,9 +1400,47 @@ def bulletin_pdf(id):
         return redirect(url_for("tenant.bulletin_detail", id=id))
 
 
-@bp.route("/bulletins/<int:id>/imprimer")
+@bp.route("/bulletins/export-zip/<int:periode_id>")
 @login_required
-def bulletin_imprimer(id):
+def bulletins_export_zip(periode_id):
+    """Télécharge tous les bulletins d'une période dans un ZIP (un PDF par salarié)."""
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    p = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query.filter_by(periode_id=periode_id, tenant_id=t.id)
+                 .join(Salarie).order_by(Salarie.nom).all())
+    if not bulletins:
+        flash("Aucun bulletin à exporter pour cette période.", "error")
+        return redirect(url_for("tenant.bulletins"))
+
+    import zipfile
+    from pdf_bulletin import generer_bulletin_pdf
+    zip_buffer = io.BytesIO()
+    erreurs = 0
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for b in bulletins:
+            try:
+                pdf_bytes = generer_bulletin_pdf(b, t)
+                nom = (f"{b.salarie.nom}_{b.salarie.prenom}_{b.periode.annee}_{b.periode.mois:02d}.pdf"
+                       .replace(" ", "_"))
+                zf.writestr(nom, pdf_bytes)
+            except Exception as e:
+                erreurs += 1
+                logger.error(f"Erreur PDF bulletin {b.id} : {e}")
+    zip_buffer.seek(0)
+    data = zip_buffer.read()
+
+    log_action("EXPORT", "bulletin", periode_id,
+               f"Export ZIP {len(bulletins)} bulletins — {p.libelle_complet}",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+
+    nom_zip = f"bulletins_{p.libelle_mois}_{p.annee}_{t.slug}.zip".replace(" ", "_")
+    from flask import Response
+    return Response(data, mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{nom_zip}"',
+                             "Content-Length": str(len(data))})
     if current_user.is_super_admin:
         b = BulletinPaie.query.get_or_404(id)
         t = b.salarie.tenant
@@ -3580,6 +3618,80 @@ def solde_tout_compte(sal_id):
     return render_template("tenant/solde_tout_compte.html",
         tenant=t, salarie=s, solde=solde, date_cessation=date_cessation,
     )
+
+
+def _doc_response(pdf_bytes, nom_fichier):
+    """Helper : renvoie un PDF en téléchargement."""
+    from flask import Response
+    return Response(pdf_bytes, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{nom_fichier}"',
+                             "Content-Length": str(len(pdf_bytes))})
+
+
+@bp.route("/salaries/<int:sal_id>/document/<type_doc>")
+@login_required
+def salarie_document(sal_id, type_doc):
+    """
+    Génère un document RH PDF pour un salarié.
+    type_doc : attestation-travail | certificat-travail | attestation-salaire | solde-tout-compte
+    """
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    s = (Salarie.query.filter_by(id=sal_id, tenant_id=t.id)
+         .options(joinedload(Salarie.conges), joinedload(Salarie.contrats))
+         .first_or_404())
+
+    from documents_rh import (attestation_travail, certificat_travail,
+                              attestation_salaire, solde_tout_compte_pdf)
+    base_nom = f"{s.nom}_{s.prenom}".replace(" ", "_")
+
+    try:
+        if type_doc == "attestation-travail":
+            pdf = attestation_travail(s, t)
+            nom = f"attestation_travail_{base_nom}.pdf"
+
+        elif type_doc == "certificat-travail":
+            pdf = certificat_travail(s, t)
+            nom = f"certificat_travail_{base_nom}.pdf"
+
+        elif type_doc == "attestation-salaire":
+            # Récupérer le dernier bulletin pour les montants
+            dernier = (BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=sal_id)
+                       .order_by(BulletinPaie.date_creation.desc()).first())
+            brut = float(dernier.salaire_brut) if dernier else None
+            net  = float(dernier.net_a_payer) if dernier else None
+            if brut is None:
+                contrat = next((c for c in s.contrats if c.actif), None)
+                brut = float(contrat.salaire_base) if contrat else None
+            pdf = attestation_salaire(s, t, brut, net)
+            nom = f"attestation_salaire_{base_nom}.pdf"
+
+        elif type_doc == "solde-tout-compte":
+            date_cess_str = request.args.get("date_cessation", "")
+            date_cess = parse_date(date_cess_str) or s.date_cessation or date.today()
+            bulletins_12 = (BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=sal_id)
+                            .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
+                            .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
+            from conges_avance import calculer_solde_tout_compte
+            solde = calculer_solde_tout_compte(s, bulletins_12, date_cess)
+            pdf = solde_tout_compte_pdf(s, t, solde, date_cess)
+            nom = f"solde_tout_compte_{base_nom}.pdf"
+
+        else:
+            flash("Type de document inconnu.", "error")
+            return redirect(url_for("tenant.salarie_detail", id=sal_id))
+
+        log_action("EXPORT", "salarie", sal_id,
+                   f"Document {type_doc} généré pour {s.nom_complet}",
+                   user_id=current_user.id, tenant_id=t.id)
+        db.session.commit()
+        return _doc_response(pdf, nom)
+
+    except Exception as e:
+        logger.error(f"Erreur génération document {type_doc} : {e}")
+        flash(f"Erreur lors de la génération du document : {e}", "error")
+        return redirect(url_for("tenant.salarie_detail", id=sal_id))
 
 
 @bp.route("/api/conges/jours-acquis/<int:sal_id>")

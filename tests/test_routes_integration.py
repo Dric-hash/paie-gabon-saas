@@ -504,3 +504,85 @@ class TestPrestataires:
         auth_session(client, "admin@b.ga")
         r = client.get(f"/prestataires/{pid}", follow_redirects=False)
         assert r.status_code == 404  # introuvable pour le tenant B
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — DOCUMENTS RH & EXPORT EN MASSE
+# ══════════════════════════════════════════════════════════════════════════════
+class TestDocumentsRH:
+    def _setup_salarie(self):
+        """Crée un salarié dans le tenant A et retourne son id."""
+        with flask_app.app_context():
+            from models import Tenant, Salarie
+            from datetime import date
+            ta = Tenant.query.filter_by(slug="entreprise-a").first()
+            s = Salarie(tenant_id=ta.id, matricule="DOC01", nom="MBA", prenom="Paul",
+                        date_embauche=date(2021, 1, 1), emploi="Chef de chantier",
+                        sexe="M", statut="ACTIF")
+            db.session.add(s)
+            db.session.commit()
+            return s.id
+
+    def test_attestation_travail_pdf(self, client):
+        sid = self._setup_salarie()
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/salaries/{sid}/document/attestation-travail")
+        assert r.status_code == 200
+        assert r.data[:4] == b"%PDF"
+
+    def test_certificat_travail_pdf(self, client):
+        sid = self._setup_salarie()
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/salaries/{sid}/document/certificat-travail")
+        assert r.status_code == 200
+        assert r.data[:4] == b"%PDF"
+
+    def test_attestation_salaire_pdf(self, client):
+        sid = self._setup_salarie()
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/salaries/{sid}/document/attestation-salaire")
+        assert r.status_code == 200
+        assert r.data[:4] == b"%PDF"
+
+    def test_solde_tout_compte_pdf(self, client):
+        sid = self._setup_salarie()
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/salaries/{sid}/document/solde-tout-compte")
+        assert r.status_code == 200
+        assert r.data[:4] == b"%PDF"
+
+    def test_document_type_inconnu(self, client):
+        sid = self._setup_salarie()
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/salaries/{sid}/document/type-bidon", follow_redirects=False)
+        assert r.status_code == 302  # redirige avec message d'erreur
+
+    def test_document_isole_par_tenant(self, client):
+        """Le tenant B ne peut pas générer de document pour un salarié du tenant A."""
+        sid = self._setup_salarie()  # salarié du tenant A
+        auth_session(client, "admin@b.ga")
+        r = client.get(f"/salaries/{sid}/document/attestation-travail",
+                       follow_redirects=False)
+        assert r.status_code == 404
+
+    def test_export_zip_bulletins(self, client):
+        """L'export ZIP doit produire une archive."""
+        with flask_app.app_context():
+            from models import Tenant, Salarie, PeriodePaie, BulletinPaie
+            from datetime import date
+            ta = Tenant.query.filter_by(slug="entreprise-a").first()
+            s = Salarie(tenant_id=ta.id, matricule="ZIP01", nom="OYONO", prenom="Luc",
+                        date_embauche=date(2022, 1, 1), statut="ACTIF")
+            db.session.add(s); db.session.flush()
+            p = PeriodePaie(tenant_id=ta.id, mois=5, annee=2026,
+                            libelle_mois="MAI", statut="OUVERT")
+            db.session.add(p); db.session.flush()
+            b = BulletinPaie(tenant_id=ta.id, salarie_id=s.id, periode_id=p.id,
+                             salaire_base=400000, salaire_brut=400000,
+                             net_a_payer=340000, statut="VALIDE")
+            db.session.add(b); db.session.commit()
+            pid = p.id
+        auth_session(client, "admin@a.ga")
+        r = client.get(f"/bulletins/export-zip/{pid}")
+        assert r.status_code == 200
+        assert r.data[:2] == b"PK"  # signature ZIP
