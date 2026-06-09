@@ -31,6 +31,17 @@
   </div>
 </div>
 
+<!-- ── Barre de recherche rapide (avec suggestions) ── -->
+<div class="mb-6" style="position:relative;max-width:560px">
+  <span style="position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:1.05rem">⌕</span>
+  <input type="text" id="dashSearch" autocomplete="off"
+    placeholder="Rechercher un salarié, un journalier…  (Ctrl+K)"
+    class="w-full text-sm rounded-xl outline-none"
+    style="background:var(--bg-card);border:1px solid var(--border);padding:.7rem 1rem .7rem 2.5rem;color:var(--text-main)"/>
+  <div id="dashSearchResults"
+    style="display:none;position:absolute;top:calc(100% + .35rem);left:0;right:0;z-index:30;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(28,43,42,.14);max-height:340px;overflow-y:auto"></div>
+</div>
+
 {% if alertes %}
 <div class="card p-5 mb-6">
   <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
@@ -337,5 +348,63 @@ function viderCache() {
     headers: {'X-CSRFToken': '{{ csrf_token() }}', 'Content-Type': 'application/json'} })
     .then(r => r.json()).then(() => window.location.reload()).catch(() => window.location.reload());
 }
+
+// ── Recherche rapide avec suggestions ───────────────────────────────────────
+(function() {
+  const input = document.getElementById('dashSearch');
+  const box   = document.getElementById('dashSearchResults');
+  if (!input || !box) return;
+  let timer = null;
+
+  function render(items) {
+    if (!items.length) {
+      box.innerHTML = '<div style="padding:.85rem 1rem;color:var(--text-muted);font-size:.85rem">Aucun résultat</div>';
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = items.map(r =>
+      '<a href="' + r.lien + '" style="display:flex;align-items:center;gap:.7rem;padding:.65rem 1rem;text-decoration:none;border-bottom:1px solid var(--border-light)">' +
+        '<span style="font-size:1.1rem">' + (r.icone || '•') + '</span>' +
+        '<span style="flex:1;min-width:0">' +
+          '<span style="display:block;font-weight:700;font-size:.85rem;color:var(--text-main)">' + r.titre + '</span>' +
+          '<span style="display:block;font-size:.73rem;color:var(--text-sub)">' + (r.sous_titre || '') + '</span>' +
+        '</span>' +
+        '<span style="font-size:.68rem;color:var(--text-muted);background:var(--bg-page);padding:.1rem .45rem;border-radius:9999px">' + (r.categorie || '') + '</span>' +
+      '</a>'
+    ).join('');
+    box.style.display = 'block';
+  }
+
+  input.addEventListener('input', function() {
+    const q = this.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { box.style.display = 'none'; return; }
+    timer = setTimeout(() => {
+      fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
+        .then(r => r.ok ? r.json() : [])
+        .then(render)
+        .catch(() => { box.style.display = 'none'; });
+    }, 250);
+  });
+
+  // Entrée → page de recherche complète
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && this.value.trim().length >= 2) {
+      window.location.href = '/recherche?q=' + encodeURIComponent(this.value.trim());
+    }
+  });
+
+  // Fermer les suggestions au clic extérieur
+  document.addEventListener('click', function(e) {
+    if (!input.contains(e.target) && !box.contains(e.target)) box.style.display = 'none';
+  });
+
+  // Raccourci Ctrl+K / Cmd+K
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault(); input.focus(); input.select();
+    }
+  });
+})();
 </script>
 {% endblock %}
