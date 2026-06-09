@@ -148,7 +148,7 @@ def add_security_headers(response):
         #    et les fetch vers les routes internes utilisés par l'app.
         csp = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-hashes' cdn.tailwindcss.com cdnjs.cloudflare.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-hashes' cdn.tailwindcss.com cdnjs.cloudflare.com cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; "
             "font-src 'self' data: fonts.gstatic.com cdnjs.cloudflare.com; "
             "img-src 'self' data: blob:; "

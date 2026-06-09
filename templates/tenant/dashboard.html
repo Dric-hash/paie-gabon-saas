@@ -265,6 +265,62 @@
 {% endblock %}
 
 {% block scripts %}
+<!-- Autocomplétion : script indépendant, s'exécute même si Chart.js échoue -->
+<script>
+(function() {
+  const input = document.getElementById('dashSearch');
+  const box   = document.getElementById('dashSearchResults');
+  if (!input || !box) return;
+  let timer = null;
+
+  function render(items) {
+    if (!items.length) {
+      box.innerHTML = '<div style="padding:.85rem 1rem;color:var(--text-muted);font-size:.85rem">Aucun résultat</div>';
+      box.style.display = 'block';
+      return;
+    }
+    box.innerHTML = items.map(function(r) {
+      return '<a href="' + r.lien + '" style="display:flex;align-items:center;gap:.7rem;padding:.65rem 1rem;text-decoration:none;border-bottom:1px solid var(--border-light)">' +
+        '<span style="font-size:1.1rem">' + (r.icone || '•') + '</span>' +
+        '<span style="flex:1;min-width:0">' +
+          '<span style="display:block;font-weight:700;font-size:.85rem;color:var(--text-main)">' + r.titre + '</span>' +
+          '<span style="display:block;font-size:.73rem;color:var(--text-sub)">' + (r.sous_titre || '') + '</span>' +
+        '</span>' +
+        '<span style="font-size:.68rem;color:var(--text-muted);background:var(--bg-page);padding:.1rem .45rem;border-radius:9999px">' + (r.categorie || '') + '</span>' +
+      '</a>';
+    }).join('');
+    box.style.display = 'block';
+  }
+
+  input.addEventListener('input', function() {
+    const q = this.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) { box.style.display = 'none'; return; }
+    timer = setTimeout(function() {
+      fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.ok ? r.json() : []; })
+        .then(render)
+        .catch(function() { box.style.display = 'none'; });
+    }, 250);
+  });
+
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && this.value.trim().length >= 2) {
+      window.location.href = '/recherche?q=' + encodeURIComponent(this.value.trim());
+    }
+  });
+
+  document.addEventListener('click', function(e) {
+    if (!input.contains(e.target) && !box.contains(e.target)) box.style.display = 'none';
+  });
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault(); input.focus(); input.select();
+    }
+  });
+})();
+</script>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
 const evo = {{ evolution | tojson }};
@@ -273,6 +329,7 @@ const BRAND = '#0f3d36', ACCENT = '#b8862f', CLAY = '#c08552';
 let chartEvo = null;
 
 function buildEvoChart(type) {
+  if (typeof Chart === 'undefined') return;  // Chart.js non chargé → on n'essaie pas
   if (chartEvo) chartEvo.destroy();
   chartEvo = new Chart(document.getElementById('chartEvolution'), {
     type: type,
@@ -320,17 +377,19 @@ function toggleChart(type) {
 buildEvoChart('bar');
 
 {% if cats_stats %}
-const catColors = ['#0f3d36','#b8862f','#c08552','#5a8a7d','#9a7635','#7a9b8e','#c9a96a','#3d5a52'];
-new Chart(document.getElementById('chartCategories'), {
-  type: 'doughnut',
-  data: { labels: cats.map(c => c[1]), datasets: [{ data: cats.map(c => c[2]),
-    backgroundColor: catColors.slice(0, cats.length), borderWidth: 2, borderColor: '#fff' }] },
-  options: { responsive: true, cutout: '60%',
-    plugins: {
-      legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } },
-      tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ' : ' + ctx.parsed + ' employé(s)' } }
-    } }
-});
+if (typeof Chart !== 'undefined') {
+  const catColors = ['#0f3d36','#b8862f','#c08552','#5a8a7d','#9a7635','#7a9b8e','#c9a96a','#3d5a52'];
+  new Chart(document.getElementById('chartCategories'), {
+    type: 'doughnut',
+    data: { labels: cats.map(c => c[1]), datasets: [{ data: cats.map(c => c[2]),
+      backgroundColor: catColors.slice(0, cats.length), borderWidth: 2, borderColor: '#fff' }] },
+    options: { responsive: true, cutout: '60%',
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } },
+        tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ' : ' + ctx.parsed + ' employé(s)' } }
+      } }
+  });
+}
 {% endif %}
 
 function toggleAlertes() {
@@ -348,63 +407,5 @@ function viderCache() {
     headers: {'X-CSRFToken': '{{ csrf_token() }}', 'Content-Type': 'application/json'} })
     .then(r => r.json()).then(() => window.location.reload()).catch(() => window.location.reload());
 }
-
-// ── Recherche rapide avec suggestions ───────────────────────────────────────
-(function() {
-  const input = document.getElementById('dashSearch');
-  const box   = document.getElementById('dashSearchResults');
-  if (!input || !box) return;
-  let timer = null;
-
-  function render(items) {
-    if (!items.length) {
-      box.innerHTML = '<div style="padding:.85rem 1rem;color:var(--text-muted);font-size:.85rem">Aucun résultat</div>';
-      box.style.display = 'block';
-      return;
-    }
-    box.innerHTML = items.map(r =>
-      '<a href="' + r.lien + '" style="display:flex;align-items:center;gap:.7rem;padding:.65rem 1rem;text-decoration:none;border-bottom:1px solid var(--border-light)">' +
-        '<span style="font-size:1.1rem">' + (r.icone || '•') + '</span>' +
-        '<span style="flex:1;min-width:0">' +
-          '<span style="display:block;font-weight:700;font-size:.85rem;color:var(--text-main)">' + r.titre + '</span>' +
-          '<span style="display:block;font-size:.73rem;color:var(--text-sub)">' + (r.sous_titre || '') + '</span>' +
-        '</span>' +
-        '<span style="font-size:.68rem;color:var(--text-muted);background:var(--bg-page);padding:.1rem .45rem;border-radius:9999px">' + (r.categorie || '') + '</span>' +
-      '</a>'
-    ).join('');
-    box.style.display = 'block';
-  }
-
-  input.addEventListener('input', function() {
-    const q = this.value.trim();
-    clearTimeout(timer);
-    if (q.length < 2) { box.style.display = 'none'; return; }
-    timer = setTimeout(() => {
-      fetch('/api/recherche-rapide?q=' + encodeURIComponent(q))
-        .then(r => r.ok ? r.json() : [])
-        .then(render)
-        .catch(() => { box.style.display = 'none'; });
-    }, 250);
-  });
-
-  // Entrée → page de recherche complète
-  input.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter' && this.value.trim().length >= 2) {
-      window.location.href = '/recherche?q=' + encodeURIComponent(this.value.trim());
-    }
-  });
-
-  // Fermer les suggestions au clic extérieur
-  document.addEventListener('click', function(e) {
-    if (!input.contains(e.target) && !box.contains(e.target)) box.style.display = 'none';
-  });
-
-  // Raccourci Ctrl+K / Cmd+K
-  document.addEventListener('keydown', function(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-      e.preventDefault(); input.focus(); input.select();
-    }
-  });
-})();
 </script>
 {% endblock %}
