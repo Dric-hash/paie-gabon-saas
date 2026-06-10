@@ -151,10 +151,18 @@ class TestPagesPubliques:
     def test_mot_de_passe_oublie_accessible(self, client):
         assert client.get("/mot-de-passe-oublie").status_code == 200
 
-    def test_racine_redirige_vers_login(self, client):
+    def test_racine_affiche_presentation(self, client):
+        """La racine affiche la page de présentation pour les visiteurs non connectés."""
+        r = client.get("/", follow_redirects=False)
+        assert r.status_code == 200
+        assert b"inscription" in r.data.lower() or b"essai" in r.data.lower()
+
+    def test_racine_connecte_redirige_dashboard(self, client):
+        """Un utilisateur connecté est redirigé vers son tableau de bord."""
+        auth_session(client, "admin@a.ga")
         r = client.get("/", follow_redirects=False)
         assert r.status_code == 302
-        assert "/login" in r.headers["Location"]
+        assert "/dashboard" in r.headers["Location"]
 
     def test_dashboard_non_connecte_redirige(self, client):
         r = client.get("/dashboard", follow_redirects=False)

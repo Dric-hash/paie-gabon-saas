@@ -37,7 +37,10 @@ def index():
             url_for("admin.admin_dashboard") if current_user.is_super_admin
             else url_for("tenant.dashboard")
         )
-    return redirect(url_for("auth.login"))
+    # Visiteurs non connectés : page de présentation
+    from models import Plan
+    plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
+    return render_template("public/presentation.html", plans=plans)
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────
