@@ -1,57 +1,8 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Salariés — {{ tenant.denomination }}</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>body{font-family:'Segoe UI',system-ui,sans-serif;}.card{background:white;border-radius:1rem;border:1px solid #e5e7eb;box-shadow:0 1px 3px rgba(0,0,0,.06);}</style>
-</head>
-<body class="bg-gray-50 min-h-screen">
+{% extends "tenant/base.html" %}
+{% block title %}Salariés — {{ tenant.denomination }}{% endblock %}
+{% block content %}
 
-<nav class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between shadow-lg">
-  <div class="flex items-center gap-3">
-    {% if tenant.logo_url %}<img src="{{ tenant.logo_url }}" alt="Logo" class="h-8 w-auto rounded">{% endif %}
-    <span class="font-black">{{ tenant.denomination }}</span>
-  </div>
-  <div class="flex items-center gap-3 text-sm">
-    <a href="/dashboard" class="hover:text-slate-200">Dashboard</a>
-    <a href="/salaries" class="font-semibold hover:text-slate-200" data-i18n="sal.title">Salariés</a>
-    <a href="/bulletins" class="hover:text-slate-200">Bulletins</a>
-    <a href="/periodes" class="hover:text-slate-200">Périodes</a>
-    <a href="/pointage" class="hover:text-slate-200">Pointage</a>
-    <a href="/journaliers" class="hover:text-slate-200" data-i18n="jour.title">Journaliers</a>
-    <a href="/notifications" id="notif-bell-std" style="position:relative;text-decoration:none;font-size:1.05rem" title="Notifications">🔔<span id="notif-badge-std" style="display:none;position:absolute;top:-4px;right:-6px;min-width:15px;height:15px;background:#dc2626;color:white;font-size:.58rem;font-weight:700;border-radius:9999px;align-items:center;justify-content:center;padding:0 3px;line-height:1"></span></a>
-    <a href="/parametres" class="hover:text-slate-200">⚙️</a>
-    <a href="/logout" class="bg-red-600 hover:bg-red-500 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
-  </div>
-</nav>
-
-<script>
-// Compteur de la cloche (page autonome)
-(function() {
-  const badge = document.getElementById('notif-badge-std');
-  if (!badge) return;
-  fetch('/api/notifications/count').then(r => r.ok ? r.json() : null).then(d => {
-    if (!d || !d.total) return;
-    badge.textContent = d.total > 99 ? '99+' : d.total;
-    badge.style.display = 'flex';
-    badge.style.background = d.critiques > 0 ? '#dc2626' : '#b8862f';
-  }).catch(() => {});
-})();
-</script>
-
-<main class="max-w-7xl mx-auto p-5">
-
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}<div class="mb-4 space-y-2">{% for cat, msg in messages %}
-  <div class="px-4 py-3 rounded-xl text-sm font-semibold
-    {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
-    else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
-    else 'bg-amber-50 text-amber-800 border border-amber-200' }}">{{ msg }}</div>
-  {% endfor %}</div>{% endif %}{% endwith %}
-
-  <div class="flex items-center justify-between mb-5">
+<div class="flex items-center justify-between mb-5">
     <div>
       <h1 class="text-2xl font-black text-gray-900" data-i18n="sal.title">Salariés</h1>
       <p class="text-gray-500 text-sm mt-0.5">{{ salaries|length }} salarié(s) trouvé(s)</p>
@@ -196,6 +147,5 @@
 {% endif %}
 </table>
   </div>
-</main>
-</body>
-</html>
+
+{% endblock %}

@@ -322,7 +322,7 @@ def salaries():
     query  = Salarie.query.filter_by(tenant_id=t.id)
     if q:      query = query.filter(db.or_(Salarie.nom.ilike(f"%{q}%"), Salarie.prenom.ilike(f"%{q}%"), Salarie.matricule.ilike(f"%{q}%")))
     if statut: query = query.filter_by(statut=statut)
-    query = query.options(joinedload(Salarie.categorie))
+    query = query.options(joinedload(Salarie.categorie), joinedload(Salarie.contrats))
     pagination = query.order_by(Salarie.nom).paginate(page=page, per_page=25, error_out=False)
     _args  = {k: v for k, v in request.args.items() if k != 'page'}
     _base  = request.path + '?' + '&'.join(f'{k}={v}' for k, v in _args.items())
@@ -3763,54 +3763,76 @@ def conges():
         mois_trav = min(round((fin_acq - debut_acq).days / 30.44, 1), 12)
         return round(mois_trav * tx, 1)
 
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie), joinedload(Salarie.contrats)).order_by(Salarie.nom).all()
+
+    # ── PRÉCHARGEMENT pour éviter les requêtes N+1 ───────────────────────────
+    from datetime import timedelta
+    sal_ids = [s.id for s in salaries_list]
+
+    # 1. Tous les soldes de congés de l'année en une requête
+    soldes_db_map = {}
+    if sal_ids:
+        for c in Conge.query.filter(
+            Conge.tenant_id == t.id, Conge.salarie_id.in_(sal_ids),
+            Conge.annee == annee, Conge.date_depart == None
+        ).all():
+            soldes_db_map[c.salarie_id] = c
+
+    # 2. Tous les congés approuvés de l'année (pour cumul jours pris) en une requête
+    pris_map = {}
+    if sal_ids:
+        for c in Conge.query.filter(
+            Conge.tenant_id == t.id, Conge.salarie_id.in_(sal_ids),
+            Conge.annee == annee, Conge.statut == "APPROUVÉ"
+        ).all():
+            pris_map.setdefault(c.salarie_id, 0.0)
+            pris_map[c.salarie_id] += float(c.jours_pris or 0)
+
+    # 3. Tous les bulletins des 12 derniers mois en une requête, groupés par salarié
+    buls_map = {}
+    if sal_ids:
+        debut_periode = (datetime(annee, 12, 31) - timedelta(days=365)).date()
+        buls_query = (BulletinPaie.query
+            .filter(BulletinPaie.tenant_id == t.id,
+                    BulletinPaie.salarie_id.in_(sal_ids))
+            .join(PeriodePaie)
+            .filter(PeriodePaie.annee >= debut_periode.year)
+            .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc())
+            .all())
+        for b in buls_query:
+            buls_map.setdefault(b.salarie_id, []).append(b)
+
     def calculer_allocation_conge(salarie, jours_acquis, annee_ref):
         """
         Allocation congés = max(Σbruts12mois, dernierBrut×12) / 288 × jours_acquis
         Prime de transport exclue de la base (Art. 213 al. 3).
+        Utilise les données préchargées (buls_map) — aucune requête SQL ici.
         """
         if jours_acquis <= 0:
             return 0.0, 0.0
-        # Bulletins des 12 derniers mois
-        from datetime import timedelta
-        limite = datetime(annee_ref, 12, 31).date()
-        debut  = (datetime(annee_ref, 12, 31) - timedelta(days=365)).date()
-        buls   = BulletinPaie.query.filter(
-            BulletinPaie.tenant_id  == salarie.tenant_id,
-            BulletinPaie.salarie_id == salarie.id,
-        ).join(PeriodePaie).filter(
-            PeriodePaie.annee >= debut.year,
-        ).order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).limit(12).all()
-
+        buls = buls_map.get(salarie.id, [])[:12]
         if not buls:
-            # Pas de bulletins → estimer depuis le contrat actif
             contrat = next((c for c in salarie.contrats if c.actif), None)
             if not contrat: return 0.0, 0.0
             last_brut = float(contrat.salaire_base or 0)
             somme_12  = last_brut * 12
         else:
-            # Exclure prime_transport de chaque bulletin
             somme_12  = sum(
                 float(b.salaire_brut or 0) - float(b.prime_transport or 0)
                 for b in buls
             )
             last_brut = float(buls[0].salaire_brut or 0) - float(buls[0].prime_transport or 0)
-
-        # Prendre le plus favorable
-        base_methode1 = somme_12  / 288        # Σ 12 mois / 288
-        base_methode2 = (last_brut * 12) / 288 # dernier × 12 / 288
+        base_methode1 = somme_12  / 288
+        base_methode2 = (last_brut * 12) / 288
         base          = max(base_methode1, base_methode2)
         allocation    = round(base * jours_acquis, 0)
         return round(base, 2), allocation
-
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
 
     soldes = []
     for s in salaries_list:
         if q and q.lower() not in f"{s.nom} {s.prenom} {s.matricule}".lower():
             continue
-        solde_db = Conge.query.filter_by(
-            tenant_id=t.id, salarie_id=s.id, annee=annee
-        ).filter(Conge.date_depart == None).first()
+        solde_db = soldes_db_map.get(s.id)
 
         jours_auto = calculer_solde_auto(s, annee)
 
@@ -3819,12 +3841,7 @@ def conges():
             pris      = float(solde_db.jours_pris   or 0)
         else:
             acquis    = jours_auto
-            pris      = sum(
-                float(c.jours_pris or 0)
-                for c in Conge.query.filter_by(
-                    tenant_id=t.id, salarie_id=s.id, annee=annee, statut="APPROUVÉ"
-                ).all()
-            )
+            pris      = pris_map.get(s.id, 0.0)
 
         taux_j    = taux_conge(s, annee)
         base_all, allocation = calculer_allocation_conge(s, acquis, annee)
