@@ -156,6 +156,9 @@ def add_security_headers(response):
             "frame-ancestors 'none';"
         )
         response.headers["Content-Security-Policy"] = csp
+        # ✅ HSTS — force HTTPS pendant 1 an (uniquement en production)
+        if os.environ.get("RAILWAY_ENVIRONMENT") == "production":
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
 # ── i18n ─────────────────────────────────────────────────────────────────────
@@ -196,6 +199,25 @@ def inject_globals():
 def forbidden(e):   return render_template("auth/403.html"), 403
 @app.errorhandler(404)
 def not_found(e):   return render_template("auth/403.html"), 404
+@app.errorhandler(500)
+def server_error(e):
+    logger.error(f"Erreur 500 : {e}")
+    try:
+        db.session.rollback()   # éviter de laisser une transaction cassée
+    except Exception:
+        pass
+    return render_template("auth/403.html"), 500
+
+# ── Health check (monitoring Railway / uptime) ────────────────────────────────
+@app.route("/health")
+def health_check():
+    """Vérifie que l'app et la base de données répondent."""
+    try:
+        db.session.execute(db.text("SELECT 1"))
+        return {"status": "ok", "database": "ok"}, 200
+    except Exception as e:
+        logger.error(f"Health check échoué : {e}")
+        return {"status": "degraded", "database": "error"}, 503
 
 # ── Blueprints ────────────────────────────────────────────────────────────────
 from blueprints.auth   import bp as auth_bp
