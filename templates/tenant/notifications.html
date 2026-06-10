@@ -1,0 +1,60 @@
+{% extends "tenant/base.html" %}
+{% block title %}Notifications — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+  <h1 class="display text-2xl font-extrabold">🔔 Notifications & rappels</h1>
+  <p class="text-sm mt-0.5" style="color:var(--text-sub)">
+    {% if total > 0 %}
+      {{ total }} rappel(s){% if nb_critiques > 0 %} — dont <span style="color:#dc2626;font-weight:700">{{ nb_critiques }} urgent(s)</span>{% endif %}
+    {% else %}
+      Tout est à jour, rien à signaler
+    {% endif %}
+  </p>
+</div>
+
+{% if total == 0 %}
+<div class="card p-10 text-center">
+  <div style="font-size:3rem;margin-bottom:1rem">✅</div>
+  <p class="display font-bold text-lg" style="color:var(--text-main)">Aucune notification</p>
+  <p class="text-sm mt-1" style="color:var(--text-sub)">
+    Vous n'avez aucun rappel en attente. Tout est sous contrôle.
+  </p>
+</div>
+{% else %}
+
+{% set cat_icones = {'contrat':'📄','conge':'🏖️','facture':'💰','periode':'📅'} %}
+{% for cat, items in par_categorie.items() %}
+<div class="card overflow-hidden mb-5">
+  <div class="flex items-center gap-2 px-5 py-3" style="border-bottom:1px solid var(--border-light)">
+    <span style="font-size:1.1rem">{{ cat_icones.get(cat, '•') }}</span>
+    <h2 class="display font-bold text-base">{{ labels_cat.get(cat, cat) }}</h2>
+    <span style="background:var(--bg-page);color:var(--text-sub);font-size:.7rem;font-weight:700;padding:.1rem .5rem;border-radius:9999px">{{ items|length }}</span>
+  </div>
+  <div>
+    {% for n in items %}
+    <div class="flex items-start justify-between gap-3 px-5 py-3.5"
+      style="border-bottom:1px solid var(--border-light)">
+      <div class="flex items-start gap-3 flex-1 min-w-0">
+        <span style="font-size:1.1rem;flex-shrink:0;margin-top:.1rem;
+          {% if n.type == 'danger' %}color:#dc2626{% elif n.type == 'warning' %}color:var(--accent){% else %}color:var(--text-sub){% endif %}">
+          {% if n.type == 'danger' %}⏰{% elif n.type == 'warning' %}▲{% else %}●{% endif %}
+        </span>
+        <div class="min-w-0">
+          <div class="text-sm font-bold" style="color:var(--text-main)">{{ n.titre }}</div>
+          <div class="text-xs mt-0.5" style="color:var(--text-sub)">{{ n.msg }}</div>
+        </div>
+      </div>
+      {% if n.lien %}
+      <a href="{{ n.lien }}" class="text-xs font-bold whitespace-nowrap flex-shrink-0"
+        style="color:var(--brand);padding-top:.15rem">{{ n.lien_texte }} →</a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+
+{% endif %}
+
+{% endblock %}

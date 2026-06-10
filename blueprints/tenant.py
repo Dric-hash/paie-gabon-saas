@@ -18,7 +18,8 @@ from sqlalchemy import func
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
-                    Site, AffectationSite, Paiement, OAuthClient, AuditLog)
+                    Site, AffectationSite, Paiement, OAuthClient, AuditLog,
+                    Prestataire, FacturePrestataire)
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
@@ -33,6 +34,14 @@ from core import (get_tenant, tenant_required, can_edit, admin_only,
 from i18n import SUPPORTED_LANGUAGES, set_language
 from jours_feries import (jours_feries_annee, est_jour_ferie,
                           nom_jour_ferie, type_jour_auto)
+from notifications import get_notifications, compter_notifications
+
+# Modèles passés au module notifications (évite les imports circulaires)
+_NOTIF_MODELS = {
+    "Contrat": Contrat, "Conge": Conge, "Salarie": Salarie,
+    "PeriodePaie": PeriodePaie, "FacturePrestataire": FacturePrestataire,
+    "Prestataire": Prestataire,
+}
 
 logger = logging.getLogger("paiegalon")
 
@@ -4529,6 +4538,41 @@ def api_jour_ferie():
         "nom":          nom,
         "est_dimanche": d.weekday() == 6,
     })
+
+
+@bp.route("/notifications")
+@login_required
+def notifications_page():
+    """Page listant tous les rappels et notifications."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    notifs = get_notifications(t, db, _NOTIF_MODELS)
+    # Grouper par catégorie pour l'affichage
+    par_categorie = {}
+    for n in notifs:
+        par_categorie.setdefault(n["categorie"], []).append(n)
+    labels_cat = {
+        "contrat": "Contrats", "conge": "Congés",
+        "facture": "Factures prestataires", "periode": "Périodes de paie",
+    }
+    nb_critiques = sum(1 for n in notifs if n["type"] == "danger")
+    return render_template("tenant/notifications.html",
+        tenant=t, notifs=notifs, par_categorie=par_categorie,
+        labels_cat=labels_cat, total=len(notifs), nb_critiques=nb_critiques)
+
+
+@bp.route("/api/notifications/count")
+@login_required
+def api_notifications_count():
+    """Compteur pour la cloche (rafraîchi en arrière-plan)."""
+    t = get_tenant()
+    if not t:
+        return jsonify({"total": 0, "critiques": 0})
+    total, critiques = compter_notifications(t, db, _NOTIF_MODELS)
+    return jsonify({"total": total, "critiques": critiques})
 
 
 @bp.route("/jours-feries")

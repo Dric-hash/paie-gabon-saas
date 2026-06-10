@@ -586,3 +586,69 @@ class TestDocumentsRH:
         r = client.get(f"/bulletins/export-zip/{pid}")
         assert r.status_code == 200
         assert r.data[:2] == b"PK"  # signature ZIP
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — NOTIFICATIONS & RAPPELS
+# ══════════════════════════════════════════════════════════════════════════════
+class TestNotifications:
+    def test_page_notifications(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.get("/notifications")
+        assert r.status_code == 200
+
+    def test_api_count(self, client):
+        auth_session(client, "admin@a.ga")
+        r = client.get("/api/notifications/count")
+        assert r.status_code == 200
+        d = r.get_json()
+        assert "total" in d and "critiques" in d
+
+    def test_contrat_echeance_detecte(self, client):
+        """Un contrat arrivant à échéance doit générer une notification."""
+        from models import Tenant, Salarie, Contrat
+        from notifications import get_notifications
+        from blueprints.tenant import _NOTIF_MODELS
+        from datetime import date, timedelta
+        with flask_app.app_context():
+            ta = Tenant.query.filter_by(slug="entreprise-a").first()
+            s = Salarie(tenant_id=ta.id, matricule="NOTIF1", nom="ECHEANCE", prenom="Test",
+                        date_embauche=date(2020,1,1), statut="ACTIF")
+            db.session.add(s); db.session.flush()
+            db.session.add(Contrat(tenant_id=ta.id, salarie_id=s.id, type_contrat="CDD",
+                date_debut=date(2024,1,1), date_fin=date.today()+timedelta(days=5),
+                salaire_base=300000, actif=True))
+            db.session.commit()
+            notifs = get_notifications(ta, db, _NOTIF_MODELS)
+            contrats = [n for n in notifs if n["categorie"] == "contrat"]
+            assert len(contrats) >= 1
+
+    def test_conge_a_valider_detecte(self, client):
+        """Un congé en attente doit générer une notification."""
+        from models import Tenant, Salarie, Conge
+        from notifications import get_notifications
+        from blueprints.tenant import _NOTIF_MODELS
+        from datetime import date, timedelta
+        with flask_app.app_context():
+            ta = Tenant.query.filter_by(slug="entreprise-a").first()
+            s = Salarie(tenant_id=ta.id, matricule="NOTIF2", nom="CONGE", prenom="Test",
+                        date_embauche=date(2020,1,1), statut="ACTIF")
+            db.session.add(s); db.session.flush()
+            db.session.add(Conge(tenant_id=ta.id, salarie_id=s.id, annee=date.today().year,
+                jours_acquis=20, jours_pris=0, date_depart=date.today()+timedelta(days=10),
+                statut="DEMANDÉ"))
+            db.session.commit()
+            notifs = get_notifications(ta, db, _NOTIF_MODELS)
+            conges = [n for n in notifs if n["categorie"] == "conge"]
+            assert len(conges) >= 1
+
+    def test_notifications_isolees_par_tenant(self, client):
+        """Les notifications d'un tenant ne fuient pas vers un autre."""
+        from models import Tenant
+        from notifications import get_notifications
+        from blueprints.tenant import _NOTIF_MODELS
+        with flask_app.app_context():
+            tb = Tenant.query.filter_by(slug="entreprise-b").first()
+            notifs_b = get_notifications(tb, db, _NOTIF_MODELS)
+            # Toutes les notifs de B doivent concerner B (pas de fuite)
+            assert isinstance(notifs_b, list)

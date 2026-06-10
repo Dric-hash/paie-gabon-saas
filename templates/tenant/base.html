@@ -333,6 +333,14 @@
       </nav>
 
       <div class="flex items-center gap-2 ml-auto">
+        <a href="/notifications" aria-label="Notifications" id="notif-bell"
+          style="position:relative;color:var(--text-sub);font-size:1.15rem;padding:.3rem .5rem;text-decoration:none">
+          🔔
+          <span id="notif-badge"
+            style="display:none;position:absolute;top:0;right:0;min-width:16px;height:16px;
+            background:#dc2626;color:white;font-size:.6rem;font-weight:700;border-radius:9999px;
+            display:none;align-items:center;justify-content:center;padding:0 4px;line-height:1"></span>
+        </a>
         <a href="/parametres" aria-label="Paramètres"
           style="color:var(--text-sub);font-size:1.1rem;padding:.3rem .5rem;text-decoration:none">⚙</a>
         <a href="/logout"
@@ -396,6 +404,27 @@ document.addEventListener('click', function(e) {
     }
   }
 });
+
+// ── Cloche de notifications : compteur rafraîchi en arrière-plan ─────────────
+(function() {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  function majCompteur() {
+    fetch('/api/notifications/count')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(d) {
+        if (!d || !d.total) { badge.style.display = 'none'; return; }
+        badge.textContent = d.total > 99 ? '99+' : d.total;
+        badge.style.display = 'flex';
+        // Rouge si critique, sinon orange
+        badge.style.background = d.critiques > 0 ? '#dc2626' : '#b8862f';
+      })
+      .catch(function() {});
+  }
+  majCompteur();
+  // Rafraîchir toutes les 5 minutes
+  setInterval(majCompteur, 300000);
+})();
 </script>
 {% block scripts %}{% endblock %}
 

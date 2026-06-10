@@ -10,8 +10,23 @@
 
 <nav class="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
   <span class="font-black">{{ tenant.denomination }}</span>
-  <a href="/journaliers" class="text-sm hover:text-slate-200">← Retour journaliers</a>
+  <div class="flex items-center gap-3">
+    <a href="/notifications" id="notif-bell-std" style="position:relative;text-decoration:none;font-size:1.05rem" title="Notifications">🔔<span id="notif-badge-std" style="display:none;position:absolute;top:-4px;right:-6px;min-width:15px;height:15px;background:#dc2626;color:white;font-size:.58rem;font-weight:700;border-radius:9999px;align-items:center;justify-content:center;padding:0 3px;line-height:1"></span></a>
+    <a href="/journaliers" class="text-sm hover:text-slate-200">← Retour journaliers</a>
+  </div>
 </nav>
+<script>
+(function() {
+  const badge = document.getElementById('notif-badge-std');
+  if (!badge) return;
+  fetch('/api/notifications/count').then(r => r.ok ? r.json() : null).then(d => {
+    if (!d || !d.total) return;
+    badge.textContent = d.total > 99 ? '99+' : d.total;
+    badge.style.display = 'flex';
+    badge.style.background = d.critiques > 0 ? '#dc2626' : '#b8862f';
+  }).catch(() => {});
+})();
+</script>
 
 <main class="max-w-xl mx-auto p-6">
   {% with messages = get_flashed_messages(with_categories=true) %}
