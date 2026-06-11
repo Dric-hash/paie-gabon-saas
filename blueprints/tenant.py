@@ -2815,9 +2815,9 @@ def pointage_individuel():
         h_sup_70_man = float(request.form.get("heures_sup_70",0) or 0)
 
         if type_jour == "DIMANCHE":
-            # Tout va en +40% (dimanche)
-            h_sup_40_final = round(h_sup_horaire + heures_normales_final, 2)
-            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_70_final = 0
+            # Dimanche travaillé : intégralité en +70% (réglementation BTP Gabon)
+            h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
+            h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
             heures_normales_final = 0
         elif type_jour == "FERIE":
             # Tout va en +70% (jour férié)
@@ -4533,19 +4533,33 @@ def api_pointage_mois(id):
     dernier_jour = calendar.monthrange(annee, mois)[1]
     debut = date(annee, mois, 1)
     fin   = date(annee, mois, dernier_jour)
-    pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
-                Pointage.present == True).all()
-    if not pts:
+    pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin).all()
+    pts_travailles = [p for p in pts if p.present and not p.absent]
+    if not pts_travailles:
         return jsonify({"nb_jours": 0, "nb_absences": 0,
             "heures_sup_10": 0, "heures_sup_30": 0, "heures_sup_40": 0, "heures_sup_70": 0,
             "heures_normales_total": 0, "total_sup": 0,
             "message": "Aucun pointage pour cette période"})
-    nb_jours        = len(pts)
-    heures_normales = sum(float(p.heures_normales or 8) for p in pts)
-    heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts)
-    heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts)
-    heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts)
-    heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts)
+    nb_jours = len(pts_travailles)
+
+    if (t.convention or "").upper() == "BTP":
+        # Ventilation réglementaire BTP : semaine par semaine, ligne par ligne
+        from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
+        v = ventiler_heures_mois_btp(pointage_vers_jours(pts))
+        heures_normales = v["heures_normales"]
+        heures_sup_10   = v["heures_sup_10"]
+        heures_sup_30   = v["heures_sup_30"]
+        heures_sup_40   = v["heures_sup_40"]
+        heures_sup_70   = v["heures_sup_70"]
+        detail_semaines = v["detail_semaines"]
+    else:
+        # Autres conventions : cumul direct des colonnes déjà ventilées par jour
+        heures_normales = sum(float(p.heures_normales or 8) for p in pts_travailles)
+        heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts_travailles)
+        heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts_travailles)
+        heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts_travailles)
+        heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts_travailles)
+        detail_semaines = []
     pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
                 Pointage.absent == True).all()
     return jsonify({
@@ -4557,6 +4571,7 @@ def api_pointage_mois(id):
         "heures_sup_40":         round(heures_sup_40, 2),
         "heures_sup_70":         round(heures_sup_70, 2),
         "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_40+heures_sup_70, 2),
+        "detail_semaines":       detail_semaines,
         "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
     })
 

@@ -95,6 +95,15 @@
           <div style="font-size:.7rem;color:#6b7280">+70% <strong id="ptg_70">0h</strong></div>
         </div>
       </div>
+
+      <!-- Détail de la ventilation par semaine (BTP) -->
+      <div id="ptg_detail_wrap" style="display:none;margin-top:.75rem">
+        <button type="button" onclick="toggleDetailSemaines()" id="btn_detail_sem"
+          style="background:transparent;border:none;color:#065f46;font-size:.75rem;font-weight:700;cursor:pointer;padding:0;text-decoration:underline">
+          ▸ Voir le détail de la répartition semaine par semaine
+        </button>
+        <div id="ptg_detail_semaines" style="display:none;margin-top:.5rem;overflow-x:auto"></div>
+      </div>
     </div>
 
     {% if acomptes_attente %}
@@ -521,6 +530,51 @@ const fmt = n => new Intl.NumberFormat("fr-FR").format(Math.round(n || 0)) + " F
 let timer;
 let _ptgData = null;
 
+function toggleDetailSemaines() {
+  const box = document.getElementById('ptg_detail_semaines');
+  const btn = document.getElementById('btn_detail_sem');
+  if (!box) return;
+  const ouvert = box.style.display !== 'none';
+  box.style.display = ouvert ? 'none' : 'block';
+  if (btn) btn.innerHTML = (ouvert ? '▸' : '▾') + ' Voir le détail de la répartition semaine par semaine';
+}
+
+function rendreDetailSemaines(semaines) {
+  const wrap = document.getElementById('ptg_detail_wrap');
+  const box  = document.getElementById('ptg_detail_semaines');
+  if (!wrap || !box) return;
+  if (!semaines || !semaines.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  let h = `<table style="width:100%;border-collapse:collapse;font-size:.72rem">
+    <thead><tr style="background:#065f46;color:white">
+      <th style="padding:.35rem .5rem;text-align:left">Semaine</th>
+      <th style="padding:.35rem .5rem;text-align:right">Pointées</th>
+      <th style="padding:.35rem .5rem;text-align:right">Normales</th>
+      <th style="padding:.35rem .5rem;text-align:right">+10%</th>
+      <th style="padding:.35rem .5rem;text-align:right">+30%</th>
+      <th style="padding:.35rem .5rem;text-align:right">+40%</th>
+      <th style="padding:.35rem .5rem;text-align:right">+70%</th>
+    </tr></thead><tbody>`;
+  semaines.forEach((s, i) => {
+    const bg = i % 2 ? 'background:#f0fdf4' : '';
+    h += `<tr style="border-bottom:1px solid #d1fae5;${bg}">
+      <td style="padding:.3rem .5rem;font-weight:600">${s.semaine}</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.cumul_ordinaire}h</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.heures_normales}h</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_10}h</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_30}h</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_40}h</td>
+      <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_70}h</td>
+    </tr>`;
+  });
+  h += `</tbody></table>
+    <p style="font-size:.68rem;color:#047857;margin:.4rem 0 0">
+      Répartition réglementaire BTP : 0→40h normales · 40→44h +10% · 44h et + +30% ·
+      nuit +40% · dimanche/férié travaillé +70% · férié chômé = 8h normales.
+    </p>`;
+  box.innerHTML = h;
+}
+
 function chargerPointage(salId, mois, annee) {
   if (!salId || !mois || !annee) return;
   fetch(`/api/salarie/${salId}/pointage-mois?mois=${mois}&annee=${annee}`)
@@ -538,6 +592,7 @@ function chargerPointage(salId, mois, annee) {
         document.getElementById('ptg_40').textContent = (d.heures_sup_40||0) + 'h';
         document.getElementById('ptg_70').textContent = (d.heures_sup_70||0) + 'h';
         document.getElementById('ptg_message').textContent = '— ' + d.message;
+        rendreDetailSemaines(d.detail_semaines || []);
       } else {
         bloc.style.display = 'none'; _ptgData = null;
       }

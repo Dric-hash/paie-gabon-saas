@@ -397,8 +397,194 @@ def distribuer_heures_semaine_btp(heures_par_jour: list,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# UTILITAIRES CONVENTION BTP GABON
+# VENTILATION MENSUELLE DU POINTAGE — RÉGIME BTP GABON (40h légal / 48h contractuel)
+# Analyse chaque jour (ligne de pointage) de façon INDÉPENDANTE, puis applique
+# le filtre réglementaire SEMAINE PAR SEMAINE (lundi → dimanche).
 # ══════════════════════════════════════════════════════════════════════════════
+
+# Heures théoriques d'un jour férié chômé (comptées en normales pour préserver le salaire)
+HEURES_JOUR_FERIE_CHOME = 8.0
+# Seuils hebdomadaires BTP
+_SEUIL_NORMALES = 40.0   # 0 → 40h : normales
+_SEUIL_10       = 44.0   # 40 → 44h : +10% (4h max)
+# au-delà de 44h : +30%
+
+
+def _classer_jour_btp(jour, feries_set):
+    """
+    Analyse UNE ligne de pointage de façon indépendante.
+    Renvoie un tuple (categorie, heures_jour, heures_nuit) où categorie ∈
+    {"ORDINAIRE", "DIM_FERIE_TRAVAILLE", "FERIE_CHOME", "REPOS"}.
+
+    Aucune présomption : on lit exactement ce qui est pointé (pas de "8h d'office").
+    """
+    d = jour.get("date")
+    hj = float(jour.get("heures", jour.get("heures_jour", 0)) or 0)
+    hn = float(jour.get("heures_nuit", 0) or 0)
+
+    # Jour férié : flag explicite prioritaire, sinon appartenance à l'ensemble fourni
+    if "ferie" in jour and jour["ferie"] is not None:
+        est_ferie = bool(jour["ferie"])
+    else:
+        est_ferie = bool(feries_set and d in feries_set)
+
+    est_dimanche = bool(d is not None and hasattr(d, "weekday") and d.weekday() == 6)
+
+    # Présence : explicite si fournie, sinon déduite des heures réellement pointées
+    if "present" in jour and jour["present"] is not None:
+        travaille = bool(jour["present"]) and (hj + hn) > 0
+    else:
+        travaille = (hj + hn) > 0
+
+    if (est_dimanche or est_ferie) and travaille:
+        # Dimanche/férié travaillé : l'intégralité bascule en +70% (base + fin de journée)
+        return ("DIM_FERIE_TRAVAILLE", hj, hn)
+    if est_ferie and not travaille and not est_dimanche:
+        # Férié chômé en semaine : 8h théoriques comptées en normales
+        return ("FERIE_CHOME", 0.0, 0.0)
+    if travaille:
+        return ("ORDINAIRE", hj, hn)
+    return ("REPOS", 0.0, 0.0)
+
+
+def _cle_semaine(d):
+    """Clé (année ISO, semaine ISO) pour regrouper les jours par semaine lundi→dimanche."""
+    iso = d.isocalendar()
+    return (iso[0], iso[1])
+
+
+def ventiler_heures_mois_btp(jours, feries=None) -> dict:
+    """
+    Ventile un MOIS de pointage selon la réglementation BTP Gabon, semaine par semaine.
+
+    Paramètres
+    ----------
+    jours : liste de dict, une entrée par jour (ligne de pointage), traitées
+            INDÉPENDAMMENT. Champs reconnus :
+        - "date"        : datetime.date  (REQUIS — détermine le jour de la semaine)
+        - "heures"      : float — heures de JOUR travaillées (alias : "heures_jour")
+        - "heures_nuit" : float — heures de nuit travaillées ce jour  (→ +40%)
+        - "ferie"       : bool  — jour férié (sinon déduit de `feries`)
+        - "present"     : bool  — présence (sinon déduite des heures pointées)
+    feries : ensemble/liste de datetime.date fériés (utilisé si "ferie" absent du jour).
+
+    Règles appliquées par semaine (lundi → dimanche) :
+        • 0 → 40h (hors dim./fériés)              → Heures normales
+        • 40 → 44h                                → +10% (4h max)
+        • 44h et au-delà (+ heures sup de semaine)→ +30%
+        • Dimanche/férié TRAVAILLÉ                → +70% (intégralité de la journée)
+        • Férié chômé en semaine                  → 8h en Heures normales
+        • Heures de nuit                          → +40% (indépendant des seuils)
+
+    Retour : dict des totaux mensuels ventilés + le détail par semaine.
+    """
+    feries_set = set(feries) if feries else set()
+
+    semaines = {}   # cle_semaine -> accumulateurs
+    for jour in jours:
+        d = jour.get("date")
+        if d is None:
+            continue
+        cat, hj, hn = _classer_jour_btp(jour, feries_set)
+        sem = semaines.setdefault(_cle_semaine(d), {
+            "cumul_ordinaire": 0.0,  # heures de jour ordinaires (cumul hebdo)
+            "nuit": 0.0,             # heures de nuit (+40%)
+            "dim_ferie": 0.0,        # heures dim/férié travaillés (+70%)
+            "feries_chomes": 0.0,    # heures normales issues de fériés chômés
+        })
+        if cat == "DIM_FERIE_TRAVAILLE":
+            sem["dim_ferie"] += hj + hn
+        elif cat == "FERIE_CHOME":
+            sem["feries_chomes"] += HEURES_JOUR_FERIE_CHOME
+        elif cat == "ORDINAIRE":
+            sem["cumul_ordinaire"] += hj
+            sem["nuit"] += hn
+        # "REPOS" : rien
+
+    tot = {"heures_normales": 0.0, "heures_sup_10": 0.0, "heures_sup_30": 0.0,
+           "heures_sup_40": 0.0, "heures_sup_70": 0.0}
+    detail_semaines = []
+
+    for cle in sorted(semaines.keys()):
+        s = semaines[cle]
+        cumul = s["cumul_ordinaire"]
+
+        normales = min(cumul, _SEUIL_NORMALES) + s["feries_chomes"]
+        h10 = min(max(cumul - _SEUIL_NORMALES, 0.0), _SEUIL_10 - _SEUIL_NORMALES)  # 40→44, max 4h
+        h30 = max(cumul - _SEUIL_10, 0.0)                                          # 44h et +
+        h40 = s["nuit"]
+        h70 = s["dim_ferie"]
+
+        tot["heures_normales"] += normales
+        tot["heures_sup_10"]   += h10
+        tot["heures_sup_30"]   += h30
+        tot["heures_sup_40"]   += h40
+        tot["heures_sup_70"]   += h70
+
+        detail_semaines.append({
+            "semaine": f"{cle[0]}-S{cle[1]:02d}",
+            "cumul_ordinaire": round(cumul, 2),
+            "heures_normales": round(normales, 2),
+            "heures_sup_10": round(h10, 2),
+            "heures_sup_30": round(h30, 2),
+            "heures_sup_40": round(h40, 2),
+            "heures_sup_70": round(h70, 2),
+        })
+
+    resultat = {k: round(v, 2) for k, v in tot.items()}
+    resultat["total_heures"] = round(sum(tot.values()), 2)
+    resultat["total_heures_sup"] = round(
+        tot["heures_sup_10"] + tot["heures_sup_30"] + tot["heures_sup_40"] + tot["heures_sup_70"], 2)
+    resultat["detail_semaines"] = detail_semaines
+    return resultat
+
+
+def pointage_vers_jours(pointages):
+    """
+    Adaptateur : convertit des enregistrements ORM `Pointage` en liste de dicts
+    pour `ventiler_heures_mois_btp`, en lisant chaque ligne indépendamment.
+
+    On RECONSTRUIT les heures réellement travaillées en sommant toutes les
+    colonnes (heures_normales + sup 10/30/40/70), car la ventilation par jour
+    déjà appliquée a pu vider `heures_normales` (ex. un férié travaillé range
+    ses 8h de base dans heures_sup_70). On laisse ensuite l'algorithme
+    hebdomadaire reclasser correctement.
+
+    Règles de mapping :
+      - type_jour CHOME_PAYE / CHOME_RECUPERABLE → férié chômé (8h normales)
+      - type_jour FERIE                          → férié travaillé (+70%)
+      - dimanche (détecté par la date) travaillé  → +70%
+      - jour ordinaire                           → heures de jour + nuit (heures_sup_40)
+    """
+    jours = []
+    for p in pointages:
+        d = getattr(p, "date_pointage", None)
+        if d is None:
+            continue
+        type_jour = (getattr(p, "type_jour", "") or "").upper()
+        nuit = float(getattr(p, "heures_sup_40", 0) or 0)
+        raw = (float(getattr(p, "heures_normales", 0) or 0)
+               + float(getattr(p, "heures_sup_10", 0) or 0)
+               + float(getattr(p, "heures_sup_30", 0) or 0)
+               + nuit
+               + float(getattr(p, "heures_sup_70", 0) or 0))
+        present = bool(getattr(p, "present", True)) and not bool(getattr(p, "absent", False))
+
+        if type_jour in ("CHOME_PAYE", "CHOME_RECUPERABLE"):
+            jours.append({"date": d, "heures": 0.0, "heures_nuit": 0.0,
+                          "ferie": True, "present": False})
+        elif type_jour == "FERIE":
+            jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
+                          "ferie": True, "present": present})
+        elif hasattr(d, "weekday") and d.weekday() == 6:
+            # Dimanche : l'intégralité bascule en +70% (géré par l'algorithme)
+            jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
+                          "ferie": False, "present": present})
+        else:
+            # Jour ordinaire : on isole la nuit (+40%), le reste alimente le cumul hebdo
+            jours.append({"date": d, "heures": max(raw - nuit, 0.0), "heures_nuit": nuit,
+                          "ferie": False, "present": present})
+    return jours
 
 def calculer_prime_anciennete_btp(salaire_base: float, anciennete_annees: int) -> float:
     """

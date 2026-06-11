@@ -61,6 +61,14 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   s'adaptent à la convention choisie.
 
 ### Corrigé
+- **Pointage / Simulateur BTP** : nouvel algorithme de ventilation mensuelle des
+  heures (`ventiler_heures_mois_btp`) qui analyse chaque jour **indépendamment**
+  puis applique le filtre réglementaire **semaine par semaine** : 0→40h normales,
+  40→44h +10% (4h max), 44h et au-delà +30%, nuit +40%, dimanche/férié travaillé
+  +70% (intégralité, sans présumer « 8h normales + sup »), férié chômé en semaine
+  = 8h normales. Branché dans le cumul mensuel du pointage pour les tenants BTP.
+  Correction au passage : un dimanche travaillé est désormais ventilé en +70%
+  (et non +40%).
 - **Simulateur** : la section « Simulations avancées » (onglets Augmentation /
   Net→Brut / Comparer scénarios) était placée dans `{% block scripts %}`, que
   `base.html` injecte **hors du `<main>`** — elle s'affichait donc sans la marge
@@ -73,6 +81,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   (garde global anti-débordement).
 - **Simulateur** : les heures supplémentaires sont désormais prises en compte
   quelle que soit la convention (auparavant ignorées hors « Mode BTP »).
+
+- **Écran de saisie du bulletin** : ajout d'un détail repliable de la
+  répartition **semaine par semaine** (heures pointées, normales, +10/+30/+40/+70%)
+  pour visualiser la ventilation BTP avant de valider le bulletin.
 
 ### Base de données (migration automatique au démarrage)
 - `ALTER TABLE tenants ADD COLUMN convention VARCHAR(20) DEFAULT 'AUCUNE'`

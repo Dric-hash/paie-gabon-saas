@@ -426,18 +426,19 @@ function majLibellesHeuresSup(conv) {
 function appliquerConvention() {
   const conv = document.getElementById('sel_convention').value;
   const isBTP = conv === 'BTP';
-  // Préremplissage structurel : uniquement en BTP
+  // Les champs restent TOUJOURS modifiables : le mode BTP ne fait que
+  // proposer une valeur par défaut (17,33h) que l'on peut changer ou effacer.
   ['h10','h30'].forEach(id => {
     const el = document.getElementById(id);
-    el.readOnly = isBTP;
-    el.style.background = isBTP ? '#f9fafb' : '';
-    el.style.color = isBTP ? '#9ca3af' : '';
+    el.readOnly = false;
+    el.style.background = '';
+    el.style.color = '';
   });
   if (isBTP) appliquerBTP();
   else { document.getElementById('h10').value = 0; document.getElementById('h30').value = 0; }
   majLibellesHeuresSup(conv);
   const note = document.getElementById('conv-note');
-  if (isBTP) note.textContent = 'Ajoute 17,33h ×+10% et 17,33h ×+30% (heures structurelles).';
+  if (isBTP) note.textContent = 'Valeurs proposées : 17,33h ×+10% et 17,33h ×+30% (modifiables ou effaçables).';
   else if (conv === 'COMMERCE') note.textContent = 'Heures sup au jour : 8 premières +10%, au-delà +30% ; nuit +70% ; férié jour +40%.';
   else note.textContent = 'Saisissez librement les heures supplémentaires.';
 }
