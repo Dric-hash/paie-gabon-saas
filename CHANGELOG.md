@@ -61,9 +61,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   s'adaptent à la convention choisie.
 
 ### Corrigé
-- **Simulateur** : mise en page rendue responsive (les deux panneaux
-  s'empilent sous 1024 px), corrigeant le débordement horizontal qui
-  masquait la barre de navigation.
+- **Simulateur** : correction du débordement horizontal (« grid blowout » des
+  colonnes `1fr`) qui faisait passer le contenu sous la sidebar fixe — le bas
+  de page était masqué côté gauche. Grilles passées en `minmax(0,1fr)` +
+  `min-width:0`, panneaux empilés sous 1100 px, et `min-width:0` sur le `<main>`
+  (garde global anti-débordement).
 - **Simulateur** : les heures supplémentaires sont désormais prises en compte
   quelle que soit la convention (auparavant ignorées hors « Mode BTP »).
 

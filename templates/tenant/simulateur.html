@@ -3,13 +3,25 @@
 {% block content %}
 
 <style>
-  /* Mise en page responsive : empile les deux panneaux sous 1024px pour éviter
-     tout débordement horizontal qui masquait la barre de navigation. */
-  @media (max-width: 1023px) {
-    #sim-grid { grid-template-columns: 1fr !important; }
-  }
-  #sim-grid { min-width: 0; }
+  /* Anti « grid blowout » : des pistes 1fr ne rétrécissent pas sous la largeur
+     de leur contenu → débordement horizontal → la sidebar fixe recouvre le
+     contenu décalé. minmax(0,1fr) + min-width:0 sur les éléments corrigent. */
+  #sim-grid { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   #sim-grid > div { min-width: 0; }
+  #sim-grid [style*="grid-template-columns"] > * { min-width: 0; }
+  #sim-grid input, #sim-grid select,
+  .adv-tab input, .adv-tab select { max-width: 100%; box-sizing: border-box; }
+  /* Les éléments des grilles internes peuvent rétrécir (pas de débordement) */
+  .adv-tab > div { min-width: 0; }
+  .adv-tab [style*="grid-template-columns"] > * { min-width: 0; }
+  /* Zone utile réduite par la sidebar : on empile en 1 colonne sous 1100px */
+  @media (max-width: 1100px) {
+    #sim-grid { grid-template-columns: 1fr !important; }
+    #panneau-resultats { position: static !important; top: auto !important; }
+  }
+  @media (max-width: 720px) {
+    .adv-tab [style*="grid-template-columns"] { grid-template-columns: 1fr !important; }
+  }
 </style>
 
 <!-- En-tête -->
@@ -24,7 +36,7 @@
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start" id="sim-grid">
+<div style="display:grid;gap:1.5rem;align-items:start" id="sim-grid">
 
   <!-- ══ PANNEAU SAISIE ══ -->
   <div>
