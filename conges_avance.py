@@ -123,7 +123,8 @@ def _zero_result(**kw):
 # 2. SOLDE DE TOUT COMPTE — INDEMNITÉ COMPENSATRICE DE CONGÉS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None) -> dict:
+def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
+                               convention="BTP") -> dict:
     """
     Calcule l'indemnité compensatrice de congés non pris à la cessation du contrat.
 
@@ -172,25 +173,16 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None) -
     base_journaliere = round(base_calcul / 30, 2)
     indemnite        = round(base_journaliere * jours_restants, 0)
 
-    # ── Indemnité de services rendus — Convention BTP Gabon Art. A.32 ────────
-    # Base : moyenne mensuelle salaire global des 12 derniers mois
-    # Taux par tranche d'ancienneté × nb années de présence :
-    #   2 à 10 ans  → 20%/année
-    #   10 à 15 ans → 26%/année
-    #   15 à 20 ans → 30%/année
-    #   > 20 ans    → 35%/année
+    # ── Indemnité de services rendus — Art. A.32 (selon convention) ──────────
+    # Base : moyenne mensuelle du salaire global des 12 derniers mois.
+    # Le barème dépend de la convention collective applicable :
+    #   BTP      → 20% (2-10) / 26% (10-15) / 30% (15-20) / 35% (>20)
+    #   COMMERCE → 20% (2-5)  / 25% (5-10)  / 30% (10-20) / 35% (>20)
+    from calculs_paie import indemnite_services_rendus
     anciennete_annees = acquis_calc["anciennete_annees"]
-    indem_licenciement = 0
-    if anciennete_annees >= 2:
-        if anciennete_annees <= 10:
-            taux = 0.20
-        elif anciennete_annees <= 15:
-            taux = 0.26
-        elif anciennete_annees <= 20:
-            taux = 0.30
-        else:
-            taux = 0.35
-        indem_licenciement = round(base_calcul * taux * anciennete_annees, 0)
+    indem_licenciement = indemnite_services_rendus(
+        convention, base_calcul, anciennete_annees
+    )
 
     return {
         "salarie":            salarie,

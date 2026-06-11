@@ -499,3 +499,258 @@ def permissions_familiales_btp(evenement: str) -> int:
         "ceremonie_religieuse":        1,
     }
     return BAREMES.get(evenement, 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# UTILITAIRES CONVENTION COMMERCE GABON
+# (Convention Collective du Secteur Commerce — Libreville, 8 juin 1988)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ─── Grille de salaires conventionnelle COMMERCE ──────────────────────────────
+# Source : Grille de salaire Convention Collective du Commerce (A.I.I. 9).
+# Montants en FCFA. "mensuel" = salaire minimum mensuel ; "horaire" = taux horaire.
+GRILLE_COMMERCE = [
+    # code, libellé,                       mensuel,  horaire
+    ("E1",  "Personnel d'exécution Cat 1",   98_500,   568.28),
+    ("E2",  "Personnel d'exécution Cat 2",  102_600,   591.93),
+    ("E3",  "Personnel d'exécution Cat 3",  105_300,   607.51),
+    ("E4",  "Personnel d'exécution Cat 4",  109_800,   633.47),
+    ("E5",  "Personnel d'exécution Cat 5",  115_500,   666.36),
+    ("E6",  "Personnel d'exécution Cat 6",  123_600,   713.09),
+    ("E7",  "Personnel d'exécution Cat 7",  144_000,   830.79),
+    ("AM1", "Agent de maîtrise AM1",         182_800,  1_054.64),
+    ("AM2", "Agent de maîtrise AM2",         212_900,  1_228.29),
+    ("C1",  "Cadres C1",                     280_500,  1_618.30),
+    ("C2",  "Cadres C2",                     358_800,  2_070.04),
+    ("C3",  "Cadres C3",                     449_700,  2_594.47),
+    ("C4",  "Cadres C4",                     562_100,  3_242.95),
+]
+
+# Taux heures supplémentaires COMMERCE — Art. A.38
+COEFF_COMMERCE_JOUR_10    = 1.10    # jours ouvrables, 8 premières heures
+COEFF_COMMERCE_JOUR_30    = 1.30    # jours ouvrables, à partir de la 9e heure
+COEFF_COMMERCE_NUIT       = 1.70    # nuit (21h-6h), jours ouvrables
+COEFF_COMMERCE_FERIE_JOUR = 1.40    # jours fériés / repos hebdo, de jour
+COEFF_COMMERCE_FERIE_NUIT = 2.40    # jours fériés / repos hebdo, de nuit (+140%)
+
+# Prime d'assiduité minimale — Art. A.49.1
+PRIME_ASSIDUITE_COMMERCE_PCT = 0.015   # 1,5 % du salaire conventionnel de base
+
+
+def calculer_prime_anciennete_commerce(salaire_base: float, anciennete_annees: int) -> float:
+    """
+    Prime d'ancienneté COMMERCE — Art. A.46.5.
+    Attribuée après 2 ans de présence : 2 % du salaire de base conventionnel,
+    majorée de 1 % par année supplémentaire (identique au barème BTP).
+    """
+    if anciennete_annees < 2 or salaire_base <= 0:
+        return 0.0
+    taux = min(0.02 + 0.01 * (anciennete_annees - 2), 0.30)
+    return round(salaire_base * taux, 0)
+
+
+def calculer_preavis_commerce(anciennete_annees: int) -> int:
+    """
+    Durée du préavis en jours — Convention COMMERCE Art. A.30.3.
+
+    Barème :
+      1 mois à 1 an  → 15 jours
+      1 à 3 ans      → 1 mois  (30 j)
+      3 à 5 ans      → 2 mois  (60 j)
+      5 à 10 ans     → 3 mois  (90 j)
+      10 à 15 ans    → 4 mois  (120 j)
+      15 à 20 ans    → 5 mois  (150 j)
+      20 à 25 ans    → 6 mois  (180 j)
+      26 à 30 ans    → 6 mois + 10 j par année au-delà de 25 ans
+      > 30 ans       → +15 j par année de présence au-delà de 30 ans
+    """
+    if anciennete_annees < 1:
+        return 15
+    elif anciennete_annees < 3:
+        return 30
+    elif anciennete_annees < 5:
+        return 60
+    elif anciennete_annees < 10:
+        return 90
+    elif anciennete_annees < 15:
+        return 120
+    elif anciennete_annees < 20:
+        return 150
+    elif anciennete_annees <= 25:
+        return 180
+    elif anciennete_annees <= 30:
+        # 26→190, 27→200, ... (6 mois + 10 j/an au-delà de 25 ans)
+        return 180 + (anciennete_annees - 25) * 10
+    else:
+        # base à 30 ans = 180 + 5*10 = 230 j, puis +15 j/an
+        return 230 + (anciennete_annees - 30) * 15
+
+
+def calculer_indemnite_services_rendus_commerce(
+    moyenne_12_mois: float, anciennete_annees: int
+) -> float:
+    """
+    Indemnité de services rendus — Convention COMMERCE Art. A.32.
+    Départ retraite / décès / licenciement (hors faute lourde) après 2 ans continus.
+
+    Base : moyenne mensuelle du salaire global des 12 derniers mois.
+    Taux × nombre d'années de présence :
+      2 à 5 ans   → 20 %/année
+      5 à 10 ans  → 25 %/année
+      10 à 20 ans → 30 %/année
+      > 20 ans    → 35 %/année
+    """
+    if anciennete_annees < 2 or moyenne_12_mois <= 0:
+        return 0.0
+    if anciennete_annees <= 5:
+        taux = 0.20
+    elif anciennete_annees <= 10:
+        taux = 0.25
+    elif anciennete_annees <= 20:
+        taux = 0.30
+    else:
+        taux = 0.35
+    return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def permissions_familiales_commerce(evenement: str) -> int:
+    """
+    Permissions exceptionnelles pour événements familiaux — Art. A.41.
+    Déductibles du congé dans la limite de 10 jours/an (barème identique au BTP).
+    """
+    BAREMES = {
+        "mariage_travailleur":          4,
+        "mariage_enfant":               2,
+        "mariage_frere_soeur":          1,
+        "deces_conjoint_parent_enfant": 5,
+        "deces_frere_soeur":            2,
+        "deces_beau_parent":            2,
+        "naissance_enfant":             3,
+        "ceremonie_religieuse":         1,
+    }
+    return BAREMES.get(evenement, 0)
+
+
+def distribuer_heures_semaine_commerce(heures_par_jour: list,
+                                       types_par_jour: list = None) -> dict:
+    """
+    Distribue les heures d'une semaine selon la convention COMMERCE — Art. A.38.
+
+    Contrairement au BTP (seuils hebdomadaires), le COMMERCE raisonne PAR JOUR :
+        Jour ouvrable : 8 premières heures → +10% ; à partir de la 9e → +30%
+        Nuit (21h-6h) ouvrable             → +70%
+        Jour férié / repos hebdo, de jour  → +40%
+        Jour férié / repos hebdo, de nuit  → +140%
+
+    heures_par_jour : liste de dict par jour :
+        {"heures_normales": 8.0, "heures_sup_nuit": 0, "type_jour": "NORMAL"}
+    """
+    h_norm  = 0.0   # heures normales (≤ 8h/jour ouvrable)
+    h_10    = 0.0   # +10% (1→8h ouvrable au-delà de la durée normale… ici 8 premières)
+    h_30    = 0.0   # +30% (9e heure et + en jour ouvrable)
+    h_nuit  = 0.0   # +70% (nuit ouvrable)
+    h_ferie_jour = 0.0  # +40%
+    h_ferie_nuit = 0.0  # +140%
+
+    SEUIL_JOUR = 8.0
+
+    for i, jour in enumerate(heures_par_jour):
+        if isinstance(jour, dict):
+            h   = float(jour.get("heures_normales", 0) or 0)
+            hn  = float(jour.get("heures_sup_nuit", 0) or 0)
+            tj  = (jour.get("type_jour", "NORMAL") or "NORMAL").upper()
+        else:
+            h  = float(jour or 0)
+            hn = 0.0
+            tj = (types_par_jour[i] if types_par_jour and i < len(types_par_jour) else "NORMAL").upper()
+
+        if tj in ("FERIE", "DIMANCHE", "REPOS"):
+            h_ferie_jour += h
+            h_ferie_nuit += hn
+        else:
+            # Jour ouvrable : 8 premières heures à taux normal,
+            # heures supplémentaires +10% sur les 8 premières heures sup,
+            # +30% au-delà. Convention : les 8 premières h = normales.
+            normales = min(h, SEUIL_JOUR)
+            sup      = max(h - SEUIL_JOUR, 0)
+            h_norm += normales
+            # Les heures sup de jour : +10% jusqu'à la 8e heure sup, +30% ensuite
+            h_10 += min(sup, SEUIL_JOUR)
+            h_30 += max(sup - SEUIL_JOUR, 0)
+            h_nuit += hn
+
+    return {
+        "total_heures":    round(h_norm + h_10 + h_30 + h_nuit + h_ferie_jour + h_ferie_nuit, 2),
+        "heures_normales": round(h_norm, 2),
+        "heures_sup_10":   round(h_10, 2),          # +10%
+        "heures_sup_30":   round(h_30, 2),          # +30%
+        "heures_sup_70":   round(h_nuit, 2),        # nuit ouvrable +70%
+        "heures_sup_40":   round(h_ferie_jour, 2),  # férié/repos jour +40%
+        "heures_sup_140":  round(h_ferie_nuit, 2),  # férié/repos nuit +140%
+    }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DISPATCHER PAR CONVENTION
+# Permet à l'application d'appliquer le bon barème selon Tenant.convention.
+# Valeurs possibles : "BTP" | "COMMERCE" | "AUCUNE"
+# ══════════════════════════════════════════════════════════════════════════════
+
+CONVENTIONS_DISPONIBLES = {
+    "AUCUNE":   "Aucune convention (Code du travail seul)",
+    "BTP":      "Convention Collective BTP",
+    "COMMERCE": "Convention Collective du Commerce",
+}
+
+
+def _conv(convention) -> str:
+    c = (convention or "AUCUNE").upper()
+    return c if c in CONVENTIONS_DISPONIBLES else "AUCUNE"
+
+
+def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) -> float:
+    """Prime d'ancienneté selon la convention (BTP/COMMERCE : 2% + 1%/an après 2 ans)."""
+    c = _conv(convention)
+    if c == "COMMERCE":
+        return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
+    if c == "BTP":
+        return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
+    return 0.0
+
+
+def preavis_jours(convention, anciennete_annees: int) -> int:
+    """Durée du préavis (jours) selon la convention applicable."""
+    c = _conv(convention)
+    if c == "COMMERCE":
+        return calculer_preavis_commerce(anciennete_annees)
+    if c == "BTP":
+        return calculer_preavis_btp(anciennete_annees)
+    # Code du travail (défaut prudent) : aligne sur le barème commun
+    return calculer_preavis_commerce(anciennete_annees)
+
+
+def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_annees: int) -> float:
+    """Indemnité de services rendus (Art. A.32) selon la convention."""
+    c = _conv(convention)
+    if c == "COMMERCE":
+        return calculer_indemnite_services_rendus_commerce(moyenne_12_mois, anciennete_annees)
+    if c == "BTP":
+        return calculer_indemnite_services_rendus_btp(moyenne_12_mois, anciennete_annees)
+    return 0.0
+
+
+def permissions_familiales(convention, evenement: str) -> int:
+    """Jours de permission exceptionnelle (Art. A.41) selon la convention."""
+    c = _conv(convention)
+    if c == "BTP":
+        return permissions_familiales_btp(evenement)
+    # COMMERCE et défaut : même barème
+    return permissions_familiales_commerce(evenement)
+
+
+def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour: list = None) -> dict:
+    """Distribution des heures hebdomadaires selon la convention (BTP vs COMMERCE)."""
+    c = _conv(convention)
+    if c == "COMMERCE":
+        return distribuer_heures_semaine_commerce(heures_par_jour, types_par_jour)
+    return distribuer_heures_semaine_btp(heures_par_jour, types_par_jour)

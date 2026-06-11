@@ -168,6 +168,54 @@
           </button>
         </form>
       </div>
+
+      <div class="card p-6">
+        <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Convention collective</h2>
+        <form method="POST" action="/parametres/societe" class="space-y-3">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Convention applicable à l'entreprise</label>
+            <select name="convention"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;background:white">
+              <option value="AUCUNE"   {{ 'selected' if (tenant.convention or 'AUCUNE') == 'AUCUNE' }}>Aucune (Code du travail seul)</option>
+              <option value="BTP"      {{ 'selected' if tenant.convention == 'BTP' }}>Convention Collective BTP</option>
+              <option value="COMMERCE" {{ 'selected' if tenant.convention == 'COMMERCE' }}>Convention Collective du Commerce</option>
+            </select>
+            <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+              Détermine les barèmes de préavis, d'ancienneté, d'indemnité de services rendus,
+              de permissions familiales et d'heures supplémentaires appliqués.
+            </p>
+          </div>
+          <!-- Champs cachés pour ne pas écraser les autres infos -->
+          <input type="hidden" name="denomination" value="{{ tenant.denomination or '' }}"/>
+          <input type="hidden" name="sigle" value="{{ tenant.sigle or '' }}"/>
+          <input type="hidden" name="activite" value="{{ tenant.activite or '' }}"/>
+          <input type="hidden" name="secteur" value="{{ tenant.secteur or '' }}"/>
+          <input type="hidden" name="nif" value="{{ tenant.nif or '' }}"/>
+          <input type="hidden" name="numero_cnss" value="{{ tenant.numero_cnss or '' }}"/>
+          <input type="hidden" name="numero_cnamgs" value="{{ tenant.numero_cnamgs or '' }}"/>
+          <input type="hidden" name="adresse" value="{{ tenant.adresse or '' }}"/>
+          <input type="hidden" name="boite_postale" value="{{ tenant.boite_postale or '' }}"/>
+          <input type="hidden" name="telephone" value="{{ tenant.telephone or '' }}"/>
+          <input type="hidden" name="ville" value="{{ tenant.ville or '' }}"/>
+          <input type="hidden" name="region" value="{{ tenant.region or '' }}"/>
+          <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
+            💾 Enregistrer la convention
+          </button>
+        </form>
+        <div style="border-top:1px solid #f3f4f6;margin:1rem 0 .75rem"></div>
+        <form method="POST" action="/parametres/importer-grille-commerce"
+              onsubmit="return confirm('Importer la grille de salaires de la Convention Commerce (catégories E1-E7, AM1-AM2, C1-C4) ? La convention de l\'entreprise sera réglée sur COMMERCE.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button type="submit" style="width:100%;background:#b8862f;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8125rem;border:none;cursor:pointer">
+            📥 Importer la grille de salaires Commerce
+          </button>
+          <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+            Crée les catégories d'emploi conventionnelles avec leurs salaires minima.
+            Les catégories existantes ne sont pas écrasées.
+          </p>
+        </form>
+      </div>
     </div>
   </div>
 

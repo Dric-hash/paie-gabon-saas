@@ -53,6 +53,8 @@ class Tenant(db.Model):
     # ✅ LOGO — colonne Text pour stocker base64 sans limite
     logo_url         = db.Column(db.Text)
     langue           = db.Column(db.String(5), default="fr")  # "fr" | "en"
+    # Convention collective applicable : "AUCUNE" | "BTP" | "COMMERCE"
+    convention       = db.Column(db.String(20), default="AUCUNE")
 
     utilisateurs = db.relationship("Utilisateur", backref="tenant", lazy=True, foreign_keys="Utilisateur.tenant_id")
     salaries     = db.relationship("Salarie", backref="tenant", lazy=True)

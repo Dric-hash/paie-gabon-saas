@@ -1,0 +1,216 @@
+{% extends "tenant/base.html" %}
+{% block title %}Déclaration Annuelle des Salaires — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">🗂️ Déclaration Annuelle des Salaires (DAS)</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      <span style="background:#dcfce7;color:#166534;font-weight:700;padding:.15rem .5rem;border-radius:9999px;font-size:.75rem">ANNUELLE</span>
+      Synthèse DGI · cumuls par salarié · formulaires ID19 / ID20 &nbsp;
+      <span style="background:#fef3c7;color:#92400e;font-weight:700;padding:.15rem .5rem;border-radius:9999px;font-size:.75rem">CABINET</span>
+    </p>
+  </div>
+  {% if lignes or lignes_hono %}
+  <div style="display:flex;gap:.625rem;flex-wrap:wrap">
+    <a href="/declaration-das/excel?annee={{ annee }}"
+       style="display:flex;align-items:center;gap:.5rem;background:#059669;color:white;padding:.625rem 1.125rem;border-radius:.875rem;font-weight:700;font-size:.875rem;text-decoration:none">
+      📥 Télécharger la DAS (Excel)
+    </a>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Sélecteur d'exercice -->
+<div class="card p-5 mb-5">
+  <form method="GET" style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <label style="font-size:.8rem;font-weight:700;color:#6b7280">Exercice comptable :</label>
+    <select name="annee" onchange="this.form.submit()"
+      style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.875rem;font-weight:600">
+      {% if not annees %}<option>{{ annee }}</option>{% endif %}
+      {% for a in annees %}
+        <option value="{{ a }}" {{ 'selected' if a == annee }}>{{ a }}</option>
+      {% endfor %}
+    </select>
+    <span style="font-size:.8rem;color:#9ca3af">
+      Basé sur les bulletins <strong>validés / payés</strong> de l'exercice.
+    </span>
+  </form>
+</div>
+
+{% if erreur %}
+  <div class="card p-8" style="text-align:center">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">📭</div>
+    <p style="font-weight:700;color:#374151">{{ erreur }}</p>
+    <p style="font-size:.85rem;color:#9ca3af;margin-top:.5rem">
+      Validez des bulletins de paie pour l'exercice {{ annee }}, puis revenez générer la DAS.
+    </p>
+  </div>
+{% else %}
+
+  <!-- Récapitulatif (ID20) -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.875rem;margin-bottom:1.25rem">
+    {% set cards = [
+      ("Salariés déclarés", totaux.nb_salaries, "#0f3d36", false),
+      ("Brut de présence", totaux.brut_presence, "#0f3d36", true),
+      ("Avantages en nature", totaux.av_nature, "#b8862f", true),
+      ("Brut de congé", totaux.brut_conge, "#b8862f", true),
+      ("TOTAL imposable", totaux.total_1a5, "#0f3d36", true),
+      ("Total retenues (TCTS+IRPP+CFP+FNH)", totaux.total_impots, "#991b1b", true),
+    ] %}
+    {% for label, val, color, money in cards %}
+    <div class="card p-4">
+      <p style="font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em">{{ label }}</p>
+      <p style="font-size:1.35rem;font-weight:800;color:{{ color }};margin-top:.25rem">
+        {% if money %}{{ "{:,.0f}".format(val).replace(",", " ") }} <span style="font-size:.75rem;color:#9ca3af">FCFA</span>{% else %}{{ val }}{% endif %}
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Détail par salarié (ID19) -->
+  <div class="card p-5">
+    <h2 style="font-size:.8rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">
+      ID19 — Détail par salarié ({{ totaux.nb_salaries }})
+    </h2>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+        <thead>
+          <tr style="background:#0f3d36;color:white">
+            <th style="padding:.5rem .6rem;text-align:left">Matricule</th>
+            <th style="padding:.5rem .6rem;text-align:left">Nom & Prénom</th>
+            <th style="padding:.5rem .6rem;text-align:left">N° CNSS</th>
+            <th style="padding:.5rem .6rem;text-align:right">Brut présence</th>
+            <th style="padding:.5rem .6rem;text-align:right">Av. nature</th>
+            <th style="padding:.5rem .6rem;text-align:right">Brut congé</th>
+            <th style="padding:.5rem .6rem;text-align:right">Total impos.</th>
+            <th style="padding:.5rem .6rem;text-align:right">TCTS</th>
+            <th style="padding:.5rem .6rem;text-align:right">IRPP</th>
+            <th style="padding:.5rem .6rem;text-align:right">CFP</th>
+            <th style="padding:.5rem .6rem;text-align:right">FNH</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for l in lignes %}
+          <tr style="border-bottom:1px solid #f3f4f6;{{ 'background:#f9fafb' if loop.index0 % 2 else '' }}">
+            <td style="padding:.45rem .6rem;font-family:monospace">{{ l.matricule }}</td>
+            <td style="padding:.45rem .6rem;font-weight:600">{{ l.nom }} {{ l.prenom }}</td>
+            <td style="padding:.45rem .6rem;font-family:monospace;color:#6b7280">{{ l.cnss or "—" }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.brut_presence).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.av_logement + l.av_eau + l.av_dom + l.av_nour).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.brut_conge).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right;font-weight:700">{{ "{:,.0f}".format(l.total_1a5).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.tcts).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.irpp).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.cfp).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(l.fnh).replace(",", " ") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:#0f3d36;color:white;font-weight:800">
+            <td colspan="3" style="padding:.55rem .6rem">TOTAL</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.brut_presence).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.av_nature).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.brut_conge).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.total_1a5).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.tcts).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.irpp).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.cfp).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(totaux.fnh).replace(",", " ") }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    <p style="font-size:.72rem;color:#9ca3af;margin-top:.75rem">
+      Le fichier Excel téléchargeable contient le détail complet (avantages en nature ventilés,
+      indemnités non imposables, période de présence) sur les onglets <strong>ID19</strong> et <strong>ID20</strong>,
+      plus l'onglet <strong>Paramètres</strong> avec les informations de l'entreprise.
+    </p>
+  </div>
+
+{% endif %}
+
+{% if lignes_hono %}
+  <div style="margin-top:1.5rem;margin-bottom:.75rem">
+    <h2 class="text-lg font-black">🤝 Honoraires & commissions (art. 189 CGI)</h2>
+    <p class="text-gray-500 text-sm">
+      Alimenté depuis le module Prestataires.
+      <span style="color:#0f3d36;font-weight:700">ID23</span> = versés au Gabon (résidents) ·
+      <span style="color:#b8862f;font-weight:700">ID24</span> = versés hors du Gabon (étrangers).
+    </p>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.875rem;margin-bottom:1.25rem">
+    {% set hcards = [
+      ("Prestataires déclarés", tot_hono.nb_prestataires, "#0f3d36", false),
+      ("Montant HT total", tot_hono.montant_ht, "#0f3d36", true),
+      ("TVA", tot_hono.tva, "#b8862f", true),
+      ("RAS locaux (ID23)", tot_hono.retenue_local, "#0f3d36", true),
+      ("RAS étrangers (ID24)", tot_hono.retenue_etranger, "#991b1b", true),
+      ("Total retenues", tot_hono.retenue_total, "#991b1b", true),
+    ] %}
+    {% for label, val, color, money in hcards %}
+    <div class="card p-4">
+      <p style="font-size:.7rem;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.04em">{{ label }}</p>
+      <p style="font-size:1.35rem;font-weight:800;color:{{ color }};margin-top:.25rem">
+        {% if money %}{{ "{:,.0f}".format(val).replace(",", " ") }} <span style="font-size:.75rem;color:#9ca3af">FCFA</span>{% else %}{{ val }}{% endif %}
+      </p>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card p-5">
+    <h3 style="font-size:.8rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem">
+      ID23 / ID24 — Détail par prestataire ({{ tot_hono.nb_prestataires }})
+    </h3>
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;font-size:.78rem">
+        <thead>
+          <tr style="background:#0f3d36;color:white">
+            <th style="padding:.5rem .6rem;text-align:left">NIF</th>
+            <th style="padding:.5rem .6rem;text-align:left">Prestataire</th>
+            <th style="padding:.5rem .6rem;text-align:left">Activité</th>
+            <th style="padding:.5rem .6rem;text-align:center">Type</th>
+            <th style="padding:.5rem .6rem;text-align:right">Montant HT</th>
+            <th style="padding:.5rem .6rem;text-align:right">TVA</th>
+            <th style="padding:.5rem .6rem;text-align:right">RAS locaux</th>
+            <th style="padding:.5rem .6rem;text-align:right">RAS étrangers</th>
+            <th style="padding:.5rem .6rem;text-align:right">Total TTC</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in lignes_hono %}
+          <tr style="border-bottom:1px solid #f3f4f6;{{ 'background:#f9fafb' if loop.index0 % 2 else '' }}">
+            <td style="padding:.45rem .6rem;font-family:monospace">{{ h.nif or "—" }}</td>
+            <td style="padding:.45rem .6rem;font-weight:600">{{ h.raison_sociale }}</td>
+            <td style="padding:.45rem .6rem;color:#6b7280">{{ h.activite or "—" }}</td>
+            <td style="padding:.45rem .6rem;text-align:center">
+              {% if h.resident %}<span style="background:#dcfce7;color:#166534;font-weight:700;padding:.1rem .4rem;border-radius:9999px;font-size:.68rem">Local</span>
+              {% else %}<span style="background:#fef3c7;color:#92400e;font-weight:700;padding:.1rem .4rem;border-radius:9999px;font-size:.68rem">Étranger</span>{% endif %}
+            </td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(h.montant_ht).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(h.tva).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(h.retenue_local).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right">{{ "{:,.0f}".format(h.retenue_etranger).replace(",", " ") }}</td>
+            <td style="padding:.45rem .6rem;text-align:right;font-weight:700">{{ "{:,.0f}".format(h.total).replace(",", " ") }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:#0f3d36;color:white;font-weight:800">
+            <td colspan="4" style="padding:.55rem .6rem">TOTAL</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(tot_hono.montant_ht).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(tot_hono.tva).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(tot_hono.retenue_local).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(tot_hono.retenue_etranger).replace(",", " ") }}</td>
+            <td style="padding:.55rem .6rem;text-align:right">{{ "{:,.0f}".format(tot_hono.total).replace(",", " ") }}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}

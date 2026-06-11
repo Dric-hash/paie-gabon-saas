@@ -29,7 +29,7 @@ from core import (get_tenant, tenant_required, can_edit, admin_only,
                   require_permission, calculer_parts_irpp, parse_date,
                   cache_get, cache_set, cache_delete,
                   _cache_get, _cache_set, _cache_delete, _parse_date, _pd,
-                  send_email_async,
+                  send_email_async, plan_required,
                   TTL_KPIS_DASH, TTL_EVOLUTION, TTL_CATS_STATS, TTL_ALERTES)
 from i18n import SUPPORTED_LANGUAGES, set_language
 from jours_feries import (jours_feries_annee, est_jour_ferie,
@@ -2191,6 +2191,11 @@ def parametres_societe():
     for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
         try: setattr(t,f,request.form.get(f,"").strip() or None)
         except: pass
+    # Convention collective applicable
+    from calculs_paie import CONVENTIONS_DISPONIBLES
+    conv = (request.form.get("convention","") or "AUCUNE").upper()
+    if conv in CONVENTIONS_DISPONIBLES:
+        t.convention = conv
     # Langue de l'interface
     langue = request.form.get("langue", "fr")
     if langue in SUPPORTED_LANGUAGES:
@@ -2198,6 +2203,38 @@ def parametres_societe():
         set_language(langue)
     db.session.commit()
     flash("Informations mises à jour." if langue == "fr" else "Settings updated.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+
+@bp.route("/parametres/importer-grille-commerce", methods=["POST"])
+@tenant_required
+@can_edit
+def importer_grille_commerce():
+    """Crée/complète les catégories d'emploi à partir de la grille conventionnelle COMMERCE."""
+    if not current_user.can_manage_parametres:
+        flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
+        return redirect(url_for("tenant.parametres"))
+    t = get_tenant()
+    from calculs_paie import GRILLE_COMMERCE
+    existantes = {c.code for c in CategorieEmploi.query.filter_by(tenant_id=t.id).all()}
+    ajout = 0
+    maj = 0
+    for code, libelle, mensuel, _horaire in GRILLE_COMMERCE:
+        if code in existantes:
+            cat = CategorieEmploi.query.filter_by(tenant_id=t.id, code=code).first()
+            if cat and (cat.salaire_minimum is None or float(cat.salaire_minimum or 0) == 0):
+                cat.salaire_minimum = mensuel
+                maj += 1
+        else:
+            db.session.add(CategorieEmploi(
+                tenant_id=t.id, code=code, libelle=libelle, salaire_minimum=mensuel,
+                description="Grille Convention Collective du Commerce"))
+            ajout += 1
+    # Bascule la convention du tenant sur COMMERCE si pas déjà fait
+    if t.convention != "COMMERCE":
+        t.convention = "COMMERCE"
+    db.session.commit()
+    flash(f"Grille Commerce importée : {ajout} catégorie(s) ajoutée(s), {maj} mise(s) à jour.", "success")
     return redirect(url_for("tenant.parametres"))
 
 
@@ -3622,7 +3659,7 @@ def solde_tout_compte(sal_id):
     ).order_by(BulletinPaie.date_creation.desc()).limit(12).all()
 
     from conges_avance import calculer_solde_tout_compte
-    solde = calculer_solde_tout_compte(s, bulletins_12, date_cessation)
+    solde = calculer_solde_tout_compte(s, bulletins_12, date_cessation, convention=t.convention)
 
     return render_template("tenant/solde_tout_compte.html",
         tenant=t, salarie=s, solde=solde, date_cessation=date_cessation,
@@ -3683,7 +3720,7 @@ def salarie_document(sal_id, type_doc):
                             .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
                             .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
             from conges_avance import calculer_solde_tout_compte
-            solde = calculer_solde_tout_compte(s, bulletins_12, date_cess)
+            solde = calculer_solde_tout_compte(s, bulletins_12, date_cess, convention=t.convention)
             pdf = solde_tout_compte_pdf(s, t, solde, date_cess)
             nom = f"solde_tout_compte_{base_nom}.pdf"
 
@@ -5780,6 +5817,76 @@ def declaration_cnss():
         bulletins_mois=bulletins_mois, stats_mensuel=stats_mensuel,
         lignes_trim=lignes_trim, stats_trim=stats_trim,
         MOIS_FR=MOIS_FR)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DÉCLARATION ANNUELLE DES SALAIRES (DAS) — réservée à l'abonnement Cabinet
+# ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/declaration-das")
+@login_required
+@plan_required("CABINET")
+def declaration_das():
+    """Déclaration Annuelle des Salaires (DGI) — synthèse annuelle par exercice."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    # Exercices disponibles (années ayant au moins une période)
+    annees = sorted({p.annee for p in PeriodePaie.query.filter_by(tenant_id=t.id).all()},
+                    reverse=True)
+    annee = request.args.get("annee", type=int) or (annees[0] if annees else date.today().year)
+
+    lignes, totaux, erreur = [], {}, None
+    lignes_hono, tot_hono = [], {}
+    from declaration_das import agreger_das, agreger_honoraires, DASVide
+    import models as _models
+    try:
+        lignes, totaux = agreger_das(t, annee, models=_models)
+    except DASVide as e:
+        erreur = str(e)
+    # Volet honoraires (optionnel — ne bloque jamais la DAS salaires)
+    try:
+        lignes_hono, tot_hono = agreger_honoraires(t, annee, models=_models)
+    except Exception:
+        lignes_hono, tot_hono = [], {}
+
+    return render_template("tenant/declaration_das.html",
+        tenant=t, annees=annees, annee=annee,
+        lignes=lignes, totaux=totaux, erreur=erreur,
+        lignes_hono=lignes_hono, tot_hono=tot_hono)
+
+
+@bp.route("/declaration-das/excel")
+@login_required
+@plan_required("CABINET")
+def declaration_das_excel():
+    """Télécharge la DAS de l'exercice au format Excel."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    annee = request.args.get("annee", type=int) or date.today().year
+    from declaration_das import generer_das_excel, DASVide
+    import models as _models
+    try:
+        contenu = generer_das_excel(t, annee, models=_models)
+    except DASVide as e:
+        flash(str(e), "error")
+        return redirect(url_for("tenant.declaration_das", annee=annee))
+
+    from flask import Response
+    slug = (t.sigle or t.denomination or "entreprise").replace(" ", "_")[:30]
+    nom = f"DAS_{slug}_{annee}.xlsx"
+    return Response(
+        contenu,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nom}"'},
+    )
 
 
 # ══════════════════════════════════════════════════════════════════════════════

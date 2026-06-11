@@ -134,6 +134,32 @@ def admin_only(f):
     return d
 
 
+def plan_required(*codes):
+    """
+    Décorateur : réserve une fonctionnalité aux tenants dont le plan figure
+    dans `codes` (ex. plan_required("CABINET") pour l'abonnement 100 000 FCFA).
+    Le super-admin a toujours accès. Sinon → page d'abonnement avec message.
+    """
+    codes_norm = {c.upper() for c in codes}
+    def decorator(f):
+        @wraps(f)
+        def d(*a, **k):
+            if not current_user.is_authenticated:
+                return redirect(url_for("auth.login"))
+            if current_user.is_super_admin:
+                return f(*a, **k)
+            t = getattr(current_user, "tenant", None)
+            plan_code = (t.plan.code.upper() if t and t.plan and t.plan.code else None)
+            if plan_code not in codes_norm:
+                flash("Cette fonctionnalité est réservée à l'abonnement Cabinet "
+                      "(100 000 FCFA/mois). Mettez à niveau votre abonnement pour y accéder.",
+                      "error")
+                return redirect(url_for("tenant.paiement"))
+            return f(*a, **k)
+        return d
+    return decorator
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # HELPERS
 # ══════════════════════════════════════════════════════════════════════════════
