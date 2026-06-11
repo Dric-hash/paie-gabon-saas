@@ -3,8 +3,8 @@
  * Stratégie : Cache-first pour assets statiques, Network-first pour les pages
  */
 
-const CACHE_NAME    = 'paiegalon-v1';
-const CACHE_ASSETS  = 'paiegalon-assets-v1';
+const CACHE_NAME    = 'paiegalon-v2';
+const CACHE_ASSETS  = 'paiegalon-assets-v2';
 
 // Assets statiques à mettre en cache immédiatement
 const PRECACHE_ASSETS = [

@@ -61,6 +61,11 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   s'adaptent à la convention choisie.
 
 ### Corrigé
+- **Simulateur** : la section « Simulations avancées » (onglets Augmentation /
+  Net→Brut / Comparer scénarios) était placée dans `{% block scripts %}`, que
+  `base.html` injecte **hors du `<main>`** — elle s'affichait donc sans la marge
+  de la sidebar et passait sous celle-ci à gauche (« bas caché côté gauche »).
+  Section déplacée dans `{% block content %}`.
 - **Simulateur** : correction du débordement horizontal (« grid blowout » des
   colonnes `1fr`) qui faisait passer le contenu sous la sidebar fixe — le bas
   de page était masqué côté gauche. Grilles passées en `minmax(0,1fr)` +
