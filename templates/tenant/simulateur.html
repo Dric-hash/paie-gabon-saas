@@ -2,6 +2,16 @@
 {% block title %}Simulateur de paie — {{ tenant.denomination }}{% endblock %}
 {% block content %}
 
+<style>
+  /* Mise en page responsive : empile les deux panneaux sous 1024px pour éviter
+     tout débordement horizontal qui masquait la barre de navigation. */
+  @media (max-width: 1023px) {
+    #sim-grid { grid-template-columns: 1fr !important; }
+  }
+  #sim-grid { min-width: 0; }
+  #sim-grid > div { min-width: 0; }
+</style>
+
 <!-- En-tête -->
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
   <div>
@@ -50,16 +60,16 @@
         <div id="info-th" style="margin-top:.375rem;font-size:.75rem;color:#6b7280;font-style:italic"></div>
       </div>
 
-      <!-- Mode BTP -->
-      <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.875rem;padding:.625rem .875rem;background:#fffbeb;border-radius:.875rem;border:1px solid #fcd34d">
-        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;flex:1">
-          <input type="checkbox" id="mode_btp" onchange="toggleModeBTP(); simuler()"
-            style="width:16px;height:16px;accent-color:#d97706"/>
-          <div>
-            <div style="font-size:.8rem;font-weight:700;color:#92400e">⚙️ Régime BTP (48h/semaine)</div>
-            <div style="font-size:.7rem;color:#a16207">Ajoute automatiquement 17,33h×+10% et 17,33h×+30%</div>
-          </div>
-        </label>
+      <!-- Convention collective / régime -->
+      <div style="margin-bottom:.875rem;padding:.625rem .875rem;background:#f0fdf4;border-radius:.875rem;border:1px solid #86efac">
+        <label style="display:block;font-size:.8rem;font-weight:700;color:#166534;margin-bottom:.4rem">⚙️ Convention collective / régime</label>
+        <select id="sel_convention" onchange="appliquerConvention(); simuler()"
+          style="width:100%;border:1.5px solid #bbf7d0;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem;font-weight:600;background:white;color:#14532d">
+          <option value="AUCUNE"   {{ 'selected' if convention == 'AUCUNE' }}>Aucune (Code du travail — 40h/sem.)</option>
+          <option value="BTP"      {{ 'selected' if convention == 'BTP' }}>BTP (48h/sem. — heures structurelles)</option>
+          <option value="COMMERCE" {{ 'selected' if convention == 'COMMERCE' }}>Commerce (heures sup au jour)</option>
+        </select>
+        <div id="conv-note" style="font-size:.7rem;color:#15803d;margin-top:.35rem"></div>
       </div>
 
       <!-- Heures supplémentaires -->
@@ -71,7 +81,7 @@
           ('h70','H.sup +70% fériés (h)','#dc2626'),
         ] %}
         <div>
-          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">{{ label }}</label>
+          <label id="lbl_{{ fid }}" style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">{{ label }}</label>
           <input type="number" id="{{ fid }}" value="0" min="0" step="0.5"
             style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.5rem .625rem;font-size:.875rem;text-align:center;font-family:monospace"
             oninput="simuler()"
@@ -211,6 +221,7 @@
 const H_NORM  = 173.33;
 const H_STRUCT= 17.33;
 const C10=1.10, C30=1.30;
+const TENANT_CONVENTION = "{{ convention }}";
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n||0)) + ' FCFA';
 const fmtN= n => new Intl.NumberFormat('fr-FR').format(Math.round(n||0));
@@ -249,7 +260,7 @@ function onSalaireChange() {
   } else {
     el.textContent = '';
   }
-  if (document.getElementById('mode_btp').checked) appliquerBTP();
+  if (document.getElementById('sel_convention').value === 'BTP') appliquerBTP();
 }
 
 // ── Mode BTP : remplir les heures structurelles ───────────────────────────────
@@ -260,16 +271,38 @@ function appliquerBTP() {
   document.getElementById('h30').value = H_STRUCT;
 }
 
-function toggleModeBTP() {
-  const checked = document.getElementById('mode_btp').checked;
+// ── Libellés des heures sup selon la convention ───────────────────────────────
+const LIBELLES_HS = {
+  BTP:      {h10:'H.sup +10% (h)', h30:'H.sup +30% (h)', h40:'H.sup +40% nuit (h)', h70:'H.sup +70% fériés (h)'},
+  COMMERCE: {h10:'+10% (8 prem. h)', h30:'+30% (au-delà)', h40:'+40% férié jour (h)', h70:'+70% nuit (h)'},
+  AUCUNE:   {h10:'H.sup +10% (h)', h30:'H.sup +30% (h)', h40:'H.sup +40% (h)', h70:'H.sup +70% (h)'},
+};
+function majLibellesHeuresSup(conv) {
+  const lib = LIBELLES_HS[conv] || LIBELLES_HS.AUCUNE;
+  for (const id of ['h10','h30','h40','h70']) {
+    const el = document.getElementById('lbl_' + id);
+    if (el) el.textContent = lib[id];
+  }
+}
+
+// ── Application de la convention sélectionnée ──────────────────────────────────
+function appliquerConvention() {
+  const conv = document.getElementById('sel_convention').value;
+  const isBTP = conv === 'BTP';
+  // Préremplissage structurel : uniquement en BTP
   ['h10','h30'].forEach(id => {
     const el = document.getElementById(id);
-    el.readOnly = checked;
-    el.style.background = checked ? '#f9fafb' : '';
-    el.style.color = checked ? '#9ca3af' : '';
+    el.readOnly = isBTP;
+    el.style.background = isBTP ? '#f9fafb' : '';
+    el.style.color = isBTP ? '#9ca3af' : '';
   });
-  if (checked) appliquerBTP();
-  else { document.getElementById('h10').value=0; document.getElementById('h30').value=0; }
+  if (isBTP) appliquerBTP();
+  else { document.getElementById('h10').value = 0; document.getElementById('h30').value = 0; }
+  majLibellesHeuresSup(conv);
+  const note = document.getElementById('conv-note');
+  if (isBTP) note.textContent = 'Ajoute 17,33h ×+10% et 17,33h ×+30% (heures structurelles).';
+  else if (conv === 'COMMERCE') note.textContent = 'Heures sup au jour : 8 premières +10%, au-delà +30% ; nuit +70% ; férié jour +40%.';
+  else note.textContent = 'Saisissez librement les heures supplémentaires.';
 }
 
 // ── Simuler ───────────────────────────────────────────────────────────────────
@@ -290,7 +323,7 @@ function _doSimuler() {
     'prime_transport','prime_responsabilite','indem_logement','prime_anciennete',
     'prime_rendement','prime_qualite','sursalaire','carburant','absences','acompte','nb_parts'];
 
-  const payload = {mode_btp: document.getElementById('mode_btp').checked ? '1' : '0'};
+  const payload = {convention: document.getElementById('sel_convention').value};
   ids.forEach(id => { payload[id] = parseFloat(document.getElementById(id)?.value||0)||0; });
   payload.salarie_id = document.getElementById('sel_salarie').value || null;
 
@@ -359,7 +392,8 @@ function afficherResultat(d) {
 function resetFormulaire() {
   document.getElementById('sel_salarie').value = '';
   document.getElementById('info-salarie').style.display = 'none';
-  document.getElementById('mode_btp').checked = false;
+  document.getElementById('sel_convention').value = TENANT_CONVENTION || 'AUCUNE';
+  appliquerConvention();
   ['h10','h30'].forEach(id => {
     const el=document.getElementById(id); el.readOnly=false; el.style.background=''; el.style.color='';
   });
@@ -378,6 +412,9 @@ if (urlParams.get('salaire')) {
   document.getElementById('salaire_base').value = urlParams.get('salaire');
   onSalaireChange(); simuler();
 }
+
+// Appliquer la convention du tenant au chargement (libellés, note, préremplissage BTP)
+appliquerConvention();
 
 // Print style
 const style = document.createElement('style');

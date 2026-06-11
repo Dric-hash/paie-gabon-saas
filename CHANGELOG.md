@@ -55,6 +55,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 - `calculs_paie.py` : ajout des fonctions Commerce et du dispatcher générique
   (`prime_anciennete`, `preavis_jours`, `indemnite_services_rendus`,
   `permissions_familiales`, `distribuer_heures_semaine`).
+- **Simulateur de paie** : le toggle « Mode BTP » est remplacé par un
+  sélecteur de **convention** (Aucune / BTP / Commerce) pré-rempli avec la
+  convention de l'entreprise ; les libellés des heures supplémentaires
+  s'adaptent à la convention choisie.
+
+### Corrigé
+- **Simulateur** : mise en page rendue responsive (les deux panneaux
+  s'empilent sous 1024 px), corrigeant le débordement horizontal qui
+  masquait la barre de navigation.
+- **Simulateur** : les heures supplémentaires sont désormais prises en compte
+  quelle que soit la convention (auparavant ignorées hors « Mode BTP »).
 
 ### Base de données (migration automatique au démarrage)
 - `ALTER TABLE tenants ADD COLUMN convention VARCHAR(20) DEFAULT 'AUCUNE'`

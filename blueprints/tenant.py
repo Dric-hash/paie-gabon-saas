@@ -348,7 +348,8 @@ def simulateur_paie():
     if not t: return redirect(url_for("auth.login"))
     salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")\
         .options(joinedload(Salarie.categorie)).order_by(Salarie.nom).all()
-    return render_template("tenant/simulateur.html", tenant=t, salaries=salaries_list)
+    return render_template("tenant/simulateur.html", tenant=t, salaries=salaries_list,
+                           convention=t.convention or "AUCUNE")
 
 
 @bp.route("/api/simuler-paie/scenarios", methods=["POST"])
@@ -438,19 +439,20 @@ def api_simuler_paie():
             try: return float(str(d.get(key) or default).replace(",",".") or default)
             except: return float(default)
 
-        # Calcul des heures sup si mode BTP demandé
-        mode_btp = d.get("mode_btp") == "1"
+        # Conversion des heures supplémentaires (saisies en HEURES) → montants.
+        # Effectuée quelle que soit la convention : les coefficients +10/+30/+40/+70
+        # sont communs au BTP et au Commerce (la sélection de convention côté UI
+        # ne change que les libellés et le préremplissage structurel BTP).
         sal_base = flt("salaire_base")
-
-        if mode_btp and sal_base > 0:
+        if sal_base > 0:
             from calculs_paie import calculer_heures_sup_btp
-            btp = calculer_heures_sup_btp(sal_base,
-                h10=flt("h10") or None, h30=flt("h30") or None,
+            hs = calculer_heures_sup_btp(sal_base,
+                h10=flt("h10"), h30=flt("h30"),
                 h40=flt("h40"), h70=flt("h70"))
-            d["heures_sup_10"] = btp["montant_10"]
-            d["heures_sup_30"] = btp["montant_30"]
-            d["heures_sup_40"] = btp["montant_40"]
-            d["heures_sup_70"] = btp["montant_70"]
+            d["heures_sup_10"] = hs["montant_10"]
+            d["heures_sup_30"] = hs["montant_30"]
+            d["heures_sup_40"] = hs["montant_40"]
+            d["heures_sup_70"] = hs["montant_70"]
 
         # Nombre de parts IRPP
         sal_id = d.get("salarie_id")
