@@ -37,6 +37,10 @@ init_sentry()
 
 app = Flask(__name__)
 
+# Version applicative (visible en bas de la barre latérale — sert aussi de repère
+# pour vérifier quelle version est réellement déployée).
+APP_VERSION = "1.4.0 · 2026-06-11"
+
 # ── SECRET_KEY ────────────────────────────────────────────────────────────────
 _secret = os.environ.get("SECRET_KEY", "")
 if not _secret:
@@ -192,7 +196,7 @@ def datetime_fr_filter(v):
 
 @app.context_processor
 def inject_globals():
-    return {"now": datetime.now(), "enumerate": enumerate}
+    return {"now": datetime.now(), "enumerate": enumerate, "app_version": APP_VERSION}
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.errorhandler(403)
