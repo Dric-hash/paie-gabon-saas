@@ -86,6 +86,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   répartition **semaine par semaine** (heures pointées, normales, +10/+30/+40/+70%)
   pour visualiser la ventilation BTP avant de valider le bulletin.
 
+- **Refonte UI — Saisie du bulletin (`bulletin_saisie.html`)** : migration vers
+  **Tailwind CSS** (abandon du CSS inline). Sections en **cartes** (`rounded-lg`
+  `shadow-md`), titres bleu marine, fonds gris doux, **tableaux** propres avec
+  défilement horizontal sur mobile, boutons avec effet de survol, et mise en page
+  **mobile-first** (colonnes empilées sur téléphone, 2 colonnes sur grand écran).
+  Tous les identifiants et la logique de calcul en temps réel sont préservés.
+
 ### Base de données (migration automatique au démarrage)
 - `ALTER TABLE tenants ADD COLUMN convention VARCHAR(20) DEFAULT 'AUCUNE'`
   (appliquée par `run_migrations()` — idempotente, aucune action manuelle).

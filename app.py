@@ -39,7 +39,7 @@ app = Flask(__name__)
 
 # Version applicative (visible en bas de la barre latérale — sert aussi de repère
 # pour vérifier quelle version est réellement déployée).
-APP_VERSION = "1.4.0 · 2026-06-11"
+APP_VERSION = "1.5.0 · 2026-06-12"
 
 # ── SECRET_KEY ────────────────────────────────────────────────────────────────
 _secret = os.environ.get("SECRET_KEY", "")
