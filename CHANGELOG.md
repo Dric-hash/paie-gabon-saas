@@ -93,6 +93,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   **mobile-first** (colonnes empilées sur téléphone, 2 colonnes sur grand écran).
   Tous les identifiants et la logique de calcul en temps réel sont préservés.
 
+- **Refonte UI — Page Pointage (`pointage.html`)** : migration vers Tailwind CSS,
+  mise en page **mobile-first** (KPIs 2 colonnes sur mobile / 4 sur desktop ;
+  listes Mensuels et Journaliers empilées sur téléphone, côte à côte sur grand
+  écran), en-tête adaptatif, champs d'heures et boutons en classes Tailwind avec
+  effets de survol. IDs et logique JS (présence, calcul du gain, sélection)
+  préservés.
+
 ### Base de données (migration automatique au démarrage)
 - `ALTER TABLE tenants ADD COLUMN convention VARCHAR(20) DEFAULT 'AUCUNE'`
   (appliquée par `run_migrations()` — idempotente, aucune action manuelle).

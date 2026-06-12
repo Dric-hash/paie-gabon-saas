@@ -1,11 +1,22 @@
 {% extends "tenant/base.html" %}
 {% block title %}Pointage — {{ tenant.denomination }}{% endblock %}
 {% block content %}
+<style type="text/tailwindcss">
+  @layer components {
+    .pt-h   { @apply w-full border border-gray-200 rounded-md p-1 text-sm text-center text-gray-700 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 outline-none transition; }
+    .pt-h10 { @apply w-full border border-amber-300 rounded-md p-1 text-sm text-center focus:border-amber-500 outline-none transition; }
+    .pt-h30 { @apply w-full border border-orange-300 rounded-md p-1 text-sm text-center focus:border-orange-500 outline-none transition; }
+    .pt-h40 { @apply w-full border border-red-300 rounded-md p-1 text-sm text-center focus:border-red-500 outline-none transition; }
+    .pt-h70 { @apply w-full border border-violet-300 rounded-md p-1 text-sm text-center focus:border-violet-500 outline-none transition; }
+    .pt-sel { @apply w-full border border-gray-200 rounded-md p-1 text-sm mt-1 focus:border-blue-600 outline-none transition; }
+    .pt-hdrbtn { @apply text-[0.7rem] bg-white/20 hover:bg-white/30 text-white px-2.5 py-1 rounded-md border-0 cursor-pointer transition-colors; }
+  }
+</style>
 
-<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem">
+<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-6">
   <div>
     <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
-      <h1 class="text-2xl font-black text-gray-900">Feuille de Pointage</h1>
+      <h1 class="text-2xl font-black text-slate-800">Feuille de Pointage</h1>
       <a href="/pointage/recap-semaine?date={{ date_sel.strftime('%Y-%m-%d') }}"
          style="font-size:.75rem;font-weight:700;background:#f0fdf4;color:#065f46;padding:.375rem .75rem;border-radius:.625rem;text-decoration:none;white-space:nowrap">
         📊 Récap semaine
@@ -17,7 +28,7 @@
     </div>
     <p class="text-gray-500 text-sm mt-1">{{ date_sel.strftime('%A %d %B %Y') }}</p>
   </div>
-  <div style="display:flex;align-items:center;gap:.5rem">
+  <div class="flex items-center gap-2 flex-wrap">
     <a href="/pointage?date={{ date_hier }}"
        style="background:#f3f4f6;padding:.5rem .75rem;border-radius:.75rem;text-decoration:none;font-size:.875rem">← Hier</a>
     <form method="GET" style="display:flex;gap:.5rem">
@@ -71,7 +82,7 @@
 {% endif %}
 
 <!-- KPIs -->
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
   <div class="card p-4 text-center">
     <div style="font-size:1.75rem;font-weight:900;color:#059669">{{ nb_presents_sal }}</div>
     <div style="font-size:.75rem;color:#6b7280;font-weight:600">Mensuels présents</div>
@@ -93,7 +104,7 @@
 <form method="POST" action="/pointage/sauvegarder" id="form_pointage">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
   <input type="hidden" name="date_pointage" value="{{ date_sel.strftime('%Y-%m-%d') }}"/>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
     <!-- ═══ MENSUELS ═══ -->
     <div class="card overflow-hidden">
@@ -102,11 +113,11 @@
         <div style="display:flex;gap:.5rem;align-items:center">
           <!-- ✅ Sélection rapide mensuels -->
           <button type="button" onclick="toggleSelSal(true)"
-            style="font-size:.65rem;background:rgba(255,255,255,.15);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☑ Tous</button>
+            class="pt-hdrbtn">☑ Tous</button>
           <button type="button" onclick="toggleSelSal(false)"
-            style="font-size:.65rem;background:rgba(255,255,255,.1);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☐ Aucun</button>
+            class="pt-hdrbtn">☐ Aucun</button>
           <button type="button" onclick="tousPresents('sal')"
-            style="font-size:.7rem;background:rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer">
+            class="pt-hdrbtn">
             ✅ Tous présents
           </button>
         </div>
@@ -153,42 +164,42 @@
 
           <!-- Heures mensuels : normales + 4 taux HS -->
           <div id="sal_heures_div_{{ s.id }}" style="{% if pt and pt.absent %}display:none{% endif %}">
-            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:.25rem">
+            <div class="grid grid-cols-5 gap-1">
               <div>
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">Normales</label>
                 <input type="number" name="sal_heures_{{ s.id }}" value="{{ pt.heures_normales|int if pt else 8 }}"
                   min="0" max="12" step="0.5"
-                  style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
+                  class="pt-h"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#f59e0b;font-weight:700;display:block;text-align:center">Sup +10%</label>
                 <input type="number" name="sal_sup10_{{ s.id }}" value="{{ pt.heures_sup_10|int if pt and pt.heures_sup_10 else 0 }}"
                   min="0" max="8" step="0.5"
-                  style="width:100%;border:1px solid #fcd34d;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
+                  class="pt-h10"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#f97316;font-weight:700;display:block;text-align:center">Sup +30%</label>
                 <input type="number" name="sal_sup30_{{ s.id }}" value="{{ pt.heures_sup_30|int if pt and pt.heures_sup_30 else 0 }}"
                   min="0" max="8" step="0.5"
-                  style="width:100%;border:1px solid #fdba74;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
+                  class="pt-h30"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#dc2626;font-weight:700;display:block;text-align:center">Sup +40%</label>
                 <input type="number" name="sal_sup40_{{ s.id }}" value="{{ pt.heures_sup_40|int if pt and pt.heures_sup_40 else 0 }}"
                   min="0" max="8" step="0.5"
-                  style="width:100%;border:1px solid #fca5a5;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
+                  class="pt-h40"/>
               </div>
               <div>
                 <label style="font-size:.6rem;color:#7c3aed;font-weight:700;display:block;text-align:center">Sup +70%</label>
                 <input type="number" name="sal_sup70_{{ s.id }}" value="{{ pt.heures_sup_70|int if pt and pt.heures_sup_70 else 0 }}"
                   min="0" max="8" step="0.5"
-                  style="width:100%;border:1px solid #c4b5fd;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"/>
+                  class="pt-h70"/>
               </div>
             </div>
           </div>
           <div id="sal_motif_div_{{ s.id }}" style="{% if not pt or not pt.absent %}display:none{% endif %}">
             <select name="sal_motif_{{ s.id }}"
-              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;margin-top:.25rem">
+              class="pt-sel">
               <option value="">Motif</option>
               <option {% if pt and pt.motif_absence=='MALADIE' %}selected{% endif %}>MALADIE</option>
               <option {% if pt and pt.motif_absence=='CONGE' %}selected{% endif %}>CONGE</option>
@@ -210,11 +221,11 @@
         <div style="display:flex;gap:.5rem">
           <!-- ✅ Sélection rapide journaliers -->
           <button type="button" onclick="toggleSelJour(true)"
-            style="font-size:.65rem;background:rgba(255,255,255,.15);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☑ Tous</button>
+            class="pt-hdrbtn">☑ Tous</button>
           <button type="button" onclick="toggleSelJour(false)"
-            style="font-size:.65rem;background:rgba(255,255,255,.1);color:white;padding:.2rem .5rem;border-radius:.375rem;border:none;cursor:pointer">☐ Aucun</button>
+            class="pt-hdrbtn">☐ Aucun</button>
           <button type="button" onclick="tousPresents('jour')"
-            style="font-size:.7rem;background:rgba(255,255,255,.2);color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer">
+            class="pt-hdrbtn">
             ✅ Tous présents
           </button>
           <a href="/journaliers/nouveau"
@@ -263,13 +274,13 @@
 
           <!-- ✅ Journaliers : H. sup SANS majoration (taux normal) -->
           <div id="jour_heures_div_{{ j.id }}" style="{% if pt and pt.absent %}display:none{% endif %}">
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.375rem">
+            <div class="grid grid-cols-3 gap-1.5">
               <div>
                 <label style="font-size:.6rem;color:#6b7280;font-weight:700;display:block;text-align:center">H. normales</label>
                 <input type="number" name="jour_heures_{{ j.id }}" id="jh_{{ j.id }}"
                   value="{{ pt.heures_normales|int if pt else 8 }}"
                   min="0" max="12" step="0.5"
-                  style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
+                  class="pt-h"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
               <div>
@@ -278,7 +289,7 @@
                 <input type="number" name="jour_sup_{{ j.id }}" id="js_{{ j.id }}"
                   value="{{ pt.heures_sup|int if pt else 0 }}"
                   min="0" max="12" step="0.5"
-                  style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;text-align:center"
+                  class="pt-h"
                   onchange="calcGain({{ j.id }}, {{ j.taux_horaire|float }})"/>
               </div>
               <div style="text-align:center">
@@ -294,7 +305,7 @@
           </div>
           <div id="jour_motif_div_{{ j.id }}" style="{% if not pt or not pt.absent %}display:none{% endif %}">
             <select name="jour_motif_{{ j.id }}"
-              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.25rem;font-size:.8rem;margin-top:.25rem">
+              class="pt-sel">
               <option>ABSENT</option><option>MALADIE</option><option>SANS_MOTIF</option>
             </select>
           </div>
@@ -312,7 +323,7 @@
 
   <div style="margin-top:1.5rem;text-align:center">
     <button type="submit" id="btn-sauver-pointage"
-      style="background:#0f3d36;color:white;padding:1rem 3rem;border-radius:.75rem;font-weight:900;font-size:1rem;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(26,35,50,.3)">
+      class="bg-[#0f3d36] hover:bg-[#0a2c27] text-white px-12 py-4 rounded-xl font-black text-base shadow-lg transition-colors cursor-pointer border-0">
       💾 Sauvegarder le pointage du {{ date_sel.strftime('%d/%m/%Y') }}
     </button>
   </div>
