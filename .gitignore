@@ -6,3 +6,4 @@ saas_paie.db
 instance/
 .venv/
 venv/
+.dev_credentials.txt

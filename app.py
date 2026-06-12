@@ -37,6 +37,14 @@ init_sentry()
 
 app = Flask(__name__)
 
+# Indicateur de production unique et robuste (présence d'une variable, pas
+# égalité stricte sur un nom d'environnement Railway qui peut être renommé).
+EST_PRODUCTION = bool(
+    os.environ.get("RAILWAY_ENVIRONMENT")
+    or os.environ.get("FLASK_ENV") == "production"
+)
+app.config["EST_PRODUCTION"] = EST_PRODUCTION
+
 # Version applicative (visible en bas de la barre latérale — sert aussi de repère
 # pour vérifier quelle version est réellement déployée).
 APP_VERSION = "1.5.1 · 2026-06-12"
@@ -44,7 +52,7 @@ APP_VERSION = "1.5.1 · 2026-06-12"
 # ── SECRET_KEY ────────────────────────────────────────────────────────────────
 _secret = os.environ.get("SECRET_KEY", "")
 if not _secret:
-    if os.environ.get("FLASK_ENV") == "production" or os.environ.get("RAILWAY_ENVIRONMENT"):
+    if EST_PRODUCTION:
         logger.critical("SECRET_KEY non définie — démarrage interrompu.")
         sys.exit(1)
     _secret = sec.token_hex(32)
@@ -86,7 +94,7 @@ app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(
 )
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"]   = (os.environ.get("RAILWAY_ENVIRONMENT") == "production")
+app.config["SESSION_COOKIE_SECURE"]   = EST_PRODUCTION
 
 # ── CSRF ──────────────────────────────────────────────────────────────────────
 csrf = CSRFProtect(app)
@@ -161,7 +169,7 @@ def add_security_headers(response):
         )
         response.headers["Content-Security-Policy"] = csp
         # ✅ HSTS — force HTTPS pendant 1 an (uniquement en production)
-        if os.environ.get("RAILWAY_ENVIRONMENT") == "production":
+        if EST_PRODUCTION:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
@@ -202,7 +210,7 @@ def inject_globals():
 @app.errorhandler(403)
 def forbidden(e):   return render_template("auth/403.html"), 403
 @app.errorhandler(404)
-def not_found(e):   return render_template("auth/403.html"), 404
+def not_found(e):   return render_template("auth/404.html"), 404
 @app.errorhandler(500)
 def server_error(e):
     logger.error(f"Erreur 500 : {e}")
@@ -301,13 +309,25 @@ def init_db():
         sa_email    = os.environ.get("SUPER_ADMIN_EMAIL", "superadmin@paiegalon.com")
         sa_password = os.environ.get("SUPER_ADMIN_PASSWORD", "")
         if not sa_password:
+            if EST_PRODUCTION:
+                logger.critical("SUPER_ADMIN_PASSWORD requis en production — démarrage interrompu.")
+                sys.exit(1)
             sa_password = sec.token_urlsafe(16)
-            logger.info(f"[INIT] Super-admin — email: {sa_email} — mdp auto: {sa_password}")
+            # Ne jamais logguer un mot de passe. En dev, on l'écrit dans un
+            # fichier local ignoré par git pour pouvoir se connecter.
+            try:
+                with open(".dev_credentials.txt", "a") as _f:
+                    _f.write(f"SUPER_ADMIN {sa_email} : {sa_password}\n")
+            except Exception:
+                pass
+            logger.info("[DEV] Super-admin créé — identifiants dans .dev_credentials.txt")
         sa = Utilisateur(nom="ADMIN", prenom="Super", email=sa_email,
                          role="SUPER_ADMIN", actif=True)
         sa.set_password(sa_password)
         db.session.add(sa)
-    if not Tenant.query.first():
+    # Le tenant de démonstration n'est créé qu'en dehors de la production,
+    # pour ne pas exposer un compte aux identifiants devinables en prod.
+    if not Tenant.query.first() and not EST_PRODUCTION:
         db.session.flush()
         plan = Plan.query.filter_by(code="PRO").first()
         t = Tenant(slug="demo", denomination="ENTREPRISE DEMO", sigle="DEMO",
@@ -322,7 +342,12 @@ def init_db():
         demo_password = os.environ.get("DEMO_PASSWORD", "")
         if not demo_password:
             demo_password = sec.token_urlsafe(16)
-            logger.info(f"[INIT] Démo — email: {demo_email} — mdp auto: {demo_password}")
+            try:
+                with open(".dev_credentials.txt", "a") as _f:
+                    _f.write(f"DEMO {demo_email} : {demo_password}\n")
+            except Exception:
+                pass
+            logger.info("[DEV] Compte démo créé — identifiants dans .dev_credentials.txt")
         u = Utilisateur(nom="DEMO", prenom="Responsable", email=demo_email,
                         role="TENANT_ADMIN", tenant_id=t.id, actif=True)
         u.set_password(demo_password)

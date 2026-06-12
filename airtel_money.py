@@ -233,21 +233,37 @@ def verifier_statut(transaction_id: str) -> dict:
 
 def valider_signature_webhook(payload_bytes: bytes, signature_header: str) -> bool:
     """
-    Vérifie la signature HMAC-SHA256 du webhook Airtel.
-    Airtel envoie le header 'X-Airtel-Signature'.
+    Vérifie la signature HMAC-SHA256 du webhook Airtel (header 'X-Airtel-Signature').
+
+    SÉCURITÉ — fail-closed en production :
+      • Si le secret est absent ET qu'on est en production → REJET (return False).
+      • L'acceptation sans signature n'est tolérée qu'en dev/sandbox, pour les tests.
 
     Returns True si la signature est valide, False sinon.
     """
     if not AIRTEL_WEBHOOK_SECRET:
-        logger.warning("[Airtel] AIRTEL_WEBHOOK_SECRET non défini — signature non vérifiée.")
-        return True  # En dev, on accepte tout
+        est_production = (
+            os.environ.get("RAILWAY_ENVIRONMENT") is not None
+            or os.environ.get("AIRTEL_ENV") == "production"
+        )
+        if est_production:
+            logger.error(
+                "[Airtel] AIRTEL_WEBHOOK_SECRET absent en PRODUCTION — webhook REJETÉ. "
+                "Configurez la variable d'environnement immédiatement."
+            )
+            return False
+        logger.warning("[Airtel] AIRTEL_WEBHOOK_SECRET absent (dev) — signature non vérifiée.")
+        return True  # Dev/sandbox uniquement
+
+    if not signature_header:
+        return False
 
     expected = hmac.new(
         AIRTEL_WEBHOOK_SECRET.encode(),
         payload_bytes,
         hashlib.sha256,
     ).hexdigest()
-    return hmac.compare_digest(expected, signature_header or "")
+    return hmac.compare_digest(expected, signature_header)
 
 
 def _normaliser_telephone(tel: str) -> str:

@@ -1101,7 +1101,7 @@ def bulletins():
     site_filtre_id = request.args.get("site_id", type=int)
     periodes     = PeriodePaie.query.filter_by(tenant_id=t.id)                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
     sites_list   = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_filtre  = Site.query.get(site_filtre_id) if site_filtre_id else None
+    site_filtre  = Site.query.filter_by(id=site_filtre_id, tenant_id=t.id).first() if site_filtre_id else None
     ps = None; buls = []; masse = {}; pagination = None
 
     if pid:
@@ -1779,8 +1779,17 @@ def webhook_airtel():
         p.reponse_raw = json.dumps(data)
 
         if statut_api in ("TS", "SUCCESS", "200"):
+            # Confirmation autoritative : on ré-interroge Airtel avant d'activer
+            from airtel_money import verifier_statut
+            verif = verifier_statut(p.reference_externe or ref)
+            if verif.get("statut") != "SUCCESS":
+                p.statut = "ECHEC"
+                p.notes  = f"Webhook OK mais vérification Airtel = {verif.get('statut')}"
+                db.session.commit()
+                logger.warning(f"[Webhook Airtel] Vérif. divergente — ref={ref}")
+                return jsonify({"status": "NON_CONFIRME"}), 200
             _activer_abonnement(p)
-            logger.info(f"[Webhook Airtel] Succès — ref={ref} tenant={p.tenant_id}")
+            logger.info(f"[Webhook Airtel] Succès vérifié — ref={ref} tenant={p.tenant_id}")
         else:
             p.statut = "ECHEC"
             p.notes  = f"Code Airtel : {statut_api}"
@@ -2044,56 +2053,86 @@ def paiement_cinetpay_statut(reference):
 def webhook_cinetpay():
     """
     Reçoit les notifications automatiques de CinetPay.
-    Appelé par CinetPay dès que le paiement est confirmé ou refusé.
+
+    SÉCURITÉ : on ne fait JAMAIS confiance au statut envoyé dans le corps de la
+    requête (falsifiable — le site_id n'est pas un secret). On ré-interroge
+    l'API CinetPay (/payment/check) pour obtenir le statut et le montant
+    authentiques, et on vérifie que le montant payé correspond au montant
+    attendu avant d'activer l'abonnement.
     """
     import json
+    from cinetpay import valider_webhook, verifier_statut
+
+    # 1. Lecture tolérante du corps (CinetPay peut envoyer du JSON ou du form-data)
+    data = request.get_json(silent=True) or request.form.to_dict()
+    logger.info(f"[Webhook CinetPay] Reçu : {data}")
+
+    # 2. Filtre de premier niveau : le site_id doit correspondre
+    if not valider_webhook(data):
+        return jsonify({"status": "SITE_ID_INVALIDE"}), 401
+
+    # 3. Extraire la référence de transaction
+    ref = (data.get("cpm_trans_id") or data.get("transaction_id")
+           or data.get("metadata") or "")
+    if not ref:
+        logger.warning("[Webhook CinetPay] Référence manquante.")
+        return jsonify({"status": "REF_MANQUANTE"}), 400
+
+    # 4. Retrouver le paiement en base
+    p = Paiement.query.filter_by(reference_interne=ref).first()
+    if not p:
+        token = data.get("cpm_payment_config") or data.get("payment_token", "")
+        p = Paiement.query.filter_by(reference_externe=token).first() if token else None
+    if not p:
+        logger.warning(f"[Webhook CinetPay] Paiement introuvable ref={ref}")
+        return jsonify({"status": "INTROUVABLE"}), 404
+
+    # 5. Idempotence — déjà traité avec succès
+    if p.statut == "SUCCES":
+        return jsonify({"status": "DEJA_TRAITE"}), 200
+
+    # 6. VÉRIFICATION AUTORITATIVE côté serveur (ne pas croire le corps)
     try:
-        data = request.get_json(force=True) or request.form.to_dict()
-        logger.info(f"[Webhook CinetPay] Reçu : {data}")
-
-        from cinetpay import valider_webhook
-        if not valider_webhook(data):
-            return jsonify({"status": "SITE_ID_INVALIDE"}), 401
-
-        # Extraire la référence de transaction
-        ref = (data.get("cpm_trans_id") or data.get("transaction_id")
-               or data.get("metadata", ""))
-        statut_api = (data.get("cpm_result") or data.get("status") or "").upper()
-
-        if not ref:
-            logger.warning("[Webhook CinetPay] Référence manquante.")
-            return jsonify({"status": "REF_MANQUANTE"}), 400
-
-        p = Paiement.query.filter_by(reference_interne=ref).first()
-        if not p:
-            # Essayer avec reference_externe
-            token = data.get("cpm_payment_config") or data.get("payment_token", "")
-            p = Paiement.query.filter_by(reference_externe=token).first() if token else None
-
-        if not p:
-            logger.warning(f"[Webhook CinetPay] Paiement introuvable ref={ref}")
-            return jsonify({"status": "INTROUVABLE"}), 404
-
-        if p.statut == "SUCCES":
-            return jsonify({"status": "DEJA_TRAITE"}), 200
-
-        p.reponse_raw = json.dumps(data)
-
-        # "00" = succès chez CinetPay
-        if statut_api in ("00", "ACCEPTED", "SUCCESS"):
-            _activer_abonnement(p)
-            logger.info(f"[Webhook CinetPay] Succès — ref={ref} tenant={p.tenant_id}")
-        else:
-            p.statut = "ECHEC"
-            p.notes  = f"Code CinetPay : {statut_api}"
-            db.session.commit()
-            logger.info(f"[Webhook CinetPay] Échec — ref={ref} code={statut_api}")
-
-        return jsonify({"status": "OK"}), 200
-
+        verif = verifier_statut(p.reference_interne)
     except Exception as e:
-        logger.error(f"[Webhook CinetPay] Erreur : {e}")
+        logger.error(f"[Webhook CinetPay] Échec vérification API : {e}")
         db.session.rollback()
+        return jsonify({"status": "VERIF_ERREUR"}), 502
+
+    p.reponse_raw = json.dumps({"webhook": data, "verification": verif.get("raw", {})})
+
+    if verif.get("statut") != "ACCEPTED":
+        p.statut = "ECHEC"
+        p.notes  = f"Statut CinetPay vérifié : {verif.get('statut')}"
+        db.session.commit()
+        logger.info(f"[Webhook CinetPay] Non confirmé — ref={ref} statut={verif.get('statut')}")
+        return jsonify({"status": "NON_CONFIRME"}), 200
+
+    # 7. Vérifier que le MONTANT payé correspond au montant attendu
+    montant_attendu = int(round(float(p.montant or 0)))
+    try:
+        montant_paye = int(round(float(verif.get("montant") or 0)))
+    except (TypeError, ValueError):
+        montant_paye = 0
+    if montant_paye and montant_paye < montant_attendu:
+        p.statut = "ECHEC"
+        p.notes  = f"Montant payé ({montant_paye}) < attendu ({montant_attendu}) — rejeté."
+        db.session.commit()
+        logger.warning(f"[Webhook CinetPay] Montant insuffisant ref={ref} : "
+                       f"{montant_paye} < {montant_attendu}")
+        return jsonify({"status": "MONTANT_INVALIDE"}), 200
+
+    # 8. Tout est vérifié → activer l'abonnement
+    try:
+        _activer_abonnement(p)
+        logger.info(f"[Webhook CinetPay] Succès vérifié — ref={ref} tenant={p.tenant_id}")
+        return jsonify({"status": "OK"}), 200
+    except Exception as e:
+        logger.error(f"[Webhook CinetPay] Erreur activation : {e}")
+        db.session.rollback()
+        return jsonify({"status": "ERREUR_INTERNE"}), 500
+
+
 @bp.route("/parametres")
 @tenant_required
 def parametres():
@@ -2704,7 +2743,7 @@ def pointage():
     # ── Filtre par site ───────────────────────────────────────────────────────
     site_filtre_id = request.args.get("site_id", type=int)
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_filtre = Site.query.get(site_filtre_id) if site_filtre_id else None
+    site_filtre = Site.query.filter_by(id=site_filtre_id, tenant_id=t.id).first() if site_filtre_id else None
 
     if site_filtre_id:
         # Salariés affectés à ce site
@@ -2769,7 +2808,17 @@ def pointage_individuel():
         date_p = datetime.strptime(
             request.form.get("date_pointage", date_str), "%Y-%m-%d").date()
         wtype  = request.form.get("worker_type", "sal")
-        wid    = int(request.form.get("worker_id", 0))
+        wid    = request.form.get("worker_id", type=int)
+
+        # Validation stricte : le travailleur doit exister ET appartenir au tenant
+        if wtype == "sal":
+            worker_obj = Salarie.query.filter_by(id=wid, tenant_id=t.id).first()
+        else:
+            worker_obj = Journalier.query.filter_by(id=wid, tenant_id=t.id).first()
+        if not worker_obj:
+            flash("Travailleur introuvable ou non autorisé.", "error")
+            return redirect(url_for("tenant.pointage"))
+
         present = request.form.get("present") == "1"
         absent  = not present
         def _hm(val):
@@ -2871,7 +2920,7 @@ def pointage_individuel():
         for k, v in kwargs.items():
             setattr(pt, k, v)
         db.session.commit()
-        worker_name = (Salarie.query.get(wid) or Journalier.query.get(wid)).nom_complet
+        worker_name = worker_obj.nom_complet
         flash(f"✅ Pointage de {worker_name} enregistré.", "success")
         # Rester sur la même page pour pointer la personne suivante
         redir = request.form.get("next_url") or f"/pointage/individuel?date={date_p}&type={wtype}&id={wid}"
@@ -3013,7 +3062,7 @@ def journaliers_paie():
     # ── Filtre par site ──────────────────────────────────────────────────────
     site_filtre_id = request.args.get("site_id", type=int)
     sites_list     = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_filtre    = Site.query.get(site_filtre_id) if site_filtre_id else None
+    site_filtre    = Site.query.filter_by(id=site_filtre_id, tenant_id=t.id).first() if site_filtre_id else None
     statut_filtre  = request.args.get("statut", "")
 
     if site_filtre_id:

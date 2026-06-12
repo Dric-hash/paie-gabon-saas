@@ -66,12 +66,14 @@ def _get_tenant_from_request(request, Tenant):
     Priorité :
       1. Header X-API-Key
       2. Header Authorization: Bearer <token>
-      3. Query param ?api_key=...  (déconseillé mais supporté)
+
+    Note sécurité : le passage du token via query string (?api_key=) a été
+    retiré — il fuiterait dans les logs serveur, l'historique et les en-têtes
+    Referer.
     """
     token = (
         request.headers.get("X-API-Key")
         or _extract_bearer(request.headers.get("Authorization", ""))
-        or request.args.get("api_key")
     )
     if not token:
         return None, "AUTH_MISSING"

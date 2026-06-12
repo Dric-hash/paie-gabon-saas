@@ -52,6 +52,33 @@ BAREME_IRPP = [
 ]
 
 
+from decimal import Decimal, ROUND_HALF_UP
+
+
+def fcfa(valeur, decimales: int = 2) -> float:
+    """
+    Arrondi monétaire déterministe — arrondi commercial (round-half-up),
+    contrairement au round() natif de Python qui fait du round-half-to-even
+    (arrondi bancaire) et donne, par ex., round(2.5) == 2.
+
+    La conversion via str() neutralise l'imprécision binaire du float
+    (ex: 0.1 + 0.2 == 0.30000000000000004). Retourne un float compatible
+    avec les colonnes Numeric(15,2) de la base.
+
+    >>> fcfa(2.5, 0)     # 3.0   (et non 2 comme round())
+    >>> fcfa(1234.565)   # 1234.57
+    >>> fcfa(None)       # 0.0
+    """
+    if valeur is None:
+        return 0.0
+    try:
+        quant = Decimal(1).scaleb(-decimales)            # ex: Decimal("0.01")
+        d = Decimal(str(valeur)).quantize(quant, rounding=ROUND_HALF_UP)
+        return float(d)
+    except Exception:
+        return 0.0
+
+
 def calculer_taux_horaire(salaire_base: float) -> float:
     """Taux horaire de base = salaire_base / 173,33."""
     if salaire_base <= 0:
@@ -121,7 +148,7 @@ def calculer_irpp(base_imposable: float, nb_parts: float) -> float:
             break
         tranche = min(revenu_par_part, borne_sup) - borne_inf
         impot_par_part += tranche * taux
-    return round(impot_par_part * nb_parts, 2)
+    return fcfa(impot_par_part * nb_parts)
 
 
 def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
@@ -131,7 +158,10 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     """
     def g(key):
         val = donnees.get(key, 0)
-        return float(val) if val else 0.0
+        try:
+            return float(val) if val not in (None, "") else 0.0
+        except (TypeError, ValueError):
+            return 0.0
 
     # ── 1. ÉLÉMENTS BRUTS ───────────────────────────────────────────────────
     salaire_base      = g("salaire_base")
@@ -187,8 +217,8 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     transport_exo_cnss = min(prime_transport, TRANSPORT_EXONERATION_CNSS)
     base_cnss = min(salaire_brut - transport_exo_cnss, CNSS_PLAFOND)
     base_cnss = max(base_cnss, 0)
-    cnss_salarie   = round(base_cnss * CNSS_TAUX_SALARIE, 2)
-    cnss_patronale = round(base_cnss * CNSS_TAUX_PATRONAL, 2)
+    cnss_salarie   = fcfa(base_cnss * CNSS_TAUX_SALARIE)
+    cnss_patronale = fcfa(base_cnss * CNSS_TAUX_PATRONAL)
 
     # ── 4. CNAMGS ────────────────────────────────────────────────────────────
     transport_exo_cnamgs = min(prime_transport, TRANSPORT_EXONERATION_IRPP)
@@ -198,16 +228,16 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         CNAMGS_PLAFOND
     )
     base_cnamgs = max(base_cnamgs, 0)
-    cnamgs_salarie   = round(base_cnamgs * CNAMGS_TAUX_SALARIE, 2)
-    cnamgs_patronale = round(base_cnamgs * CNAMGS_TAUX_PATRONAL, 2)
+    cnamgs_salarie   = fcfa(base_cnamgs * CNAMGS_TAUX_SALARIE)
+    cnamgs_patronale = fcfa(base_cnamgs * CNAMGS_TAUX_PATRONAL)
 
     # ── 5. FNH ──────────────────────────────────────────────────────────────
     base_fnh = min(max(base_cnss - indem_logement, 0), FNH_PLAFOND)
-    fnh = round(base_fnh * FNH_TAUX, 2)
+    fnh = fcfa(base_fnh * FNH_TAUX)
 
     # ── 6. CFP ──────────────────────────────────────────────────────────────
     base_cfp = max(base_cnss - indem_logement, 0)
-    cfp = round(base_cfp * CFP_TAUX, 2)
+    cfp = fcfa(base_cfp * CFP_TAUX)
 
     # ── 7. TCS ──────────────────────────────────────────────────────────────
     base_tcs = (
@@ -218,7 +248,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         + (indem_domesticite + indem_eau_electricite + indem_nourriture)
     )
     base_tcs_imposable = max(base_tcs - TCS_EXONERATION, 0)
-    tcs = round(base_tcs_imposable * TCS_TAUX, 2)
+    tcs = fcfa(base_tcs_imposable * TCS_TAUX)
 
     # ── 8. NET AVANT IRPP ───────────────────────────────────────────────────
     net_avant_irpp = salaire_brut - cnss_salarie - cnamgs_salarie - tcs
