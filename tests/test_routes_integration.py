@@ -700,3 +700,54 @@ class TestBulletinImmuable:
             assert b2.statut in ("VALIDÉ", "VALIDE")
             assert float(b2.net_a_payer) == net_avant
             assert float(b2.salaire_base) == 300000
+
+
+class TestNumeroBulletin:
+    """Numérotation séquentielle et immuable des bulletins (#2)."""
+
+    def test_numero_sequentiel_et_immuable(self, client):
+        from blueprints.tenant import attribuer_numero_bulletin
+        with flask_app.app_context():
+            sal = Salarie.query.filter_by(matricule="EA001").first()
+            per1 = PeriodePaie.query.filter_by(mois=6, annee=2026).first()
+            per2 = PeriodePaie(tenant_id=sal.tenant_id, mois=7, annee=2026,
+                               libelle_mois="JUILLET", statut="OUVERT")
+            db.session.add(per2); db.session.commit()
+
+            b1 = BulletinPaie(tenant_id=sal.tenant_id, salarie_id=sal.id,
+                              periode_id=per1.id, statut="BROUILLON",
+                              salaire_base=300000, salaire_brut=300000, net_a_payer=250000)
+            b2 = BulletinPaie(tenant_id=sal.tenant_id, salarie_id=sal.id,
+                              periode_id=per2.id, statut="BROUILLON",
+                              salaire_base=300000, salaire_brut=300000, net_a_payer=250000)
+            db.session.add_all([b1, b2]); db.session.commit()
+
+            # Premier numéro
+            attribuer_numero_bulletin(b1)
+            assert b1.numero == "BP-2026-000001"
+
+            # Le suivant s'incrémente
+            attribuer_numero_bulletin(b2)
+            assert b2.numero == "BP-2026-000002"
+
+            # Immuabilité : un nouvel appel ne réattribue pas
+            attribuer_numero_bulletin(b1)
+            assert b1.numero == "BP-2026-000001"
+
+
+class TestPagesLegales:
+    """Les pages légales publiques doivent être accessibles sans connexion (#4)."""
+
+    def test_cgu_accessible(self, client):
+        assert client.get("/cgu").status_code == 200
+
+    def test_cgv_accessible(self, client):
+        r = client.get("/cgv")
+        assert r.status_code == 200
+        assert b"Conditions" in r.data
+
+    def test_mentions_legales_accessibles(self, client):
+        assert client.get("/mentions-legales").status_code == 200
+
+    def test_confidentialite_accessible(self, client):
+        assert client.get("/politique-confidentialite").status_code == 200

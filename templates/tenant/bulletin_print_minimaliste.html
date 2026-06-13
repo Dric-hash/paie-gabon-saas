@@ -58,6 +58,7 @@
   <div class="titre-bloc">
     <div class="titre-doc">Bulletin de paie</div>
     <div class="titre-periode">{{ bulletin.periode.libelle_complet }}</div>
+    {% if bulletin.numero %}<div class="titre-periode" style="font-size:10px">N° {{ bulletin.numero }}</div>{% endif %}
     <div class="titre-confidentiel">Document confidentiel</div>
   </div>
 

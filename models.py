@@ -432,6 +432,10 @@ class BulletinPaie(db.Model):
     tenant_id             = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
     salarie_id            = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
     periode_id            = db.Column(db.Integer, db.ForeignKey("periodes_paie.id"), nullable=False)
+    # Numéro séquentiel immuable attribué à la validation (ex. BP-2026-000042).
+    # Unique par tenant : un document de paie officiel ne change jamais de numéro.
+    numero                = db.Column(db.String(30))
+    numero_seq            = db.Column(db.Integer)
     nb_jours_travailles   = db.Column(db.Integer)
     salaire_base          = db.Column(db.Numeric(15,2), nullable=False)
     heures_sup_10         = db.Column(db.Numeric(15,2), default=0)
@@ -537,6 +541,7 @@ class BulletinPaie(db.Model):
     date_validation       = db.Column(db.DateTime)
     __table_args__ = (
         db.UniqueConstraint("tenant_id","salarie_id","periode_id"),
+        db.UniqueConstraint("tenant_id","numero", name="uq_bulletin_numero"),
         db.Index("idx_bulletins_tenant_periode", "tenant_id", "periode_id"),
         db.Index("idx_bulletins_tenant_statut",  "tenant_id", "statut"),
     )

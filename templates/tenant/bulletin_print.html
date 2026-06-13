@@ -81,6 +81,7 @@
     </div>
     <div>
       <div class="bulletin-title">Bulletin de Paie</div>
+      {% if bulletin.numero %}<div style="font-size:11px;color:#555">N° {{ bulletin.numero }}</div>{% endif %}
       <div class="bulletin-sub">
         Période : <strong>{{ bulletin.periode.libelle_complet }}</strong><br/>
         Jours travaillés : <strong>{{ bulletin.nb_jours_travailles or 26 }}</strong><br/>

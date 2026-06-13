@@ -357,6 +357,8 @@ def init_db():
 
 def run_migrations():
     migrations = [
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS numero VARCHAR(30)",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS numero_seq INTEGER",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS jours_conge_par_mois NUMERIC(3,1) DEFAULT 2.5",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_10 NUMERIC(5,2) DEFAULT 0",
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_30 NUMERIC(5,2) DEFAULT 0",

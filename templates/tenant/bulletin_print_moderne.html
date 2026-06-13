@@ -83,6 +83,7 @@
     <div class="header-right">
       <div class="titre">BULLETIN DE PAIE</div>
       <div class="periode">{{ bulletin.periode.libelle_complet }}</div>
+      {% if bulletin.numero %}<div class="periode" style="font-size:11px;opacity:.8">N° {{ bulletin.numero }}</div>{% endif %}
     </div>
   </div>
 

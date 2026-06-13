@@ -408,3 +408,19 @@ def confirmer_changement_email(token):
 @bp.route("/politique-confidentialite")
 def politique_confidentialite():
     return render_template("politique_confidentialite.html")
+
+
+# ── Documents légaux ──────────────────────────────────────────────────────────
+@bp.route("/cgu")
+def cgu():
+    return render_template("cgu.html")
+
+
+@bp.route("/cgv")
+def cgv():
+    return render_template("cgv.html")
+
+
+@bp.route("/mentions-legales")
+def mentions_legales():
+    return render_template("mentions_legales.html")

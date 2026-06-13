@@ -1195,6 +1195,7 @@ def bulletins_valider_lot():
             if b.statut != "BROUILLON": continue
             b.statut          = "VALIDÉ"
             b.date_validation = datetime.utcnow()
+            attribuer_numero_bulletin(b)
             for a in Acompte.query.filter_by(
                 tenant_id=t.id, salarie_id=b.salarie_id,
                 mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all():
@@ -1247,6 +1248,21 @@ def bulletins_valider_lot():
     redir = f"/bulletins?periode_id={pid}"
     if site_id: redir += f"&site_id={site_id}"
     return redirect(redir)
+
+def attribuer_numero_bulletin(b):
+    """
+    Attribue un numéro séquentiel immuable au bulletin lors de sa validation.
+    Format : BP-<année>-<séquence 6 chiffres>, continu et unique par tenant.
+    Ne fait rien si le bulletin a déjà un numéro (immuabilité du document).
+    """
+    if b.numero:
+        return
+    annee = b.periode.annee if b.periode else datetime.utcnow().year
+    dernier = (db.session.query(db.func.max(BulletinPaie.numero_seq))
+               .filter(BulletinPaie.tenant_id == b.tenant_id).scalar()) or 0
+    b.numero_seq = dernier + 1
+    b.numero     = f"BP-{annee}-{b.numero_seq:06d}"
+
 
 @bp.route("/bulletins/saisie", methods=["GET","POST"])
 @login_required
@@ -1349,6 +1365,7 @@ def bulletin_saisie():
         action=request.form.get("action","brouillon")
         if action=="valider":
             b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
+            attribuer_numero_bulletin(b)
             for a in acomptes_en_attente: a.statut = "DEDUIT"
         else:
             b.statut="BROUILLON"
@@ -1390,6 +1407,7 @@ def bulletin_valider(id):
         mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
     for a in acomptes: a.statut = "DEDUIT"
     b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
+    attribuer_numero_bulletin(b)
     db.session.commit()
     flash("Bulletin validé avec succès.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
