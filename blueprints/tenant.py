@@ -1284,9 +1284,10 @@ def bulletin_saisie():
         # et que l'utilisateur n'a pas saisi de valeur manuelle (l'override
         # manuel reste prioritaire). Versée avant le départ en congé (Art. 225).
         if not donnees.get("allocations_conge"):
+            import calendar as _cal
             _debut_mois = date(periode.annee, periode.mois, 1)
             _fin_mois   = date(periode.annee, periode.mois,
-                               calendar.monthrange(periode.annee, periode.mois)[1])
+                               _cal.monthrange(periode.annee, periode.mois)[1])
             jours_conge = sum(
                 float(c.jours_pris or 0)
                 for c in s.conges
@@ -1314,6 +1315,16 @@ def bulletin_saisie():
 
         res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
         ex=BulletinPaie.query.filter_by(tenant_id=t.id,salarie_id=sid,periode_id=pid).first()
+        # 🔒 Immuabilité : un bulletin validé est un document de paie officiel.
+        # Il ne peut pas être réécrit en silence — il faut d'abord annuler sa
+        # validation (action tracée), sinon l'historique de paie serait modifiable.
+        if ex and ex.statut in ("VALIDÉ", "VALIDE"):
+            log_action("BLOCK_EDIT", "bulletin", ex.id,
+                       "Tentative de modification d'un bulletin validé (bloquée)")
+            flash("Ce bulletin est validé : il ne peut pas être modifié. "
+                  "Annulez d'abord sa validation depuis la liste des bulletins, "
+                  "puis ressaisissez-le.", "error")
+            return redirect(url_for("tenant.bulletin_detail", id=ex.id))
         b=ex or BulletinPaie(tenant_id=t.id,salarie_id=sid,periode_id=pid)
         if not ex: db.session.add(b)
         for k,v in res.items():

@@ -1,0 +1,4 @@
+# Dépendances de développement et d'intégration continue uniquement.
+# Ne pas inclure dans l'image de production.
+pytest>=8.0
+pip-audit>=2.7

@@ -27,7 +27,7 @@ from datetime import date, datetime
 
 from app import app as flask_app
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi,
-                    Salarie, PeriodePaie)
+                    Salarie, PeriodePaie, BulletinPaie)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -660,3 +660,43 @@ class TestNotifications:
             notifs_b = get_notifications(tb, db, _NOTIF_MODELS)
             # Toutes les notifs de B doivent concerner B (pas de fuite)
             assert isinstance(notifs_b, list)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — IMMUABILITÉ DES BULLETINS VALIDÉS
+# ══════════════════════════════════════════════════════════════════════════════
+class TestBulletinImmuable:
+    """Un bulletin validé ne doit pas pouvoir être réécrit via la saisie."""
+
+    def _creer_bulletin_valide(self):
+        with flask_app.app_context():
+            sal = Salarie.query.filter_by(matricule="EA001").first()
+            per = PeriodePaie.query.filter_by(mois=6, annee=2026).first()
+            b = BulletinPaie(tenant_id=sal.tenant_id, salarie_id=sal.id,
+                             periode_id=per.id, statut="VALIDÉ",
+                             salaire_base=300000, salaire_brut=300000,
+                             net_a_payer=250000)
+            db.session.add(b)
+            db.session.commit()
+            return sal.id, per.id, b.id, float(b.net_a_payer)
+
+    def test_bulletin_valide_non_modifiable(self, client):
+        auth_session(client, "admin@a.ga")
+        sid, pid, bid, net_avant = self._creer_bulletin_valide()
+
+        # Récupérer le token CSRF depuis le formulaire de saisie
+        page = client.get(f"/bulletins/saisie?salarie_id={sid}")
+        token = _extract_csrf(page.data)
+
+        # Tenter d'écraser le bulletin validé avec un nouveau salaire
+        client.post("/bulletins/saisie", data={
+            "salarie_id": sid, "periode_id": pid, "csrf_token": token,
+            "salaire_base": 999999, "action": "valider",
+        }, follow_redirects=False)
+
+        # Le bulletin validé doit être resté intact
+        with flask_app.app_context():
+            b2 = BulletinPaie.query.get(bid)
+            assert b2.statut in ("VALIDÉ", "VALIDE")
+            assert float(b2.net_a_payer) == net_avant
+            assert float(b2.salaire_base) == 300000
