@@ -111,7 +111,7 @@ class TestSoldeToutCompte:
         s = self._salarie(date(2024, 1, 1))
         buls = self._bulletins([300000]*6)
         r = calculer_solde_tout_compte(s, buls)
-        assert r["base_journaliere"] == pytest.approx(300000 / 30, abs=1)
+        assert r["base_journaliere"] == pytest.approx(300000 / 26, abs=1)
 
     def test_indem_licenciement_apres_1_an(self):
         s = self._salarie(date(2020, 1, 1))

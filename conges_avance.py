@@ -11,7 +11,7 @@ Règles légales gabonaises (Code du Travail) :
   - 2,5 jours ouvrables de congé par mois de travail effectif
   - Maximum 30 jours ouvrables par an (12 mois × 2,5)
   - Période de référence : 1er juin → 31 mai (N→N+1)
-  - Indemnité compensatrice = (salaire brut / 30) × jours non pris
+  - Indemnité compensatrice = (salaire brut / 26 jours ouvrables) × jours non pris
   - Ancienneté > 5 ans : +1 jour / an supplémentaire (max +5j)
   - Ancienneté > 10 ans : +1 jour / an supplémentaire (max +5j en plus)
 """
@@ -25,13 +25,17 @@ JOURS_PAR_MOIS          = 2.5    # jours ouvrables / mois travaillé
 JOURS_MAX_PAR_AN        = 30.0   # plafond annuel
 JOURS_ANCIENNETE_PALIER1 = 5     # ans → +1 jour/an jusqu'à 5 ans
 JOURS_ANCIENNETE_PALIER2 = 10    # ans → +1 jour/an au-delà
+# Diviseur unique pour convertir un salaire mensuel en taux journalier
+# « congés » (jours ouvrables, Art. 223). Utilisé partout dans le logiciel :
+# allocation de congé ET indemnité compensatrice du solde de tout compte.
+JOURS_OUVRABLES_MOIS    = 26
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 1. CALCUL DES JOURS ACQUIS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def allocation_conge(bulletins_12mois, jours_pris: float, jours_mois: float = 26.0) -> float:
+def allocation_conge(bulletins_12mois, jours_pris: float, jours_mois: float = JOURS_OUVRABLES_MOIS) -> float:
     """
     Allocation de congé — Code du travail 2021, Art. 225.
 
@@ -207,7 +211,7 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     cause ∈ {"LICENCIEMENT", "RETRAITE", "DECES", "DEMISSION", "FAUTE_LOURDE"}
 
     Formule de l'indemnité compensatrice de congés :
-      Base journalière = max(moy_12_mois, dernier_brut) / 30
+      Base journalière = max(moy_12_mois, dernier_brut) / 26 (jours ouvrables)
       Indemnité = Base journalière × jours non pris
 
     Returns:
@@ -244,7 +248,7 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         dernier_brut = moyenne_12
 
     base_calcul      = max(moyenne_12, dernier_brut)
-    base_journaliere = round(base_calcul / 30, 2)
+    base_journaliere = round(base_calcul / JOURS_OUVRABLES_MOIS, 2)
     indemnite        = round(base_journaliere * jours_restants, 0)
 
     # ── Indemnité de rupture selon la CAUSE (Code Art. 87-90) ────────────────
