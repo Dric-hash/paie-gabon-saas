@@ -1278,6 +1278,40 @@ def bulletin_saisie():
                 donnees[k] = 0
         if total_acomptes > 0:
             donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
+
+        # ── L6 : Allocation de congé (Code du travail 2021, Art. 225) ──────────
+        # Calcul automatique si un congé ANNUEL débute dans le mois de la période
+        # et que l'utilisateur n'a pas saisi de valeur manuelle (l'override
+        # manuel reste prioritaire). Versée avant le départ en congé (Art. 225).
+        if not donnees.get("allocations_conge"):
+            _debut_mois = date(periode.annee, periode.mois, 1)
+            _fin_mois   = date(periode.annee, periode.mois,
+                               calendar.monthrange(periode.annee, periode.mois)[1])
+            jours_conge = sum(
+                float(c.jours_pris or 0)
+                for c in s.conges
+                if (c.type_conge in ("ANNUEL", None))
+                   and c.statut in ("APPROUVÉ", "APPROUVE", "PRIS")
+                   and c.date_depart and _debut_mois <= c.date_depart <= _fin_mois
+            )
+            if jours_conge > 0:
+                from conges_avance import allocation_conge
+                bulletins_12 = (BulletinPaie.query
+                    .filter_by(tenant_id=t.id, salarie_id=sid)
+                    .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]),
+                            BulletinPaie.periode_id != pid)
+                    .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
+                alloc = allocation_conge(bulletins_12, jours_conge)
+                if alloc > 0:
+                    donnees["allocations_conge"] = alloc
+                    flash(
+                        f"Allocation de congé calculée automatiquement pour "
+                        f"{jours_conge:.0f} jour(s) pris : {int(alloc):,} FCFA "
+                        f"(moyenne des 12 derniers mois, Art. 225). "
+                        f"Vous pouvez la modifier manuellement."
+                        .replace(",", " "),
+                        "info")
+
         res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
         ex=BulletinPaie.query.filter_by(tenant_id=t.id,salarie_id=sid,periode_id=pid).first()
         b=ex or BulletinPaie(tenant_id=t.id,salarie_id=sid,periode_id=pid)
@@ -3710,7 +3744,11 @@ def solde_tout_compte(sal_id):
     ).order_by(BulletinPaie.date_creation.desc()).limit(12).all()
 
     from conges_avance import calculer_solde_tout_compte
-    solde = calculer_solde_tout_compte(s, bulletins_12, date_cessation, convention=t.convention)
+    cause = request.args.get("cause", "LICENCIEMENT")
+    solde = calculer_solde_tout_compte(
+        s, bulletins_12, date_cessation, convention=t.convention,
+        cause=cause, jours_conge_par_mois=t.jours_conge_par_mois
+    )
 
     return render_template("tenant/solde_tout_compte.html",
         tenant=t, salarie=s, solde=solde, date_cessation=date_cessation,
@@ -3771,7 +3809,11 @@ def salarie_document(sal_id, type_doc):
                             .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
                             .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
             from conges_avance import calculer_solde_tout_compte
-            solde = calculer_solde_tout_compte(s, bulletins_12, date_cess, convention=t.convention)
+            cause = request.args.get("cause", "LICENCIEMENT")
+            solde = calculer_solde_tout_compte(
+                s, bulletins_12, date_cess, convention=t.convention,
+                cause=cause, jours_conge_par_mois=t.jours_conge_par_mois
+            )
             pdf = solde_tout_compte_pdf(s, t, solde, date_cess)
             nom = f"solde_tout_compte_{base_nom}.pdf"
 

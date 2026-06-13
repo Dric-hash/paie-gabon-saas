@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 from conges_avance import (
     calculer_jours_acquis, calculer_solde_tout_compte,
-    bilan_conges_tenant, planning_absences,
+    bilan_conges_tenant, planning_absences, allocation_conge,
     JOURS_PAR_MOIS, JOURS_MAX_PAR_AN
 )
 
@@ -119,10 +119,26 @@ class TestSoldeToutCompte:
         r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1))
         assert r["indem_licenciement"] > 0
 
-    def test_pas_indem_licenciement_moins_1_an(self):
+    def test_indem_licenciement_meme_moins_1_an(self):
+        # Code 2021 Art. 87 : l'indemnité de licenciement est due SANS
+        # condition d'ancienneté. Un salarié licencié à ~7 mois y a droit.
         s = self._salarie(date(2025, 6, 1))
         buls = self._bulletins([400000]*3)
-        r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1))
+        r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1), cause="LICENCIEMENT")
+        assert r["indem_licenciement"] > 0
+
+    def test_pas_indem_demission_moins_2_ans(self):
+        # Démission < 2 ans : aucune indemnité de services rendus (Art. 88).
+        s = self._salarie(date(2025, 6, 1))
+        buls = self._bulletins([400000]*3)
+        r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1), cause="DEMISSION")
+        assert r["indem_licenciement"] == 0
+
+    def test_pas_indem_faute_lourde(self):
+        # Faute lourde : aucune indemnité de rupture (Art. 87).
+        s = self._salarie(date(2020, 1, 1))
+        buls = self._bulletins([500000]*12)
+        r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1), cause="FAUTE_LOURDE")
         assert r["indem_licenciement"] == 0
 
     def test_total_somme_indemnites(self):
@@ -280,3 +296,34 @@ class TestSimulerAugmentation:
     def test_salaire_invalide(self):
         r = simuler_augmentation(0, augmentation_pct=10)
         assert "error" in r
+
+
+class TestAllocationConge:
+    """Allocation de congé — Code du travail 2021, Art. 225."""
+
+    class _Bul:
+        def __init__(self, brut, rendement=0, assiduite=0):
+            self.salaire_brut = brut
+            self.prime_rendement = rendement
+            setattr(self, "prime_assiduité", assiduite)
+
+    def test_moyenne_12_mois(self):
+        buls = [self._Bul(300000) for _ in range(12)]
+        # 300000/26 x 30 jours ouvrables
+        assert allocation_conge(buls, 30) == pytest.approx(300000 / 26 * 30, abs=1)
+
+    def test_prorata_jours(self):
+        buls = [self._Bul(300000) for _ in range(12)]
+        assert allocation_conge(buls, 15) == pytest.approx(300000 / 26 * 15, abs=1)
+
+    def test_exclut_rendement_et_assiduite(self):
+        # 280000 de base après exclusion des primes rendement/assiduité
+        buls = [self._Bul(300000, rendement=15000, assiduite=5000) for _ in range(12)]
+        assert allocation_conge(buls, 30) == pytest.approx(280000 / 26 * 30, abs=1)
+
+    def test_zero_si_aucun_bulletin(self):
+        assert allocation_conge([], 15) == 0
+
+    def test_zero_si_aucun_jour(self):
+        buls = [self._Bul(300000) for _ in range(12)]
+        assert allocation_conge(buls, 0) == 0

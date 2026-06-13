@@ -934,15 +934,51 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
     return 0.0
 
 
+def calculer_preavis_code(anciennete_annees: int) -> int:
+    """
+    Durée du préavis en jours — Code du travail 2021, Art. 82.
+    Barème légal applicable à défaut de convention plus favorable :
+      jusqu'à 1 an : 15 jours
+      1 à 3 ans    : 1 mois  (30 j)
+      3 à 5 ans    : 2 mois  (60 j)
+      5 à 10 ans   : 3 mois  (90 j)
+      10 à 15 ans  : 4 mois  (120 j)
+      15 à 20 ans  : 5 mois  (150 j)
+      20 à 30 ans  : 6 mois  (180 j)
+      > 30 ans     : +10 jours par année de présence
+    (Conversion mois→jours à 30 j ; le Code raisonne en mois.)
+    """
+    if anciennete_annees < 1:
+        return 15
+    elif anciennete_annees < 3:
+        return 30
+    elif anciennete_annees < 5:
+        return 60
+    elif anciennete_annees < 10:
+        return 90
+    elif anciennete_annees < 15:
+        return 120
+    elif anciennete_annees < 20:
+        return 150
+    elif anciennete_annees <= 30:
+        return 180
+    else:
+        return 180 + (anciennete_annees - 30) * 10
+
+
 def preavis_jours(convention, anciennete_annees: int) -> int:
-    """Durée du préavis (jours) selon la convention applicable."""
+    """
+    Durée du préavis (jours) selon la convention applicable, en retenant
+    toujours la durée la plus favorable au salarié (Code Art. 80 & 82).
+    """
     c = _conv(convention)
+    legal = calculer_preavis_code(anciennete_annees)
     if c == "COMMERCE":
-        return calculer_preavis_commerce(anciennete_annees)
+        return max(calculer_preavis_commerce(anciennete_annees), legal)
     if c == "BTP":
-        return calculer_preavis_btp(anciennete_annees)
-    # Code du travail (défaut prudent) : aligne sur le barème commun
-    return calculer_preavis_commerce(anciennete_annees)
+        return max(calculer_preavis_btp(anciennete_annees), legal)
+    # Aucune convention : barème légal du Code du travail.
+    return legal
 
 
 def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_annees: int) -> float:
@@ -953,6 +989,58 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
     if c == "BTP":
         return calculer_indemnite_services_rendus_btp(moyenne_12_mois, anciennete_annees)
     return 0.0
+
+
+def indemnite_licenciement(moyenne_12_mois: float, anciennete_annees: float) -> float:
+    """
+    Indemnité de licenciement — Code du travail 2021, Art. 87 & 90.
+
+    Due SANS condition d'ancienneté à tout salarié licencié pour un motif
+    autre que la faute lourde (hors période d'essai).
+    Minimum légal : 20 % de la moyenne mensuelle du salaire global des
+    12 derniers mois, par année de présence continue (fractions comprises,
+    Art. 90).
+    """
+    if moyenne_12_mois <= 0 or anciennete_annees <= 0:
+        return 0.0
+    return fcfa(moyenne_12_mois * 0.20 * anciennete_annees, 0)
+
+
+def indemnite_rupture(convention, cause, moyenne_12_mois: float,
+                      anciennete_annees: float) -> dict:
+    """
+    Aiguille vers la bonne indemnité de rupture selon la CAUSE de cessation,
+    conformément au Code du travail 2021 (Art. 87 à 90).
+
+    cause ∈ {"LICENCIEMENT", "RETRAITE", "DECES", "DEMISSION", "FAUTE_LOURDE"}
+
+    Règles appliquées :
+      • Non-cumul (Art. 89) : licenciement OU services rendus, jamais les deux.
+      • Faveur (Art. 90)    : le barème conventionnel (BTP/Commerce) s'applique
+                              s'il est plus avantageux que le minimum légal 20 %/an.
+      • Licenciement (Art. 87) : AUCUNE condition d'ancienneté.
+      • Services rendus (Art. 88) : retraite, décès, ou démission >= 2 ans.
+
+    Returns: {"type": str | None, "montant": float}
+    """
+    cause = (cause or "").upper()
+    if cause == "FAUTE_LOURDE" or moyenne_12_mois <= 0 or anciennete_annees <= 0:
+        return {"type": None, "montant": 0.0}
+
+    # Indemnité de services rendus : retraite, décès, ou démission >= 2 ans
+    if cause in ("RETRAITE", "DECES") or (cause == "DEMISSION" and anciennete_annees >= 2):
+        montant = indemnite_services_rendus(convention, moyenne_12_mois, anciennete_annees)
+        return {"type": "SERVICES_RENDUS", "montant": montant}
+
+    # Indemnité de licenciement : tout licenciement hors faute lourde, SANS minimum.
+    if cause == "LICENCIEMENT":
+        legal = indemnite_licenciement(moyenne_12_mois, anciennete_annees)
+        conv  = indemnite_services_rendus(convention, moyenne_12_mois, anciennete_annees)
+        # On retient le plus favorable au salarié (Art. 90).
+        return {"type": "LICENCIEMENT", "montant": max(legal, conv)}
+
+    # Démission < 2 ans : aucune indemnité de rupture.
+    return {"type": None, "montant": 0.0}
 
 
 def permissions_familiales(convention, evenement: str) -> int:

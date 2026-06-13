@@ -31,7 +31,55 @@ JOURS_ANCIENNETE_PALIER2 = 10    # ans → +1 jour/an au-delà
 # 1. CALCUL DES JOURS ACQUIS
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None) -> dict:
+def allocation_conge(bulletins_12mois, jours_pris: float, jours_mois: float = 26.0) -> float:
+    """
+    Allocation de congé — Code du travail 2021, Art. 225.
+
+    Base : moyenne mensuelle des salaires des 12 derniers mois, de laquelle
+    sont exclues les primes de rendement et d'assiduité (Art. 225, al. 3),
+    ramenée au jour ouvrable (÷ 26, les jours de congé étant décomptés en
+    jours ouvrables — Art. 223) puis proratisée au nombre de jours pris.
+
+    Args:
+        bulletins_12mois : bulletins des 12 derniers mois
+        jours_pris       : nombre de jours ouvrables de congé pris
+        jours_mois       : diviseur mensuel en jours ouvrables (26 par défaut)
+
+    Returns:
+        montant de l'allocation de congé (FCFA)
+    """
+    from calculs_paie import fcfa
+    if not bulletins_12mois or jours_pris <= 0 or jours_mois <= 0:
+        return 0.0
+    total = 0.0
+    for b in bulletins_12mois:
+        assiette = float(getattr(b, "salaire_brut", 0) or 0)
+        # Exclusions autorisées par l'Art. 225 (rendement, assiduité)
+        assiette -= float(getattr(b, "prime_rendement", 0) or 0)
+        assiette -= float(getattr(b, "prime_assiduité", 0) or 0)
+        total += max(0.0, assiette)
+    moyenne_mensuelle = total / len(bulletins_12mois)
+    base_journaliere  = moyenne_mensuelle / jours_mois
+    return fcfa(base_journaliere * jours_pris, 0)
+
+
+def _bonus_conge_enfants(salarie) -> int:
+    """
+    +1 jour de congé par an et par enfant à charge de moins de 16 ans,
+    pour la mère de famille — Code du travail 2021, Art. 223.
+    Robuste aux objets incomplets (retourne 0 si données absentes).
+    """
+    try:
+        if (getattr(salarie, "sexe", "") or "") != "F":
+            return 0
+        n = int(getattr(salarie, "nb_enfants_moins_16ans", 0) or 0)
+        return max(0, n)
+    except (TypeError, ValueError):
+        return 0
+
+
+def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None,
+                          salarie=None, taux_mensuel=None) -> dict:
     """
     Calcule les jours de congé acquis par un salarié.
 
@@ -76,12 +124,29 @@ def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None) -> dict:
     delta_jours   = (fin_effectif - debut_effectif).days + 1
     mois_travailles = delta_jours / 30.4375  # 365.25 / 12
 
+    # Taux mensuel d'acquisition (Art. 222). Défaut historique : 2,5 j/mois.
+    # Les moins de 18 ans ont droit à 2,5 j/mois au minimum (Art. 222).
+    taux = float(taux_mensuel) if taux_mensuel else JOURS_PAR_MOIS
+    if salarie is not None and getattr(salarie, "date_naissance", None):
+        try:
+            age = (date_ref - salarie.date_naissance).days // 365
+            if age < 18:
+                taux = max(taux, 2.5)
+        except (TypeError, ValueError):
+            pass
+
     # Jours acquis sur la période
-    jours_periode = round(min(mois_travailles * JOURS_PAR_MOIS, JOURS_MAX_PAR_AN), 1)
+    jours_periode = round(min(mois_travailles * taux, JOURS_MAX_PAR_AN), 1)
 
     # Ancienneté totale
     anciennete_jours  = (date_ref - date_embauche).days
     anciennete_annees = anciennete_jours // 365
+    # Ancienneté fractionnaire pour le MONTANT des indemnités (Art. 90 : les
+    # fractions d'année comptent). Les mois entiers restants (>= 30 j) sont
+    # exprimés en douzièmes d'année. L'ancienneté entière reste utilisée pour
+    # lire les paliers conventionnels (2/10/15/20 ans).
+    mois_fraction      = (anciennete_jours % 365) // 30
+    anciennete_annees_calcul = round(anciennete_annees + mois_fraction / 12.0, 3)
 
     # Bonus ancienneté (jours supplémentaires)
     bonus = 0
@@ -92,16 +157,22 @@ def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None) -> dict:
 
     jours_total = min(jours_periode + bonus, JOURS_MAX_PAR_AN + bonus)
 
+    # Jour de congé supplémentaire par enfant à charge < 16 ans (mère) — Art. 223
+    bonus_enfants = _bonus_conge_enfants(salarie)
+    jours_total += bonus_enfants
+
     return {
         "jours_acquis_periode":  jours_periode,
         "jours_acquis_total":    jours_total,
         "bonus_anciennete":      bonus,
+        "bonus_enfants":         bonus_enfants,
         "mois_travailles":       round(mois_travailles, 1),
         "anciennete_annees":     anciennete_annees,
+        "anciennete_annees_calcul": anciennete_annees_calcul,
         "anciennete_mois":       (anciennete_jours % 365) // 30,
         "periode_debut":         periode_debut,
         "periode_fin":           periode_fin,
-        "taux_mensuel":          JOURS_PAR_MOIS,
+        "taux_mensuel":          taux,
     }
 
 
@@ -110,8 +181,10 @@ def _zero_result(**kw):
         "jours_acquis_periode": 0,
         "jours_acquis_total":   0,
         "bonus_anciennete":     0,
+        "bonus_enfants":        0,
         "mois_travailles":      0,
         "anciennete_annees":    0,
+        "anciennete_annees_calcul": 0,
         "anciennete_mois":      0,
         "periode_debut":        kw.get("periode_debut"),
         "periode_fin":          kw.get("periode_fin"),
@@ -124,18 +197,18 @@ def _zero_result(**kw):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
-                               convention="BTP") -> dict:
+                               convention="BTP", cause="LICENCIEMENT",
+                               jours_conge_par_mois=None) -> dict:
     """
-    Calcule l'indemnité compensatrice de congés non pris à la cessation du contrat.
+    Calcule l'indemnité compensatrice de congés non pris à la cessation du contrat,
+    ainsi que l'indemnité de rupture (licenciement / services rendus) due selon la
+    CAUSE de cessation, conformément au Code du travail 2021 (Art. 87 à 90, 224).
 
-    Formule légale gabonaise :
+    cause ∈ {"LICENCIEMENT", "RETRAITE", "DECES", "DEMISSION", "FAUTE_LOURDE"}
+
+    Formule de l'indemnité compensatrice de congés :
       Base journalière = max(moy_12_mois, dernier_brut) / 30
       Indemnité = Base journalière × jours non pris
-
-    Args:
-        salarie         : objet Salarie
-        bulletins_12mois: liste des bulletins des 12 derniers mois
-        date_cessation  : date de cessation (défaut : aujourd'hui)
 
     Returns:
         dict avec tous les éléments du calcul
@@ -145,7 +218,8 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
 
     # Jours acquis non pris
     acquis_calc = calculer_jours_acquis(
-        salarie.date_embauche, date_cessation
+        salarie.date_embauche, date_cessation,
+        salarie=salarie, taux_mensuel=jours_conge_par_mois
     )
     jours_acquis = acquis_calc["jours_acquis_total"]
 
@@ -173,20 +247,21 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     base_journaliere = round(base_calcul / 30, 2)
     indemnite        = round(base_journaliere * jours_restants, 0)
 
-    # ── Indemnité de services rendus — Art. A.32 (selon convention) ──────────
-    # Base : moyenne mensuelle du salaire global des 12 derniers mois.
-    # Le barème dépend de la convention collective applicable :
-    #   BTP      → 20% (2-10) / 26% (10-15) / 30% (15-20) / 35% (>20)
-    #   COMMERCE → 20% (2-5)  / 25% (5-10)  / 30% (10-20) / 35% (>20)
-    from calculs_paie import indemnite_services_rendus
-    anciennete_annees = acquis_calc["anciennete_annees"]
-    indem_licenciement = indemnite_services_rendus(
-        convention, base_calcul, anciennete_annees
-    )
+    # ── Indemnité de rupture selon la CAUSE (Code Art. 87-90) ────────────────
+    # Licenciement (hors faute lourde) : 20 %/an SANS condition d'ancienneté,
+    #   ou barème conventionnel BTP/Commerce s'il est plus favorable.
+    # Services rendus : retraite, décès, ou démission >= 2 ans.
+    # Non-cumul (Art. 89) : une seule de ces indemnités est versée.
+    from calculs_paie import indemnite_rupture
+    anciennete_calcul = acquis_calc["anciennete_annees_calcul"]   # fractionnaire (Art. 90)
+    rupture = indemnite_rupture(convention, cause, base_calcul, anciennete_calcul)
+    indem_rupture = rupture["montant"]
 
     return {
         "salarie":            salarie,
         "date_cessation":     date_cessation,
+        "cause_cessation":    (cause or "").upper(),
+        "type_indemnite":     rupture["type"],
         "jours_acquis":       jours_acquis,
         "jours_pris":         jours_pris,
         "jours_restants":     jours_restants,
@@ -197,10 +272,10 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         "base_calcul":        round(base_calcul, 0),
         "base_journaliere":   base_journaliere,
         "indemnite_conges":   indemnite,
-        "anciennete_annees":  anciennete_annees,
+        "anciennete_annees":  acquis_calc["anciennete_annees"],
         "anciennete_mois":    acquis_calc["anciennete_mois"],
-        "indem_licenciement": indem_licenciement,
-        "total_a_payer":      indemnite + indem_licenciement,
+        "indem_licenciement": indem_rupture,
+        "total_a_payer":      indemnite + indem_rupture,
     }
 
 
