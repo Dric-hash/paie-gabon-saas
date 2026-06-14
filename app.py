@@ -417,6 +417,7 @@ def run_migrations():
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS convention VARCHAR(20) DEFAULT 'AUCUNE'",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS seuil_heures_sup_hebdo NUMERIC(4,1) DEFAULT 40.0",
     ]
     for sql in migrations:
         try:
