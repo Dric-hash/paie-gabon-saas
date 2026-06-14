@@ -65,7 +65,7 @@
 
       <div style="margin-bottom:.875rem">
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Salaire de base (FCFA)</label>
-        <input type="number" id="salaire_base" value="0" min="0" step="1000"
+        <input type="number" id="salaire_base" value="0" min="0" step="1"
           style="width:100%;border:2px solid #e5e7eb;border-radius:.875rem;padding:.75rem;font-size:1.1rem;font-weight:700;text-align:right;font-family:monospace"
           oninput="onSalaireChange(); simuler()"
           onfocus="this.style.borderColor='#0f3d36'" onblur="this.style.borderColor='#e5e7eb'"/>
@@ -251,7 +251,7 @@
         <h3 style="font-size:.875rem;font-weight:700;color:#0f3d36;margin:0 0 1rem">Paramètres</h3>
         <div style="margin-bottom:.75rem">
           <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Salaire actuel (FCFA)</label>
-          <input type="number" id="aug-salaire" placeholder="400000" step="1000"
+          <input type="number" id="aug-salaire" placeholder="400000" step="1"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem">
@@ -262,7 +262,7 @@
           </div>
           <div>
             <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">ou montant fixe</label>
-            <input type="number" id="aug-montant" placeholder="50000" step="1000"
+            <input type="number" id="aug-montant" placeholder="50000" step="1"
               style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
           </div>
         </div>
@@ -290,7 +290,7 @@
         <h3 style="font-size:.875rem;font-weight:700;color:#0f3d36;margin:0 0 1rem">Net souhaité</h3>
         <div style="margin-bottom:.75rem">
           <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.25rem">Net à payer cible (FCFA)</label>
-          <input type="number" id="ntb-net" placeholder="350000" step="1000"
+          <input type="number" id="ntb-net" placeholder="350000" step="1"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.875rem;box-sizing:border-box"/>
         </div>
         <div style="margin-bottom:.75rem">
@@ -327,7 +327,7 @@
           ] %}
           <div style="margin-bottom:.375rem">
             <label style="font-size:.65rem;color:#6b7280">{{ label }}</label>
-            <input type="number" id="sc{{ i }}-{{ field }}" placeholder="{{ placeholder }}" step="1000" value="{{ placeholder if field == 'prime_transport' else 0 if placeholder == '0' else '' }}"
+            <input type="number" id="sc{{ i }}-{{ field }}" placeholder="{{ placeholder }}" step="1" value="{{ placeholder if field == 'prime_transport' else 0 if placeholder == '0' else '' }}"
               style="width:100%;border:1px solid #e5e7eb;border-radius:.375rem;padding:.3rem .5rem;font-size:.8rem;box-sizing:border-box"/>
           </div>
           {% endfor %}

@@ -50,7 +50,7 @@
         <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
           Salaire de base (FCFA) *
         </label>
-        <input type="number" name="salaire_base" required min="0" step="1000"
+        <input type="number" name="salaire_base" required min="0" step="1"
           value="{{ (contrat.salaire_base|int) if contrat else '' }}"
           placeholder="Ex: 400000"
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
