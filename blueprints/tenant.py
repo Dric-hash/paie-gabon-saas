@@ -4055,6 +4055,18 @@ def conge_nouveau():
         date_dep = _parse_date(request.form.get("date_depart"))
         date_ret = _parse_date(request.form.get("date_retour"))
         type_c = request.form.get("type_conge", "ANNUEL")
+        # Congé de maternité : si une date présumée d'accouchement est fournie,
+        # les 14 semaines légales (Art. 208) sont calculées automatiquement.
+        if type_c == "MATERNITE":
+            date_acc = _parse_date(request.form.get("date_accouchement"))
+            if date_acc:
+                from conges_avance import calculer_conge_maternite
+                mat = calculer_conge_maternite(
+                    date_acc,
+                    naissances_multiples=(request.form.get("naissances_multiples") == "1"),
+                    complications=(request.form.get("complications_grossesse") == "1"),
+                )
+                date_dep, date_ret = mat["date_debut"], mat["date_fin"]
         jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
         conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
         if not conge:

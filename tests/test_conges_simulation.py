@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 
 from conges_avance import (
     calculer_jours_acquis, calculer_solde_tout_compte,
-    bilan_conges_tenant, planning_absences, allocation_conge,
+    bilan_conges_tenant, planning_absences, allocation_conge, calculer_conge_maternite,
     JOURS_PAR_MOIS, JOURS_MAX_PAR_AN
 )
 
@@ -327,3 +327,32 @@ class TestAllocationConge:
     def test_zero_si_aucun_jour(self):
         buls = [self._Bul(300000) for _ in range(12)]
         assert allocation_conge(buls, 0) == 0
+
+
+class TestCongeMaternite:
+    """Congé de maternité — Code du travail 2021, Art. 208."""
+
+    def test_14_semaines(self):
+        from datetime import date
+        r = calculer_conge_maternite(date(2026, 9, 1))
+        assert r["semaines_total"] == 14
+        assert r["semaines_avant"] == 6
+        assert r["semaines_apres"] == 8
+        assert r["jours"] == 98  # 14 x 7
+        assert r["date_debut"] == date(2026, 7, 21)   # 6 semaines avant
+        assert r["indemnise_par"] == "CNSS"
+        assert r["impacte_conge_annuel"] is False
+
+    def test_naissances_multiples(self):
+        from datetime import date
+        r = calculer_conge_maternite(date(2026, 9, 1), naissances_multiples=True)
+        assert r["semaines_apres"] == 11   # 8 + 3
+        assert r["semaines_total"] == 17
+
+    def test_complications(self):
+        from datetime import date
+        r = calculer_conge_maternite(date(2026, 9, 1), complications=True)
+        assert r["semaines_apres"] == 11
+
+    def test_sans_date(self):
+        assert calculer_conge_maternite(None) is None

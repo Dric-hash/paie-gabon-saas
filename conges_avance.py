@@ -35,6 +35,40 @@ JOURS_OUVRABLES_MOIS    = 26
 # 1. CALCUL DES JOURS ACQUIS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def calculer_conge_maternite(date_accouchement, naissances_multiples=False,
+                             complications=False) -> dict:
+    """
+    Congé de maternité — Code du travail 2021, Art. 208.
+
+    Durée légale : 14 semaines, soit 6 semaines avant la date présumée
+    d'accouchement et 8 semaines après. Prolongations :
+      • +3 semaines en cas de naissances multiples ;
+      • +3 semaines en cas de maladie/complications liées à la grossesse.
+
+    Indemnisation : salaire intégral à la charge de la CNSS (et non de
+    l'employeur). Ce congé n'entame pas le congé annuel (Art. 223).
+
+    Returns: dict avec dates, durées et la mention de l'indemnisation,
+             ou None si la date d'accouchement n'est pas fournie.
+    """
+    from datetime import timedelta
+    if not date_accouchement:
+        return None
+    semaines_apres = 8 + (3 if naissances_multiples else 0) + (3 if complications else 0)
+    date_debut = date_accouchement - timedelta(weeks=6)
+    date_fin   = date_accouchement + timedelta(weeks=semaines_apres) - timedelta(days=1)
+    return {
+        "date_debut":      date_debut,
+        "date_fin":        date_fin,
+        "jours":           (date_fin - date_debut).days + 1,
+        "semaines_total":  6 + semaines_apres,
+        "semaines_avant":  6,
+        "semaines_apres":  semaines_apres,
+        "indemnise_par":   "CNSS",          # salaire intégral porté par la CNSS
+        "impacte_conge_annuel": False,      # n'entame pas le congé annuel (Art. 223)
+    }
+
+
 def allocation_conge(bulletins_12mois, jours_pris: float, jours_mois: float = JOURS_OUVRABLES_MOIS) -> float:
     """
     Allocation de congé — Code du travail 2021, Art. 225.

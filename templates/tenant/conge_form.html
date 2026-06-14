@@ -58,7 +58,7 @@
       <!-- Type de congé -->
       <div style="margin-bottom:1rem">
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.375rem">Type de congé *</label>
-        <select name="type_conge" required style="width:100%;border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.625rem .875rem;font-size:.875rem">
+        <select name="type_conge" id="sel_type" required onchange="toggleMaternite()" style="width:100%;border:1.5px solid #e5e7eb;border-radius:.875rem;padding:.625rem .875rem;font-size:.875rem">
           {% for t_c, label in [
             ('ANNUEL','Congé annuel payé'),
             ('MALADIE','Congé maladie'),
@@ -70,6 +70,26 @@
           <option value="{{ t_c }}" {% if conge and conge.type_conge == t_c %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
+      </div>
+
+      <!-- Congé maternité : si renseigné, les 14 semaines légales (Art. 208) sont
+           calculées automatiquement à partir de la date présumée d'accouchement. -->
+      <div id="bloc_maternite" style="display:none;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:.875rem;padding:.875rem;margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#9d174d;text-transform:uppercase;margin-bottom:.375rem">Date présumée d'accouchement</label>
+        <input type="date" name="date_accouchement"
+          style="width:100%;border:1.5px solid #fbcfe8;border-radius:.875rem;padding:.625rem;font-size:.875rem"/>
+        <div style="margin-top:.5rem;font-size:.8rem;color:#9d174d">
+          <label style="display:inline-flex;align-items:center;gap:.35rem;margin-right:1rem">
+            <input type="checkbox" name="naissances_multiples" value="1"/> Naissances multiples (+3 sem.)
+          </label>
+          <label style="display:inline-flex;align-items:center;gap:.35rem">
+            <input type="checkbox" name="complications_grossesse" value="1"/> Complications (+3 sem.)
+          </label>
+        </div>
+        <p style="font-size:.72rem;color:#be185d;margin-top:.4rem">
+          14 semaines (6 avant + 8 après), indemnisées par la CNSS. Les dates de départ/retour
+          ci-dessous seront calculées automatiquement.
+        </p>
       </div>
 
       <!-- Dates -->
@@ -131,6 +151,12 @@ function calculerDuree() {
   el.textContent = `📅 Durée : ${jours} jour${jours>1?'s':''} de congé`;
   el.style.display=''; el.style.color='#1e40af';
 }
+function toggleMaternite() {
+  var t = document.getElementById('sel_type');
+  var b = document.getElementById('bloc_maternite');
+  if (t && b) b.style.display = (t.value === 'MATERNITE') ? 'block' : 'none';
+}
 calculerDuree();
+toggleMaternite();
 </script>
 {% endblock %}

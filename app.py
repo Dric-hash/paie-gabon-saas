@@ -74,6 +74,16 @@ if _db_url.startswith("postgresql://") or _db_url.startswith("mysql"):
     }
 db.init_app(app)
 
+# Flask-Migrate (Alembic) — active les commandes `flask db ...` pour gérer le
+# schéma de façon versionnée. Le démarrage continue d'utiliser create_all() +
+# run_migrations() pour ne pas perturber la base de production existante ; la
+# bascule vers Alembic est documentée dans migrations/README (flask db stamp).
+try:
+    from flask_migrate import Migrate
+    migrate = Migrate(app, db)
+except ImportError:
+    migrate = None  # flask-migrate non installé (ex. ancien environnement)
+
 # ── Email ─────────────────────────────────────────────────────────────────────
 app.config["MAIL_SERVER"]         = "smtp.gmail.com"
 app.config["MAIL_PORT"]           = 587
@@ -155,9 +165,11 @@ def add_security_headers(response):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"]        = "SAMEORIGIN"
         response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"
-        # ✅ Content-Security-Policy — protège contre l'injection de scripts
-        #    externes tout en autorisant les handlers inline (oninput, onclick…)
-        #    et les fetch vers les routes internes utilisés par l'app.
+        # ✅ Content-Security-Policy — protège contre l'injection de scripts.
+        #    NB : 'unsafe-inline' reste nécessaire tant que les handlers inline
+        #    (oninput, onclick…) ne sont pas migrés vers une CSP à nonce.
+        #    En attendant, on durcit les directives qui n'exigent aucune
+        #    modification de template (base-uri, object-src, form-action…).
         csp = (
             "default-src 'self'; "
             "script-src 'self' 'unsafe-inline' 'unsafe-hashes' cdn.tailwindcss.com cdnjs.cloudflare.com cdn.jsdelivr.net; "
@@ -165,8 +177,14 @@ def add_security_headers(response):
             "font-src 'self' data: fonts.gstatic.com cdnjs.cloudflare.com; "
             "img-src 'self' data: blob:; "
             "connect-src 'self'; "
-            "frame-ancestors 'none';"
+            "object-src 'none'; "          # bloque les plugins/embeds (Flash, etc.)
+            "base-uri 'self'; "            # empêche le détournement via <base>
+            "form-action 'self'; "         # les formulaires ne postent que vers le site
+            "frame-ancestors 'none';"      # pas d'iframe tierce (anti-clickjacking)
         )
+        # En production, force la mise à niveau des sous-ressources http → https.
+        if EST_PRODUCTION:
+            csp += " upgrade-insecure-requests;"
         response.headers["Content-Security-Policy"] = csp
         # ✅ HSTS — force HTTPS pendant 1 an (uniquement en production)
         if EST_PRODUCTION:
@@ -409,13 +427,17 @@ def run_migrations():
             logger.debug(f"Migration skipped ({sql[:50]}…): {e}")
     logger.info("✅ Migrations terminées.")
 
-with app.app_context():
-    try:
-        db.create_all()
-        run_migrations()
-        init_db()
-    except Exception as e:
-        logger.error(f"Erreur au démarrage : {e}")
+# Bootstrap du schéma au démarrage (create_all + migrations idempotentes).
+# Peut être désactivé via SKIP_BOOTSTRAP=1 pour les commandes CLI (ex. génération
+# d'une migration Alembic, qui doit comparer les modèles à une base vide).
+if not os.environ.get("SKIP_BOOTSTRAP"):
+    with app.app_context():
+        try:
+            db.create_all()
+            run_migrations()
+            init_db()
+        except Exception as e:
+            logger.error(f"Erreur au démarrage : {e}")
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
