@@ -236,7 +236,7 @@ def server_error(e):
         db.session.rollback()   # éviter de laisser une transaction cassée
     except Exception:
         pass
-    return render_template("auth/403.html"), 500
+    return render_template("auth/500.html"), 500
 
 # ── Health check (monitoring Railway / uptime) ────────────────────────────────
 @app.route("/health")

@@ -1515,32 +1515,42 @@ def bulletins_export_zip(periode_id):
     return Response(data, mimetype="application/zip",
                     headers={"Content-Disposition": f'attachment; filename="{nom_zip}"',
                              "Content-Length": str(len(data))})
+
+
+@bp.route("/bulletins/<int:id>/imprimer")
+@login_required
+def bulletin_imprimer(id):
+    """Aperçu imprimable du bulletin (HTML), disponible dès le brouillon.
+
+    Impression = consultation : accessible à tout utilisateur du tenant
+    (pas de restriction can_edit), y compris pour un bulletin en BROUILLON.
+    """
     if current_user.is_super_admin:
         b = BulletinPaie.query.get_or_404(id)
         t = b.salarie.tenant
     else:
         t = get_tenant()
-        if not t: return redirect(url_for("auth.login"))
+        if not t:
+            return redirect(url_for("auth.login"))
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    # Récupérer le modèle avec fallback sécurisé
+    # Modèle de bulletin choisi par le tenant, avec repli sécurisé.
     try:
         modele = t.modele_bulletin or "classique"
     except Exception:
-        modele = "classique"
-    if modele not in ("classique", "moderne", "minimaliste"):
         modele = "classique"
     template_map = {
         "classique":   "tenant/bulletin_print.html",
         "moderne":     "tenant/bulletin_print_moderne.html",
         "minimaliste": "tenant/bulletin_print_minimaliste.html",
     }
+    template = template_map.get(modele, "tenant/bulletin_print.html")
+    # Vérifier que le template existe réellement sur le serveur, sinon repli.
     import os
-    template = template_map[modele]
-    # Vérifier que le fichier template existe sur le serveur
-    tpl_path = os.path.join(os.path.dirname(__file__), "templates", template)
+    tpl_path = os.path.join(os.path.dirname(__file__), "..", "templates", template)
     if not os.path.exists(tpl_path):
         template = "tenant/bulletin_print.html"
     return render_template(template, bulletin=b, tenant=t)
+
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
 @bp.route("/bulletins/<int:id>/envoyer-email", methods=["POST"])
@@ -4189,6 +4199,148 @@ def salaries_imprimer():
         s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
     return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── IMPRESSION DES POINTAGES (salariés & journaliers) ─────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+_MOIS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
+            "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+_JOURS_FR = ["Lundi", "Mardi", "Mercredi", "Jeudi", "Vendredi", "Samedi", "Dimanche"]
+_TYPE_JOUR_LABEL = {
+    "NORMAL": "Ordinaire", "DIMANCHE": "Dimanche", "FERIE": "Férié travaillé",
+    "CHOME_PAYE": "Férié chômé payé", "CHOME_RECUPERABLE": "Férié récupérable",
+}
+
+
+def _pointages_mois_contexte(t, pointages, convention):
+    """Construit le contexte d'impression d'un relevé de pointage mensuel.
+
+    Retourne un dict : lignes par jour, totaux ventilés (heures normales et
+    supplémentaires) et, pour la convention BTP, le détail de répartition
+    semaine par semaine (utile en cas de réclamation du travailleur).
+    """
+    pts = sorted(pointages, key=lambda p: p.date_pointage)
+    lignes = []
+    for p in pts:
+        hn  = float(p.heures_normales or 0)
+        h10 = float(p.heures_sup_10 or 0)
+        h30 = float(p.heures_sup_30 or 0)
+        h40 = float(p.heures_sup_40 or 0)
+        h70 = float(p.heures_sup_70 or 0)
+        absent = bool(p.absent)
+        present = bool(p.present) and not absent
+        total_jour = hn + h10 + h30 + h40 + h70
+        tj = (p.type_jour or "NORMAL").upper()
+        lignes.append({
+            "date": p.date_pointage,
+            "jour_sem": _JOURS_FR[p.date_pointage.weekday()],
+            "type_label": _TYPE_JOUR_LABEL.get(tj, tj.title()),
+            "present": present, "absent": absent,
+            "motif": p.motif_absence or "",
+            "heures_travaillees": round(total_jour, 2),
+            "heures_nuit": round(h40, 2),
+            "observation": p.observation or "",
+        })
+
+    pts_travailles = [p for p in pts if p.present and not p.absent]
+    pts_absents    = [p for p in pts if p.absent]
+
+    conv = (convention or "").upper()
+    if conv == "BTP" and pts_travailles:
+        from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
+        v = ventiler_heures_mois_btp(pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
+        totaux = {
+            "heures_normales": v["heures_normales"],
+            "heures_sup_10":   v["heures_sup_10"],
+            "heures_sup_30":   v["heures_sup_30"],
+            "heures_sup_40":   v["heures_sup_40"],
+            "heures_sup_70":   v["heures_sup_70"],
+        }
+        detail_semaines = v.get("detail_semaines", [])
+    else:
+        totaux = {
+            "heures_normales": sum(float(p.heures_normales or 0) for p in pts_travailles),
+            "heures_sup_10":   sum(float(p.heures_sup_10 or 0) for p in pts_travailles),
+            "heures_sup_30":   sum(float(p.heures_sup_30 or 0) for p in pts_travailles),
+            "heures_sup_40":   sum(float(p.heures_sup_40 or 0) for p in pts_travailles),
+            "heures_sup_70":   sum(float(p.heures_sup_70 or 0) for p in pts_travailles),
+        }
+        detail_semaines = []
+
+    totaux = {k: round(v, 2) for k, v in totaux.items()}
+    totaux["total_sup"] = round(totaux["heures_sup_10"] + totaux["heures_sup_30"]
+                                + totaux["heures_sup_40"] + totaux["heures_sup_70"], 2)
+    totaux["total_general"] = round(totaux["heures_normales"] + totaux["total_sup"], 2)
+    totaux["nb_jours"]    = len(pts_travailles)
+    totaux["nb_absences"] = len(pts_absents)
+
+    return {"lignes": lignes, "totaux": totaux, "detail_semaines": detail_semaines,
+            "convention": conv}
+
+
+def _resoudre_mois_annee():
+    now = datetime.now()
+    mois  = request.args.get("mois",  type=int) or now.month
+    annee = request.args.get("annee", type=int) or now.year
+    mois  = min(max(mois, 1), 12)
+    return mois, annee
+
+
+@bp.route("/salaries/<int:id>/pointages/imprimer")
+@login_required
+def salarie_pointages_imprimer(id):
+    """Relevé mensuel imprimable des pointages d'un salarié (totaux + répartition)."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    mois, annee = _resoudre_mois_annee()
+    import calendar
+    debut = date(annee, mois, 1)
+    fin   = date(annee, mois, calendar.monthrange(annee, mois)[1])
+    pts = (Pointage.query
+           .filter_by(tenant_id=t.id, salarie_id=id)
+           .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin)
+           .order_by(Pointage.date_pointage).all())
+    ctx = _pointages_mois_contexte(t, pts, t.convention)
+    return render_template("tenant/pointages_print.html",
+        tenant=t, now=datetime.now(),
+        personne={"nom_complet": s.nom_complet,
+                  "reference": ("Matricule : " + s.matricule) if s.matricule else (s.emploi or ""),
+                  "type": "Salarié"},
+        mois=mois, annee=annee, mois_libelle=_MOIS_FR[mois], **ctx)
+
+
+@bp.route("/journaliers/<int:id>/pointages/imprimer")
+@login_required
+def journalier_pointages_imprimer(id):
+    """Relevé mensuel imprimable des pointages d'un journalier (totaux d'heures)."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    mois, annee = _resoudre_mois_annee()
+    import calendar
+    debut = date(annee, mois, 1)
+    fin   = date(annee, mois, calendar.monthrange(annee, mois)[1])
+    pts = (Pointage.query
+           .filter_by(tenant_id=t.id, journalier_id=id)
+           .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin)
+           .order_by(Pointage.date_pointage).all())
+    # Les journaliers ne relèvent pas de la ventilation conventionnelle BTP :
+    # on cumule directement les colonnes pointées.
+    ctx = _pointages_mois_contexte(t, pts, convention=None)
+    return render_template("tenant/pointages_print.html",
+        tenant=t, now=datetime.now(),
+        personne={"nom_complet": j.nom_complet,
+                  "reference": (j.profession or "Journalier"),
+                  "type": "Journalier"},
+        mois=mois, annee=annee, mois_libelle=_MOIS_FR[mois], **ctx)
 
 
 @bp.route("/api/travailleur/stats-sans-site")

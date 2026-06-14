@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Relevé de pointage — {{ personne.nom_complet }} — {{ mois_libelle }} {{ annee }}</title>
+  <style>
+    body{font-family:'Segoe UI',sans-serif;font-size:11px;color:#111;margin:0;padding:20px;}
+    .header{text-align:center;margin-bottom:16px;border-bottom:2px solid #0f3d36;padding-bottom:10px;}
+    .header h1{font-size:16px;font-weight:900;margin:0;color:#0f3d36;}
+    .header p{margin:2px 0;color:#555;font-size:10px;}
+    .header h2{font-size:13px;margin:8px 0 2px;color:#0f3d36;}
+    .infos{display:flex;justify-content:space-between;margin:12px 0;font-size:11px;}
+    .infos div{line-height:1.5;}
+    .infos b{color:#0f3d36;}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px;}
+    th{background:#0f3d36;color:white;padding:5px 7px;text-align:left;font-size:9px;text-transform:uppercase;}
+    td{padding:4px 7px;border-bottom:1px solid #e5e7eb;}
+    tr:nth-child(even) td{background:#f9fafb;}
+    td.num,th.num{text-align:right;}
+    .absent td{color:#991b1b;font-style:italic;}
+    .tot-row td{font-weight:900;background:#eef3f1 !important;border-top:2px solid #0f3d36;}
+    .recap{margin-top:8px;}
+    .recap h3{font-size:12px;color:#0f3d36;margin:14px 0 6px;border-left:4px solid #b8862f;padding-left:8px;}
+    .grid-totaux{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:6px;}
+    .carte{flex:1;min-width:120px;border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;background:#fafafa;}
+    .carte .lbl{font-size:9px;color:#6b7280;text-transform:uppercase;font-weight:700;}
+    .carte .val{font-size:16px;font-weight:900;color:#0f3d36;}
+    .note{font-size:9px;color:#6b7280;font-style:italic;margin-top:4px;}
+    .signatures{display:flex;justify-content:space-between;margin-top:40px;font-size:10px;}
+    .signatures div{width:45%;}
+    .sig-line{border-top:1px solid #111;margin-top:40px;padding-top:4px;text-align:center;color:#555;}
+    .footer{margin-top:24px;text-align:right;font-size:9px;color:#9ca3af;}
+    @media print{.no-print{display:none;}body{padding:0;}}
+  </style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:15px;">
+  <button onclick="window.print()" style="background:#0f3d36;color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700;">🖨️ Imprimer</button>
+  <a href="javascript:history.back()" style="margin-left:10px;color:#0f3d36;font-weight:700;text-decoration:none;">← Retour</a>
+</div>
+
+<div class="header">
+  <h1>{{ tenant.denomination }}</h1>
+  <p>{{ tenant.adresse or '' }}{{ ' · ' + tenant.ville if tenant.ville else '' }}{{ ' · NIF: ' + tenant.nif if tenant.nif else '' }}</p>
+  <h2>RELEVÉ DE POINTAGE — {{ mois_libelle | upper }} {{ annee }}</h2>
+</div>
+
+<div class="infos">
+  <div>
+    <b>{{ personne.type }} :</b> {{ personne.nom_complet }}<br/>
+    {% if personne.reference %}{{ personne.reference }}<br/>{% endif %}
+  </div>
+  <div style="text-align:right;">
+    <b>Jours travaillés :</b> {{ totaux.nb_jours }}<br/>
+    <b>Absences :</b> {{ totaux.nb_absences }}<br/>
+    {% if convention == 'BTP' %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Date</th><th>Jour</th><th>Type</th>
+      <th class="num">H. travaillées</th><th class="num">dont nuit</th>
+      <th>Observation</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for l in lignes %}
+    <tr class="{{ 'absent' if l.absent else '' }}">
+      <td>{{ l.date.strftime('%d/%m/%Y') }}</td>
+      <td>{{ l.jour_sem }}</td>
+      <td>{% if l.absent %}Absence{{ ' (' + l.motif + ')' if l.motif else '' }}{% else %}{{ l.type_label }}{% endif %}</td>
+      <td class="num">{{ '%g'|format(l.heures_travaillees) if not l.absent else '—' }}</td>
+      <td class="num">{{ '%g'|format(l.heures_nuit) if l.heures_nuit else '—' }}</td>
+      <td>{{ l.observation }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:14px;">Aucun pointage enregistré pour cette période.</td></tr>
+    {% endfor %}
+    {% if lignes %}
+    <tr class="tot-row">
+      <td colspan="3">TOTAL HEURES TRAVAILLÉES</td>
+      <td class="num">{{ '%g'|format(totaux.total_general) }}</td>
+      <td class="num">{{ '%g'|format(totaux.heures_sup_40) if totaux.heures_sup_40 else '—' }}</td>
+      <td></td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+{% if lignes %}
+<div class="recap">
+  <h3>Répartition des heures{{ ' (convention BTP)' if convention == 'BTP' else '' }}</h3>
+  <div class="grid-totaux">
+    <div class="carte"><div class="lbl">Heures normales</div><div class="val">{{ '%g'|format(totaux.heures_normales) }}</div></div>
+    <div class="carte"><div class="lbl">Heures sup. +10 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>
+    <div class="carte"><div class="lbl">Heures sup. +30 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30) }}</div></div>
+    <div class="carte"><div class="lbl">Heures nuit +40 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_40) }}</div></div>
+    <div class="carte"><div class="lbl">Dim./Férié +70 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_70) }}</div></div>
+    <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total heures sup.</div><div class="val">{{ '%g'|format(totaux.total_sup) }}</div></div>
+  </div>
+  {% if convention == 'BTP' %}
+  <p class="note">Les heures supplémentaires se déclenchent au-delà de {{ '%g'|format(tenant.seuil_hs) }} h par semaine
+     (palier +10 % sur les 4 premières heures, +30 % au-delà). Répartition détaillée ci-dessous.</p>
+  {% endif %}
+</div>
+
+{% if detail_semaines %}
+<div class="recap">
+  <h3>Détail par semaine (en cas de réclamation)</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Semaine</th>
+        <th class="num">Cumul ordinaire</th>
+        <th class="num">Normales</th>
+        <th class="num">+10 %</th>
+        <th class="num">+30 %</th>
+        <th class="num">Nuit +40 %</th>
+        <th class="num">Dim/Férié +70 %</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in detail_semaines %}
+      {% if s.cumul_ordinaire or s.heures_sup_40 or s.heures_sup_70 %}
+      <tr>
+        <td>{{ s.semaine }}</td>
+        <td class="num">{{ '%g'|format(s.cumul_ordinaire) }}</td>
+        <td class="num">{{ '%g'|format(s.heures_normales) }}</td>
+        <td class="num">{{ '%g'|format(s.heures_sup_10) }}</td>
+        <td class="num">{{ '%g'|format(s.heures_sup_30) }}</td>
+        <td class="num">{{ '%g'|format(s.heures_sup_40) }}</td>
+        <td class="num">{{ '%g'|format(s.heures_sup_70) }}</td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="note">Format semaine : ANNÉE-S(numéro de semaine ISO). Le cumul ordinaire correspond aux heures de
+     jour hors dimanche/férié, base du calcul des heures supplémentaires.</p>
+</div>
+{% endif %}
+
+<div class="signatures">
+  <div><div class="sig-line">Signature du {{ personne.type | lower }}</div></div>
+  <div><div class="sig-line">Signature et cachet de l'employeur</div></div>
+</div>
+{% endif %}
+
+<div class="footer">Édité le {{ now.strftime('%d/%m/%Y à %H:%M') }} — Ameriack I.T. Solutions · PaieGabon</div>
+</body>
+</html>

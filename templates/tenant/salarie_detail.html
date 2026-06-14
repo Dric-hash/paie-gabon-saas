@@ -303,6 +303,24 @@
   </div>
 </div>
 
+  <!-- Impression du relevé de pointage mensuel -->
+  <div style="background:white;border:1px solid #f3f4f6;border-radius:1rem;padding:1rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+    <span style="font-weight:700;color:#0f3d36;font-size:.9rem">🖨️ Imprimer le relevé de pointage</span>
+    <form action="/salaries/{{ salarie.id }}/pointages/imprimer" method="get" target="_blank"
+          style="display:flex;align-items:center;gap:.5rem;margin:0">
+      <select name="mois" style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.85rem">
+        {% set mois_noms = ['Janvier','Février','Mars','Avril','Mai','Juin','Juillet','Août','Septembre','Octobre','Novembre','Décembre'] %}
+        {% for m in range(1,13) %}
+        <option value="{{ m }}" {{ 'selected' if m == now.month else '' }}>{{ mois_noms[m-1] }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="annee" value="{{ now.year }}" min="2020" max="2100"
+             style="width:5.5rem;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.85rem"/>
+      <button type="submit" class="btn-primary" style="font-size:.8rem">Ouvrir</button>
+    </form>
+    <span style="font-size:.72rem;color:#9ca3af">Totaux + répartition des heures (utile en cas de réclamation).</span>
+  </div>
+
   {{ historique_pointage(
       pts_hist, nb_jours, nb_presences, nb_absences,
       nb_non_pointes, h_normales_tot, h_sup_tot, taux_presence,
