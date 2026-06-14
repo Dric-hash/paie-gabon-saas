@@ -356,29 +356,39 @@ def calculer_masse_salariale(bulletins: list) -> dict:
 
 
 def distribuer_heures_semaine_btp(heures_par_jour: list,
-                                   types_par_jour: list = None) -> dict:
+                                   types_par_jour: list = None,
+                                   seuil_normales: float = 40.0) -> dict:
     """
     Distribue les heures d'une semaine selon la convention BTP Gabon.
 
     heures_par_jour : liste de dict par jour travaillé :
         {"heures_normales": 8.0, "heures_sup_nuit": 0, "type_jour": "NORMAL"}
     types_par_jour  : optionnel, liste de str ("NORMAL","DIMANCHE","FERIE",...)
+    seuil_normales  : seuil hebdomadaire (en heures) à partir duquel les heures
+        supplémentaires se déclenchent. Défaut = 40h (seuil légal). Une entreprise
+        sous dérogation peut le porter à 45h ou 48h : en deçà du seuil, les heures
+        restent payées au taux normal. La grille de majoration (+10% sur les 4
+        premières heures sup, +30% au-delà) se décale avec le seuil.
 
-    Logique BTP :
+    Logique BTP (seuil légal de 40h) :
         0  → 40h  : Heures normales
         40 → 44h  : +10% (max 4h)
         44 → 48h  : +30% (max 4h)
         > 48h     : +30% (au-delà)
         Nuit      : +40% (indépendant, cumulable)
         Dim/Férié : +70% (remplace le taux normal pour ces heures)
+
+    Avec un seuil dérogatoire S, la grille devient :
+        0 → S, S → S+4 (+10%), S+4 → S+8 (+30%), > S+8 (+30%).
     """
     total_norm  = 0.0  # heures normales cumulées (hors dim/férié/nuit)
     h40_fin_btp = 0.0  # +40% cumulées (nuit)
     h70_fin_btp = 0.0  # +70% cumulées (dim/férié)
 
-    SEUIL_10 = 40.0
-    SEUIL_30 = 44.0
-    SEUIL_48 = 48.0
+    # Bornes calées sur le seuil dérogatoire (40h par défaut), largeurs BTP préservées.
+    SEUIL_10 = float(seuil_normales)        # fin des heures normales / début +10%
+    SEUIL_30 = SEUIL_10 + 4.0               # fin du palier +10% (4h) / début +30%
+    SEUIL_48 = SEUIL_30 + 4.0               # repère informatif (palier +30% « plein »)
 
     for i, jour in enumerate(heures_par_jour):
         if isinstance(jour, dict):
@@ -483,7 +493,7 @@ def _cle_semaine(d):
     return (iso[0], iso[1])
 
 
-def ventiler_heures_mois_btp(jours, feries=None) -> dict:
+def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -> dict:
     """
     Ventile un MOIS de pointage selon la réglementation BTP Gabon, semaine par semaine.
 
@@ -497,11 +507,15 @@ def ventiler_heures_mois_btp(jours, feries=None) -> dict:
         - "ferie"       : bool  — jour férié (sinon déduit de `feries`)
         - "present"     : bool  — présence (sinon déduite des heures pointées)
     feries : ensemble/liste de datetime.date fériés (utilisé si "ferie" absent du jour).
+    seuil_normales : seuil hebdomadaire (en heures) de déclenchement des heures
+        supplémentaires. None ou non fourni → 40h (seuil légal). Une entreprise sous
+        dérogation peut le porter à 45h/48h : sous le seuil, les heures restent au
+        taux normal. Le palier +10% (4h) puis +30% se décale avec le seuil.
 
-    Règles appliquées par semaine (lundi → dimanche) :
-        • 0 → 40h (hors dim./fériés)              → Heures normales
-        • 40 → 44h                                → +10% (4h max)
-        • 44h et au-delà (+ heures sup de semaine)→ +30%
+    Règles appliquées par semaine (lundi → dimanche), avec un seuil S (40h par défaut) :
+        • 0 → S (hors dim./fériés)                → Heures normales
+        • S → S+4                                 → +10% (4h max)
+        • S+4 et au-delà (+ heures sup de semaine)→ +30%
         • Dimanche/férié TRAVAILLÉ                → +70% (intégralité de la journée)
         • Férié chômé en semaine                  → 8h en Heures normales
         • Heures de nuit                          → +40% (indépendant des seuils)
@@ -509,6 +523,11 @@ def ventiler_heures_mois_btp(jours, feries=None) -> dict:
     Retour : dict des totaux mensuels ventilés + le détail par semaine.
     """
     feries_set = set(feries) if feries else set()
+
+    # Seuils calés sur la dérogation éventuelle (40h légal par défaut),
+    # largeur du palier +10% préservée (4h) conformément à la convention BTP.
+    seuil_norm = _SEUIL_NORMALES if seuil_normales is None else float(seuil_normales)
+    seuil_10   = seuil_norm + 4.0
 
     semaines = {}   # cle_semaine -> accumulateurs
     for jour in jours:
@@ -539,9 +558,9 @@ def ventiler_heures_mois_btp(jours, feries=None) -> dict:
         s = semaines[cle]
         cumul = s["cumul_ordinaire"]
 
-        normales = min(cumul, _SEUIL_NORMALES) + s["feries_chomes"]
-        h10 = min(max(cumul - _SEUIL_NORMALES, 0.0), _SEUIL_10 - _SEUIL_NORMALES)  # 40→44, max 4h
-        h30 = max(cumul - _SEUIL_10, 0.0)                                          # 44h et +
+        normales = min(cumul, seuil_norm) + s["feries_chomes"]
+        h10 = min(max(cumul - seuil_norm, 0.0), seuil_10 - seuil_norm)  # S→S+4, max 4h
+        h30 = max(cumul - seuil_10, 0.0)                                # S+4 et +
         h40 = s["nuit"]
         h70 = s["dim_ferie"]
 
@@ -1052,9 +1071,13 @@ def permissions_familiales(convention, evenement: str) -> int:
     return permissions_familiales_commerce(evenement)
 
 
-def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour: list = None) -> dict:
-    """Distribution des heures hebdomadaires selon la convention (BTP vs COMMERCE)."""
+def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour: list = None,
+                              seuil_normales: float = 40.0) -> dict:
+    """Distribution des heures hebdomadaires selon la convention (BTP vs COMMERCE).
+
+    seuil_normales : seuil hebdomadaire de déclenchement des heures sup (défaut 40h).
+    """
     c = _conv(convention)
     if c == "COMMERCE":
         return distribuer_heures_semaine_commerce(heures_par_jour, types_par_jour)
-    return distribuer_heures_semaine_btp(heures_par_jour, types_par_jour)
+    return distribuer_heures_semaine_btp(heures_par_jour, types_par_jour, seuil_normales=seuil_normales)

@@ -2295,18 +2295,32 @@ def parametres_societe():
     for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
         try: setattr(t,f,request.form.get(f,"").strip() or None)
         except: pass
-    # Convention collective applicable
+    # Convention collective applicable — mise à jour uniquement si le champ est
+    # présent dans le formulaire soumis (évite d'écraser la valeur depuis un
+    # formulaire qui ne l'inclut pas, ex. la carte « Informations générales »).
     from calculs_paie import CONVENTIONS_DISPONIBLES
-    conv = (request.form.get("convention","") or "AUCUNE").upper()
-    if conv in CONVENTIONS_DISPONIBLES:
-        t.convention = conv
-    # Langue de l'interface
-    langue = request.form.get("langue", "fr")
-    if langue in SUPPORTED_LANGUAGES:
+    conv_raw = request.form.get("convention")
+    if conv_raw is not None:
+        conv = (conv_raw or "AUCUNE").upper()
+        if conv in CONVENTIONS_DISPONIBLES:
+            t.convention = conv
+    # Seuil hebdomadaire de déclenchement des heures supplémentaires (dérogation).
+    # La loi gabonaise fixe le seuil légal à 40h/semaine ; une dérogation peut le
+    # porter jusqu'à 48h. On borne strictement la valeur saisie dans cet intervalle.
+    seuil_raw = request.form.get("seuil_heures_sup_hebdo")
+    if seuil_raw is not None and str(seuil_raw).strip() != "":
+        try:
+            seuil = float(str(seuil_raw).replace(",", "."))
+            t.seuil_heures_sup_hebdo = max(40.0, min(seuil, 48.0))
+        except (ValueError, TypeError):
+            flash("Seuil d'heures supplémentaires invalide — valeur inchangée.", "error")
+    # Langue de l'interface — idem, seulement si le champ est soumis.
+    langue = request.form.get("langue")
+    if langue is not None and langue in SUPPORTED_LANGUAGES:
         t.langue = langue
         set_language(langue)
     db.session.commit()
-    flash("Informations mises à jour." if langue == "fr" else "Settings updated.", "success")
+    flash("Informations mises à jour." if (t.langue or "fr") == "fr" else "Settings updated.", "success")
     return redirect(url_for("tenant.parametres"))
 
 
@@ -4677,7 +4691,7 @@ def api_pointage_mois(id):
     if (t.convention or "").upper() == "BTP":
         # Ventilation réglementaire BTP : semaine par semaine, ligne par ligne
         from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
-        v = ventiler_heures_mois_btp(pointage_vers_jours(pts))
+        v = ventiler_heures_mois_btp(pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         heures_normales = v["heures_normales"]
         heures_sup_10   = v["heures_sup_10"]
         heures_sup_30   = v["heures_sup_30"]
@@ -4857,7 +4871,7 @@ def api_semaine_btp():
             "type_jour": p.type_jour or "NORMAL"
         })
 
-    dist = distribuer_heures_semaine_btp(jours_data)
+    dist = distribuer_heures_semaine_btp(jours_data, seuil_normales=t.seuil_hs)
     dist["semaine"]  = f"{lundi.strftime('%d/%m')} → {samedi.strftime('%d/%m/%Y')}"
     dist["nb_jours"] = len(pts)
     dist["jours_detail"] = [

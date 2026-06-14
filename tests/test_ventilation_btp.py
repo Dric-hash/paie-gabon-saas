@@ -112,3 +112,56 @@ def test_adaptateur_chome_paye():
     r = ventiler_heures_mois_btp(pointage_vers_jours(pts))
     assert r["heures_normales"] == 48      # 8h chômé + 40h travaillées
     assert r["heures_sup_10"] == 0
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# SEUIL DÉROGATOIRE — déclenchement des heures sup configurable par tenant
+# La loi fixe 40h ; une dérogation peut porter le seuil à 45h ou 48h.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def test_seuil_defaut_40h_inchange():
+    """Sans seuil fourni, le comportement légal (40h) est préservé."""
+    jours = [J(date(2026, 1, d), 8) for d in range(5, 11)]  # 48h
+    r_defaut = ventiler_heures_mois_btp(jours)
+    r_explicite = ventiler_heures_mois_btp(jours, seuil_normales=40)
+    assert r_defaut == r_explicite
+    assert r_defaut["heures_normales"] == 40
+    assert r_defaut["heures_sup_10"] == 4
+    assert r_defaut["heures_sup_30"] == 4
+
+
+def test_seuil_45h_derogation():
+    """Dérogation à 45h : une semaine de 48h ne déclenche que 3h sup (+10%)."""
+    jours = [J(date(2026, 1, d), 8) for d in range(5, 11)]  # 6×8 = 48h
+    r = ventiler_heures_mois_btp(jours, seuil_normales=45)
+    assert r["heures_normales"] == 45      # 0 → 45h au taux normal
+    assert r["heures_sup_10"] == 3         # 45 → 48h (palier +10%, 4h max)
+    assert r["heures_sup_30"] == 0         # rien au-delà de 49h
+
+
+def test_seuil_48h_derogation():
+    """Dérogation à 48h : une semaine de 48h ne déclenche aucune heure sup."""
+    jours = [J(date(2026, 1, d), 8) for d in range(5, 11)]  # 48h
+    r = ventiler_heures_mois_btp(jours, seuil_normales=48)
+    assert r["heures_normales"] == 48
+    assert r["heures_sup_10"] == 0
+    assert r["heures_sup_30"] == 0
+
+
+def test_seuil_48h_avec_depassement():
+    """Dérogation à 48h, semaine de 54h : palier +10% (4h) puis +30% (2h)."""
+    jours = [J(date(2026, 1, d), 9) for d in range(5, 11)]  # 6×9 = 54h
+    r = ventiler_heures_mois_btp(jours, seuil_normales=48)
+    assert r["heures_normales"] == 48      # 0 → 48h
+    assert r["heures_sup_10"] == 4         # 48 → 52h (+10%)
+    assert r["heures_sup_30"] == 2         # 52 → 54h (+30%)
+
+
+def test_seuil_distribution_hebdo_45h():
+    """distribuer_heures_semaine_btp respecte aussi le seuil dérogatoire."""
+    from calculs_paie import distribuer_heures_semaine_btp
+    jours = [{"heures_normales": 8, "type_jour": "NORMAL"} for _ in range(6)]  # 48h
+    d = distribuer_heures_semaine_btp(jours, seuil_normales=45)
+    assert d["heures_normales"] == 45
+    assert d["heures_sup_10"] == 3
+    assert d["heures_sup_30"] == 0

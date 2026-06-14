@@ -186,6 +186,28 @@
               de permissions familiales et d'heures supplémentaires appliqués.
             </p>
           </div>
+
+          <!-- Seuil de déclenchement des heures supplémentaires (dérogation) -->
+          <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #f3f4f6">
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
+              Seuil hebdomadaire des heures supplémentaires
+            </label>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <input type="number" name="seuil_heures_sup_hebdo"
+                     min="40" max="48" step="0.5"
+                     value="{{ '%g'|format(tenant.seuil_hs) }}"
+                     style="width:7rem;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;background:white"/>
+              <span style="font-size:.875rem;color:#374151;font-weight:600">heures / semaine</span>
+            </div>
+            <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+              La loi fixe le déclenchement des heures supplémentaires à la
+              <strong>40<sup>e</sup> heure</strong>. Si votre entreprise bénéficie d'une
+              dérogation (déclenchement à la 45<sup>e</sup> ou 48<sup>e</sup> heure), ajustez
+              ce seuil : en deçà, les heures restent payées au taux normal. Les majorations
+              conventionnelles (+10 % puis +30 %) se décalent à partir du seuil. Valeur
+              admise : 40 à 48 h. <em>Appliqué à la ventilation hebdomadaire (convention BTP).</em>
+            </p>
+          </div>
           <!-- Champs cachés pour ne pas écraser les autres infos -->
           <input type="hidden" name="denomination" value="{{ tenant.denomination or '' }}"/>
           <input type="hidden" name="sigle" value="{{ tenant.sigle or '' }}"/>
@@ -200,7 +222,7 @@
           <input type="hidden" name="ville" value="{{ tenant.ville or '' }}"/>
           <input type="hidden" name="region" value="{{ tenant.region or '' }}"/>
           <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
-            💾 Enregistrer la convention
+            💾 Enregistrer la convention et le seuil
           </button>
         </form>
         <div style="border-top:1px solid #f3f4f6;margin:1rem 0 .75rem"></div>

@@ -58,6 +58,11 @@ class Tenant(db.Model):
     # Taux d'acquisition des congés (jours ouvrables / mois travaillé, Art. 222).
     # Minimum légal adulte = 2.0 ; défaut historique de l'app = 2.5 (avantage).
     jours_conge_par_mois = db.Column(db.Numeric(3, 1), default=2.5)
+    # Seuil hebdomadaire de déclenchement des heures supplémentaires (en heures).
+    # La loi fixe le seuil légal à 40h/semaine. Certaines entreprises bénéficient
+    # d'une dérogation portant ce seuil à 45h ou 48h : en deçà, les heures restent
+    # payées au taux normal. Bornes admises : 40h (légal) → 48h (max contractuel).
+    seuil_heures_sup_hebdo = db.Column(db.Numeric(4, 1), default=40.0)
 
     utilisateurs = db.relationship("Utilisateur", backref="tenant", lazy=True, foreign_keys="Utilisateur.tenant_id")
     salaries     = db.relationship("Salarie", backref="tenant", lazy=True)
@@ -65,6 +70,19 @@ class Tenant(db.Model):
     categories   = db.relationship("CategorieEmploi", backref="tenant", lazy=True)
 
     def generate_token(self): self.token_api = secrets.token_hex(32)
+
+    @property
+    def seuil_hs(self) -> float:
+        """Seuil hebdomadaire de déclenchement des heures sup (float, défaut 40h).
+
+        Retourne toujours une valeur bornée entre 40h (minimum légal) et 48h
+        (maximum contractuel), même si la colonne est NULL ou hors plage.
+        """
+        try:
+            v = float(self.seuil_heures_sup_hebdo) if self.seuil_heures_sup_hebdo is not None else 40.0
+        except (TypeError, ValueError):
+            v = 40.0
+        return max(40.0, min(v, 48.0))
 
     @property
     def nb_salaries_actifs(self):
