@@ -156,7 +156,7 @@ def inscription():
         db.session.commit()
 
         lien = url_for("auth.confirmer_email", token=token_conf, _external=True)
-        if os.environ.get("MAIL_USERNAME"):
+        if os.environ.get("MAIL_PASSWORD"):
             from flask_mail import Message as Msg
             mail = current_app.extensions["mail"]
             msg = Msg(
@@ -234,7 +234,7 @@ def renvoyer_confirmation():
     if u.email_verifie:
         flash("Votre email est déjà confirmé.", "info")
         return redirect(url_for("tenant.dashboard"))
-    if not os.environ.get("MAIL_USERNAME"):
+    if not os.environ.get("MAIL_PASSWORD"):
         u.email_verifie = True
         db.session.commit()
         flash("Mode développement : email validé automatiquement.", "success")
@@ -266,7 +266,7 @@ def mot_de_passe_oublie():
         user  = Utilisateur.query.filter_by(email=email, actif=True).first()
         # Toujours afficher le même message (anti-énumération)
         flash("Si un compte existe avec cet email, un lien de réinitialisation a été envoyé.", "success")
-        if user and os.environ.get("MAIL_USERNAME"):
+        if user and os.environ.get("MAIL_PASSWORD"):
             token = sec.token_urlsafe(32)
             user.reset_token        = token
             user.reset_token_expiry = datetime.utcnow() + timedelta(hours=2)
@@ -354,7 +354,7 @@ def changer_email():
         current_user.token_changement_expiry = datetime.utcnow() + timedelta(hours=24)
         db.session.commit()
         lien = url_for("auth.confirmer_changement_email", token=token, _external=True)
-        if os.environ.get("MAIL_USERNAME"):
+        if os.environ.get("MAIL_PASSWORD"):
             mail = current_app.extensions["mail"]
             from flask_mail import Message as Msg
             msg = Msg(

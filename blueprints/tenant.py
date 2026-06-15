@@ -1567,8 +1567,9 @@ def bulletin_envoyer_email(id):
     if not dest_email:
         flash(f"{s.nom_complet} n'a pas d'adresse email. Renseignez-en une dans le formulaire.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
-    if not os.environ.get("MAIL_USERNAME"):
-        flash("Email non configuré sur le serveur (MAIL_USERNAME manquant).", "error")
+    if not os.environ.get("MAIL_PASSWORD"):
+        flash("Email non configuré sur le serveur : ajoutez la clé API Resend "
+              "(variable MAIL_PASSWORD) dans les variables d'environnement.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
     try:
         corps = (f"Bonjour {s.prenom},\n\n"
@@ -1597,6 +1598,10 @@ def bulletins_envoyer_tous():
     if not t: return redirect(url_for("auth.login"))
     periode_id = request.form.get("periode_id", type=int)
     if not periode_id: flash("Période manquante.", "error"); return redirect(url_for("tenant.bulletins"))
+    if not os.environ.get("MAIL_PASSWORD"):
+        flash("Email non configuré sur le serveur : ajoutez la clé API Resend "
+              "(variable MAIL_PASSWORD) dans les variables d'environnement.", "error")
+        return redirect(url_for("tenant.bulletins"))
     buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode_id).all()
     nb_ok=0; nb_sans_email=0
     for b in buls:
