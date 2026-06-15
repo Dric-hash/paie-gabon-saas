@@ -84,14 +84,19 @@ try:
 except ImportError:
     migrate = None  # flask-migrate non installé (ex. ancien environnement)
 
-# ── Email ─────────────────────────────────────────────────────────────────────
-app.config["MAIL_SERVER"]         = "smtp.gmail.com"
-app.config["MAIL_PORT"]           = 587
-app.config["MAIL_USE_TLS"]        = True
-app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME", "")
+# ── Email (Resend par défaut, configurable via variables d'environnement) ─────
+# Resend SMTP : host=smtp.resend.com, user="resend", password=<clé API re_...>.
+# L'expéditeur (MAIL_DEFAULT_SENDER) est INDÉPENDANT du nom d'utilisateur SMTP :
+# il doit être une adresse valide d'un domaine vérifié dans Resend, ou
+# "onboarding@resend.dev" pour les tests (envoi uniquement vers votre propre email).
+app.config["MAIL_SERVER"]         = os.environ.get("MAIL_SERVER", "smtp.resend.com")
+app.config["MAIL_PORT"]           = int(os.environ.get("MAIL_PORT", "587"))
+app.config["MAIL_USE_TLS"]        = os.environ.get("MAIL_USE_TLS", "true").lower() == "true"
+app.config["MAIL_USERNAME"]       = os.environ.get("MAIL_USERNAME", "resend")
 app.config["MAIL_PASSWORD"]       = os.environ.get("MAIL_PASSWORD", "")
-app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_USERNAME", "noreply@paiegalon.ga")
-app.config["MAIL_SUPPRESS_SEND"]  = not bool(os.environ.get("MAIL_USERNAME", ""))
+app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", "onboarding@resend.dev")
+# On n'envoie réellement que si une clé API (MAIL_PASSWORD) est présente.
+app.config["MAIL_SUPPRESS_SEND"]  = not bool(os.environ.get("MAIL_PASSWORD", ""))
 mail = Mail(app)
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
