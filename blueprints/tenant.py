@@ -707,16 +707,97 @@ def salaries_import():
 @bp.route("/salaries/import/modele")
 @login_required
 def salaries_import_modele():
-    """Télécharger le modèle Excel vierge."""
-    import os
-    modele_path = os.path.join(os.path.dirname(__file__), "modele_import_salaries.xlsx")
-    if os.path.exists(modele_path):
-        from flask import send_file
-        return send_file(modele_path, as_attachment=True,
-                         download_name="modele_import_salaries.xlsx",
-                         mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    flash("Modèle non disponible.", "error")
-    return redirect(url_for("tenant.salaries_import"))
+    """Génère et télécharge le modèle Excel vierge d'import des salariés.
+
+    Le fichier est produit à la volée (openpyxl) pour rester toujours disponible
+    et toujours aligné sur les colonnes réellement attendues par l'import.
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from io import BytesIO
+    from flask import send_file
+
+    # Colonnes : les 5 premières sont OBLIGATOIRES, les suivantes optionnelles.
+    colonnes = [
+        ("MATRICULE", True), ("NOM", True), ("PRENOM", True),
+        ("EMPLOI", True), ("DATE_EMBAUCHE", True),
+        ("SEXE", False), ("DATE_NAISSANCE", False), ("NATIONALITE", False),
+        ("SITUATION_MAT", False), ("NB_ENFANTS", False), ("NOMBRE_PARTS", False),
+        ("ADRESSE", False), ("TELEPHONE", False), ("EMAIL", False),
+        ("CATEGORIE", False), ("SALAIRE_BASE", False),
+        ("NUMERO_CNSS", False), ("NUMERO_CNAMGS", False),
+    ]
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Salariés"
+
+    entete_oblig = Font(bold=True, color="FFFFFF")
+    entete_opt   = Font(bold=True, color="0F3D36")
+    fill_oblig   = PatternFill("solid", fgColor="0F3D36")
+    fill_opt     = PatternFill("solid", fgColor="E8EFEC")
+
+    for idx, (nom, oblig) in enumerate(colonnes, start=1):
+        cell = ws.cell(row=1, column=idx, value=nom)
+        cell.alignment = Alignment(horizontal="center")
+        cell.font = entete_oblig if oblig else entete_opt
+        cell.fill = fill_oblig if oblig else fill_opt
+        ws.column_dimensions[cell.column_letter].width = max(14, len(nom) + 2)
+
+    # Ligne d'exemple (sera ignorée si supprimée ; sert de guide de format)
+    exemple = {
+        "MATRICULE": "0001", "NOM": "NDONG", "PRENOM": "Jean",
+        "EMPLOI": "Maçon", "DATE_EMBAUCHE": "15/01/2026",
+        "SEXE": "M", "DATE_NAISSANCE": "10/06/1990", "NATIONALITE": "Gabonaise",
+        "SITUATION_MAT": "MARIE", "NB_ENFANTS": 2, "NOMBRE_PARTS": 2.5,
+        "ADRESSE": "Libreville", "TELEPHONE": "077000000", "EMAIL": "",
+        "CATEGORIE": "C1", "SALAIRE_BASE": 200000,
+        "NUMERO_CNSS": "", "NUMERO_CNAMGS": "",
+    }
+    for idx, (nom, _) in enumerate(colonnes, start=1):
+        ws.cell(row=2, column=idx, value=exemple.get(nom, ""))
+    for c in range(1, len(colonnes) + 1):
+        ws.cell(row=2, column=c).font = Font(italic=True, color="9CA3AF")
+
+    # Feuille d'instructions, avec les catégories réellement définies pour ce tenant.
+    ws2 = wb.create_sheet("Instructions")
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+    lignes_info = [
+        ("Modèle d'import des salariés — PaieGabon", True),
+        ("", False),
+        ("Colonnes OBLIGATOIRES : MATRICULE, NOM, PRENOM, EMPLOI, DATE_EMBAUCHE", False),
+        ("Les autres colonnes sont facultatives.", False),
+        ("Format des dates : JJ/MM/AAAA (ex. 15/01/2026).", False),
+        ("SEXE : M ou F.", False),
+        ("SITUATION_MAT : CELIBATAIRE, MARIE, DIVORCE, VEUF.", False),
+        ("SALAIRE_BASE : montant entier en FCFA, sans espaces (ex. 200000).", False),
+        ("Supprimez la ligne d'exemple avant l'import.", False),
+        ("", False),
+        ("Codes CATEGORIE disponibles pour votre entreprise :", True),
+    ]
+    if cats:
+        for c in cats:
+            lignes_info.append((f"   {c.code} — {c.libelle}", False))
+    else:
+        lignes_info.append(("   (aucune catégorie définie — laissez la colonne vide)", False))
+    for i, (txt, gras) in enumerate(lignes_info, start=1):
+        cell = ws2.cell(row=i, column=1, value=txt)
+        if gras:
+            cell.font = Font(bold=True, color="0F3D36")
+    ws2.column_dimensions["A"].width = 70
+
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True,
+                     download_name="modele_import_salaries.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 @bp.route("/salaries/nouveau", methods=["GET","POST"])
 @login_required

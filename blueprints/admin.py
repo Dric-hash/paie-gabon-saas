@@ -191,6 +191,85 @@ def admin_tenants():
     return render_template("admin/tenants.html", tenants=query.order_by(Tenant.date_inscription.desc()).all(),
         plans=Plan.query.all(), q=q, statut=statut)
 
+
+@bp.route("/admin/tenants/nouveau", methods=["GET", "POST"])
+@super_admin_required
+def admin_tenant_nouveau():
+    """Création d'une entreprise (tenant) + son compte administrateur par le super admin.
+
+    Contrairement à l'inscription publique, l'email est considéré comme vérifié
+    (c'est le super admin qui crée le compte pour le client).
+    """
+    plans = Plan.query.filter_by(actif=True).all()
+    if request.method == "POST":
+        from core import validate_password
+        denom = request.form.get("denomination", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+
+        if not denom:
+            flash("La dénomination de l'entreprise est obligatoire.", "error")
+            return render_template("admin/tenant_form.html", plans=plans, form=request.form)
+        if not email or "@" not in email:
+            flash("Adresse email de l'administrateur invalide.", "error")
+            return render_template("admin/tenant_form.html", plans=plans, form=request.form)
+        if Utilisateur.query.filter_by(email=email).first():
+            flash("Cet email est déjà utilisé par un autre compte.", "error")
+            return render_template("admin/tenant_form.html", plans=plans, form=request.form)
+        pw_errors = validate_password(password)
+        if pw_errors:
+            for err in pw_errors:
+                flash(err, "error")
+            return render_template("admin/tenant_form.html", plans=plans, form=request.form)
+
+        plan = (Plan.query.get(request.form.get("plan_id", ""))
+                or Plan.query.filter_by(code="STARTER").first())
+
+        slug_base = denom.lower().replace(" ", "_")[:30]
+        slug = slug_base; i = 1
+        while Tenant.query.filter_by(slug=slug).first():
+            slug = f"{slug_base}_{i}"; i += 1
+
+        statut = request.form.get("statut", "ESSAI").upper()
+        if statut not in ("ESSAI", "ACTIF"):
+            statut = "ESSAI"
+
+        t = Tenant(
+            slug=slug, denomination=denom.upper(),
+            sigle=request.form.get("sigle", "").strip().upper(),
+            activite=request.form.get("activite", "").strip(),
+            nif=request.form.get("nif", "").strip(),
+            telephone=request.form.get("telephone", "").strip(),
+            ville=request.form.get("ville", "Libreville").strip() or "Libreville",
+            pays="Gabon", plan_id=plan.id if plan else None,
+            statut=statut,
+            date_expiration=datetime.utcnow() + timedelta(days=30),
+        )
+        t.token_api = sec.token_hex(32)
+        db.session.add(t)
+        db.session.flush()
+
+        for code, lib in [("C1","Ouvriers"),("C2","Techniciens"),
+                          ("C3","Conducteurs de Travaux"),("C4","Cadres")]:
+            db.session.add(CategorieEmploi(tenant_id=t.id, code=code, libelle=lib))
+
+        admin = Utilisateur(
+            nom=request.form.get("nom", "").strip().upper(),
+            prenom=request.form.get("prenom", "").strip(),
+            email=email, role="TENANT_ADMIN", tenant_id=t.id, actif=True,
+            email_verifie=True,   # créé par le super admin → pas de confirmation requise
+        )
+        admin.set_password(password)
+        db.session.add(admin)
+        db.session.commit()
+        log_action("CREATION", entite="tenant", entite_id=t.id,
+                   description=f"Entreprise '{denom.upper()}' créée par le super admin")
+        flash(f"Entreprise « {denom.upper()} » créée. L'administrateur peut se connecter avec {email}.", "success")
+        return redirect(url_for("admin.admin_tenant_detail", id=t.id))
+
+    return render_template("admin/tenant_form.html", plans=plans, form={})
+
+
 @bp.route("/admin/tenants/<int:id>")
 @super_admin_required
 def admin_tenant_detail(id):

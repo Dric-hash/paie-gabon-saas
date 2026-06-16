@@ -1,0 +1,115 @@
+<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Nouvelle entreprise — Ameriack I.T. Solutions Admin</title><script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-gray-50 min-h-screen">
+<nav class="bg-purple-900 text-white px-6 py-4 flex items-center gap-6 shadow-lg">
+  <a href="/admin" class="text-xl font-black">Ameriack I.T. Solutions</a>
+  <span class="bg-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">SUPER-ADMIN</span>
+  <a href="/admin/tenants" class="text-sm font-bold">Entreprises</a>
+  <a href="/admin/plans" class="text-sm text-white/70 hover:text-white">Plans</a>
+  <a href="/admin/rubriques" class="text-sm text-white/70 hover:text-white">Rubriques</a>
+  <a href="/logout" class="ml-auto bg-purple-700 px-3 py-1.5 rounded-lg text-xs font-bold">Déconnexion</a>
+</nav>
+<main class="max-w-3xl mx-auto p-8">
+  <div class="flex items-center gap-3 mb-6">
+    <a href="/admin/tenants" class="text-sm text-purple-700 font-bold">← Entreprises</a>
+    <h1 class="text-2xl font-black">Nouvelle entreprise</h1>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="mb-3 px-4 py-3 rounded-xl text-sm font-semibold
+      {{ 'bg-red-50 text-red-700 border border-red-200' if category == 'error' else 'bg-green-50 text-green-700 border border-green-200' }}">
+      {{ message }}
+    </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="/admin/tenants/nouveau" class="space-y-6">
+
+    <div class="bg-white border border-gray-200 rounded-2xl p-6">
+      <h2 class="font-black text-gray-900 mb-4">Informations de l'entreprise</h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-600 mb-1">Dénomination *</label>
+          <input name="denomination" required value="{{ form.denomination or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Sigle</label>
+          <input name="sigle" value="{{ form.sigle or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">NIF</label>
+          <input name="nif" value="{{ form.nif or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Activité</label>
+          <input name="activite" value="{{ form.activite or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Téléphone</label>
+          <input name="telephone" value="{{ form.telephone or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Ville</label>
+          <input name="ville" value="{{ form.ville or 'Libreville' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Plan</label>
+          <select name="plan_id" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+            {% for p in plans %}
+            <option value="{{ p.id }}" {{ 'selected' if form.plan_id == p.id|string else '' }}>{{ p.nom or p.code }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Statut</label>
+          <select name="statut" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300">
+            <option value="ESSAI" {{ 'selected' if form.statut != 'ACTIF' else '' }}>Essai (30 jours)</option>
+            <option value="ACTIF" {{ 'selected' if form.statut == 'ACTIF' else '' }}>Actif</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-2xl p-6">
+      <h2 class="font-black text-gray-900 mb-1">Compte administrateur</h2>
+      <p class="text-xs text-gray-500 mb-4">Identifiants que le client utilisera pour se connecter (email considéré comme vérifié).</p>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Prénom</label>
+          <input name="prenom" value="{{ form.prenom or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-600 mb-1">Nom</label>
+          <input name="nom" value="{{ form.nom or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-600 mb-1">Email *</label>
+          <input type="email" name="email" required value="{{ form.email or '' }}"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+        </div>
+        <div class="md:col-span-2">
+          <label class="block text-xs font-bold text-gray-600 mb-1">Mot de passe *</label>
+          <input type="text" name="password" required
+            class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+          <p class="text-xs text-gray-400 mt-1">Au moins 8 caractères, avec majuscule, minuscule et chiffre. Communiquez-le au client.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex gap-3">
+      <button type="submit"
+        class="bg-purple-700 hover:bg-purple-800 text-white font-bold px-6 py-2.5 rounded-xl text-sm">Créer l'entreprise</button>
+      <a href="/admin/tenants" class="px-6 py-2.5 rounded-xl text-sm font-bold text-gray-600 border border-gray-200">Annuler</a>
+    </div>
+  </form>
+</main>
+</body></html>
