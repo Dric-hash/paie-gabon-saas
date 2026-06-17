@@ -1664,6 +1664,12 @@ def bulletin_envoyer_email(id):
             body=corps,
             sender=current_app.config["MAIL_DEFAULT_SENDER"]
         )
+        # Joindre le bulletin en PDF
+        from pdf_bulletin import generer_bulletin_pdf
+        pdf_bytes = generer_bulletin_pdf(b, t)
+        nom_pdf = (f"bulletin_{s.nom}_{s.prenom}_"
+                   f"{b.periode.annee}_{b.periode.mois:02d}.pdf")
+        msg.attach(nom_pdf, "application/pdf", pdf_bytes)
         # ✅ Envoi dans un thread séparé → le serveur répond immédiatement
         send_email_async(current_app.extensions["mail"], msg)
         flash(f"Email en cours d'envoi à {dest_email}.", "success")
@@ -1695,6 +1701,11 @@ def bulletins_envoyer_tous():
             msg = Message(subject=f"Bulletin {b.periode.libelle_complet}",
                 recipients=[b.salarie.email], body=corps,
                 sender=current_app.config["MAIL_DEFAULT_SENDER"])
+            from pdf_bulletin import generer_bulletin_pdf
+            pdf_bytes = generer_bulletin_pdf(b, t)
+            nom_pdf = (f"bulletin_{b.salarie.nom}_{b.salarie.prenom}_"
+                       f"{b.periode.annee}_{b.periode.mois:02d}.pdf")
+            msg.attach(nom_pdf, "application/pdf", pdf_bytes)
             send_email_async(current_app.extensions["mail"], msg)
             nb_ok+=1
         except Exception as e:
