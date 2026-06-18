@@ -22,6 +22,48 @@
        style="font-size:.8rem;font-weight:700;color:white;background:#0f3d36;padding:.5rem .875rem;border-radius:.75rem;text-decoration:none">
       🖨️ Imprimer l'état de paie
     </a>
+    <button type="button" onclick="ouvrirModalSites()"
+       style="font-size:.8rem;font-weight:700;color:white;background:#7c3aed;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
+      🏗️ Imprimer par site
+    </button>
+  </div>
+</div>
+
+<!-- ── Modal : Imprimer par site (une page par site) ──────────────────────────── -->
+<div id="modal_sites" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;align-items:center;justify-content:center">
+  <div style="background:white;border-radius:1rem;padding:1.5rem;max-width:420px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+      <h2 style="font-size:1rem;font-weight:900;color:#111827">🏗️ Imprimer la paie par site</h2>
+      <button onclick="fermerModalSites()" style="background:none;border:none;font-size:1.25rem;cursor:pointer;color:#9ca3af">✕</button>
+    </div>
+    <p style="font-size:.78rem;color:#6b7280;margin-bottom:1rem">
+      Génère un document avec <strong>une page par site</strong> (saut de page), idéal pour distribuer aux chefs de chantier.
+      Chaque page liste les journaliers du site, avec colonne signature et sous-total. Choisissez la période :
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.625rem;margin-bottom:.875rem">
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Du</label>
+        <input type="date" id="sites_debut" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .625rem;font-size:.85rem"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Au</label>
+        <input type="date" id="sites_fin" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .625rem;font-size:.85rem"/>
+      </div>
+    </div>
+    <div style="margin-bottom:1rem">
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Statut</label>
+      <select id="sites_statut" style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .625rem;font-size:.85rem">
+        <option value="">Toutes les feuilles</option>
+        <option value="EN_ATTENTE">En attente uniquement</option>
+        <option value="PAYÉ">Payées uniquement</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:.625rem;justify-content:flex-end">
+      <button onclick="fermerModalSites()"
+        style="background:#f3f4f6;color:#374151;padding:.6rem 1.1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">Annuler</button>
+      <button onclick="lancerImpressionSites()"
+        style="background:#7c3aed;color:#fff;padding:.6rem 1.1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">🖨️ Générer le document</button>
+    </div>
   </div>
 </div>
 
@@ -526,6 +568,31 @@ function fermerModalExport() {
   document.getElementById('modal_export').style.display = 'none';
 }
 
+// ── Modal impression par site ───────────────────────────────────────────────
+function ouvrirModalSites() {
+  const y = today.getFullYear(), m = String(today.getMonth()+1).padStart(2,'0');
+  const lastDay = new Date(y, today.getMonth()+1, 0).getDate();
+  const d = document.getElementById('sites_debut'), f = document.getElementById('sites_fin');
+  if (!d.value) d.value = `${y}-${m}-01`;
+  if (!f.value) f.value = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
+  document.getElementById('modal_sites').style.display = 'flex';
+}
+
+function fermerModalSites() {
+  document.getElementById('modal_sites').style.display = 'none';
+}
+
+function lancerImpressionSites() {
+  const debut  = document.getElementById('sites_debut').value;
+  const fin    = document.getElementById('sites_fin').value;
+  const statut = document.getElementById('sites_statut').value;
+  if (!debut || !fin) { alert('Choisissez une période (du / au).'); return; }
+  const params = [`date_debut=${debut}`, `date_fin=${fin}`];
+  if (statut) params.push(`statut=${encodeURIComponent(statut)}`);
+  window.open('/journaliers/paie/imprimer-sites?' + params.join('&'), '_blank');
+  fermerModalSites();
+}
+
 function lancerExport() {
   const site   = document.getElementById('exp_site').value;
   const debut  = document.getElementById('exp_debut').value;
@@ -545,6 +612,9 @@ function lancerExport() {
 // Fermer modal en cliquant en dehors
 document.getElementById('modal_export').addEventListener('click', function(e) {
   if (e.target === this) fermerModalExport();
+});
+document.getElementById('modal_sites').addEventListener('click', function(e) {
+  if (e.target === this) fermerModalSites();
 });
 
 // Init

@@ -3450,6 +3450,69 @@ def journalier_feuille_supprimer(id):
     flash("Feuille supprimée.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
 
+@bp.route("/journaliers/paie/imprimer-sites")
+@login_required
+def journaliers_paie_imprimer_sites():
+    """Impression de la paie journalier GROUPÉE PAR SITE (une page par site).
+
+    Pensée pour distribuer aux chefs de chantier : chaque site a sa propre page
+    (saut de page), avec le détail des journaliers, une colonne signature et un
+    sous-total. Une page récapitulative tous sites termine le document.
+    Filtre par période obligatoire côté formulaire : date_debut / date_fin.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    statut_f   = request.args.get("statut", "")
+    date_debut = _parse_date(request.args.get("date_debut", ""))
+    date_fin   = _parse_date(request.args.get("date_fin", ""))
+
+    # Feuilles de la période (et statut éventuel)
+    q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
+    if statut_f:
+        q = q.filter_by(statut=statut_f)
+    if date_debut:
+        q = q.filter(FeuillePaieJournalier.date_debut >= date_debut)
+    if date_fin:
+        q = q.filter(FeuillePaieJournalier.date_fin <= date_fin)
+    feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
+        FeuillePaieJournalier.date_fin.desc()).all()
+
+    # Site (actif) de chaque journalier
+    site_par_journalier = {}
+    for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(
+            AffectationSite.journalier_id.isnot(None)).all():
+        site_par_journalier.setdefault(a.journalier_id, a.site)
+
+    sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+
+    # Regroupement : { site_id : {"site": Site|None, "feuilles": [...], "total": x} }
+    groupes = {}
+    SANS_SITE = 0
+    for f in feuilles:
+        s = site_par_journalier.get(f.journalier_id)
+        key = s.id if s else SANS_SITE
+        if key not in groupes:
+            groupes[key] = {"site": s, "feuilles": [], "total": 0.0}
+        groupes[key]["feuilles"].append(f)
+        groupes[key]["total"] += float(f.montant_brut or 0)
+
+    # Ordonner : sites par nom (selon sites_list), puis "Sans site" à la fin
+    groupes_ordonnes = []
+    for s in sites_list:
+        if s.id in groupes:
+            groupes_ordonnes.append(groupes[s.id])
+    if SANS_SITE in groupes:
+        groupes_ordonnes.append(groupes[SANS_SITE])
+
+    total_general = sum(g["total"] for g in groupes_ordonnes)
+    nb_total = sum(len(g["feuilles"]) for g in groupes_ordonnes)
+    return render_template("tenant/journaliers_paie_sites_print.html",
+        tenant=t, groupes=groupes_ordonnes, total_general=total_general,
+        nb_total=nb_total, statut=statut_f, date_debut=date_debut, date_fin=date_fin,
+        now=datetime.now())
+
+
 @bp.route("/journaliers/paie/imprimer")
 @login_required
 def journaliers_paie_imprimer():
