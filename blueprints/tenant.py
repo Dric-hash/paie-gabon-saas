@@ -4436,14 +4436,15 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts = sorted(pointages, key=lambda p: p.date_pointage)
     lignes = []
     for p in pts:
-        hn  = float(p.heures_normales or 0)
-        h10 = float(p.heures_sup_10 or 0)
-        h30 = float(p.heures_sup_30 or 0)
-        h40 = float(p.heures_sup_40 or 0)
-        h70 = float(p.heures_sup_70 or 0)
+        hn   = float(p.heures_normales or 0)
+        hsup = float(p.heures_sup or 0)     # heures sup "simples" (journaliers, non majorées)
+        h10  = float(p.heures_sup_10 or 0)
+        h30  = float(p.heures_sup_30 or 0)
+        h40  = float(p.heures_sup_40 or 0)
+        h70  = float(p.heures_sup_70 or 0)
         absent = bool(p.absent)
         present = bool(p.present) and not absent
-        total_jour = hn + h10 + h30 + h40 + h70
+        total_jour = hn + hsup + h10 + h30 + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
         lignes.append({
             "date": p.date_pointage,
@@ -4482,8 +4483,13 @@ def _pointages_mois_contexte(t, pointages, convention):
         detail_semaines = []
 
     totaux = {k: round(v, 2) for k, v in totaux.items()}
+    # Heures sup "simples" (colonne heures_sup) : utilisées par les journaliers,
+    # non majorées. Nulles pour les salariés BTP (qui utilisent les tranches).
+    heures_sup_simple = round(sum(float(p.heures_sup or 0) for p in pts_travailles), 2)
+    totaux["heures_sup_simple"] = heures_sup_simple
     totaux["total_sup"] = round(totaux["heures_sup_10"] + totaux["heures_sup_30"]
-                                + totaux["heures_sup_40"] + totaux["heures_sup_70"], 2)
+                                + totaux["heures_sup_40"] + totaux["heures_sup_70"]
+                                + heures_sup_simple, 2)
     totaux["total_general"] = round(totaux["heures_normales"] + totaux["total_sup"], 2)
     totaux["nb_jours"]    = len(pts_travailles)
     totaux["nb_absences"] = len(pts_absents)
