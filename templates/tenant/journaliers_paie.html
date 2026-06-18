@@ -499,10 +499,9 @@ function confirmerGeneration() {
   const fin   = document.getElementById('inp-fin').value;
   if (nb === 0) { alert('Cochez au moins un journalier.'); return false; }
   if (!debut || !fin) { alert('Renseignez les dates de début et fin.'); return false; }
-  const btn = document.getElementById('btn-generer');
-  btn.disabled = true;
-  btn.textContent = '⏳ Génération en cours…';
-  return true;
+  return true;  // validation OK → le formulaire part ; le retour visuel et la
+                // désactivation se font dans le gestionnaire 'submit' ci-dessous
+                // (désactiver le bouton ici annulerait l'envoi du formulaire).
 }
 
 function toggleEdit(id) {
@@ -552,6 +551,13 @@ document.getElementById('modal_export').addEventListener('click', function(e) {
 document.addEventListener('DOMContentLoaded', () => {
   setMoisActuel();
   updateCpt();
+  // Retour visuel + anti double-soumission : on agit dans l'évènement 'submit'
+  // (déclenché APRÈS que le navigateur a validé l'envoi), jamais dans le onclick.
+  const fg = document.getElementById('form-generer');
+  if (fg) fg.addEventListener('submit', function () {
+    const btn = document.getElementById('btn-generer');
+    if (btn) { btn.textContent = '⏳ Génération en cours…'; btn.disabled = true; btn.style.opacity = '.7'; }
+  });
 });
 </script>
 {% endblock %}
