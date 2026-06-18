@@ -92,6 +92,14 @@
 {% if lignes %}
 <div class="recap">
   <h3>Répartition des heures{{ ' (convention BTP)' if convention == 'BTP' else '' }}</h3>
+  {% if personne.type == 'Journalier' %}
+  <div class="grid-totaux">
+    <div class="carte"><div class="lbl">Heures normales</div><div class="val">{{ '%g'|format(totaux.heures_normales) }}</div></div>
+    <div class="carte"><div class="lbl">Heures supplémentaires</div><div class="val">{{ '%g'|format(totaux.total_sup) }}</div></div>
+    <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total heures</div><div class="val">{{ '%g'|format(totaux.total_general) }}</div></div>
+  </div>
+  <p class="note">Pour les journaliers, les heures supplémentaires ne sont pas majorées : elles sont rémunérées au même taux horaire que les heures normales.</p>
+  {% else %}
   <div class="grid-totaux">
     <div class="carte"><div class="lbl">Heures normales</div><div class="val">{{ '%g'|format(totaux.heures_normales) }}</div></div>
     <div class="carte"><div class="lbl">Heures sup. +10 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>
@@ -104,9 +112,10 @@
   <p class="note">Les heures supplémentaires se déclenchent au-delà de {{ '%g'|format(tenant.seuil_hs) }} h par semaine
      (palier +10 % sur les 4 premières heures, +30 % au-delà). Répartition détaillée ci-dessous.</p>
   {% endif %}
+  {% endif %}
 </div>
 
-{% if detail_semaines %}
+{% if detail_semaines and personne.type != 'Journalier' %}
 <div class="recap">
   <h3>Détail par semaine (en cas de réclamation)</h3>
   <table>
