@@ -3467,22 +3467,32 @@ def journaliers_paie_imprimer_sites():
     date_debut = _parse_date(request.args.get("date_debut", ""))
     date_fin   = _parse_date(request.args.get("date_fin", ""))
 
-    # Feuilles de la période (et statut éventuel)
+    # Feuilles de la période (et statut éventuel). On retient toute feuille qui
+    # CHEVAUCHE la période choisie (plus tolérant qu'une inclusion stricte).
     q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
     if statut_f:
         q = q.filter_by(statut=statut_f)
     if date_debut:
-        q = q.filter(FeuillePaieJournalier.date_debut >= date_debut)
+        q = q.filter(FeuillePaieJournalier.date_fin >= date_debut)
     if date_fin:
-        q = q.filter(FeuillePaieJournalier.date_fin <= date_fin)
+        q = q.filter(FeuillePaieJournalier.date_debut <= date_fin)
     feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
         FeuillePaieJournalier.date_fin.desc()).all()
 
-    # Site (actif) de chaque journalier
+    # Site de chaque journalier : on prend TOUTES les affectations, en préférant
+    # l'affectation active, puis la plus récente. Ainsi un journalier dont
+    # l'affectation n'est pas marquée "active" n'est pas perdu, et seuls les
+    # journaliers réellement sans aucune affectation tombent dans "Sans site".
     site_par_journalier = {}
-    for a in AffectationSite.query.filter_by(tenant_id=t.id, actif=True).filter(
-            AffectationSite.journalier_id.isnot(None)).all():
-        site_par_journalier.setdefault(a.journalier_id, a.site)
+    affs = (AffectationSite.query
+            .filter_by(tenant_id=t.id)
+            .filter(AffectationSite.journalier_id.isnot(None))
+            .order_by(AffectationSite.actif.desc(),
+                      AffectationSite.date_debut.desc())
+            .all())
+    for a in affs:
+        if a.journalier_id not in site_par_journalier and a.site is not None:
+            site_par_journalier[a.journalier_id] = a.site
 
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
 
