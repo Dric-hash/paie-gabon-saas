@@ -640,6 +640,7 @@ class Journalier(db.Model):
     telephone     = db.Column(db.String(20))
     profession    = db.Column(db.String(100))
     taux_horaire  = db.Column(db.Numeric(12,2), nullable=False)
+    type_paie     = db.Column(db.String(20), default="JOURNALIER")  # JOURNALIER | MENSUEL
     statut        = db.Column(db.String(20), default="ACTIF")
     date_embauche = db.Column(db.Date)
     date_debut    = db.Column(db.Date)           # début de mission (libre)
@@ -650,12 +651,20 @@ class Journalier(db.Model):
                 foreign_keys="Pointage.journalier_id")
     @property
     def nom_complet(self): return f"{self.nom} {self.prenom}"
+    @property
+    def taux_journalier(self):
+        """Taux journalier = taux horaire × 8 h (journée standard)."""
+        return float(self.taux_horaire or 0) * 8
+    @property
+    def est_mensuel(self):
+        return (self.type_paie or "JOURNALIER") == "MENSUEL"
     def to_dict(self):
         d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
         if d["taux_horaire"]: d["taux_horaire"] = float(d["taux_horaire"])
         if d["date_creation"]: d["date_creation"] = str(d["date_creation"])
         if d.get("date_embauche"): d["date_embauche"] = str(d["date_embauche"])
         d["nom_complet"] = self.nom_complet
+        d["taux_journalier"] = self.taux_journalier
         return d
 
 

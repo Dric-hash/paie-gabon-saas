@@ -37,9 +37,22 @@
           </div>
           <div>
             <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Taux horaire (FCFA) *</label>
-            <input type="number" name="taux_horaire" required min="0" step="any"
+            <input type="number" name="taux_horaire" id="taux_horaire" required min="0" step="any"
               value="{{ journalier.taux_horaire if journalier else '' }}"
               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+            <p class="text-xs text-gray-400 mt-1">Taux journalier (× 8 h) :
+              <span id="apercu_taux_jour" class="font-bold text-gray-600">—</span> FCFA</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Type de paie *</label>
+            <select name="type_paie" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value="JOURNALIER" {{ 'selected' if not journalier or journalier.type_paie!='MENSUEL' }}>Journalier (payé à la période)</option>
+              <option value="MENSUEL" {{ 'selected' if journalier and journalier.type_paie=='MENSUEL' }}>Mensuel (payé en fin de mois)</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">« Mensuel » : la paie se génère sur le mois entier.</p>
           </div>
         </div>
 
@@ -124,5 +137,17 @@
       </div>
     </form>
   </div>
+
+  <script>
+    (function() {
+      var input = document.getElementById('taux_horaire');
+      var apercu = document.getElementById('apercu_taux_jour');
+      function maj() {
+        var v = parseFloat(input.value) || 0;
+        apercu.textContent = v ? (v * 8).toLocaleString('fr-FR') : '—';
+      }
+      if (input && apercu) { input.addEventListener('input', maj); maj(); }
+    })();
+  </script>
 
 {% endblock %}

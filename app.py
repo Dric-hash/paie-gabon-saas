@@ -417,6 +417,7 @@ def run_migrations():
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_debut DATE",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_fin DATE",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS nationalite VARCHAR(60)",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS type_paie VARCHAR(20) DEFAULT 'JOURNALIER'",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_conge NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_services_rendus NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_compensatrice_preavis NUMERIC(15,2) DEFAULT 0",

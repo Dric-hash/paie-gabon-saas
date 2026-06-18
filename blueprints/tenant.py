@@ -2811,6 +2811,7 @@ def journalier_nouveau():
             telephone=request.form.get("telephone","").strip(),
             profession=request.form.get("profession","").strip().upper(),
             taux_horaire=float(request.form.get("taux_horaire",0) or 0),
+            type_paie=("MENSUEL" if request.form.get("type_paie")=="MENSUEL" else "JOURNALIER"),
             date_embauche=_parse_date(request.form.get("date_embauche")),
             date_debut=   _parse_date(request.form.get("date_debut")),
             date_fin=     _parse_date(request.form.get("date_fin")),
@@ -2878,6 +2879,7 @@ def journalier_modifier(id):
         j.telephone=request.form.get("telephone","").strip()
         j.profession=request.form.get("profession","").strip().upper()
         j.taux_horaire=float(request.form.get("taux_horaire",0) or 0)
+        j.type_paie=("MENSUEL" if request.form.get("type_paie")=="MENSUEL" else "JOURNALIER")
         j.date_embauche=_parse_date(request.form.get("date_embauche"))
         j.date_debut=   _parse_date(request.form.get("date_debut"))
         j.date_fin=     _parse_date(request.form.get("date_fin"))
@@ -3363,6 +3365,60 @@ def journaliers_paie_generer():
         redirect_url += f"?site_id={site_id}"
     return redirect(redirect_url)
 
+@bp.route("/journaliers/paie/generer-mois", methods=["POST"])
+@login_required
+def journaliers_paie_generer_mois():
+    """Génère la paie de FIN DE MOIS pour tous les journaliers de type MENSUEL.
+
+    La période couvre le mois entier (1er → dernier jour). Le montant est calculé
+    à partir des pointages présents du mois × taux horaire.
+    """
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    import calendar as _cal
+    mois  = request.form.get("mois", type=int)
+    annee = request.form.get("annee", type=int)
+    if not mois or not annee:
+        flash("Mois/année manquant.", "error")
+        return redirect(url_for("tenant.journaliers_paie"))
+    date_debut = date(annee, mois, 1)
+    date_fin   = date(annee, mois, _cal.monthrange(annee, mois)[1])
+
+    mensuels = Journalier.query.filter_by(
+        tenant_id=t.id, statut="ACTIF", type_paie="MENSUEL").all()
+    nb = 0; nb_existant = 0
+    for j in mensuels:
+        if FeuillePaieJournalier.query.filter_by(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin).first():
+            nb_existant += 1
+            continue
+        pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id).filter(
+            Pointage.date_pointage >= date_debut,
+            Pointage.date_pointage <= date_fin,
+            Pointage.present == True).all()
+        total_h  = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
+        nb_jours = len(pts)
+        if total_h <= 0 and nb_jours == 0:
+            continue
+        taux = float(j.taux_horaire or 0)
+        db.session.add(FeuillePaieJournalier(
+            tenant_id=t.id, journalier_id=j.id,
+            date_debut=date_debut, date_fin=date_fin,
+            nb_jours=nb_jours, total_heures=total_h,
+            taux_horaire=taux, montant_brut=round(total_h * taux, 2),
+            statut="EN_ATTENTE"))
+        nb += 1
+    db.session.commit()
+    msg = f"{nb} feuille(s) mensuelle(s) générée(s) pour {mois:02d}/{annee}."
+    if nb_existant:
+        msg += f" {nb_existant} déjà existante(s) ignorée(s)."
+    if not mensuels:
+        msg = "Aucun journalier de type « Mensuel » n'est défini."
+    flash(msg, "success" if mensuels else "error")
+    return redirect(url_for("tenant.journaliers_paie"))
+
+
 @bp.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
 @login_required
 def journalier_payer(id):
@@ -3393,6 +3449,43 @@ def journalier_feuille_supprimer(id):
     db.session.delete(f); db.session.commit()
     flash("Feuille supprimée.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
+
+@bp.route("/journaliers/paie/imprimer")
+@login_required
+def journaliers_paie_imprimer():
+    """Page imprimable des feuilles de paie journalier (avec colonne signature).
+
+    Filtres optionnels : site_id, statut, date_debut, date_fin.
+    """
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    site_id    = request.args.get("site_id", type=int)
+    statut_f   = request.args.get("statut", "")
+    date_debut = _parse_date(request.args.get("date_debut", ""))
+    date_fin   = _parse_date(request.args.get("date_fin", ""))
+    site       = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
+
+    q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
+    if site_id:
+        ids_j = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_id).filter(
+            AffectationSite.journalier_id.isnot(None)).all()]
+        q = q.filter(FeuillePaieJournalier.journalier_id.in_(ids_j))
+    if statut_f:
+        q = q.filter_by(statut=statut_f)
+    if date_debut:
+        q = q.filter(FeuillePaieJournalier.date_debut >= date_debut)
+    if date_fin:
+        q = q.filter(FeuillePaieJournalier.date_fin <= date_fin)
+    feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
+        FeuillePaieJournalier.date_fin.desc()).all()
+    total = sum(float(f.montant_brut or 0) for f in feuilles)
+    return render_template("tenant/journaliers_paie_print.html",
+        tenant=t, feuilles=feuilles, site=site, statut=statut_f,
+        date_debut=date_debut, date_fin=date_fin, total=total,
+        now=datetime.now())
+
 
 @bp.route("/journaliers/paie/export")
 @login_required
@@ -3747,6 +3840,29 @@ def acomptes():
     return render_template("tenant/acomptes.html", tenant=t, liste=liste, salaries=salaries_list,
         mois=mois, annee=annee, now=now, total_mois=total_mois,
         total_en_attente=total_en_attente, total_deduit=total_deduit, MOIS_NOMS=PeriodePaie.MOIS_NOMS)
+
+@bp.route("/acomptes/imprimer", methods=["POST"])
+@login_required
+def acomptes_imprimer():
+    """Page imprimable de la liste des acomptes sélectionnés (avec colonne signature)."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    ids = [int(i) for i in request.form.getlist("acompte_ids") if str(i).isdigit()]
+    mois  = request.form.get("mois", type=int)
+    annee = request.form.get("annee", type=int)
+    if not ids:
+        flash("Sélectionnez au moins un acompte à imprimer.", "error")
+        return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
+    liste = Acompte.query.filter(
+        Acompte.tenant_id == t.id,
+        Acompte.id.in_(ids)
+    ).options(joinedload(Acompte.salarie)).order_by(Acompte.date_acompte).all()
+    total = sum(float(a.montant or 0) for a in liste if a.statut != "ANNULE")
+    return render_template("tenant/acomptes_print.html",
+        tenant=t, liste=liste, total=total, mois=mois, annee=annee,
+        MOIS_NOMS=PeriodePaie.MOIS_NOMS, now=datetime.now())
+
 
 @bp.route("/acomptes/nouveau", methods=["GET","POST"])
 @login_required

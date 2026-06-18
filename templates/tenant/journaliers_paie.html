@@ -17,6 +17,11 @@
        style="font-size:.8rem;font-weight:700;color:white;background:#059669;padding:.5rem .875rem;border-radius:.75rem;border:none;cursor:pointer">
       📊 Export Excel
     </button>
+    <a href="/journaliers/paie/imprimer{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}{% if statut_filtre %}{{ '&' if site_filtre else '?' }}statut={{ statut_filtre }}{% endif %}"
+       target="_blank"
+       style="font-size:.8rem;font-weight:700;color:white;background:#0f3d36;padding:.5rem .875rem;border-radius:.75rem;text-decoration:none">
+      🖨️ Imprimer l'état de paie
+    </a>
   </div>
 </div>
 
@@ -64,10 +69,42 @@
   </div>
 </div>
 
+<!-- ── Paie MENSUELLE (journaliers de type Mensuel) ──────────────────────────── -->
+<div class="card p-5 mb-6" style="background:#faf5ff;border:1px solid #e9d5ff">
+  <h2 style="font-size:.8rem;font-weight:800;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.5rem">
+    💜 Paie de fin de mois — journaliers « Mensuels »
+  </h2>
+  <p style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem">
+    Génère en un clic la feuille de paie du mois entier pour tous les journaliers de type « Mensuel »
+    (calculée à partir de leurs pointages du mois).
+  </p>
+  <form method="POST" action="/journaliers/paie/generer-mois"
+        style="display:flex;gap:.625rem;align-items:end;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Mois</label>
+      <select name="mois" style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+        {% for m in range(1,13) %}
+        <option value="{{ m }}" {{ 'selected' if m == now.month }}>{{ '%02d'|format(m) }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Année</label>
+      <input type="number" name="annee" value="{{ now.year }}" min="2020" max="2100"
+        style="width:90px;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+    </div>
+    <button type="submit"
+      style="background:#7c3aed;color:#fff;padding:.6rem 1.1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+      Générer la paie du mois
+    </button>
+  </form>
+</div>
+
 <!-- ── Générer ─────────────────────────────────────────────────────────────── -->
 <div class="card p-5 mb-6">
   <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">
-    ⚙️ Générer les feuilles de paie{% if site_filtre %} — {{ site_filtre.nom }}{% endif %}
+    ⚙️ Générer les feuilles de paie (journaliers){% if site_filtre %} — {{ site_filtre.nom }}{% endif %}
   </h2>
   <form method="POST" action="/journaliers/paie/generer" id="form-generer">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
@@ -238,6 +275,11 @@
         <td>
           <div style="font-weight:700;font-size:.875rem">{{ f.journalier.nom_complet }}</div>
           <div style="font-size:.7rem;color:#9ca3af">{{ f.journalier.profession or '' }}</div>
+          {% if f.journalier.type_paie == 'MENSUEL' %}
+          <span style="display:inline-block;margin-top:.15rem;background:#f3e8ff;color:#7c3aed;padding:.1rem .45rem;border-radius:9999px;font-weight:700;font-size:.62rem">MENSUEL</span>
+          {% else %}
+          <span style="display:inline-block;margin-top:.15rem;background:#dbeafe;color:#1d4ed8;padding:.1rem .45rem;border-radius:9999px;font-weight:700;font-size:.62rem">JOURNALIER</span>
+          {% endif %}
         </td>
         <td style="font-size:.75rem">
           {% set site_aff = aff_jour.get(f.journalier_id) %}

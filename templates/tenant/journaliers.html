@@ -51,6 +51,8 @@
           <th class="px-4 py-3 text-left">Téléphone</th>
           <th class="px-4 py-3 text-center">Date embauche</th>
           <th class="px-4 py-3 text-right">Taux horaire</th>
+          <th class="px-4 py-3 text-right">Taux journalier</th>
+          <th class="px-4 py-3 text-center">Type</th>
           <th class="px-4 py-3 text-center" data-i18n="common.status">Statut</th>
           <th class="px-4 py-3 text-center">Pointage</th>
           <th class="px-4 py-3 text-center" data-i18n="common.actions">Actions</th>
@@ -77,6 +79,14 @@
             {{ j.date_embauche|date_fr if j.date_embauche else '—' }}
           </td>
           <td class="px-4 py-3 text-right font-bold text-blue-700">{{ j.taux_horaire|int }} FCFA/h</td>
+          <td class="px-4 py-3 text-right font-semibold text-gray-700">{{ j.taux_journalier|int }} FCFA/j</td>
+          <td class="px-4 py-3 text-center">
+            {% if j.type_paie == 'MENSUEL' %}
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-purple-100 text-purple-700">Mensuel</span>
+            {% else %}
+              <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-700">Journalier</span>
+            {% endif %}
+          </td>
           <td class="px-4 py-3 text-center">
             {% set sc = {'ACTIF':'bg-emerald-100 text-emerald-700','INACTIF':'bg-red-100 text-red-600'} %}
             <span class="text-xs font-bold px-2 py-0.5 rounded-full {{ sc.get(j.statut,'bg-gray-100 text-gray-500') }}">{{ j.statut }}</span>
@@ -91,7 +101,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="8" class="text-center py-10 text-gray-400 text-sm">
+        <tr><td colspan="10" class="text-center py-10 text-gray-400 text-sm">
           {% if q %}Aucun résultat pour "{{ q }}"{% else %}Aucun journalier enregistré{% endif %}
         </td></tr>
         {% endfor %}

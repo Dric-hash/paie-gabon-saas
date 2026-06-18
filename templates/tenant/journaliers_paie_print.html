@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>État de paie des journaliers — {{ tenant.denomination }}</title>
+  <style>
+    body{font-family:'Segoe UI',sans-serif;font-size:11px;color:#111;margin:0;padding:20px;}
+    .header{text-align:center;margin-bottom:16px;border-bottom:2px solid #0f3d36;padding-bottom:10px;}
+    .header h1{font-size:16px;font-weight:900;margin:0;color:#0f3d36;}
+    .header p{margin:2px 0;color:#555;font-size:10px;}
+    .header h2{font-size:13px;margin:8px 0 2px;color:#0f3d36;}
+    .infos{display:flex;justify-content:space-between;margin:12px 0;font-size:11px;}
+    .infos b{color:#0f3d36;}
+    table{width:100%;border-collapse:collapse;margin-bottom:14px;}
+    th{background:#0f3d36;color:white;padding:5px 7px;text-align:left;font-size:9px;text-transform:uppercase;}
+    td{padding:6px 7px;border-bottom:1px solid #e5e7eb;}
+    tr:nth-child(even) td{background:#f9fafb;}
+    td.num,th.num{text-align:right;}
+    td.center,th.center{text-align:center;}
+    .badge{padding:1px 6px;border-radius:9999px;font-size:8px;font-weight:700;}
+    .b-mens{background:#f3e8ff;color:#7c3aed;}
+    .b-jour{background:#dbeafe;color:#1d4ed8;}
+    .sig-cell{width:150px;border-bottom:1px dashed #9ca3af;}
+    .tot-row td{font-weight:900;background:#eef3f1 !important;border-top:2px solid #0f3d36;}
+    .footer{margin-top:24px;text-align:right;font-size:9px;color:#9ca3af;}
+    @media print{.no-print{display:none;}body{padding:0;}}
+  </style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:15px;">
+  <button onclick="window.print()" style="background:#0f3d36;color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700;">🖨️ Imprimer</button>
+  <a href="javascript:history.back()" style="margin-left:10px;color:#0f3d36;font-weight:700;text-decoration:none;">← Retour</a>
+</div>
+
+<div class="header">
+  <h1>{{ tenant.denomination }}</h1>
+  {% if tenant.nif %}<p>NIF : {{ tenant.nif }}{% if tenant.ville %} — {{ tenant.ville }}{% endif %}</p>{% endif %}
+  <h2>État de paie des journaliers</h2>
+</div>
+
+<div class="infos">
+  <div>
+    {% if site %}<b>Site :</b> {{ site.nom }}<br/>{% endif %}
+    {% if statut %}<b>Statut :</b> {{ statut }}<br/>{% endif %}
+    {% if date_debut or date_fin %}
+      <b>Période :</b>
+      {{ date_debut.strftime('%d/%m/%Y') if date_debut else '…' }} →
+      {{ date_fin.strftime('%d/%m/%Y') if date_fin else '…' }}
+    {% endif %}
+  </div>
+  <div style="text-align:right">
+    <b>Édité le :</b> {{ now.strftime('%d/%m/%Y à %H:%M') }}<br/>
+    <b>Nombre de lignes :</b> {{ feuilles|length }}
+  </div>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>Journalier</th>
+      <th class="center">Type</th>
+      <th>Période</th>
+      <th class="center">Jours</th>
+      <th class="num">Heures</th>
+      <th class="num">Taux/h</th>
+      <th class="num">Taux/jour</th>
+      <th class="num">Montant brut</th>
+      <th class="center">Émargement / Signature</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for f in feuilles %}
+    <tr>
+      <td>
+        <b>{{ f.journalier.nom_complet }}</b><br/>
+        <span style="color:#9ca3af;font-size:9px">{{ f.journalier.profession or '' }}</span>
+      </td>
+      <td class="center">
+        {% if f.journalier.type_paie == 'MENSUEL' %}
+          <span class="badge b-mens">MENSUEL</span>
+        {% else %}
+          <span class="badge b-jour">JOURNALIER</span>
+        {% endif %}
+      </td>
+      <td>{{ f.date_debut.strftime('%d/%m/%Y') }} → {{ f.date_fin.strftime('%d/%m/%Y') }}</td>
+      <td class="center">{{ f.nb_jours }}</td>
+      <td class="num">{{ "%.1f"|format(f.total_heures|float) }}h</td>
+      <td class="num">{{ f.taux_horaire|int }}</td>
+      <td class="num">{{ (f.taux_horaire|float * 8)|int }}</td>
+      <td class="num"><b>{{ f.montant_brut|int }}</b></td>
+      <td class="sig-cell">&nbsp;</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="9" class="center" style="padding:20px;color:#9ca3af">Aucune feuille de paie à afficher.</td></tr>
+    {% endfor %}
+    {% if feuilles %}
+    <tr class="tot-row">
+      <td colspan="7" class="num">TOTAL</td>
+      <td class="num">{{ total|int }} FCFA</td>
+      <td></td>
+    </tr>
+    {% endif %}
+  </tbody>
+</table>
+
+<div class="footer">
+  PaieGabon — Document généré automatiquement
+</div>
+</body>
+</html>
