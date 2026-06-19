@@ -4,7 +4,7 @@ models.py — Modèles multi-tenant SaaS Paie Gabon
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import secrets
 
 db = SQLAlchemy()
@@ -153,9 +153,33 @@ class Utilisateur(db.Model, UserMixin):
     derniere_activite        = db.Column(db.DateTime)
     nb_echecs_connexion      = db.Column(db.Integer, default=0)
     compte_bloque_jusqu      = db.Column(db.DateTime)
+    # ── 2FA par email (code à usage unique) ───────────────────────────────────
+    otp_code_hash            = db.Column(db.String(256))
+    otp_expiry               = db.Column(db.DateTime)
+    otp_tentatives           = db.Column(db.Integer, default=0)
 
     def set_password(self, pw): self.mot_de_passe_hash = generate_password_hash(pw)
     def check_password(self, pw): return check_password_hash(self.mot_de_passe_hash, pw)
+
+    def set_otp(self, code):
+        """Enregistre le code 2FA (haché) avec une validité de 10 minutes."""
+        self.otp_code_hash = generate_password_hash(code)
+        self.otp_expiry    = datetime.utcnow() + timedelta(minutes=10)
+        self.otp_tentatives = 0
+
+    def check_otp(self, code):
+        """Vérifie le code 2FA : non expiré et correspondant."""
+        if not self.otp_code_hash or not self.otp_expiry:
+            return False
+        if datetime.utcnow() > self.otp_expiry:
+            return False
+        return check_password_hash(self.otp_code_hash, code)
+
+    def clear_otp(self):
+        self.otp_code_hash = None
+        self.otp_expiry    = None
+        self.otp_tentatives = 0
+
 
     @property
     def nom_complet(self): return f"{self.prenom} {self.nom}"

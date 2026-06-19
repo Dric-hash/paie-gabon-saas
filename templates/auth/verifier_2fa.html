@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Vérification en deux étapes — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-md">
+
+  <div class="text-center mb-8">
+    <h1 class="text-3xl font-black text-white">Ameriack I.T. Solutions</h1>
+    <p class="text-amber-400 font-semibold mt-1">Logiciel de paie multi-entreprises · Gabon</p>
+    <div class="w-12 h-1 bg-amber-400 mx-auto mt-2 rounded-full"></div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+  <div class="mb-4 space-y-2">{% for cat, msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold
+    {{ 'bg-emerald-50 text-emerald-800' if cat=='success'
+    else 'bg-red-50 text-red-800' if cat=='error'
+    else 'bg-amber-50 text-amber-800' }}">
+    {{ msg }}
+  </div>{% endfor %}</div>
+  {% endif %}{% endwith %}
+
+  <div class="bg-white rounded-2xl shadow-2xl p-8">
+    <h2 class="text-xl font-black text-gray-900 mb-2">🔐 Vérification en deux étapes</h2>
+    <p class="text-sm text-gray-600 mb-6">
+      Un code à 6 chiffres a été envoyé à
+      <span class="font-semibold text-gray-900">{{ email }}</span>.
+      Saisissez-le ci-dessous pour finaliser la connexion.
+    </p>
+
+    <form method="POST" action="{{ url_for('auth.verifier_2fa') }}" class="space-y-4">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Code de connexion</label>
+        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
+               maxlength="6" pattern="[0-9]{6}" required autofocus
+               class="w-full text-center text-2xl tracking-[0.5em] font-bold border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
+               placeholder="000000"/>
+      </div>
+      <button type="submit"
+        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-black px-6 py-3 rounded-xl text-sm transition-colors">
+        Valider et se connecter
+      </button>
+    </form>
+
+    <div class="mt-5 flex items-center justify-between text-sm">
+      <form method="POST" action="{{ url_for('auth.renvoyer_2fa') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" class="text-amber-600 hover:text-amber-700 font-semibold">
+          Renvoyer un code
+        </button>
+      </form>
+      <a href="{{ url_for('auth.login') }}" class="text-gray-500 hover:text-gray-700 font-semibold">
+        ← Annuler
+      </a>
+    </div>
+
+    <p class="mt-6 text-xs text-gray-400 text-center">
+      Le code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette connexion,
+      changez votre mot de passe immédiatement.
+    </p>
+  </div>
+
+</div>
+</body>
+</html>

@@ -67,6 +67,39 @@ def login():
             if user.check_password(pw):
                 user.nb_echecs_connexion = 0
                 user.compte_bloque_jusqu = None
+                db.session.commit()
+
+                # ── 2FA par email pour le super-admin ─────────────────────────
+                # Si l'email est configuré, on n'ouvre pas la session tout de
+                # suite : on envoie un code à 6 chiffres et on demande sa saisie.
+                # Soupape d'urgence : DISABLE_SUPERADMIN_2FA=1 dans le .env permet
+                # de désactiver temporairement la 2FA si le super-admin est bloqué
+                # (ex. problème d'envoi d'email). À retirer une fois le souci réglé.
+                _2fa_off = os.environ.get("DISABLE_SUPERADMIN_2FA", "").lower() in ("1", "true", "yes")
+                if user.is_super_admin and os.environ.get("MAIL_PASSWORD") and not _2fa_off:
+                    code = f"{sec.randbelow(1000000):06d}"
+                    user.set_otp(code)
+                    db.session.commit()
+                    try:
+                        mail = current_app.extensions["mail"]
+                        msg = Message(
+                            subject="🔐 Votre code de connexion — PaieGabon",
+                            recipients=[user.email],
+                            html=(f"<p>Bonjour {user.prenom},</p>"
+                                  f"<p>Votre code de connexion super-admin est :</p>"
+                                  f"<p style='font-size:28px;font-weight:bold;letter-spacing:4px'>{code}</p>"
+                                  f"<p>Ce code expire dans 10 minutes. "
+                                  f"Si vous n'êtes pas à l'origine de cette connexion, "
+                                  f"changez votre mot de passe immédiatement.</p>"),
+                            sender=current_app.config["MAIL_DEFAULT_SENDER"],
+                        )
+                        send_email_async(mail, msg)
+                    except Exception as e:
+                        current_app.logger.error(f"[2FA EMAIL ERROR] {e}")
+                    session["2fa_user_id"] = user.id
+                    return redirect(url_for("auth.verifier_2fa"))
+
+                # ── Connexion normale (non super-admin) ───────────────────────
                 user.derniere_connexion  = now
                 db.session.commit()
                 log_action("LOGIN", "utilisateur", user.id,
@@ -87,6 +120,86 @@ def login():
 
         flash("Email ou mot de passe incorrect.", "error")
     return render_template("auth/login.html")
+
+
+# ── Vérification 2FA (super-admin) ────────────────────────────────────────────
+@bp.route("/login/verifier-2fa", methods=["GET", "POST"])
+@_rate_limit("10/minute")
+def verifier_2fa():
+    uid = session.get("2fa_user_id")
+    if not uid:
+        return redirect(url_for("auth.login"))
+    user = Utilisateur.query.filter_by(id=uid, actif=True).first()
+    if not user:
+        session.pop("2fa_user_id", None)
+        return redirect(url_for("auth.login"))
+
+    if request.method == "POST":
+        code = request.form.get("code", "").strip()
+        now  = datetime.utcnow()
+        MAX_OTP = 5
+
+        # Code expiré ou inexistant
+        if not user.otp_code_hash or not user.otp_expiry or now > user.otp_expiry:
+            user.clear_otp(); db.session.commit()
+            session.pop("2fa_user_id", None)
+            flash("Code expiré. Veuillez vous reconnecter.", "error")
+            return redirect(url_for("auth.login"))
+
+        if user.check_otp(code):
+            user.clear_otp()
+            user.derniere_connexion = now
+            db.session.commit()
+            log_action("LOGIN", "utilisateur", user.id,
+                       f"Connexion 2FA de {user.nom_complet} ({user.role_label})",
+                       user_id=user.id, tenant_id=user.tenant_id)
+            db.session.commit()
+            session.pop("2fa_user_id", None)
+            login_user(user)
+            return redirect(url_for("auth.index"))
+        else:
+            user.otp_tentatives = (user.otp_tentatives or 0) + 1
+            if user.otp_tentatives >= MAX_OTP:
+                user.clear_otp(); db.session.commit()
+                session.pop("2fa_user_id", None)
+                flash("Trop de tentatives. Veuillez vous reconnecter.", "error")
+                return redirect(url_for("auth.login"))
+            db.session.commit()
+            reste = MAX_OTP - user.otp_tentatives
+            flash(f"Code incorrect. Il vous reste {reste} tentative(s).", "error")
+
+    return render_template("auth/verifier_2fa.html", email=user.email)
+
+
+@bp.route("/login/renvoyer-2fa", methods=["POST"])
+@_rate_limit("3/minute")
+def renvoyer_2fa():
+    uid = session.get("2fa_user_id")
+    if not uid:
+        return redirect(url_for("auth.login"))
+    user = Utilisateur.query.filter_by(id=uid, actif=True).first()
+    if not user:
+        session.pop("2fa_user_id", None)
+        return redirect(url_for("auth.login"))
+    code = f"{sec.randbelow(1000000):06d}"
+    user.set_otp(code)
+    db.session.commit()
+    try:
+        mail = current_app.extensions["mail"]
+        msg = Message(
+            subject="🔐 Votre nouveau code de connexion — PaieGabon",
+            recipients=[user.email],
+            html=(f"<p>Bonjour {user.prenom},</p>"
+                  f"<p>Votre nouveau code de connexion est :</p>"
+                  f"<p style='font-size:28px;font-weight:bold;letter-spacing:4px'>{code}</p>"
+                  f"<p>Ce code expire dans 10 minutes.</p>"),
+            sender=current_app.config["MAIL_DEFAULT_SENDER"],
+        )
+        send_email_async(mail, msg)
+    except Exception as e:
+        current_app.logger.error(f"[2FA EMAIL ERROR] {e}")
+    flash("Un nouveau code vous a été envoyé.", "success")
+    return redirect(url_for("auth.verifier_2fa"))
 
 
 # ── Inscription ───────────────────────────────────────────────────────────────
