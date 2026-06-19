@@ -3577,7 +3577,7 @@ def journaliers_paie_export():
     statut_f   = request.args.get("statut",     "")
     date_debut = _parse_date(request.args.get("date_debut", ""))
     date_fin   = _parse_date(request.args.get("date_fin",   ""))
-    site       = Site.query.get(site_id) if site_id else None
+    site       = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
 
     # ── Requête ───────────────────────────────────────────────────────────────
     q = FeuillePaieJournalier.query.filter_by(tenant_id=t.id)
@@ -4380,7 +4380,7 @@ def conge_nouveau():
         jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
         conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
         if not conge:
-            s = Salarie.query.get(salarie_id)
+            s = Salarie.query.filter_by(id=salarie_id, tenant_id=t.id).first()
             mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
             conge = Conge(tenant_id=t.id, salarie_id=salarie_id, annee=annee,
                 jours_acquis=round(min(mois,12)*2.0,1), jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
@@ -4441,7 +4441,7 @@ def conge_approuver(id):
             tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee
         ).filter(Conge.date_depart == None).first()
         if not solde:
-            s = Salarie.query.get(c.salarie_id)
+            s = Salarie.query.filter_by(id=c.salarie_id, tenant_id=t.id).first()
             mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
             solde = Conge(tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee,
                           jours_acquis=round(min(mois,12)*2.5, 1), jours_pris=0)
@@ -5533,7 +5533,7 @@ def rapport_mensuel_site():
     mois_fin   = date(annee, mois, nb_jours_mois)
 
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_sel   = Site.query.get(site_id) if site_id else None
+    site_sel   = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
 
     # Affectations actives pour ce mois
     aff_sal  = {}   # salarie_id  → site_id
@@ -5731,7 +5731,7 @@ def rapport_mensuel_site_export():
     # Pour éviter la duplication, on re-calcule ici directement
 
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
-    site_sel   = Site.query.get(site_id) if site_id else None
+    site_sel   = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
     sites_a_traiter = [site_sel] if site_sel else sites_list
 
     aff_sal  = {}
