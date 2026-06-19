@@ -424,6 +424,23 @@ def run_migrations():
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS convention VARCHAR(20) DEFAULT 'AUCUNE'",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS seuil_heures_sup_hebdo NUMERIC(4,1) DEFAULT 40.0",
+        # ── Index de performance sur les tables récentes (multi-tenant) ──────────
+        # Idempotents (IF NOT EXISTS). Accélèrent les listes et impressions filtrées
+        # par tenant_id / statut / dates / site.
+        "CREATE INDEX IF NOT EXISTS idx_journaliers_tenant_statut ON journaliers (tenant_id, statut)",
+        "CREATE INDEX IF NOT EXISTS idx_journaliers_tenant_type ON journaliers (tenant_id, type_paie)",
+        "CREATE INDEX IF NOT EXISTS idx_fpj_tenant_statut ON feuilles_paie_journalier (tenant_id, statut)",
+        "CREATE INDEX IF NOT EXISTS idx_fpj_tenant_dates ON feuilles_paie_journalier (tenant_id, date_debut, date_fin)",
+        "CREATE INDEX IF NOT EXISTS idx_fpj_journalier ON feuilles_paie_journalier (journalier_id, date_debut, date_fin)",
+        "CREATE INDEX IF NOT EXISTS idx_affect_tenant_site ON affectations_sites (tenant_id, site_id)",
+        "CREATE INDEX IF NOT EXISTS idx_affect_journalier ON affectations_sites (journalier_id)",
+        "CREATE INDEX IF NOT EXISTS idx_affect_salarie ON affectations_sites (salarie_id)",
+        "CREATE INDEX IF NOT EXISTS idx_acomptes_tenant_periode ON acomptes (tenant_id, annee, mois)",
+        "CREATE INDEX IF NOT EXISTS idx_acomptes_salarie ON acomptes (salarie_id)",
+        "CREATE INDEX IF NOT EXISTS idx_conges_tenant_annee ON conges (tenant_id, annee)",
+        "CREATE INDEX IF NOT EXISTS idx_conges_salarie ON conges (salarie_id)",
+        "CREATE INDEX IF NOT EXISTS idx_sites_tenant_actif ON sites (tenant_id, actif)",
+        "CREATE INDEX IF NOT EXISTS idx_pointages_journalier_date ON pointages (journalier_id, date_pointage)",
     ]
     for sql in migrations:
         try:
