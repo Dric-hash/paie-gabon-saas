@@ -613,25 +613,17 @@ def _hhmm_vers_minutes(horaire):
 
 def heures_nuit_depuis_horaires(entree_sup, sortie_sup):
     """Calcule les heures de NUIT (fenêtre légale 21h00 → 06h00) comprises dans
-    la plage d'heures supplémentaires [entree_sup, sortie_sup].
+    UNE plage horaire [entree, sortie] (chaînes 'HH:MM').
 
-    Code du Travail gabonais : les heures supplémentaires effectuées à partir de
-    21h00 (et jusqu'à 06h00) sont des heures de nuit, rémunérées au taux de +40 %
-    en semaine (lundi-samedi). Cette fonction n'isole QUE la portion nocturne ;
-    l'application du taux et la règle dimanche/férié (+70 %) sont gérées en aval.
-
-    - Gère le passage de minuit (ex. 20:00 → 02:00 = 5h de nuit : 21h→02h).
-    - `entree_sup` / `sortie_sup` : chaînes 'HH:MM'.
-    - Renvoie un float (nombre d'heures de nuit, arrondi au centième), ou None si
-      les horaires sont absents/invalides — l'appelant utilise alors la valeur
-      stockée comme repli (compatibilité avec les anciens pointages).
+    Gère le passage de minuit (ex. 20:00 → 02:00 = 5h de nuit : 21h→02h).
+    Renvoie un float (heures de nuit, arrondi au centième), ou None si les
+    horaires sont absents/invalides.
 
     Exemples :
         ('17:00', '22:00') → 1.0   (seule la tranche 21h-22h est de nuit)
         ('14:00', '18:00') → 0.0   (rien après 21h)
         ('20:00', '02:00') → 5.0   (21h→02h)
-        ('22:00', '23:30') → 1.5   (intégralement de nuit)
-        ('04:00', '06:00') → 2.0   (petit matin, avant 06h)
+        ('21:00', '06:00') → 9.0   (toute la plage est de nuit)
     """
     debut = _hhmm_vers_minutes(entree_sup)
     fin   = _hhmm_vers_minutes(sortie_sup)
@@ -652,6 +644,34 @@ def heures_nuit_depuis_horaires(entree_sup, sortie_sup):
     return round(minutes_nuit / 60.0, 2)
 
 
+def heures_nuit_journee(p):
+    """Cumule les heures de nuit (21h00 → 06h00) sur TOUTES les plages travaillées
+    d'un pointage : matin, après-midi ET heures supplémentaires.
+
+    Conforme au Code du Travail gabonais : toute heure effectuée entre 21h00 et
+    06h00 est une heure de nuit, quel que soit le créneau où elle tombe.
+
+    Renvoie un float (total des heures de nuit du jour), ou None si AUCUNE des
+    trois plages n'a d'horaire exploitable (l'appelant utilisera alors la valeur
+    stockée `heures_sup_40` comme repli — compatibilité ascendante).
+    """
+    plages = (
+        (getattr(p, "entree_matin",  None), getattr(p, "sortie_matin",  None)),
+        (getattr(p, "entree_apmidi", None), getattr(p, "sortie_apmidi", None)),
+        (getattr(p, "entree_sup",    None), getattr(p, "sortie_sup",    None)),
+    )
+    total = 0.0
+    trouve = False
+    for entree, sortie in plages:
+        n = heures_nuit_depuis_horaires(entree, sortie)
+        if n is not None:
+            trouve = True
+            total += n
+    if not trouve:
+        return None
+    return round(total, 2)
+
+
 def pointage_vers_jours(pointages):
     """
     Adaptateur : convertit des enregistrements ORM `Pointage` en liste de dicts
@@ -664,11 +684,11 @@ def pointage_vers_jours(pointages):
     hebdomadaire reclasser correctement.
 
     HEURES DE NUIT (Code du Travail gabonais) :
-      Les heures de nuit sont désormais CALCULÉES à partir des horaires réels
-      des heures supplémentaires (`entree_sup` / `sortie_sup`) : toute portion
-      effectuée à partir de 21h00 (jusqu'à 06h00) est isolée et rémunérée à
-      +40 % en semaine. Si les horaires sont absents (anciens pointages), on
-      retombe sur la valeur stockée `heures_sup_40` (compatibilité ascendante).
+      Les heures de nuit sont CALCULÉES à partir des horaires réels de TOUTES les
+      plages travaillées (matin, après-midi ET heures supplémentaires) : toute
+      heure effectuée entre 21h00 et 06h00 est une heure de nuit, rémunérée à
+      +40 % en semaine. Si aucun horaire n'est exploitable (anciens pointages),
+      on retombe sur la valeur stockée `heures_sup_40` (compatibilité ascendante).
 
     Règles de mapping :
       - type_jour CHOME_PAYE / CHOME_RECUPERABLE → férié chômé (8h normales)
@@ -691,9 +711,10 @@ def pointage_vers_jours(pointages):
                + float(getattr(p, "heures_sup_40", 0) or 0)
                + float(getattr(p, "heures_sup_70", 0) or 0))
 
-        # Heures de nuit : calculées depuis l'horaire des HS, sinon repli stocké
-        nuit_calc = heures_nuit_depuis_horaires(
-            getattr(p, "entree_sup", None), getattr(p, "sortie_sup", None))
+        # Heures de nuit : cumulées sur TOUTES les plages (matin + après-midi +
+        # sup) depuis les horaires réels ; repli sur la valeur stockée si aucun
+        # horaire n'est exploitable (anciens pointages).
+        nuit_calc = heures_nuit_journee(p)
         if nuit_calc is None:
             nuit = float(getattr(p, "heures_sup_40", 0) or 0)
         else:
