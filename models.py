@@ -617,6 +617,62 @@ class RubriquePaie(db.Model):
         return d
 
 
+class ComposantPaie(db.Model):
+    """Composant de salaire personnalisé, créé par l'entreprise (tenant).
+
+    Permet à chaque entreprise de définir ses propres primes / indemnités (gains)
+    ou retenues, qui s'ajouteront au calcul du bulletin. Chaque composant porte
+    son traitement social/fiscal : soumis ou non à la CNSS, à la CNAMGS, à l'IRPP.
+    Le montant lui-même est saisi ponctuellement sur chaque bulletin.
+    """
+    __tablename__ = "composants_paie"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    libelle       = db.Column(db.String(120), nullable=False)
+    sens          = db.Column(db.String(10), nullable=False, default="GAIN")  # GAIN | RETENUE
+    soumis_cnss   = db.Column(db.Boolean, default=True)
+    soumis_cnamgs = db.Column(db.Boolean, default=True)
+    soumis_irpp   = db.Column(db.Boolean, default=True)
+    actif         = db.Column(db.Boolean, default=True)
+    ordre         = db.Column(db.Integer, default=0)
+    cree_le       = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.Index("idx_composants_tenant", "tenant_id", "actif"),)
+
+    @property
+    def est_gain(self):
+        return (self.sens or "GAIN").upper() == "GAIN"
+
+
+class BulletinComposant(db.Model):
+    """Valeur d'un composant personnalisé sur un bulletin précis.
+
+    On stocke un INSTANTANÉ (libellé, sens, traitement social/fiscal) afin que les
+    bulletins déjà émis ne changent jamais, même si le composant est modifié ou
+    supprimé par la suite.
+    """
+    __tablename__ = "bulletin_composants"
+    id            = db.Column(db.Integer, primary_key=True)
+    bulletin_id   = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id"), nullable=False)
+    composant_id  = db.Column(db.Integer, db.ForeignKey("composants_paie.id"))
+    libelle       = db.Column(db.String(120), nullable=False)
+    sens          = db.Column(db.String(10), nullable=False, default="GAIN")
+    soumis_cnss   = db.Column(db.Boolean, default=True)
+    soumis_cnamgs = db.Column(db.Boolean, default=True)
+    soumis_irpp   = db.Column(db.Boolean, default=True)
+    montant       = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    __table_args__ = (db.Index("idx_bulcomp_bulletin", "bulletin_id"),)
+
+    @property
+    def est_gain(self):
+        return (self.sens or "GAIN").upper() == "GAIN"
+
+    @property
+    def montant_signe(self):
+        """Montant signé : + pour un gain, - pour une retenue."""
+        m = float(self.montant or 0)
+        return m if self.est_gain else -m
+
+
 class Conge(db.Model):
     __tablename__ = "conges"
     id           = db.Column(db.Integer, primary_key=True)

@@ -1,0 +1,86 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+
+<div style="max-width:640px;margin:0 auto">
+  <a href="{{ url_for('tenant.composants') }}" style="font-size:.8rem;color:#6b7280;text-decoration:none;font-weight:700">← Retour aux composants</a>
+  <h1 class="text-2xl font-black text-gray-900 mt-2 mb-1">
+    {{ 'Modifier le composant' if composant else 'Nouveau composant' }}
+  </h1>
+  <p class="text-sm text-gray-500 mb-6">
+    Définissez une prime, une indemnité ou une retenue propre à votre entreprise.
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}<div class="mb-4 space-y-2">{% for cat,msg in messages %}
+  <div class="px-4 py-3 rounded-xl text-sm font-semibold bg-red-50 text-red-800">{{ msg }}</div>
+  {% endfor %}</div>{% endif %}{% endwith %}
+
+  <form method="POST" class="card p-6 space-y-5">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Libellé du composant *</label>
+      <input type="text" name="libelle" required maxlength="120"
+        value="{{ composant.libelle if composant else '' }}"
+        placeholder="Ex : Prime de salissure, Indemnité de panier, Retenue mutuelle…"
+        style="width:100%;border:1px solid #d1d5db;border-radius:.625rem;padding:.6rem .75rem;font-size:.9rem"/>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Type</label>
+      <div style="display:flex;gap:.75rem">
+        <label style="flex:1;border:1px solid #d1d5db;border-radius:.625rem;padding:.6rem .75rem;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:.85rem">
+          <input type="radio" name="sens" value="GAIN"
+            {{ 'checked' if not composant or composant.est_gain else '' }}/>
+          <span><strong style="color:#065f46">Gain</strong> — s'ajoute au salaire</span>
+        </label>
+        <label style="flex:1;border:1px solid #d1d5db;border-radius:.625rem;padding:.6rem .75rem;cursor:pointer;display:flex;align-items:center;gap:.5rem;font-size:.85rem">
+          <input type="radio" name="sens" value="RETENUE"
+            {{ 'checked' if composant and not composant.est_gain else '' }}/>
+          <span><strong style="color:#991b1b">Retenue</strong> — se déduit</span>
+        </label>
+      </div>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.5rem">Traitement social et fiscal</label>
+      <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .25rem">
+        <label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" name="soumis_cnss"
+            {{ 'checked' if not composant or composant.soumis_cnss else '' }}/>
+          <span>Soumis à la <strong>CNSS</strong> (entre dans la base de cotisation CNSS)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" name="soumis_cnamgs"
+            {{ 'checked' if not composant or composant.soumis_cnamgs else '' }}/>
+          <span>Soumis à la <strong>CNAMGS</strong> (entre dans la base de cotisation CNAMGS)</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" name="soumis_irpp"
+            {{ 'checked' if not composant or composant.soumis_irpp else '' }}/>
+          <span>Soumis à l'<strong>IRPP</strong> (entre dans la base imposable)</span>
+        </label>
+      </div>
+      <p style="font-size:.72rem;color:#9ca3af;margin-top:.4rem">
+        Décochez une case pour exonérer le composant de la cotisation ou de l'impôt correspondant.
+      </p>
+    </div>
+
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Ordre d'affichage (optionnel)</label>
+      <input type="number" name="ordre" min="0" value="{{ composant.ordre if composant else 0 }}"
+        style="width:120px;border:1px solid #d1d5db;border-radius:.625rem;padding:.5rem .75rem;font-size:.9rem"/>
+    </div>
+
+    <div style="display:flex;gap:.75rem;justify-content:flex-end;padding-top:.5rem">
+      <a href="{{ url_for('tenant.composants') }}"
+        style="background:#f3f4f6;color:#374151;font-weight:700;font-size:.85rem;padding:.6rem 1.1rem;border-radius:.625rem;text-decoration:none">Annuler</a>
+      <button type="submit"
+        style="background:#0f3d36;color:white;font-weight:700;font-size:.85rem;padding:.6rem 1.4rem;border-radius:.625rem;border:none;cursor:pointer">
+        {{ 'Enregistrer' if composant else 'Créer le composant' }}
+      </button>
+    </div>
+  </form>
+</div>
+
+{% endblock %}

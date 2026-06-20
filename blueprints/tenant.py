@@ -19,7 +19,7 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement, OAuthClient, AuditLog,
-                    Prestataire, FacturePrestataire)
+                    Prestataire, FacturePrestataire, ComposantPaie, BulletinComposant)
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
@@ -4652,6 +4652,77 @@ def api_stats_sans_site():
 # ══════════════════════════════════════════════════════════════════════════════
 # ── SITES & AFFECTATIONS ──────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
+
+@bp.route("/composants")
+@tenant_required
+def composants():
+    t = get_tenant()
+    composants_list = ComposantPaie.query.filter_by(tenant_id=t.id).order_by(
+        ComposantPaie.ordre, ComposantPaie.libelle).all()
+    return render_template("tenant/composants.html", tenant=t, composants=composants_list)
+
+
+@bp.route("/composants/nouveau", methods=["GET", "POST"])
+@tenant_required
+def composant_nouveau():
+    t = get_tenant()
+    if not current_user.can_edit: abort(403)
+    if request.method == "POST":
+        libelle = request.form.get("libelle", "").strip()
+        if not libelle:
+            flash("Le libellé est obligatoire.", "error")
+            return render_template("tenant/composant_form.html", tenant=t, composant=None)
+        c = ComposantPaie(
+            tenant_id     = t.id,
+            libelle       = libelle,
+            sens          = "RETENUE" if request.form.get("sens") == "RETENUE" else "GAIN",
+            soumis_cnss   = request.form.get("soumis_cnss")   == "on",
+            soumis_cnamgs = request.form.get("soumis_cnamgs") == "on",
+            soumis_irpp   = request.form.get("soumis_irpp")   == "on",
+            ordre         = request.form.get("ordre", type=int) or 0,
+            actif         = True,
+        )
+        db.session.add(c)
+        db.session.commit()
+        flash(f"Composant « {c.libelle} » créé.", "success")
+        return redirect(url_for("tenant.composants"))
+    return render_template("tenant/composant_form.html", tenant=t, composant=None)
+
+
+@bp.route("/composants/<int:id>/modifier", methods=["GET", "POST"])
+@tenant_required
+def composant_modifier(id):
+    t = get_tenant()
+    if not current_user.can_edit: abort(403)
+    c = ComposantPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if request.method == "POST":
+        libelle = request.form.get("libelle", "").strip()
+        if not libelle:
+            flash("Le libellé est obligatoire.", "error")
+            return render_template("tenant/composant_form.html", tenant=t, composant=c)
+        c.libelle       = libelle
+        c.sens          = "RETENUE" if request.form.get("sens") == "RETENUE" else "GAIN"
+        c.soumis_cnss   = request.form.get("soumis_cnss")   == "on"
+        c.soumis_cnamgs = request.form.get("soumis_cnamgs") == "on"
+        c.soumis_irpp   = request.form.get("soumis_irpp")   == "on"
+        c.ordre         = request.form.get("ordre", type=int) or 0
+        db.session.commit()
+        flash(f"Composant « {c.libelle} » modifié.", "success")
+        return redirect(url_for("tenant.composants"))
+    return render_template("tenant/composant_form.html", tenant=t, composant=c)
+
+
+@bp.route("/composants/<int:id>/toggle", methods=["POST"])
+@tenant_required
+def composant_toggle(id):
+    t = get_tenant()
+    if not current_user.can_edit: abort(403)
+    c = ComposantPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    c.actif = not c.actif
+    db.session.commit()
+    flash(f"Composant « {c.libelle} » {'activé' if c.actif else 'désactivé'}.", "success")
+    return redirect(url_for("tenant.composants"))
+
 
 @bp.route("/sites")
 @tenant_required
