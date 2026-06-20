@@ -442,6 +442,51 @@
       </table></div>
     </div>
 
+    {% if composants_actifs %}
+    <div class="pf-card" style="margin-top:1rem">
+      <h2 class="text-xs font-bold text-slate-700 uppercase tracking-widest" style="margin-bottom:.75rem">
+        🧩 Composants personnalisés
+      </h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+        <thead>
+          <tr>
+            <th style="text-align:left;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Composant</th>
+            <th style="text-align:center;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Type</th>
+            <th style="text-align:right;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Montant (FCFA)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in composants_actifs %}
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">
+              {{ c.libelle }}
+              <div style="font-size:.65rem;color:#9ca3af;font-weight:500">
+                {{ 'CNSS' if c.soumis_cnss else '' }}{{ ' · CNAMGS' if c.soumis_cnamgs else '' }}{{ ' · IRPP' if c.soumis_irpp else '' }}{{ 'Exonéré' if not (c.soumis_cnss or c.soumis_cnamgs or c.soumis_irpp) else '' }}
+              </div>
+            </td>
+            <td style="text-align:center">
+              {% if c.est_gain %}
+                <span style="background:#d1fae5;color:#065f46;padding:.1rem .45rem;border-radius:9999px;font-size:.62rem;font-weight:700">GAIN</span>
+              {% else %}
+                <span style="background:#fee2e2;color:#991b1b;padding:.1rem .45rem;border-radius:9999px;font-size:.62rem;font-weight:700">RETENUE</span>
+              {% endif %}
+            </td>
+            <td class="pf-cell" style="text-align:right">
+              <input type="number" name="composant_{{ c.id }}" id="f_composant_{{ c.id }}"
+                     value="0" step="any" min="0"
+                     class="champ-calcul pf-amt{{ '-neg' if not c.est_gain else '' }}"
+                     oninput="recalculer()"/>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+      <p style="font-size:.7rem;color:#9ca3af;margin-top:.5rem">
+        Gérez vos composants dans <a href="{{ url_for('tenant.composants') }}" style="color:#0f3d36;font-weight:700">Composants</a>.
+      </p>
+    </div>
+    {% endif %}
+
   </div>
 
   <!-- COLONNE DROITE -->

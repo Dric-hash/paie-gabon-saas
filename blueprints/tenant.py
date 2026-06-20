@@ -462,6 +462,17 @@ def api_simuler_paie():
             if s: nb_parts = float(s.nombre_parts or 1)
         nb_parts = flt("nb_parts") or nb_parts
 
+        # Composants personnalisés (aperçu temps réel) : lus depuis composant_<id>
+        comps_live = []
+        for comp in ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).all():
+            montant = flt(f"composant_{comp.id}")
+            if montant:
+                comps_live.append({
+                    "libelle": comp.libelle, "sens": comp.sens, "montant": montant,
+                    "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
+                    "soumis_irpp": comp.soumis_irpp})
+        d["composants"] = comps_live
+
         result = calculer_bulletin(d, nb_parts=nb_parts)
 
         # Enrichir avec détails BTP
@@ -1367,7 +1378,7 @@ def bulletin_saisie():
             # Exclure les champs non-numériques et les champs base_/taux_ (traités séparément)
             if k in ("salarie_id","periode_id","csrf_token","action","nb_jours_travailles"):
                 continue
-            if k.startswith("base_") or k.startswith("taux_"):
+            if k.startswith("base_") or k.startswith("taux_") or k.startswith("composant_"):
                 continue
             try:
                 donnees[k] = float(v) if v else 0
@@ -1375,6 +1386,21 @@ def bulletin_saisie():
                 donnees[k] = 0
         if total_acomptes > 0:
             donnees["acompte"] = max(donnees.get("acompte", 0), total_acomptes)
+
+        # ── Composants personnalisés du tenant (gains/retenues) ────────────────
+        # Lecture des montants saisis (champ composant_<id>) ; on construit la
+        # liste passée au calcul et on en garde une copie pour la persistance.
+        composants_actifs = ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).all()
+        composants_saisis = []
+        for comp in composants_actifs:
+            montant = request.form.get(f"composant_{comp.id}", type=float) or 0
+            if montant:
+                composants_saisis.append({
+                    "composant_id": comp.id, "libelle": comp.libelle, "sens": comp.sens,
+                    "montant": montant, "soumis_cnss": comp.soumis_cnss,
+                    "soumis_cnamgs": comp.soumis_cnamgs, "soumis_irpp": comp.soumis_irpp,
+                })
+        donnees["composants"] = composants_saisis
 
         # ── L6 : Allocation de congé (Code du travail 2021, Art. 225) ──────────
         # Calcul automatique si un congé ANNUEL débute dans le mois de la période
@@ -1450,6 +1476,15 @@ def bulletin_saisie():
             for a in acomptes_en_attente: a.statut = "DEDUIT"
         else:
             b.statut="BROUILLON"
+        # Persistance des composants personnalisés (instantané par bulletin)
+        db.session.flush()  # garantit b.id pour un nouveau bulletin
+        BulletinComposant.query.filter_by(bulletin_id=b.id).delete()
+        for cs in composants_saisis:
+            db.session.add(BulletinComposant(
+                bulletin_id=b.id, composant_id=cs["composant_id"],
+                libelle=cs["libelle"], sens=cs["sens"], montant=cs["montant"],
+                soumis_cnss=cs["soumis_cnss"], soumis_cnamgs=cs["soumis_cnamgs"],
+                soumis_irpp=cs["soumis_irpp"]))
         db.session.commit()
         if total_acomptes > 0:
             flash(f"Bulletin sauvegardé. Acompte de {int(total_acomptes):,} FCFA déduit automatiquement.".replace(",", " "), "success")
@@ -1461,8 +1496,11 @@ def bulletin_saisie():
     c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
     acomptes_attente = Acompte.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_ATTENTE").all() if sid else []
     total_acomptes = sum(float(a.montant) for a in acomptes_attente)
+    composants_actifs = ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).order_by(
+        ComposantPaie.ordre, ComposantPaie.libelle).all()
     return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t,
-        acomptes_attente=acomptes_attente, total_acomptes=total_acomptes)
+        acomptes_attente=acomptes_attente, total_acomptes=total_acomptes,
+        composants_actifs=composants_actifs)
 
 @bp.route("/bulletins/<int:id>")
 @login_required

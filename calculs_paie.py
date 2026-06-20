@@ -213,9 +213,48 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         + indem_compensatrice_preavis + indem_licenciement
     )
 
+    # ── 2bis. COMPOSANTS PERSONNALISÉS (primes/indemnités/retenues du tenant) ──
+    # Chaque composant est un dict : {libelle, sens('GAIN'|'RETENUE'), montant,
+    # soumis_cnss, soumis_cnamgs, soumis_irpp}. Les gains s'ajoutent au brut, les
+    # retenues s'en déduisent. On calcule en parallèle les "deltas" à retirer de
+    # chaque base pour les composants NON soumis (afin de préserver exactement la
+    # logique existante : avec zéro composant, tous les deltas valent 0).
+    composants_perso = donnees.get("composants") or []
+    delta_brut = 0.0
+    delta_non_cnss = 0.0
+    delta_non_cnamgs = 0.0
+    delta_non_irpp = 0.0
+    total_composants_gains = 0.0
+    total_composants_retenues = 0.0
+    composants_detail = []
+    for c in composants_perso:
+        try:
+            montant = float(c.get("montant") or 0)
+        except (TypeError, ValueError):
+            montant = 0.0
+        if montant == 0:
+            continue
+        est_gain = str(c.get("sens", "GAIN")).upper() == "GAIN"
+        signe = montant if est_gain else -montant
+        s_cnss   = bool(c.get("soumis_cnss", True))
+        s_cnamgs = bool(c.get("soumis_cnamgs", True))
+        s_irpp   = bool(c.get("soumis_irpp", True))
+        delta_brut += signe
+        if est_gain: total_composants_gains += montant
+        else:        total_composants_retenues += montant
+        if not s_cnss:   delta_non_cnss   += signe
+        if not s_cnamgs: delta_non_cnamgs += signe
+        if not s_irpp:   delta_non_irpp   += signe
+        composants_detail.append({
+            "libelle": c.get("libelle", ""), "sens": "GAIN" if est_gain else "RETENUE",
+            "montant": round(montant, 2), "montant_signe": round(signe, 2),
+            "soumis_cnss": s_cnss, "soumis_cnamgs": s_cnamgs, "soumis_irpp": s_irpp,
+        })
+    salaire_brut += delta_brut
+
     # ── 3. CNSS ─────────────────────────────────────────────────────────────
     transport_exo_cnss = min(prime_transport, TRANSPORT_EXONERATION_CNSS)
-    base_cnss = min(salaire_brut - transport_exo_cnss, CNSS_PLAFOND)
+    base_cnss = min(salaire_brut - transport_exo_cnss - delta_non_cnss, CNSS_PLAFOND)
     base_cnss = max(base_cnss, 0)
     cnss_salarie   = fcfa(base_cnss * CNSS_TAUX_SALARIE)
     cnss_patronale = fcfa(base_cnss * CNSS_TAUX_PATRONAL)
@@ -224,7 +263,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     transport_exo_cnamgs = min(prime_transport, TRANSPORT_EXONERATION_IRPP)
     logement_imposable = min(indem_logement, salaire_brut * LOGEMENT_PLAFOND_PCT, LOGEMENT_PLAFOND_MAX)
     base_cnamgs = min(
-        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable - prime_qualite,
+        salaire_brut - transport_exo_cnamgs - indem_logement + logement_imposable - prime_qualite - delta_non_cnamgs,
         CNAMGS_PLAFOND
     )
     base_cnamgs = max(base_cnamgs, 0)
@@ -246,6 +285,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         - transport_exo_cnamgs - indem_logement
         - cnss_salarie - cnamgs_salarie
         + (indem_domesticite + indem_eau_electricite + indem_nourriture)
+        - delta_non_irpp
     )
     base_tcs_imposable = max(base_tcs - TCS_EXONERATION, 0)
     tcs = fcfa(base_tcs_imposable * TCS_TAUX)
@@ -307,6 +347,9 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "indem_representation":        round(indem_representation, 2),
         "prime_salisure":              round(prime_salisure, 2),
         "acompte":                     round(acompte, 2),
+        "composants":                  composants_detail,
+        "total_composants_gains":      round(total_composants_gains, 2),
+        "total_composants_retenues":   round(total_composants_retenues, 2),
         "salaire_brut":                round(salaire_brut, 2),
         "base_cnss":                   round(base_cnss, 2),
         "cnss_salarie":                round(cnss_salarie, 2),
