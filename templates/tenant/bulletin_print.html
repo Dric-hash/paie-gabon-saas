@@ -334,6 +334,14 @@
         <td class="tr gain">{{ bulletin.indem_licenciement|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+      {% for c in composants %}
+      <tr>
+        <td>{{ c.libelle }}{% if not c.est_gain %} <span style="color:#b91c1c;font-size:7.5px;font-weight:700">(retenue)</span>{% endif %}</td>
+        <td class="tr" style="font-family:monospace;font-size:8.5px">{{ c.base|int if c.base else '' }}</td>
+        <td class="tc" style="font-size:8.5px">{{ ('%g'|format(c.taux|float)) if c.taux else '' }}</td>
+        <td class="tr {{ 'gain' if c.est_gain else '' }}" {{ 'style=color:#b91c1c'|safe if not c.est_gain else '' }}>{{ '- ' if not c.est_gain else '' }}{{ c.montant|fcfa }}</td>
+        <td></td>
+      </tr>{% endfor %}
       <tr class="row-subtotal">
         <td class="bold">{{ T.payslip.gross_salary }}</td>
         <td></td><td></td>

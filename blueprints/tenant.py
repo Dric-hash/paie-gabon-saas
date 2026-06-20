@@ -1511,8 +1511,10 @@ def bulletin_detail(id):
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t=get_tenant()
     if not t: return redirect(url_for("auth.login"))
+    bulletin = BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
+    composants = BulletinComposant.query.filter_by(bulletin_id=bulletin.id).all()
     return render_template("tenant/bulletin_detail.html",
-        bulletin=BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404(), tenant=t)
+        bulletin=bulletin, tenant=t, composants=composants)
 
 @bp.route("/bulletins/<int:id>/valider", methods=["POST"])
 @login_required
@@ -1671,7 +1673,8 @@ def bulletin_imprimer(id):
     tpl_path = os.path.join(os.path.dirname(__file__), "..", "templates", template)
     if not os.path.exists(tpl_path):
         template = "tenant/bulletin_print.html"
-    return render_template(template, bulletin=b, tenant=t)
+    composants = BulletinComposant.query.filter_by(bulletin_id=b.id).all()
+    return render_template(template, bulletin=b, tenant=t, composants=composants)
 
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur

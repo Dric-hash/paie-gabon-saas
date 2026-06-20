@@ -252,6 +252,20 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
         if _flt(val) > 0:
             rows.append(ligne(label, "", "", gain=val))
 
+    # ── Composants personnalisés (créés par l'entreprise) ────────────────────
+    try:
+        from models import BulletinComposant
+        comps = BulletinComposant.query.filter_by(bulletin_id=b.id).all()
+    except Exception:
+        comps = []
+    for c in comps:
+        base_val = c.base if _flt(c.base) > 0 else ""
+        taux_txt = (("%g" % _flt(c.taux)) if _flt(c.taux) else "")
+        if str(c.sens).upper() == "GAIN":
+            rows.append(ligne(c.libelle, base_val, taux_txt, gain=c.montant))
+        else:
+            rows.append(ligne(c.libelle, base_val, taux_txt, retenue=c.montant))
+
     # ── Absences ─────────────────────────────────────────────────────────────
     if _flt(b.absences) > 0:
         rows.append(ligne("Retenue pour absences", "", "", retenue=b.absences))

@@ -126,6 +126,15 @@
       </tr>
       {% endif %}
       {% endfor %}
+      {% for c in composants %}
+      <tr>
+        <td>{{ c.libelle }}{% if not c.est_gain %} (ret.){% endif %}</td>
+        <td>{{ (c.base|int|fcfa) if c.base and c.base|float > 0 else '' }}</td>
+        <td style="text-align:center">{{ ('%g'|format(c.taux|float)) if c.taux else '' }}</td>
+        <td>{{ (c.montant|int|fcfa) if c.est_gain else '' }}</td>
+        <td {{ 'style=color:#dc2626'|safe if not c.est_gain else '' }}>{{ (c.montant|int|fcfa) if not c.est_gain else '' }}</td>
+      </tr>
+      {% endfor %}
       {% if bulletin.absences and bulletin.absences > 0 %}
       <tr><td>Absences</td><td></td><td></td><td></td><td>{{ bulletin.absences|int|fcfa }}</td></tr>
       {% endif %}

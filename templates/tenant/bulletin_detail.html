@@ -63,6 +63,20 @@
     {{ ligne("Prime qualité", bulletin.prime_qualite) }}
     {{ ligne("Prime performance", bulletin.prime_performance) }}
     {{ ligne("Allocations congé", bulletin.allocations_conge) }}
+    {% for c in composants %}
+    <div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid #f9fafb">
+      <span class="text-gray-600">
+        {{ c.libelle }}
+        {% if c.base and c.base|float > 0 %}
+        <span style="font-size:.7rem;color:#9ca3af">({{ c.base|fcfa }} × {{ '%g'|format(c.taux|float) if c.taux else 1 }})</span>
+        {% endif %}
+        {% if not c.est_gain %}<span style="font-size:.65rem;color:#991b1b;font-weight:700">RETENUE</span>{% endif %}
+      </span>
+      <span class="font-bold {{ 'text-red-600' if not c.est_gain else 'text-gray-900' }}">
+        {{ '- ' if not c.est_gain else '' }}{{ c.montant|fcfa }}
+      </span>
+    </div>
+    {% endfor %}
     <div style="display:flex;justify-content:space-between;padding:.5rem 0;border-top:2px solid #e5e7eb;margin-top:.25rem;font-weight:900;font-size:.875rem">
       <span>SALAIRE BRUT</span><span>{{ bulletin.salaire_brut|fcfa }}</span>
     </div>
