@@ -1399,6 +1399,8 @@ def bulletin_saisie():
                     "composant_id": comp.id, "libelle": comp.libelle, "sens": comp.sens,
                     "montant": montant, "soumis_cnss": comp.soumis_cnss,
                     "soumis_cnamgs": comp.soumis_cnamgs, "soumis_irpp": comp.soumis_irpp,
+                    "base": request.form.get(f"base_composant_{comp.id}", type=float),
+                    "taux": request.form.get(f"taux_composant_{comp.id}", type=float),
                 })
         donnees["composants"] = composants_saisis
 
@@ -1483,6 +1485,7 @@ def bulletin_saisie():
             db.session.add(BulletinComposant(
                 bulletin_id=b.id, composant_id=cs["composant_id"],
                 libelle=cs["libelle"], sens=cs["sens"], montant=cs["montant"],
+                base=cs.get("base"), taux=cs.get("taux"),
                 soumis_cnss=cs["soumis_cnss"], soumis_cnamgs=cs["soumis_cnamgs"],
                 soumis_irpp=cs["soumis_irpp"]))
         db.session.commit()
@@ -5201,6 +5204,20 @@ def api_calculer():
                            annee=int(annee), statut="EN_ATTENTE").scalar() or 0)
         if total_acomptes > 0:
             data["acompte"] = max(float(data.get("acompte", 0)), total_acomptes)
+        # Composants personnalisés (aperçu temps réel) : lus depuis composant_<id>
+        if t:
+            comps_live = []
+            for comp in ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).all():
+                try:
+                    montant = float(data.get(f"composant_{comp.id}") or 0)
+                except (TypeError, ValueError):
+                    montant = 0.0
+                if montant:
+                    comps_live.append({
+                        "libelle": comp.libelle, "sens": comp.sens, "montant": montant,
+                        "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
+                        "soumis_irpp": comp.soumis_irpp})
+            data["composants"] = comps_live
         res = calculer_bulletin(data, nb_parts=nb_parts)
         res["acompte_auto"] = total_acomptes
         return jsonify(res)

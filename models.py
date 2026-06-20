@@ -659,6 +659,8 @@ class BulletinComposant(db.Model):
     soumis_cnss   = db.Column(db.Boolean, default=True)
     soumis_cnamgs = db.Column(db.Boolean, default=True)
     soumis_irpp   = db.Column(db.Boolean, default=True)
+    base          = db.Column(db.Numeric(15, 2))
+    taux          = db.Column(db.Numeric(8, 4))
     montant       = db.Column(db.Numeric(15, 2), nullable=False, default=0)
     __table_args__ = (db.Index("idx_bulcomp_bulletin", "bulletin_id"),)
 

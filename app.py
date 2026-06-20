@@ -414,6 +414,8 @@ def run_migrations():
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_code_hash VARCHAR(256)",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_tentatives INTEGER DEFAULT 0",
+        "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS base NUMERIC(15,2)",
+        "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS taux NUMERIC(8,4)",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",

@@ -452,6 +452,8 @@
           <tr>
             <th style="text-align:left;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Composant</th>
             <th style="text-align:center;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Type</th>
+            <th style="text-align:center;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Base</th>
+            <th style="text-align:center;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Taux</th>
             <th style="text-align:right;font-size:.7rem;color:#6b7280;text-transform:uppercase;padding:.3rem .5rem">Montant (FCFA)</th>
           </tr>
         </thead>
@@ -470,6 +472,16 @@
               {% else %}
                 <span style="background:#fee2e2;color:#991b1b;padding:.1rem .45rem;border-radius:9999px;font-size:.62rem;font-weight:700">RETENUE</span>
               {% endif %}
+            </td>
+            <td class="pf-cell">
+              <input type="number" step="any" min="0" placeholder="0"
+                     name="base_composant_{{ c.id }}" id="base_composant_{{ c.id }}"
+                     oninput="calcMontant('composant_{{ c.id }}')" class="pf-base"/>
+            </td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×
+              <input type="text" placeholder="1"
+                     name="taux_composant_{{ c.id }}" id="taux_composant_{{ c.id }}"
+                     oninput="calcMontant('composant_{{ c.id }}')" class="pf-rate"/>
             </td>
             <td class="pf-cell" style="text-align:right">
               <input type="number" name="composant_{{ c.id }}" id="f_composant_{{ c.id }}"
