@@ -588,6 +588,70 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -
     return resultat
 
 
+def _hhmm_vers_minutes(horaire):
+    """Convertit une chaîne d'horaire 'H:MM' ou 'HH:MM' en minutes depuis minuit.
+
+    Renvoie None si la valeur est absente ou invalide. Tolère '24:00' (= minuit
+    du lendemain, soit 1440 minutes).
+    """
+    if not horaire:
+        return None
+    s = str(horaire).strip()
+    if ":" not in s:
+        return None
+    parts = s.split(":")
+    try:
+        h = int(parts[0]); m = int(parts[1])
+    except (ValueError, IndexError):
+        return None
+    if h == 24 and m == 0:
+        return 1440
+    if not (0 <= h <= 23 and 0 <= m <= 59):
+        return None
+    return h * 60 + m
+
+
+def heures_nuit_depuis_horaires(entree_sup, sortie_sup):
+    """Calcule les heures de NUIT (fenêtre légale 21h00 → 06h00) comprises dans
+    la plage d'heures supplémentaires [entree_sup, sortie_sup].
+
+    Code du Travail gabonais : les heures supplémentaires effectuées à partir de
+    21h00 (et jusqu'à 06h00) sont des heures de nuit, rémunérées au taux de +40 %
+    en semaine (lundi-samedi). Cette fonction n'isole QUE la portion nocturne ;
+    l'application du taux et la règle dimanche/férié (+70 %) sont gérées en aval.
+
+    - Gère le passage de minuit (ex. 20:00 → 02:00 = 5h de nuit : 21h→02h).
+    - `entree_sup` / `sortie_sup` : chaînes 'HH:MM'.
+    - Renvoie un float (nombre d'heures de nuit, arrondi au centième), ou None si
+      les horaires sont absents/invalides — l'appelant utilise alors la valeur
+      stockée comme repli (compatibilité avec les anciens pointages).
+
+    Exemples :
+        ('17:00', '22:00') → 1.0   (seule la tranche 21h-22h est de nuit)
+        ('14:00', '18:00') → 0.0   (rien après 21h)
+        ('20:00', '02:00') → 5.0   (21h→02h)
+        ('22:00', '23:30') → 1.5   (intégralement de nuit)
+        ('04:00', '06:00') → 2.0   (petit matin, avant 06h)
+    """
+    debut = _hhmm_vers_minutes(entree_sup)
+    fin   = _hhmm_vers_minutes(sortie_sup)
+    if debut is None or fin is None:
+        return None
+    if fin <= debut:
+        fin += 1440  # la sortie a lieu le lendemain
+
+    # Fenêtres de nuit (21h00→06h00) projetées sur une frise de 48h pour couvrir
+    # les plages qui débordent après minuit :
+    #   • 00h00-06h00 (jour J)             → [0, 360]
+    #   • 21h00 (jour J) → 06h00 (jour J+1) → [1260, 1800]   (contiguës)
+    #   • 21h00-06h00 (jour J+1)           → [2700, 3240]    (sécurité plages longues)
+    fenetres_nuit = ((0, 360), (1260, 1800), (2700, 3240))
+    minutes_nuit = 0
+    for (a, b) in fenetres_nuit:
+        minutes_nuit += max(0, min(fin, b) - max(debut, a))
+    return round(minutes_nuit / 60.0, 2)
+
+
 def pointage_vers_jours(pointages):
     """
     Adaptateur : convertit des enregistrements ORM `Pointage` en liste de dicts
@@ -599,11 +663,19 @@ def pointage_vers_jours(pointages):
     ses 8h de base dans heures_sup_70). On laisse ensuite l'algorithme
     hebdomadaire reclasser correctement.
 
+    HEURES DE NUIT (Code du Travail gabonais) :
+      Les heures de nuit sont désormais CALCULÉES à partir des horaires réels
+      des heures supplémentaires (`entree_sup` / `sortie_sup`) : toute portion
+      effectuée à partir de 21h00 (jusqu'à 06h00) est isolée et rémunérée à
+      +40 % en semaine. Si les horaires sont absents (anciens pointages), on
+      retombe sur la valeur stockée `heures_sup_40` (compatibilité ascendante).
+
     Règles de mapping :
       - type_jour CHOME_PAYE / CHOME_RECUPERABLE → férié chômé (8h normales)
       - type_jour FERIE                          → férié travaillé (+70%)
-      - dimanche (détecté par la date) travaillé  → +70%
-      - jour ordinaire                           → heures de jour + nuit (heures_sup_40)
+      - dimanche (détecté par la date) travaillé  → +70% (jour ET nuit)
+      - jour ordinaire (lun-sam)                 → nuit isolée à +40%, reste au
+                                                    cumul hebdomadaire (10%/30%)
     """
     jours = []
     for p in pointages:
@@ -611,26 +683,40 @@ def pointage_vers_jours(pointages):
         if d is None:
             continue
         type_jour = (getattr(p, "type_jour", "") or "").upper()
-        nuit = float(getattr(p, "heures_sup_40", 0) or 0)
+
+        # Total des heures réellement travaillées ce jour-là
         raw = (float(getattr(p, "heures_normales", 0) or 0)
                + float(getattr(p, "heures_sup_10", 0) or 0)
                + float(getattr(p, "heures_sup_30", 0) or 0)
-               + nuit
+               + float(getattr(p, "heures_sup_40", 0) or 0)
                + float(getattr(p, "heures_sup_70", 0) or 0))
+
+        # Heures de nuit : calculées depuis l'horaire des HS, sinon repli stocké
+        nuit_calc = heures_nuit_depuis_horaires(
+            getattr(p, "entree_sup", None), getattr(p, "sortie_sup", None))
+        if nuit_calc is None:
+            nuit = float(getattr(p, "heures_sup_40", 0) or 0)
+        else:
+            nuit = nuit_calc
+        # Sécurité : la nuit ne peut pas dépasser le total travaillé
+        nuit = min(max(nuit, 0.0), raw)
+
         present = bool(getattr(p, "present", True)) and not bool(getattr(p, "absent", False))
 
         if type_jour in ("CHOME_PAYE", "CHOME_RECUPERABLE"):
             jours.append({"date": d, "heures": 0.0, "heures_nuit": 0.0,
                           "ferie": True, "present": False})
         elif type_jour == "FERIE":
+            # Férié travaillé : tout passe en +70%, pas d'isolement de la nuit
             jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
                           "ferie": True, "present": present})
         elif hasattr(d, "weekday") and d.weekday() == 6:
-            # Dimanche : l'intégralité bascule en +70% (géré par l'algorithme)
+            # Dimanche : l'intégralité (jour ET nuit) bascule en +70%
             jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
                           "ferie": False, "present": present})
         else:
-            # Jour ordinaire : on isole la nuit (+40%), le reste alimente le cumul hebdo
+            # Jour ordinaire (lun-sam) : on isole la nuit (+40%), le reste
+            # alimente le cumul hebdomadaire (seuils 10%/30%)
             jours.append({"date": d, "heures": max(raw - nuit, 0.0), "heures_nuit": nuit,
                           "ferie": False, "present": present})
     return jours
