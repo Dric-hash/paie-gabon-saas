@@ -4551,6 +4551,20 @@ def _pointages_mois_contexte(t, pointages, convention):
     semaine par semaine (utile en cas de réclamation du travailleur).
     """
     pts = sorted(pointages, key=lambda p: p.date_pointage)
+    conv = (convention or "").upper()
+
+    # Carte des heures de nuit PAR JOUR (BTP) : calculée depuis les horaires
+    # réels via la même fonction que la ventilation (pointage_vers_jours), afin
+    # que la colonne « DONT NUIT » de chaque ligne soit cohérente avec le total
+    # +40 % affiché en bas (somme des lignes = total).
+    nuit_par_date = {}
+    if conv == "BTP":
+        from calculs_paie import pointage_vers_jours
+        for j in pointage_vers_jours(pts):
+            d = j.get("date")
+            if d is not None:
+                nuit_par_date[d] = nuit_par_date.get(d, 0.0) + float(j.get("heures_nuit") or 0)
+
     lignes = []
     for p in pts:
         hn   = float(p.heures_normales or 0)
@@ -4563,6 +4577,11 @@ def _pointages_mois_contexte(t, pointages, convention):
         present = bool(p.present) and not absent
         total_jour = hn + hsup + h10 + h30 + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
+        # Nuit du jour : depuis l'horaire (BTP), sinon valeur stockée (journaliers)
+        if conv == "BTP":
+            nuit_jour = nuit_par_date.get(p.date_pointage, 0.0)
+        else:
+            nuit_jour = h40
         lignes.append({
             "date": p.date_pointage,
             "jour_sem": _JOURS_FR[p.date_pointage.weekday()],
@@ -4570,14 +4589,13 @@ def _pointages_mois_contexte(t, pointages, convention):
             "present": present, "absent": absent,
             "motif": p.motif_absence or "",
             "heures_travaillees": round(total_jour, 2),
-            "heures_nuit": round(h40, 2),
+            "heures_nuit": round(nuit_jour, 2),
             "observation": p.observation or "",
         })
 
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    conv = (convention or "").upper()
     if conv == "BTP" and pts_travailles:
         from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
         v = ventiler_heures_mois_btp(pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
