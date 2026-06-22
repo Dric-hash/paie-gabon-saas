@@ -12,12 +12,15 @@
         {% if p.statut == 'INACTIF' %}<span style="background:#f3f4f6;color:#6b7280;font-size:.7rem;font-weight:700;padding:.1rem .5rem;border-radius:9999px;margin-left:.5rem">Inactif</span>{% endif %}
       </p>
     </div>
-    <a href="/prestataires/{{ p.id }}/modifier" class="btn-secondary">✏️ Modifier</a>
+    <div style="display:flex;gap:.5rem">
+      <a href="/prestataires/{{ p.id }}/releve" target="_blank" class="btn-secondary">🖨️ Imprimer le relevé</a>
+      <a href="/prestataires/{{ p.id }}/modifier" class="btn-secondary">✏️ Modifier</a>
+    </div>
   </div>
 </div>
 
 <!-- Totaux financiers -->
-<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
   <div class="card p-4">
     <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total facturé (net)</div>
     <div style="font-size:1.4rem;font-weight:900;color:#111827;margin-top:.25rem">{{ "{:,.0f}".format(total_facture).replace(",", " ") }} XAF</div>
@@ -25,6 +28,10 @@
   <div class="card p-4">
     <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total payé</div>
     <div style="font-size:1.4rem;font-weight:900;color:#065f46;margin-top:.25rem">{{ "{:,.0f}".format(total_paye).replace(",", " ") }} XAF</div>
+  </div>
+  <div class="card p-4">
+    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Avances perçues</div>
+    <div style="font-size:1.4rem;font-weight:900;color:{{ '#92400e' if total_avances > 0 else '#9ca3af' }};margin-top:.25rem">{{ "{:,.0f}".format(total_avances).replace(",", " ") }} XAF</div>
   </div>
   <div class="card p-4">
     <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Reste dû</div>
@@ -90,6 +97,52 @@
   </table>
   {% else %}
   <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.85rem">Aucune facture enregistrée.</div>
+  {% endif %}
+</div>
+
+<!-- Avances -->
+<div class="card overflow-hidden mb-5">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6">
+    <h2 style="font-weight:900;font-size:.95rem;color:#111827">Avances perçues ({{ avances|length }})</h2>
+    <button onclick="document.getElementById('modal-avance').style.display='flex'" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle avance</button>
+  </div>
+  {% if avances %}
+  <table class="w-full">
+    <thead>
+      <tr>
+        <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Date</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Motif</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Mode / Réf.</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Montant</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">À régulariser</th>
+        <th style="border-bottom:1px solid #f3f4f6"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in avances %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1.25rem;font-size:.8rem;color:#6b7280">{{ a.date_avance.strftime('%d/%m/%Y') }}</td>
+        <td style="padding:.6rem 1rem;font-size:.82rem">{{ a.motif or '—' }}</td>
+        <td style="padding:.6rem 1rem;font-size:.78rem;color:#6b7280">{{ a.mode_paiement }}{% if a.reference %} · {{ a.reference }}{% endif %}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if a.reste_a_regulariser > 0 else '#065f46' }}">{{ "{:,.0f}".format(a.reste_a_regulariser).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;white-space:nowrap">
+          <form method="POST" action="/prestataires/avances/{{ a.id }}/supprimer" onsubmit="return confirm('Supprimer cette avance ?')" style="display:inline">
+            <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+      <tr style="background:#fffdf5;border-top:2px solid #f3f4f6">
+        <td colspan="3" style="padding:.6rem 1.25rem;font-weight:900;font-size:.82rem">Total avances perçues</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:900;font-size:.85rem;color:#92400e">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:900;font-size:.85rem;color:#92400e">{{ "{:,.0f}".format(total_avances_a_regul).replace(",", " ") }}</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.85rem">Aucune avance enregistrée.</div>
   {% endif %}
 </div>
 
@@ -240,8 +293,44 @@
   </div>
 </div>
 
+<!-- ═══ MODAL AVANCE ═══ -->
+<div id="modal-avance" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:white;border-radius:1rem;max-width:480px;width:100%;padding:1.5rem">
+    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:.25rem">Nouvelle avance</h2>
+    <p style="font-size:.8rem;color:#6b7280;margin-bottom:1rem">Somme versée à {{ p.raison_sociale }} hors facture.</p>
+    <form method="POST" action="/prestataires/{{ p.id }}/avances/nouvelle">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant (XAF) *</label>
+          <input type="number" name="montant" required step="0.01" min="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date *</label>
+          <input type="date" name="date_avance" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Mode</label>
+          <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="VIREMENT">Virement</option><option value="MOBILE_MONEY">Mobile Money</option>
+            <option value="CHEQUE">Chèque</option><option value="ESPECES">Espèces</option>
+          </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Référence</label>
+          <input type="text" name="reference" placeholder="N° transaction / chèque" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        {% if contrats %}
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Contrat lié (facultatif)</label>
+          <select name="contrat_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="">— Aucun —</option>
+            {% for c in contrats %}<option value="{{ c.id }}">{{ c.reference or c.objet }}</option>{% endfor %}
+          </select></div>
+        {% endif %}
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Motif</label>
+          <input type="text" name="motif" placeholder="Ex. avance de démarrage chantier" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+      </div>
+      <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
+        <button type="button" onclick="document.getElementById('modal-avance').style.display='none'" class="btn-secondary">Annuler</button>
+        <button type="submit" class="btn-primary">Enregistrer l'avance</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <script>
-function calculerFacture() {
   const ht  = parseFloat(document.getElementById('f_ht').value) || 0;
   const tva = parseFloat(document.getElementById('f_tva').value) || 0;
   const ret = parseFloat(document.getElementById('f_ret').value) || 0;

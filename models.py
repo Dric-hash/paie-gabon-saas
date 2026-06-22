@@ -1180,3 +1180,52 @@ class PaiementPrestataire(db.Model):
             if d.get(k): d[k] = str(d[k])
         if d.get("montant"): d["montant"] = float(d["montant"])
         return d
+
+
+class AvancePrestataire(db.Model):
+    """Avance versée à un prestataire / sous-traitant, hors facture.
+
+    Somme remise au prestataire AVANT ou indépendamment d'une facture
+    (fréquent avec les sous-traitants). Elle pourra ensuite être régularisée
+    (déduite) au moment de la facturation via `montant_regularise`.
+    """
+    __tablename__ = "avances_prestataire"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    prestataire_id = db.Column(db.Integer, db.ForeignKey("prestataires.id"), nullable=False)
+    contrat_id     = db.Column(db.Integer, db.ForeignKey("contrats_prestation.id"))
+
+    montant            = db.Column(db.Numeric(15, 2), nullable=False)
+    montant_regularise = db.Column(db.Numeric(15, 2), default=0)
+    date_avance        = db.Column(db.Date, nullable=False)
+    mode_paiement      = db.Column(db.String(30), default="VIREMENT")
+    reference          = db.Column(db.String(100))   # n° transaction / chèque
+    motif              = db.Column(db.String(300))
+    statut             = db.Column(db.String(20), default="EN_COURS")  # EN_COURS | REGULARISEE | ANNULEE
+    date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
+
+    prestataire = db.relationship("Prestataire", backref="avances")
+
+    __table_args__ = (
+        db.Index("idx_avances_prest_tenant", "tenant_id", "prestataire_id"),
+        db.Index("idx_avances_prest_statut", "tenant_id", "statut"),
+    )
+
+    @property
+    def reste_a_regulariser(self):
+        return round(float(self.montant or 0) - float(self.montant_regularise or 0), 2)
+
+    @property
+    def statut_label(self):
+        return {"EN_COURS": "En cours", "REGULARISEE": "Régularisée",
+                "ANNULEE": "Annulée"}.get(self.statut, self.statut)
+
+    def to_dict(self):
+        d = {}
+        for c in self.__table__.columns:
+            val = getattr(self, c.name)
+            d[c.name] = (str(val) if isinstance(val, (date, datetime))
+                         else (float(val) if hasattr(val, "__float__") and val is not None else val))
+        d["reste_a_regulariser"] = self.reste_a_regulariser
+        d["statut_label"] = self.statut_label
+        return d

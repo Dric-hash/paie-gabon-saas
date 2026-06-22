@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<title>Relevé — {{ p.raison_sociale }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI",Arial,sans-serif; color:#1f2937; font-size:12px; background:#f3f4f6; }
+  .page { max-width:800px; margin:1rem auto; background:white; padding:32px 36px; box-shadow:0 1px 6px rgba(0,0,0,.12); }
+  .topbar { text-align:center; margin-bottom:16px; }
+  .topbar button { background:#0f3d36; color:white; border:none; padding:.5rem 1.2rem; border-radius:.4rem; font-size:13px; font-weight:700; cursor:pointer; margin:0 .25rem; }
+  .topbar a { color:#6b7280; text-decoration:none; font-size:13px; padding:.5rem .8rem; }
+  header { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:3px solid #0f3d36; padding-bottom:14px; }
+  .ent-nom { font-size:18px; font-weight:900; color:#0f3d36; }
+  .ent-info { font-size:10.5px; color:#6b7280; margin-top:3px; line-height:1.5; }
+  .logo { max-height:60px; max-width:160px; object-fit:contain; }
+  .doc-title { text-align:center; font-size:15px; font-weight:900; letter-spacing:.5px; text-transform:uppercase; margin:18px 0 4px; color:#111827; }
+  .doc-sub { text-align:center; font-size:11px; color:#6b7280; margin-bottom:18px; }
+  .bloc { border:1px solid #e5e7eb; border-radius:8px; padding:12px 14px; margin-bottom:14px; }
+  .bloc h3 { font-size:11px; text-transform:uppercase; letter-spacing:.4px; color:#9ca3af; margin-bottom:8px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px; font-size:11.5px; }
+  .grid2 span { color:#9ca3af; }
+  table { width:100%; border-collapse:collapse; margin-top:4px; }
+  th { text-align:left; font-size:9.5px; text-transform:uppercase; color:#9ca3af; font-weight:700; padding:6px 8px; border-bottom:1.5px solid #e5e7eb; }
+  td { padding:6px 8px; font-size:11px; border-bottom:1px solid #f3f4f6; }
+  .r { text-align:right; }
+  .tot-row td { font-weight:900; background:#fafafa; border-top:1.5px solid #e5e7eb; }
+  .synthese { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+  .synthese .box { border:1px solid #e5e7eb; border-radius:8px; padding:10px 12px; }
+  .synthese .lbl { font-size:9.5px; text-transform:uppercase; color:#9ca3af; font-weight:700; }
+  .synthese .val { font-size:15px; font-weight:900; margin-top:3px; }
+  .signatures { display:flex; justify-content:space-between; margin-top:36px; font-size:11px; }
+  .sig { width:42%; }
+  .sig .line { border-top:1px solid #9ca3af; margin-top:42px; padding-top:4px; color:#6b7280; text-align:center; }
+  footer { margin-top:24px; font-size:9.5px; color:#9ca3af; text-align:center; border-top:1px solid #f3f4f6; padding-top:8px; }
+  @media print {
+    body { background:white; }
+    .page { box-shadow:none; margin:0; max-width:100%; padding:0; }
+    .topbar { display:none; }
+  }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <button onclick="window.print()">🖨️ Imprimer</button>
+    <a href="/prestataires/{{ p.id }}">← Retour à la fiche</a>
+  </div>
+
+  <div class="page">
+    <header>
+      <div>
+        <div class="ent-nom">{{ tenant.denomination }}{% if tenant.sigle %} ({{ tenant.sigle }}){% endif %}</div>
+        <div class="ent-info">
+          {% if tenant.adresse %}{{ tenant.adresse }}, {% endif %}{{ tenant.ville or 'Libreville' }}<br/>
+          {% if tenant.nif %}NIF : {{ tenant.nif }}{% endif %}{% if tenant.numero_cnss %} · CNSS : {{ tenant.numero_cnss }}{% endif %}{% if tenant.telephone %} · Tél : {{ tenant.telephone }}{% endif %}
+        </div>
+      </div>
+      {% if tenant.logo_url %}<img class="logo" src="{{ tenant.logo_url }}" alt="logo"/>{% endif %}
+    </header>
+
+    <div class="doc-title">Relevé {{ p.categorie_label }}</div>
+    <div class="doc-sub">Édité le {{ now.strftime('%d/%m/%Y à %H:%M') }}</div>
+
+    <!-- Identité prestataire -->
+    <div class="bloc">
+      <h3>Prestataire</h3>
+      <div class="grid2">
+        <div><span>Raison sociale :</span> <strong>{{ p.raison_sociale }}</strong></div>
+        <div><span>Code :</span> <strong>{{ p.code }}</strong></div>
+        <div><span>Catégorie :</span> <strong>{{ p.categorie_label }}</strong></div>
+        <div><span>Activité :</span> <strong>{{ p.activite or '—' }}</strong></div>
+        <div><span>NIF :</span> <strong>{{ p.nif or '—' }}</strong></div>
+        <div><span>RCCM :</span> <strong>{{ p.rccm or '—' }}</strong></div>
+        <div><span>Téléphone :</span> <strong>{{ p.telephone or '—' }}</strong></div>
+        <div><span>Email :</span> <strong>{{ p.email or '—' }}</strong></div>
+      </div>
+    </div>
+
+    <!-- Synthèse -->
+    <div class="synthese">
+      <div class="box"><div class="lbl">Total facturé (net)</div><div class="val">{{ "{:,.0f}".format(total_facture).replace(",", " ") }}</div></div>
+      <div class="box"><div class="lbl">Total payé</div><div class="val" style="color:#065f46">{{ "{:,.0f}".format(total_paye).replace(",", " ") }}</div></div>
+      <div class="box"><div class="lbl">Avances perçues</div><div class="val" style="color:#92400e">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</div></div>
+      <div class="box"><div class="lbl">Solde dû</div><div class="val" style="color:{{ '#92400e' if solde > 0 else '#111827' }}">{{ "{:,.0f}".format(solde).replace(",", " ") }}</div></div>
+    </div>
+
+    <!-- Avances perçues (cœur du relevé) -->
+    <div class="bloc">
+      <h3>Avances déjà perçues ({{ avances|length }})</h3>
+      {% if avances %}
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Motif</th><th>Mode / Réf.</th>
+            <th class="r">Montant</th><th class="r">Régularisé</th><th class="r">Reste</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in avances %}
+          <tr>
+            <td>{{ a.date_avance.strftime('%d/%m/%Y') }}</td>
+            <td>{{ a.motif or '—' }}</td>
+            <td>{{ a.mode_paiement }}{% if a.reference %} · {{ a.reference }}{% endif %}</td>
+            <td class="r">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(a.montant_regularise|float).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(a.reste_a_regulariser).replace(",", " ") }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="tot-row">
+            <td colspan="3">TOTAL AVANCES</td>
+            <td class="r">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</td>
+            <td class="r"></td>
+            <td class="r">{{ "{:,.0f}".format(avances_non_regul).replace(",", " ") }}</td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <div style="color:#9ca3af;font-size:11px;padding:8px 0">Aucune avance perçue à ce jour.</div>
+      {% endif %}
+    </div>
+
+    <!-- Factures -->
+    <div class="bloc">
+      <h3>Factures ({{ factures|length }})</h3>
+      {% if factures %}
+      <table>
+        <thead>
+          <tr>
+            <th>N°</th><th>Date</th><th>Description</th>
+            <th class="r">Net à payer</th><th class="r">Payé</th><th class="r">Reste</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for f in factures %}
+          <tr>
+            <td>{{ f.numero }}</td>
+            <td>{{ f.date_facture.strftime('%d/%m/%Y') }}</td>
+            <td>{{ f.description or '—' }}</td>
+            <td class="r">{{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(f.montant_paye|float).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }}</td>
+          </tr>
+          {% endfor %}
+          <tr class="tot-row">
+            <td colspan="3">TOTAL FACTURÉ (net)</td>
+            <td class="r">{{ "{:,.0f}".format(total_facture).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(total_paye).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(total_facture - total_paye).replace(",", " ") }}</td>
+          </tr>
+        </tbody>
+      </table>
+      {% else %}
+      <div style="color:#9ca3af;font-size:11px;padding:8px 0">Aucune facture enregistrée.</div>
+      {% endif %}
+    </div>
+
+    <div class="signatures">
+      <div class="sig"><div class="line">{{ tenant.denomination }}</div></div>
+      <div class="sig"><div class="line">{{ p.raison_sociale }}</div></div>
+    </div>
+
+    <footer>
+      Montants en francs CFA (XAF). Le solde dû = net facturé − déjà payé − avances non encore régularisées.
+      Document généré par PaieGabon le {{ now.strftime('%d/%m/%Y') }}.
+    </footer>
+  </div>
+
+  <script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 350); });</script>
+</body>
+</html>

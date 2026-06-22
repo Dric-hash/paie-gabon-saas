@@ -18,7 +18,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from models import (db, Prestataire, ContratPrestation, FacturePrestataire,
-                    PaiementPrestataire, Site)
+                    PaiementPrestataire, AvancePrestataire, Site)
 from audit import log_action
 from core import get_tenant, can_edit, require_permission, parse_date
 
@@ -95,15 +95,22 @@ def prestataire_detail(id):
                 .order_by(ContratPrestation.date_debut.desc()).all())
     factures = (FacturePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=id)
                 .order_by(FacturePrestataire.date_facture.desc()).all())
+    avances = (AvancePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=id)
+               .filter(AvancePrestataire.statut != "ANNULEE")
+               .order_by(AvancePrestataire.date_avance.desc()).all())
 
     # Totaux
-    total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures)
+    total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures
+                        if f.statut != "ANNULEE")
     total_paye    = sum(float(f.montant_paye or 0) for f in factures)
     total_du      = round(total_facture - total_paye, 2)
+    total_avances = sum(float(a.montant or 0) for a in avances)
+    total_avances_a_regul = sum(a.reste_a_regulariser for a in avances)
 
     return render_template("tenant/prestataire_detail.html",
-        tenant=t, p=p, contrats=contrats, factures=factures,
+        tenant=t, p=p, contrats=contrats, factures=factures, avances=avances,
         total_facture=total_facture, total_paye=total_paye, total_du=total_du,
+        total_avances=total_avances, total_avances_a_regul=total_avances_a_regul,
         sites=Site.query.filter_by(tenant_id=t.id).all())
 
 
@@ -366,6 +373,100 @@ def facture_annuler(fid):
     db.session.commit()
     flash(f"Facture {f.numero} annulée.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# AVANCES (versées hors facture, fréquentes avec les sous-traitants)
+# ══════════════════════════════════════════════════════════════════════════════
+@bp.route("/prestataires/<int:id>/avances/nouvelle", methods=["POST"])
+@login_required
+@can_edit
+def avance_nouvelle(id):
+    t, redir = _guard()
+    if redir:
+        return redir
+    p = Prestataire.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    montant = float(request.form.get("montant", 0) or 0)
+    if montant <= 0:
+        flash("Le montant de l'avance doit être positif.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=id))
+
+    a = AvancePrestataire(
+        tenant_id=t.id, prestataire_id=id,
+        contrat_id=request.form.get("contrat_id", type=int) or None,
+        montant=montant,
+        date_avance=parse_date(request.form.get("date_avance")) or date.today(),
+        mode_paiement=request.form.get("mode_paiement", "VIREMENT"),
+        reference=request.form.get("reference", "").strip(),
+        motif=request.form.get("motif", "").strip(),
+    )
+    db.session.add(a)
+    db.session.commit()
+    log_action("CREATE", "avance_prestataire", a.id,
+               f"Avance {int(montant):,} XAF — {p.raison_sociale}".replace(",", " "),
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Avance de {int(montant):,} XAF enregistrée.".replace(",", " "), "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=id))
+
+
+@bp.route("/prestataires/avances/<int:aid>/supprimer", methods=["POST"])
+@login_required
+@can_edit
+def avance_supprimer(aid):
+    t, redir = _guard()
+    if redir:
+        return redir
+    a = AvancePrestataire.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    pid = a.prestataire_id
+    if float(a.montant_regularise or 0) > 0:
+        # Avance déjà régularisée (déduite) : on l'annule plutôt que de la supprimer.
+        a.statut = "ANNULEE"
+        flash("Avance annulée (elle avait déjà été partiellement régularisée).", "success")
+    else:
+        db.session.delete(a)
+        flash("Avance supprimée.", "success")
+    db.session.commit()
+    log_action("DELETE", "avance_prestataire", aid, "Suppression/annulation avance",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    return redirect(url_for("prestataires.prestataire_detail", id=pid))
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# RELEVÉ IMPRIMABLE PAR PRESTATAIRE / SOUS-TRAITANT
+# ══════════════════════════════════════════════════════════════════════════════
+@bp.route("/prestataires/<int:id>/releve")
+@login_required
+def prestataire_releve(id):
+    """Relevé imprimable d'un prestataire : identité, factures, et la liste des
+    avances déjà perçues, avec une synthèse financière (facturé / payé / avances /
+    solde). Imprimable directement (window.print)."""
+    t, redir = _guard()
+    if redir:
+        return redir
+    p = Prestataire.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    factures = (FacturePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=id)
+                .filter(FacturePrestataire.statut != "ANNULEE")
+                .order_by(FacturePrestataire.date_facture).all())
+    avances = (AvancePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=id)
+               .filter(AvancePrestataire.statut != "ANNULEE")
+               .order_by(AvancePrestataire.date_avance).all())
+
+    total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures)
+    total_paye    = sum(float(f.montant_paye or 0) for f in factures)
+    total_avances = sum(float(a.montant or 0) for a in avances)
+    total_avances_regul = sum(float(a.montant_regularise or 0) for a in avances)
+    # Solde net dû = net facturé - déjà payé - avances non encore régularisées.
+    avances_non_regul = total_avances - total_avances_regul
+    solde = round(total_facture - total_paye - avances_non_regul, 2)
+
+    return render_template("tenant/prestataire_releve_print.html",
+        tenant=t, p=p, factures=factures, avances=avances,
+        total_facture=total_facture, total_paye=total_paye,
+        total_avances=total_avances, avances_non_regul=avances_non_regul,
+        solde=solde, now=datetime.now())
 
 
 # ══════════════════════════════════════════════════════════════════════════════

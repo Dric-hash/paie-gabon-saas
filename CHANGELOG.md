@@ -9,6 +9,21 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
+#### Avances prestataires / sous-traitants
+- Nouveau modèle `AvancePrestataire` : sommes versées à un prestataire ou
+  sous-traitant **hors facture** (avances de démarrage, acomptes de chantier),
+  régularisables ensuite lors de la facturation (`montant_regularise`).
+- Fiche prestataire : section « Avances perçues » (ajout via modale, liste,
+  suppression), carte de synthèse « Avances perçues », et bouton
+  « Imprimer le relevé ».
+- **Relevé imprimable par prestataire/sous-traitant** (`/prestataires/<id>/releve`)
+  : en-tête entreprise, identité, synthèse (facturé / payé / avances / solde),
+  **liste des avances déjà perçues**, et tableau des factures. Impression directe.
+- Table `avances_prestataire` créée par `create_all()` au démarrage + migration
+  Alembic `c3d4e5f6a7b8`.
+- 6 tests d'intégration (`tests/test_prestataires_avances.py`).
+
+
 #### Convention Collective des professionnels du pétrole (SGEPP/GPP, 17 juin 1983)
 - Intégration de la Convention Pétrole (stockage/distribution, hors transport et
   commerce de détail) :
