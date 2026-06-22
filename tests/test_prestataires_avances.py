@@ -220,3 +220,15 @@ def test_api_taux_devise(client):
     j = r.get_json()
     assert j["devise"] == "EUR"
     assert abs(j["taux_xaf"] - 655.957) < 0.01
+
+
+def test_fiche_contient_fonctions_js(client):
+    """Garde-fou : les fonctions JS des boutons doivent être déclarées
+    (évite une régression où un bloc <script> cassé rend les boutons inertes)."""
+    pid = client._ids["prest_a"]
+    html = client.get(f"/prestataires/{pid}").data.decode("utf-8", errors="ignore")
+    for fn in ("function ouvrirAvance(", "function ouvrirEditAvance(",
+               "function calculerFacture(", "function ouvrirPaiement("):
+        assert fn in html, f"Fonction JS manquante : {fn}"
+    # Le <script> ne doit pas démarrer directement par du code orphelin
+    assert "<script>\n  const ht" not in html
