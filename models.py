@@ -1100,11 +1100,17 @@ class FacturePrestataire(db.Model):
     tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
     prestataire_id = db.Column(db.Integer, db.ForeignKey("prestataires.id"), nullable=False)
     contrat_id     = db.Column(db.Integer, db.ForeignKey("contrats_prestation.id"))
+    site_id        = db.Column(db.Integer, db.ForeignKey("sites.id"))   # chantier
 
     numero         = db.Column(db.String(50), nullable=False)  # n° de facture
     date_facture   = db.Column(db.Date, nullable=False)
     date_echeance  = db.Column(db.Date)
     description    = db.Column(db.String(300))
+
+    # BTP : facturation au mètre carré (montant_ht = surface × prix unitaire)
+    surface_m2          = db.Column(db.Numeric(12, 2))
+    prix_unitaire_m2    = db.Column(db.Numeric(15, 2))
+    pourcentage_realisation = db.Column(db.Numeric(5, 2), default=0)  # % d'avancement
 
     # Montants
     montant_ht     = db.Column(db.Numeric(15,2), nullable=False)
@@ -1114,6 +1120,11 @@ class FacturePrestataire(db.Model):
     montant_retenue = db.Column(db.Numeric(15,2), default=0)
     montant_ttc    = db.Column(db.Numeric(15,2), default=0)     # HT + TVA
     montant_net_a_payer = db.Column(db.Numeric(15,2), default=0)  # TTC - retenue
+
+    # Multi-devises
+    devise         = db.Column(db.String(5), default="XAF")
+    taux_change    = db.Column(db.Numeric(14, 6), default=1)    # XAF pour 1 unité de devise
+    montant_xaf    = db.Column(db.Numeric(15, 2), default=0)    # net à payer converti en XAF
 
     statut         = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | PAYEE | PARTIELLE | ANNULEE
     montant_paye   = db.Column(db.Numeric(15,2), default=0)
@@ -1128,13 +1139,24 @@ class FacturePrestataire(db.Model):
     )
 
     def calculer(self):
-        """Recalcule TVA, retenue, TTC et net à payer à partir du HT."""
+        """Recalcule HT (si m²), TVA, retenue, TTC, net à payer et équivalent XAF."""
+        # BTP : si surface et prix au m² fournis, le HT en découle.
+        if self.surface_m2 and self.prix_unitaire_m2:
+            self.montant_ht = round(float(self.surface_m2) * float(self.prix_unitaire_m2), 2)
         ht = float(self.montant_ht or 0)
         self.montant_tva = round(ht * float(self.taux_tva or 0) / 100, 2)
         self.montant_ttc = round(ht + float(self.montant_tva), 2)
         self.montant_retenue = round(ht * float(self.taux_retenue or 0) / 100, 2)
         self.montant_net_a_payer = round(float(self.montant_ttc) - float(self.montant_retenue), 2)
+        # Équivalent XAF (devise étrangère → FCFA au taux du jour)
+        self.montant_xaf = round(float(self.montant_net_a_payer) * float(self.taux_change or 1), 2)
         return self
+
+    @property
+    def montant_net_en_xaf(self):
+        if self.montant_xaf and float(self.montant_xaf) > 0:
+            return round(float(self.montant_xaf), 2)
+        return round(float(self.montant_net_a_payer or 0) * float(self.taux_change or 1), 2)
 
     @property
     def reste_a_payer(self):
@@ -1166,6 +1188,7 @@ class PaiementPrestataire(db.Model):
     montant        = db.Column(db.Numeric(15,2), nullable=False)
     date_paiement  = db.Column(db.Date, nullable=False)
     mode_paiement  = db.Column(db.String(30), default="VIREMENT")
+    pourcentage_realisation = db.Column(db.Numeric(5,2), default=0)  # % d'avancement payé (BTP)
     reference      = db.Column(db.String(100))   # n° de transaction / chèque
     notes          = db.Column(db.String(300))
     date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
@@ -1182,18 +1205,41 @@ class PaiementPrestataire(db.Model):
         return d
 
 
+class TauxDevise(db.Model):
+    """Cache quotidien des taux de change (XAF pour 1 unité de devise).
+
+    Évite d'appeler l'API de change à chaque saisie : un taux par devise et par
+    jour est mémorisé. L'EUR est figé à la parité fixe FCFA BEAC (655,957).
+    """
+    __tablename__ = "taux_devises"
+    id        = db.Column(db.Integer, primary_key=True)
+    date_taux = db.Column(db.Date, nullable=False)
+    devise    = db.Column(db.String(5), nullable=False)
+    taux_xaf  = db.Column(db.Numeric(14, 6), nullable=False)
+    source    = db.Column(db.String(30), default="API")   # API | PEG | FALLBACK | MANUEL
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("date_taux", "devise"),
+    )
+
+
 class AvancePrestataire(db.Model):
     """Avance versée à un prestataire / sous-traitant, hors facture.
 
     Somme remise au prestataire AVANT ou indépendamment d'une facture
     (fréquent avec les sous-traitants). Elle pourra ensuite être régularisée
     (déduite) au moment de la facturation via `montant_regularise`.
+
+    Cycle de vie : EN_ATTENTE (demandée, modifiable/supprimable) → VALIDEE par le
+    chef de chantier (figée : ni modifiable ni supprimable) ; ANNULEE possible.
     """
     __tablename__ = "avances_prestataire"
     id             = db.Column(db.Integer, primary_key=True)
     tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
     prestataire_id = db.Column(db.Integer, db.ForeignKey("prestataires.id"), nullable=False)
     contrat_id     = db.Column(db.Integer, db.ForeignKey("contrats_prestation.id"))
+    site_id        = db.Column(db.Integer, db.ForeignKey("sites.id"))   # chantier
 
     montant            = db.Column(db.Numeric(15, 2), nullable=False)
     montant_regularise = db.Column(db.Numeric(15, 2), default=0)
@@ -1201,10 +1247,22 @@ class AvancePrestataire(db.Model):
     mode_paiement      = db.Column(db.String(30), default="VIREMENT")
     reference          = db.Column(db.String(100))   # n° transaction / chèque
     motif              = db.Column(db.String(300))
-    statut             = db.Column(db.String(20), default="EN_COURS")  # EN_COURS | REGULARISEE | ANNULEE
+
+    # Multi-devises : montant saisi dans `devise`, converti en XAF au taux du jour.
+    devise         = db.Column(db.String(5), default="XAF")
+    taux_change    = db.Column(db.Numeric(14, 6), default=1)   # XAF pour 1 unité de devise
+    montant_xaf    = db.Column(db.Numeric(15, 2), default=0)   # = montant × taux_change
+
+    # Workflow de validation (chef de chantier)
+    statut             = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | VALIDEE | ANNULEE
+    valide_par_nom     = db.Column(db.String(150))   # nom du chef de chantier
+    valide_par_user_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    date_validation    = db.Column(db.DateTime)
+
     date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
 
     prestataire = db.relationship("Prestataire", backref="avances")
+    site        = db.relationship("Site")
 
     __table_args__ = (
         db.Index("idx_avances_prest_tenant", "tenant_id", "prestataire_id"),
@@ -1216,9 +1274,26 @@ class AvancePrestataire(db.Model):
         return round(float(self.montant or 0) - float(self.montant_regularise or 0), 2)
 
     @property
+    def est_validee(self):
+        return self.statut == "VALIDEE"
+
+    @property
+    def est_modifiable(self):
+        """Modifiable/supprimable tant qu'elle n'est ni validée ni annulée."""
+        return self.statut == "EN_ATTENTE"
+
+    @property
     def statut_label(self):
-        return {"EN_COURS": "En cours", "REGULARISEE": "Régularisée",
-                "ANNULEE": "Annulée"}.get(self.statut, self.statut)
+        return {"EN_ATTENTE": "En attente", "VALIDEE": "Validée",
+                "REGULARISEE": "Régularisée", "ANNULEE": "Annulée",
+                "EN_COURS": "En attente"}.get(self.statut, self.statut)
+
+    @property
+    def montant_en_xaf(self):
+        """Équivalent XAF (recalculé si non stocké)."""
+        if self.montant_xaf and float(self.montant_xaf) > 0:
+            return round(float(self.montant_xaf), 2)
+        return round(float(self.montant or 0) * float(self.taux_change or 1), 2)
 
     def to_dict(self):
         d = {}
@@ -1228,4 +1303,5 @@ class AvancePrestataire(db.Model):
                          else (float(val) if hasattr(val, "__float__") and val is not None else val))
         d["reste_a_regulariser"] = self.reste_a_regulariser
         d["statut_label"] = self.statut_label
+        d["montant_en_xaf"] = self.montant_en_xaf
         return d

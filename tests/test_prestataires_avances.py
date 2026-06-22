@@ -15,7 +15,7 @@ import pytest
 from datetime import date
 
 from app import app as flask_app
-from models import db, Plan, Tenant, Utilisateur, Prestataire, AvancePrestataire
+from models import db, Plan, Tenant, Utilisateur, Prestataire, AvancePrestataire, Site
 
 
 @pytest.fixture
@@ -49,8 +49,11 @@ def client():
                             raison_sociale="AUTRE TENANT SARL")
         db.session.add_all([st, autre])
         db.session.commit()
+        chantier = Site(tenant_id=t_a.id, nom="Chantier Akanda", code="CH1")
+        db.session.add(chantier)
+        db.session.commit()
         ids = {"tenant_a": t_a.id, "admin": admin.id,
-               "prest_a": st.id, "prest_b": autre.id}
+               "prest_a": st.id, "prest_b": autre.id, "site_a": chantier.id}
         cli = flask_app.test_client()
         with cli.session_transaction() as sess:
             sess["_user_id"] = str(ids["admin"])
@@ -136,3 +139,84 @@ def test_isolation_multi_tenant(client):
     r2 = client.post(f"/prestataires/{pid_b}/avances/nouvelle",
                      data={"montant": "999", "date_avance": "2026-06-01"})
     assert r2.status_code == 404
+
+
+# ── Nouveaux comportements : édition, validation, site, devises ────────────────
+def _creer(client, **extra):
+    pid = client._ids["prest_a"]
+    data = {"montant": "100000", "date_avance": "2026-06-10"}
+    data.update(extra)
+    client.post(f"/prestataires/{pid}/avances/nouvelle", data=data, follow_redirects=True)
+    with flask_app.app_context():
+        return AvancePrestataire.query.filter_by(prestataire_id=pid).order_by(
+            AvancePrestataire.id.desc()).first().id
+
+
+def test_modifier_avance_en_attente(client):
+    aid = _creer(client, motif="initial")
+    client.post(f"/prestataires/avances/{aid}/modifier",
+                data={"montant": "120000", "date_avance": "2026-06-11",
+                      "motif": "corrigé", "devise": "XAF"}, follow_redirects=True)
+    with flask_app.app_context():
+        a = db.session.get(AvancePrestataire, aid)
+        assert float(a.montant) == 120000
+        assert a.motif == "corrigé"
+
+
+def test_valider_fige_avance(client):
+    aid = _creer(client)
+    # Validation par le chef de chantier
+    client.post(f"/prestataires/avances/{aid}/valider",
+                data={"valide_par_nom": "M. NZE"}, follow_redirects=True)
+    with flask_app.app_context():
+        a = db.session.get(AvancePrestataire, aid)
+        assert a.statut == "VALIDEE"
+        assert a.valide_par_nom == "M. NZE"
+        assert a.date_validation is not None
+        assert a.est_modifiable is False
+    # Une fois validée : ni modification ni suppression
+    client.post(f"/prestataires/avances/{aid}/modifier",
+                data={"montant": "1", "date_avance": "2026-06-11"}, follow_redirects=True)
+    client.post(f"/prestataires/avances/{aid}/supprimer", follow_redirects=True)
+    with flask_app.app_context():
+        a = db.session.get(AvancePrestataire, aid)
+        assert a is not None                 # toujours là (suppression refusée)
+        assert float(a.montant) == 100000    # inchangée (modif refusée)
+
+
+def test_validation_exige_nom_chef(client):
+    aid = _creer(client)
+    client.post(f"/prestataires/avances/{aid}/valider",
+                data={"valide_par_nom": ""}, follow_redirects=True)
+    with flask_app.app_context():
+        assert db.session.get(AvancePrestataire, aid).statut == "EN_ATTENTE"
+
+
+def test_avance_sur_chantier(client):
+    sid = client._ids["site_a"]
+    aid = _creer(client, site_id=str(sid), motif="avance chantier")
+    with flask_app.app_context():
+        a = db.session.get(AvancePrestataire, aid)
+        assert a.site_id == sid
+        assert a.site.nom == "Chantier Akanda"
+
+
+def test_avance_devise_etrangere(client):
+    # 1000 EUR à parité fixe 655,957 -> 655 957 XAF
+    aid = _creer(client, montant="1000", devise="EUR", taux_change="655.957")
+    with flask_app.app_context():
+        a = db.session.get(AvancePrestataire, aid)
+        assert a.devise == "EUR"
+        assert abs(a.montant_en_xaf - 655957) < 1
+    # Le relevé affiche la devise et l'équivalent XAF
+    r = client.get(f"/prestataires/{client._ids['prest_a']}/releve")
+    html = r.data.decode("utf-8", errors="ignore")
+    assert "EUR" in html and "655 957" in html
+
+
+def test_api_taux_devise(client):
+    r = client.get("/api/prestataire/taux-devise?devise=EUR")
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j["devise"] == "EUR"
+    assert abs(j["taux_xaf"] - 655.957) < 0.01

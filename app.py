@@ -434,6 +434,25 @@ def run_migrations():
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS heures_sup_30b NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_30b NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_30b VARCHAR(20) DEFAULT ''",
+        # ── Prestataires : avances (workflow, site, devises) ─────────────────────
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS site_id INTEGER",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS devise VARCHAR(5) DEFAULT 'XAF'",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS taux_change NUMERIC(14,6) DEFAULT 1",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS montant_xaf NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS valide_par_nom VARCHAR(150)",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS valide_par_user_id INTEGER",
+        "ALTER TABLE avances_prestataire ADD COLUMN IF NOT EXISTS date_validation TIMESTAMP",
+        "UPDATE avances_prestataire SET statut = 'EN_ATTENTE' WHERE statut = 'EN_COURS'",
+        # ── Prestataires : factures (site, m², %, devises) ───────────────────────
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS site_id INTEGER",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS surface_m2 NUMERIC(12,2)",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS prix_unitaire_m2 NUMERIC(15,2)",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS pourcentage_realisation NUMERIC(5,2) DEFAULT 0",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS devise VARCHAR(5) DEFAULT 'XAF'",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS taux_change NUMERIC(14,6) DEFAULT 1",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS montant_xaf NUMERIC(15,2) DEFAULT 0",
+        # ── Prestataires : paiements (% réalisation BTP) ─────────────────────────
+        "ALTER TABLE paiements_prestataire ADD COLUMN IF NOT EXISTS pourcentage_realisation NUMERIC(5,2) DEFAULT 0",
         # ── Index de performance sur les tables récentes (multi-tenant) ──────────
         # Idempotents (IF NOT EXISTS). Accélèrent les listes et impressions filtrées
         # par tenant_id / statut / dates / site.

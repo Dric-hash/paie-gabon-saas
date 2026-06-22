@@ -11,17 +11,29 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 #### Avances prestataires / sous-traitants
 - Nouveau modèle `AvancePrestataire` : sommes versées à un prestataire ou
-  sous-traitant **hors facture** (avances de démarrage, acomptes de chantier),
-  régularisables ensuite lors de la facturation (`montant_regularise`).
-- Fiche prestataire : section « Avances perçues » (ajout via modale, liste,
-  suppression), carte de synthèse « Avances perçues », et bouton
-  « Imprimer le relevé ».
+  sous-traitant **hors facture** (avances de démarrage, acomptes de chantier).
+- **Cycle de validation** : une avance est *En attente* (modifiable et
+  supprimable), puis **validée par le chef de chantier** (saisie de son nom) ;
+  une fois validée elle est **figée** — ni modifiable ni supprimable. La
+  dernière avance en attente est mise en avant sur la fiche pour validation.
+- **Chantier / Site** : on peut indiquer sur quel chantier une avance **ou** une
+  facture a été perçue/établie.
+- **Multi-devises** (prestataires étrangers) : XAF, EUR, USD, MAD. Conversion au
+  jour affichée **à la saisie** et **à l'impression** ; EUR à parité fixe FCFA
+  (655,957), USD/MAD au taux du jour (API + cache quotidien `taux_devises`, repli
+  configurable `TAUX_USD_XAF` / `TAUX_MAD_XAF`, taux ajustable à la main).
+- **BTP** : factures établies **au m²** (surface × prix unitaire → HT) et
+  paiements suivis **au pourcentage de réalisation**.
+- Fiche prestataire : section « Avances » (création/édition/validation/
+  suppression), carte de synthèse, et bouton « Imprimer le relevé ».
 - **Relevé imprimable par prestataire/sous-traitant** (`/prestataires/<id>/releve`)
-  : en-tête entreprise, identité, synthèse (facturé / payé / avances / solde),
-  **liste des avances déjà perçues**, et tableau des factures. Impression directe.
-- Table `avances_prestataire` créée par `create_all()` au démarrage + migration
-  Alembic `c3d4e5f6a7b8`.
-- 6 tests d'intégration (`tests/test_prestataires_avances.py`).
+  : en-tête entreprise, identité, synthèse, **liste des avances** (devise +
+  équivalent XAF + statut), et tableau des factures. Impression directe.
+- Nouveau module `devises.py` ; nouvel endpoint `/api/prestataire/taux-devise`.
+- Migrations Alembic `c3d4e5f6a7b8` (table avances) et `d4e5f6a7b8c9` (validation,
+  site, devises, m²/%, table `taux_devises`) ; colonnes posées en prod par
+  `run_migrations()`.
+- 12 tests d'intégration (`tests/test_prestataires_avances.py`).
 
 
 #### Convention Collective des professionnels du pétrole (SGEPP/GPP, 17 juin 1983)

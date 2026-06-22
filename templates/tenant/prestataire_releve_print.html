@@ -91,29 +91,29 @@
       <table>
         <thead>
           <tr>
-            <th>Date</th><th>Motif</th><th>Mode / Réf.</th>
-            <th class="r">Montant</th><th class="r">Régularisé</th><th class="r">Reste</th>
+            <th>Date</th><th>Chantier · Motif</th><th>Mode / Réf.</th><th>Statut</th>
+            <th class="r">Montant</th><th class="r">≈ XAF</th>
           </tr>
         </thead>
         <tbody>
           {% for a in avances %}
           <tr>
             <td>{{ a.date_avance.strftime('%d/%m/%Y') }}</td>
-            <td>{{ a.motif or '—' }}</td>
+            <td>{% if a.site %}🏗️ {{ a.site.nom }} · {% endif %}{{ a.motif or '—' }}</td>
             <td>{{ a.mode_paiement }}{% if a.reference %} · {{ a.reference }}{% endif %}</td>
-            <td class="r">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }}</td>
-            <td class="r">{{ "{:,.0f}".format(a.montant_regularise|float).replace(",", " ") }}</td>
-            <td class="r">{{ "{:,.0f}".format(a.reste_a_regulariser).replace(",", " ") }}</td>
+            <td>{% if a.statut == 'VALIDEE' %}Validée{% if a.valide_par_nom %} ({{ a.valide_par_nom }}){% endif %}{% else %}En attente{% endif %}</td>
+            <td class="r">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }} {{ a.devise }}</td>
+            <td class="r">{{ "{:,.0f}".format(a.montant_en_xaf).replace(",", " ") }}</td>
           </tr>
           {% endfor %}
           <tr class="tot-row">
-            <td colspan="3">TOTAL AVANCES</td>
-            <td class="r">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</td>
+            <td colspan="4">TOTAL AVANCES (équivalent XAF)</td>
             <td class="r"></td>
-            <td class="r">{{ "{:,.0f}".format(avances_non_regul).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</td>
           </tr>
         </tbody>
       </table>
+      {% if multi_devises %}<div style="font-size:9px;color:#9ca3af;margin-top:4px">Conversions en XAF au taux retenu à la date de chaque opération (EUR à parité fixe 655,957 ; USD/MAD au taux du jour).</div>{% endif %}
       {% else %}
       <div style="color:#9ca3af;font-size:11px;padding:8px 0">Aucune avance perçue à ce jour.</div>
       {% endif %}

@@ -21,6 +21,8 @@ from models import (db, Prestataire, ContratPrestation, FacturePrestataire,
                     PaiementPrestataire, AvancePrestataire, Site)
 from audit import log_action
 from core import get_tenant, can_edit, require_permission, parse_date
+from devises import (taux_xaf, convertir_en_xaf, info_taux, devises_disponibles,
+                     DEVISES)
 
 logger = logging.getLogger("paiegalon")
 
@@ -104,13 +106,18 @@ def prestataire_detail(id):
                         if f.statut != "ANNULEE")
     total_paye    = sum(float(f.montant_paye or 0) for f in factures)
     total_du      = round(total_facture - total_paye, 2)
-    total_avances = sum(float(a.montant or 0) for a in avances)
-    total_avances_a_regul = sum(a.reste_a_regulariser for a in avances)
+    # Avances : on totalise en XAF (devises mélangées possibles)
+    total_avances = round(sum(a.montant_en_xaf for a in avances), 2)
+    total_avances_a_regul = round(sum(a.reste_a_regulariser for a in avances), 2)
+    # La dernière avance en attente : à présenter au chef de chantier pour validation
+    derniere_en_attente = next((a for a in avances if a.statut == "EN_ATTENTE"), None)
 
     return render_template("tenant/prestataire_detail.html",
         tenant=t, p=p, contrats=contrats, factures=factures, avances=avances,
         total_facture=total_facture, total_paye=total_paye, total_du=total_du,
         total_avances=total_avances, total_avances_a_regul=total_avances_a_regul,
+        derniere_en_attente=derniere_en_attente,
+        devises_dispo=devises_disponibles(),
         sites=Site.query.filter_by(tenant_id=t.id).all())
 
 
@@ -300,16 +307,28 @@ def facture_nouvelle(id):
     taux_tva     = 18 if p.assujetti_tva else 0
     taux_retenue = float(p.taux_retenue_source or 0)
 
+    devise = (request.form.get("devise") or "XAF").upper()
+    if devise not in DEVISES:
+        devise = "XAF"
+    taux_ch = request.form.get("taux_change", type=float)
+    if not taux_ch or taux_ch <= 0:
+        taux_ch = taux_xaf(devise, parse_date(request.form.get("date_facture")))
+
     f = FacturePrestataire(
         tenant_id=t.id, prestataire_id=id,
         contrat_id=request.form.get("contrat_id", type=int) or None,
+        site_id=request.form.get("site_id", type=int) or None,
         numero=numero,
         date_facture=parse_date(request.form.get("date_facture")) or date.today(),
         date_echeance=parse_date(request.form.get("date_echeance")),
         description=request.form.get("description", "").strip(),
+        surface_m2=request.form.get("surface_m2", type=float) or None,
+        prix_unitaire_m2=request.form.get("prix_unitaire_m2", type=float) or None,
+        pourcentage_realisation=request.form.get("pourcentage_realisation", type=float) or 0,
         montant_ht=float(request.form.get("montant_ht", 0) or 0),
         taux_tva=float(request.form.get("taux_tva", taux_tva) or 0),
         taux_retenue=float(request.form.get("taux_retenue", taux_retenue) or 0),
+        devise=devise, taux_change=taux_ch,
     )
     f.calculer()
     db.session.add(f)
@@ -342,6 +361,7 @@ def facture_payer(fid):
         tenant_id=t.id, facture_id=fid, montant=montant,
         date_paiement=parse_date(request.form.get("date_paiement")) or date.today(),
         mode_paiement=request.form.get("mode_paiement", "VIREMENT"),
+        pourcentage_realisation=request.form.get("pourcentage_realisation", type=float) or 0,
         reference=request.form.get("reference", "").strip(),
         notes=request.form.get("notes", "").strip(),
     )
@@ -391,23 +411,104 @@ def avance_nouvelle(id):
         flash("Le montant de l'avance doit être positif.", "error")
         return redirect(url_for("prestataires.prestataire_detail", id=id))
 
+    devise = (request.form.get("devise") or "XAF").upper()
+    if devise not in DEVISES:
+        devise = "XAF"
+    # Taux : valeur saisie (modifiable) sinon taux du jour
+    taux = request.form.get("taux_change", type=float)
+    if not taux or taux <= 0:
+        taux = taux_xaf(devise, parse_date(request.form.get("date_avance")))
+
     a = AvancePrestataire(
         tenant_id=t.id, prestataire_id=id,
         contrat_id=request.form.get("contrat_id", type=int) or None,
+        site_id=request.form.get("site_id", type=int) or None,
         montant=montant,
+        devise=devise, taux_change=taux,
+        montant_xaf=round(montant * taux, 2),
         date_avance=parse_date(request.form.get("date_avance")) or date.today(),
         mode_paiement=request.form.get("mode_paiement", "VIREMENT"),
         reference=request.form.get("reference", "").strip(),
         motif=request.form.get("motif", "").strip(),
+        statut="EN_ATTENTE",
     )
     db.session.add(a)
     db.session.commit()
     log_action("CREATE", "avance_prestataire", a.id,
-               f"Avance {int(montant):,} XAF — {p.raison_sociale}".replace(",", " "),
+               f"Avance {int(a.montant_en_xaf):,} XAF — {p.raison_sociale}".replace(",", " "),
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
-    flash(f"Avance de {int(montant):,} XAF enregistrée.".replace(",", " "), "success")
+    flash(f"Avance de {int(montant):,} {devise} enregistrée.".replace(",", " "), "success")
     return redirect(url_for("prestataires.prestataire_detail", id=id))
+
+
+@bp.route("/prestataires/avances/<int:aid>/modifier", methods=["POST"])
+@login_required
+@can_edit
+def avance_modifier(aid):
+    t, redir = _guard()
+    if redir:
+        return redir
+    a = AvancePrestataire.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    if not a.est_modifiable:
+        flash("Cette avance est validée : elle ne peut plus être modifiée.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
+
+    montant = float(request.form.get("montant", a.montant) or 0)
+    if montant <= 0:
+        flash("Le montant de l'avance doit être positif.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
+    devise = (request.form.get("devise") or a.devise or "XAF").upper()
+    if devise not in DEVISES:
+        devise = "XAF"
+    taux = request.form.get("taux_change", type=float)
+    if not taux or taux <= 0:
+        taux = taux_xaf(devise, parse_date(request.form.get("date_avance")))
+
+    a.montant       = montant
+    a.devise        = devise
+    a.taux_change   = taux
+    a.montant_xaf   = round(montant * taux, 2)
+    a.site_id       = request.form.get("site_id", type=int) or None
+    a.contrat_id    = request.form.get("contrat_id", type=int) or None
+    a.date_avance   = parse_date(request.form.get("date_avance")) or a.date_avance
+    a.mode_paiement = request.form.get("mode_paiement", a.mode_paiement)
+    a.reference     = request.form.get("reference", "").strip()
+    a.motif         = request.form.get("motif", "").strip()
+    db.session.commit()
+    log_action("UPDATE", "avance_prestataire", a.id, "Modification avance",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash("Avance modifiée.", "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
+
+
+@bp.route("/prestataires/avances/<int:aid>/valider", methods=["POST"])
+@login_required
+@can_edit
+def avance_valider(aid):
+    """Validation par le chef de chantier : fige l'avance (plus de modif/suppression)."""
+    t, redir = _guard()
+    if redir:
+        return redir
+    a = AvancePrestataire.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    if a.statut == "VALIDEE":
+        flash("Cette avance est déjà validée.", "info")
+        return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
+    chef = request.form.get("valide_par_nom", "").strip()
+    if not chef:
+        flash("Indiquez le nom du chef de chantier qui valide l'avance.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
+    a.statut = "VALIDEE"
+    a.valide_par_nom = chef
+    a.valide_par_user_id = current_user.id
+    a.date_validation = datetime.utcnow()
+    db.session.commit()
+    log_action("VALIDATE", "avance_prestataire", a.id,
+               f"Avance validée par {chef}", user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Avance validée par {chef}. Elle est désormais figée.", "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
 
 
 @bp.route("/prestataires/avances/<int:aid>/supprimer", methods=["POST"])
@@ -419,17 +520,15 @@ def avance_supprimer(aid):
         return redir
     a = AvancePrestataire.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
     pid = a.prestataire_id
-    if float(a.montant_regularise or 0) > 0:
-        # Avance déjà régularisée (déduite) : on l'annule plutôt que de la supprimer.
-        a.statut = "ANNULEE"
-        flash("Avance annulée (elle avait déjà été partiellement régularisée).", "success")
-    else:
-        db.session.delete(a)
-        flash("Avance supprimée.", "success")
+    if a.statut == "VALIDEE":
+        flash("Cette avance est validée : elle ne peut plus être supprimée.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=pid))
+    db.session.delete(a)
     db.session.commit()
-    log_action("DELETE", "avance_prestataire", aid, "Suppression/annulation avance",
+    log_action("DELETE", "avance_prestataire", aid, "Suppression avance",
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
+    flash("Avance supprimée.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=pid))
 
 
@@ -456,17 +555,35 @@ def prestataire_releve(id):
 
     total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures)
     total_paye    = sum(float(f.montant_paye or 0) for f in factures)
-    total_avances = sum(float(a.montant or 0) for a in avances)
+    total_avances = round(sum(a.montant_en_xaf for a in avances), 2)
     total_avances_regul = sum(float(a.montant_regularise or 0) for a in avances)
     # Solde net dû = net facturé - déjà payé - avances non encore régularisées.
-    avances_non_regul = total_avances - total_avances_regul
+    avances_non_regul = round(total_avances - total_avances_regul, 2)
     solde = round(total_facture - total_paye - avances_non_regul, 2)
+    # Y a-t-il au moins une devise étrangère à afficher ?
+    multi_devises = any((a.devise or "XAF") != "XAF" for a in avances) or \
+                    any((f.devise or "XAF") != "XAF" for f in factures)
 
     return render_template("tenant/prestataire_releve_print.html",
         tenant=t, p=p, factures=factures, avances=avances,
         total_facture=total_facture, total_paye=total_paye,
         total_avances=total_avances, avances_non_regul=avances_non_regul,
-        solde=solde, now=datetime.now())
+        solde=solde, multi_devises=multi_devises, DEVISES=DEVISES,
+        now=datetime.now())
+
+
+@bp.route("/api/prestataire/taux-devise")
+@login_required
+def api_taux_devise():
+    """Renvoie le taux du jour (XAF pour 1 unité) pour la conversion en direct."""
+    t = get_tenant()
+    if not t:
+        return jsonify({"erreur": "non connecté"}), 401
+    devise = (request.args.get("devise") or "XAF").upper()
+    if devise not in DEVISES:
+        return jsonify({"erreur": "devise inconnue"}), 400
+    jour = parse_date(request.args.get("date"))
+    return jsonify(info_taux(devise, jour))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

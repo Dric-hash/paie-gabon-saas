@@ -103,18 +103,38 @@
 <!-- Avances -->
 <div class="card overflow-hidden mb-5">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6">
-    <h2 style="font-weight:900;font-size:.95rem;color:#111827">Avances perçues ({{ avances|length }})</h2>
-    <button onclick="document.getElementById('modal-avance').style.display='flex'" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle avance</button>
+    <h2 style="font-weight:900;font-size:.95rem;color:#111827">Avances ({{ avances|length }})</h2>
+    <button onclick="ouvrirAvance()" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle avance</button>
   </div>
+
+  {% if derniere_en_attente %}
+  {% set d = derniere_en_attente %}
+  <div style="margin:1rem 1.25rem;border:1px solid #fde68a;background:#fffbeb;border-radius:.75rem;padding:1rem 1.25rem">
+    <div style="font-size:.7rem;font-weight:800;color:#92400e;text-transform:uppercase;letter-spacing:.3px;margin-bottom:.35rem">⏳ Dernière avance demandée — à valider par le chef de chantier</div>
+    <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.75rem">
+      <div style="font-size:.86rem">
+        <strong>{{ "{:,.0f}".format(d.montant|float).replace(",", " ") }} {{ d.devise }}</strong>
+        {% if d.devise != 'XAF' %}<span style="color:#6b7280">(≈ {{ "{:,.0f}".format(d.montant_en_xaf).replace(",", " ") }} XAF)</span>{% endif %}
+        · {{ d.date_avance.strftime('%d/%m/%Y') }}{% if d.motif %} · {{ d.motif }}{% endif %}{% if d.site %} · 🏗️ {{ d.site.nom }}{% endif %}
+      </div>
+      <form method="POST" action="/prestataires/avances/{{ d.id }}/valider" style="display:flex;gap:.5rem;align-items:center">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="text" name="valide_par_nom" required placeholder="Nom du chef de chantier" style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.82rem"/>
+        <button type="submit" class="btn-primary" style="padding:.42rem .9rem;font-size:.8rem;white-space:nowrap" onclick="return confirm('Valider cette avance ? Elle ne pourra plus être modifiée ni supprimée.')">✓ Valider</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+
   {% if avances %}
   <table class="w-full">
     <thead>
       <tr>
         <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Date</th>
-        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Motif</th>
-        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Mode / Réf.</th>
+        <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Chantier · Motif</th>
         <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Montant</th>
-        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">À régulariser</th>
+        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">≈ XAF</th>
+        <th style="text-align:center;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Statut</th>
         <th style="border-bottom:1px solid #f3f4f6"></th>
       </tr>
     </thead>
@@ -122,22 +142,36 @@
       {% for a in avances %}
       <tr style="border-bottom:1px solid #f9fafb">
         <td style="padding:.6rem 1.25rem;font-size:.8rem;color:#6b7280">{{ a.date_avance.strftime('%d/%m/%Y') }}</td>
-        <td style="padding:.6rem 1rem;font-size:.82rem">{{ a.motif or '—' }}</td>
-        <td style="padding:.6rem 1rem;font-size:.78rem;color:#6b7280">{{ a.mode_paiement }}{% if a.reference %} · {{ a.reference }}{% endif %}</td>
-        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }}</td>
-        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if a.reste_a_regulariser > 0 else '#065f46' }}">{{ "{:,.0f}".format(a.reste_a_regulariser).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;font-size:.82rem">
+          {% if a.site %}<span style="color:#0f3d36;font-weight:600">🏗️ {{ a.site.nom }}</span> · {% endif %}{{ a.motif or '—' }}
+          <div style="font-size:.72rem;color:#9ca3af">{{ a.mode_paiement }}{% if a.reference %} · {{ a.reference }}{% endif %}</div>
+        </td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(a.montant|float).replace(",", " ") }} <span style="color:#9ca3af;font-weight:400;font-size:.72rem">{{ a.devise }}</span></td>
+        <td style="padding:.6rem 1rem;text-align:right;font-size:.8rem;color:#6b7280">{{ "{:,.0f}".format(a.montant_en_xaf).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:center">
+          {% if a.statut == 'VALIDEE' %}
+          <span title="Validée par {{ a.valide_par_nom }}{% if a.date_validation %} le {{ a.date_validation.strftime('%d/%m/%Y') }}{% endif %}" style="background:#d1fae5;color:#065f46;font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:9999px">🔒 Validée</span>
+          {% else %}
+          <span style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:9999px">En attente</span>
+          {% endif %}
+        </td>
         <td style="padding:.6rem 1rem;text-align:right;white-space:nowrap">
+          {% if a.est_modifiable %}
+          <button onclick='ouvrirEditAvance({{ a.id }}, {{ a.montant|float }}, "{{ a.devise }}", {{ a.taux_change|float }}, "{{ a.date_avance.strftime("%Y-%m-%d") }}", "{{ a.mode_paiement }}", "{{ a.reference|default("",true) }}", {{ (a.motif or "")|tojson }}, {{ a.site_id or 'null' }})' style="background:none;border:none;color:#0f3d36;font-size:.72rem;font-weight:700;cursor:pointer">Modifier</button>
           <form method="POST" action="/prestataires/avances/{{ a.id }}/supprimer" onsubmit="return confirm('Supprimer cette avance ?')" style="display:inline">
-            <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer">Supprimer</button>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer;margin-left:.4rem">Supprimer</button>
           </form>
+          {% else %}
+          <span style="color:#9ca3af;font-size:.72rem">— figée —</span>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
       <tr style="background:#fffdf5;border-top:2px solid #f3f4f6">
-        <td colspan="3" style="padding:.6rem 1.25rem;font-weight:900;font-size:.82rem">Total avances perçues</td>
+        <td colspan="3" style="padding:.6rem 1.25rem;font-weight:900;font-size:.82rem">Total avances (équivalent XAF)</td>
         <td style="padding:.6rem 1rem;text-align:right;font-weight:900;font-size:.85rem;color:#92400e">{{ "{:,.0f}".format(total_avances).replace(",", " ") }}</td>
-        <td style="padding:.6rem 1rem;text-align:right;font-weight:900;font-size:.85rem;color:#92400e">{{ "{:,.0f}".format(total_avances_a_regul).replace(",", " ") }}</td>
-        <td></td>
+        <td colspan="2"></td>
       </tr>
     </tbody>
   </table>
@@ -212,12 +246,30 @@
           <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Échéance</label>
           <input type="date" name="date_echeance" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Chantier / Site</label>
+          <select name="site_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="">— Aucun —</option>
+            {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
+          </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">% réalisation</label>
+          <input type="number" name="pourcentage_realisation" step="0.01" min="0" max="100" placeholder="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Surface (m²) <span style="color:#9ca3af">BTP</span></label>
+          <input type="number" name="surface_m2" id="f_surf" step="0.01" min="0" oninput="majHtM2()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Prix / m²</label>
+          <input type="number" name="prix_unitaire_m2" id="f_prixm2" step="0.01" min="0" oninput="majHtM2()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Devise</label>
+          <select name="devise" id="f_devise" onchange="fTaux()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            {% for code, lib, sym in devises_dispo %}<option value="{{ code }}">{{ code }} — {{ lib }}</option>{% endfor %}
+          </select></div>
+        <div id="f_taux_wrap" style="display:none"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Taux (1 = ? XAF)</label>
+          <input type="number" name="taux_change" id="f_taux" step="0.000001" min="0" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
       </div>
       <div id="f_recap" style="background:#f9fafb;border-radius:.5rem;padding:.75rem;margin-top:.75rem;font-size:.8rem;display:none">
         <div style="display:flex;justify-content:space-between"><span>TVA :</span><strong id="r_tva">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>TTC :</span><strong id="r_ttc">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>Retenue :</span><strong id="r_ret" style="color:#dc2626">0</strong></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;margin-top:.4rem;padding-top:.4rem"><span style="font-weight:700">Net à payer :</span><strong id="r_net" style="font-size:1rem">0</strong></div>
+        <div id="r_xaf_wrap" style="display:none;justify-content:space-between;color:#0f3d36"><span>Équivalent XAF :</span><strong id="r_xaf">0</strong></div>
       </div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
         <button type="button" onclick="document.getElementById('modal-facture').style.display='none'" class="btn-secondary">Annuler</button>
@@ -284,6 +336,8 @@
           </select></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Référence</label>
           <input type="text" name="reference" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">% réalisation</label>
+          <input type="number" name="pourcentage_realisation" step="0.01" min="0" max="100" placeholder="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
       </div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
         <button type="button" onclick="document.getElementById('modal-paiement').style.display='none'" class="btn-secondary">Annuler</button>
@@ -293,38 +347,52 @@
   </div>
 </div>
 
-<!-- ═══ MODAL AVANCE ═══ -->
+<!-- ═══ MODAL AVANCE (création + édition) ═══ -->
 <div id="modal-avance" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
-  <div style="background:white;border-radius:1rem;max-width:480px;width:100%;padding:1.5rem">
-    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:.25rem">Nouvelle avance</h2>
+  <div style="background:white;border-radius:1rem;max-width:540px;width:100%;padding:1.5rem;max-height:92vh;overflow:auto">
+    <h2 id="av_titre" style="font-weight:900;font-size:1.1rem;margin-bottom:.25rem">Nouvelle avance</h2>
     <p style="font-size:.8rem;color:#6b7280;margin-bottom:1rem">Somme versée à {{ p.raison_sociale }} hors facture.</p>
-    <form method="POST" action="/prestataires/{{ p.id }}/avances/nouvelle">
+    <form method="POST" id="form-avance">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant (XAF) *</label>
-          <input type="number" name="montant" required step="0.01" min="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant *</label>
+          <input type="number" name="montant" id="av_montant" required step="0.01" min="0" oninput="avConvert()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Devise</label>
+          <select name="devise" id="av_devise" onchange="avTaux()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            {% for code, lib, sym in devises_dispo %}<option value="{{ code }}">{{ code }} — {{ lib }}</option>{% endfor %}
+          </select></div>
+        <div id="av_taux_wrap" style="display:none"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Taux du jour (1 unité = ? XAF)</label>
+          <input type="number" name="taux_change" id="av_taux" step="0.000001" min="0" oninput="avConvert()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div id="av_equiv_wrap" style="display:none;align-self:end">
+          <div style="font-size:.73rem;color:#6b7280;font-weight:700">Équivalent</div>
+          <div id="av_equiv" style="font-weight:900;font-size:.95rem;color:#0f3d36">— XAF</div></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date *</label>
-          <input type="date" name="date_avance" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="date" name="date_avance" id="av_date" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" onchange="avTaux()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Mode</label>
-          <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+          <select name="mode_paiement" id="av_mode" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
             <option value="VIREMENT">Virement</option><option value="MOBILE_MONEY">Mobile Money</option>
             <option value="CHEQUE">Chèque</option><option value="ESPECES">Espèces</option>
           </select></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Chantier / Site</label>
+          <select name="site_id" id="av_site" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+            <option value="">— Aucun —</option>
+            {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
+          </select></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Référence</label>
-          <input type="text" name="reference" placeholder="N° transaction / chèque" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="text" name="reference" id="av_ref" placeholder="N° transaction / chèque" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         {% if contrats %}
-        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Contrat lié (facultatif)</label>
-          <select name="contrat_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Contrat lié</label>
+          <select name="contrat_id" id="av_contrat" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
             <option value="">— Aucun —</option>
             {% for c in contrats %}<option value="{{ c.id }}">{{ c.reference or c.objet }}</option>{% endfor %}
           </select></div>
         {% endif %}
         <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Motif</label>
-          <input type="text" name="motif" placeholder="Ex. avance de démarrage chantier" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="text" name="motif" id="av_motif" placeholder="Ex. avance de démarrage chantier" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
       </div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
         <button type="button" onclick="document.getElementById('modal-avance').style.display='none'" class="btn-secondary">Annuler</button>
-        <button type="submit" class="btn-primary">Enregistrer l'avance</button>
+        <button type="submit" class="btn-primary" id="av_submit">Enregistrer l'avance</button>
       </div>
     </form>
   </div>
@@ -345,7 +413,27 @@
     document.getElementById('r_ret').textContent = '- ' + fmt(d.montant_retenue) + ' XAF';
     document.getElementById('r_net').textContent = fmt(d.montant_net_a_payer) + ' XAF';
     document.getElementById('f_recap').style.display = 'block';
+    var dev = document.getElementById('f_devise') ? document.getElementById('f_devise').value : 'XAF';
+    var taux = parseFloat(document.getElementById('f_taux') ? document.getElementById('f_taux').value : 1) || 1;
+    var w = document.getElementById('r_xaf_wrap');
+    if (dev !== 'XAF') { w.style.display = 'flex'; document.getElementById('r_xaf').textContent = fmt(d.montant_net_a_payer * taux) + ' XAF'; }
+    else { w.style.display = 'none'; }
   }).catch(() => {});
+}
+function majHtM2(){
+  var s = parseFloat(document.getElementById('f_surf').value) || 0;
+  var pu = parseFloat(document.getElementById('f_prixm2').value) || 0;
+  if (s > 0 && pu > 0) { document.getElementById('f_ht').value = (s * pu).toFixed(2); }
+  calculerFacture();
+}
+function fTaux(){
+  var dev = document.getElementById('f_devise').value;
+  var wrap = document.getElementById('f_taux_wrap');
+  if (dev === 'XAF') { wrap.style.display = 'none'; document.getElementById('f_taux').value = 1; calculerFacture(); return; }
+  wrap.style.display = 'block';
+  var dt = document.querySelector('#modal-facture input[name=date_facture]');
+  var q = '/api/prestataire/taux-devise?devise=' + dev + (dt && dt.value ? '&date=' + dt.value : '');
+  fetch(q).then(function(r){ return r.json(); }).then(function(d){ if (d && d.taux_xaf){ document.getElementById('f_taux').value = d.taux_xaf; calculerFacture(); } }).catch(function(){});
 }
 function ouvrirPaiement(fid, numero, reste) {
   document.getElementById('form-paiement').action = '/prestataires/factures/' + fid + '/payer';
@@ -353,6 +441,61 @@ function ouvrirPaiement(fid, numero, reste) {
   document.getElementById('pay_montant').value = reste;
   document.getElementById('pay_montant').max = reste;
   document.getElementById('modal-paiement').style.display = 'flex';
+}
+
+// ── Avances : création / édition / conversion devise ──────────────────────────
+function avFmt(n){ return Math.round(n).toLocaleString('fr-FR').replace(/,/g,' '); }
+
+function avConvert(){
+  var dev = document.getElementById('av_devise').value;
+  var m = parseFloat(document.getElementById('av_montant').value) || 0;
+  var taux = parseFloat(document.getElementById('av_taux').value) || (dev === 'XAF' ? 1 : 0);
+  var wrap = document.getElementById('av_equiv_wrap');
+  if (dev === 'XAF') { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  document.getElementById('av_equiv').textContent = avFmt(m * taux) + ' XAF';
+}
+
+function avTaux(){
+  var dev = document.getElementById('av_devise').value;
+  var wrap = document.getElementById('av_taux_wrap');
+  if (dev === 'XAF') { wrap.style.display = 'none'; document.getElementById('av_taux').value = 1; avConvert(); return; }
+  wrap.style.display = 'block';
+  var dt = document.getElementById('av_date').value || '';
+  fetch('/api/prestataire/taux-devise?devise=' + dev + (dt ? '&date=' + dt : ''))
+    .then(function(r){ return r.json(); })
+    .then(function(d){ if (d && d.taux_xaf) { document.getElementById('av_taux').value = d.taux_xaf; avConvert(); } })
+    .catch(function(){});
+}
+
+function ouvrirAvance(){
+  var f = document.getElementById('form-avance');
+  f.action = '/prestataires/{{ p.id }}/avances/nouvelle';
+  f.reset();
+  document.getElementById('av_titre').textContent = 'Nouvelle avance';
+  document.getElementById('av_submit').textContent = "Enregistrer l'avance";
+  document.getElementById('av_devise').value = 'XAF';
+  avTaux();
+  document.getElementById('modal-avance').style.display = 'flex';
+}
+
+function ouvrirEditAvance(id, montant, devise, taux, dateAv, mode, ref, motif, siteId){
+  var f = document.getElementById('form-avance');
+  f.action = '/prestataires/avances/' + id + '/modifier';
+  document.getElementById('av_titre').textContent = "Modifier l'avance";
+  document.getElementById('av_submit').textContent = "Enregistrer les modifications";
+  document.getElementById('av_montant').value = montant;
+  document.getElementById('av_devise').value = devise || 'XAF';
+  document.getElementById('av_date').value = dateAv;
+  document.getElementById('av_mode').value = mode || 'VIREMENT';
+  document.getElementById('av_ref').value = ref || '';
+  document.getElementById('av_motif').value = motif || '';
+  if (document.getElementById('av_site')) document.getElementById('av_site').value = siteId || '';
+  var wrap = document.getElementById('av_taux_wrap');
+  if ((devise || 'XAF') === 'XAF') { wrap.style.display = 'none'; }
+  else { wrap.style.display = 'block'; document.getElementById('av_taux').value = taux; }
+  avConvert();
+  document.getElementById('modal-avance').style.display = 'flex';
 }
 </script>
 
