@@ -429,6 +429,11 @@ def run_migrations():
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS indem_licenciement NUMERIC(15,2) DEFAULT 0",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS convention VARCHAR(20) DEFAULT 'AUCUNE'",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS seuil_heures_sup_hebdo NUMERIC(4,1) DEFAULT 40.0",
+        # ── Convention Pétrole : 5ᵉ case d'heures sup (repos/férié de jour, +30%) ──
+        "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS heures_sup_30b NUMERIC(5,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS heures_sup_30b NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS base_heures_sup_30b NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS taux_heures_sup_30b VARCHAR(20) DEFAULT ''",
         # ── Index de performance sur les tables récentes (multi-tenant) ──────────
         # Idempotents (IF NOT EXISTS). Accélèrent les listes et impressions filtrées
         # par tenant_id / statut / dates / site.
