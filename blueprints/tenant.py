@@ -448,11 +448,14 @@ def api_simuler_paie():
             from calculs_paie import calculer_heures_sup_btp
             hs = calculer_heures_sup_btp(sal_base,
                 h10=flt("h10"), h30=flt("h30"),
-                h40=flt("h40"), h70=flt("h70"))
+                h40=flt("h40"), h70=flt("h70"),
+                h30b=flt("h30b"), convention=t.convention)
             d["heures_sup_10"] = hs["montant_10"]
             d["heures_sup_30"] = hs["montant_30"]
+            d["heures_sup_30b"] = hs["montant_30b"]
             d["heures_sup_40"] = hs["montant_40"]
             d["heures_sup_70"] = hs["montant_70"]
+        d["convention"] = t.convention
 
         # Nombre de parts IRPP
         sal_id = d.get("salarie_id")
@@ -487,6 +490,7 @@ def api_simuler_paie():
             {"label": "Salaire de base",          "montant": result["salaire_base"]},
             {"label": "H.sup +10%",               "montant": result["heures_sup_10"]},
             {"label": "H.sup +30%",               "montant": result["heures_sup_30"]},
+            {"label": "H.sup +30% (repos/férié)", "montant": result.get("heures_sup_30b", 0)},
             {"label": "H.sup +40% (nuit/dim.)",   "montant": result["heures_sup_40"]},
             {"label": "H.sup +70% (fériés)",      "montant": result["heures_sup_70"]},
             {"label": "Sursalaire",               "montant": result["sursalaire"]},
@@ -1438,7 +1442,7 @@ def bulletin_saisie():
                         .replace(",", " "),
                         "info")
 
-        res=calculer_bulletin(donnees,nb_parts=float(s.nombre_parts or 1))
+        res=calculer_bulletin(dict(donnees, convention=t.convention),nb_parts=float(s.nombre_parts or 1))
         ex=BulletinPaie.query.filter_by(tenant_id=t.id,salarie_id=sid,periode_id=pid).first()
         # 🔒 Immuabilité : un bulletin validé est un document de paie officiel.
         # Il ne peut pas être réécrit en silence — il faut d'abord annuler sa
@@ -1456,7 +1460,7 @@ def bulletin_saisie():
             if not k.startswith("_") and hasattr(b,k): setattr(b,k,v)
         b.nb_jours_travailles=int(request.form.get("nb_jours_travailles") or 0)
         # ✅ Sauvegarder base et taux saisis manuellement pour chaque rubrique
-        RUBRIQUES_BT = ["salaire_base","heures_sup_10","heures_sup_30","heures_sup_40","heures_sup_70",
+        RUBRIQUES_BT = ["salaire_base","heures_sup_10","heures_sup_30","heures_sup_30b","heures_sup_40","heures_sup_70",
             "absences","sursalaire","prime_caisse","carburant","prime_anciennete",
             "indem_logement","indem_domesticite","indem_eau_electricite","indem_nourriture",
             "prime_transport","prime_responsabilite","prime_rendement","prime_assiduité",
@@ -2507,6 +2511,53 @@ def importer_grille_commerce():
     return redirect(url_for("tenant.parametres"))
 
 
+@bp.route("/parametres/importer-grille-petrole", methods=["POST"])
+@tenant_required
+@can_edit
+def importer_grille_petrole():
+    """Crée/complète les catégories d'emploi à partir de la grille conventionnelle PÉTROLE.
+
+    ⚠️ Les montants de l'Annexe n°2 (1983) sont obsolètes : les premières
+    catégories sont sous le SMIG actuel. On importe donc la STRUCTURE des
+    catégories en appliquant un plancher au SMIG légal, et on n'écrase jamais une
+    catégorie existante. Les montants doivent être actualisés par l'entreprise.
+    """
+    if not current_user.can_manage_parametres:
+        flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
+        return redirect(url_for("tenant.parametres"))
+    t = get_tenant()
+    from calculs_paie import GRILLE_PETROLE, SMIG_GABON
+    existantes = {c.code for c in CategorieEmploi.query.filter_by(tenant_id=t.id).all()}
+    ajout = 0
+    maj = 0
+    plancher_applique = False
+    for code, libelle, mensuel_1983 in GRILLE_PETROLE:
+        # Plancher SMIG : aucune catégorie ne peut être créée sous le minimum légal.
+        mensuel = max(int(mensuel_1983), int(SMIG_GABON))
+        if mensuel != int(mensuel_1983):
+            plancher_applique = True
+        if code in existantes:
+            cat = CategorieEmploi.query.filter_by(tenant_id=t.id, code=code).first()
+            if cat and (cat.salaire_minimum is None or float(cat.salaire_minimum or 0) == 0):
+                cat.salaire_minimum = mensuel
+                maj += 1
+        else:
+            db.session.add(CategorieEmploi(
+                tenant_id=t.id, code=code, libelle=libelle, salaire_minimum=mensuel,
+                description="Grille Convention Pétrole (montants à actualiser)"))
+            ajout += 1
+    if t.convention != "PETROLE":
+        t.convention = "PETROLE"
+    db.session.commit()
+    msg = f"Grille Pétrole importée : {ajout} catégorie(s) ajoutée(s), {maj} mise(s) à jour."
+    if plancher_applique:
+        msg += (f" ⚠️ Certains montants de 1983 étaient sous le SMIG "
+                f"({int(SMIG_GABON):,} FCFA) et ont été relevés au plancher légal — "
+                f"actualisez-les selon votre grille interne.").replace(",", " ")
+    flash(msg, "success")
+    return redirect(url_for("tenant.parametres"))
+
+
 @bp.route("/langue/<lang>")
 def changer_langue(lang):
     """Change la langue de l'interface — accessible depuis n'importe quelle page."""
@@ -3090,17 +3141,30 @@ def pointage_individuel():
         # Reclasser les heures selon le type de jour
         h_sup_10_man = float(request.form.get("heures_sup_10",0) or 0)
         h_sup_30_man = float(request.form.get("heures_sup_30",0) or 0)
+        h_sup_30b_man = float(request.form.get("heures_sup_30b",0) or 0)
         h_sup_40_man = float(request.form.get("heures_sup_40",0) or 0)
         h_sup_70_man = float(request.form.get("heures_sup_70",0) or 0)
+        h_sup_30b_final = 0
+        _conv_t = (t.convention or "").upper()
 
         if type_jour == "DIMANCHE":
-            # Dimanche travaillé : intégralité en +70% (réglementation BTP Gabon)
-            h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
+            if _conv_t == "PETROLE":
+                # Pétrole : dimanche de jour → +30% (case 30b) ; la nuit est
+                # recalculée par la ventilation mensuelle (+100%).
+                h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
+                h_sup_70_final = 0
+            else:
+                # Dimanche travaillé : intégralité en +70% (réglementation BTP Gabon)
+                h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
             h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
             heures_normales_final = 0
         elif type_jour == "FERIE":
-            # Tout va en +70% (jour férié)
-            h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
+            if _conv_t == "PETROLE":
+                h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
+                h_sup_70_final = 0
+            else:
+                # Tout va en +70% (jour férié)
+                h_sup_70_final = round(h_sup_horaire + heures_normales_final, 2)
             h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
             heures_normales_final = 0
         elif type_jour in ("CHOME_PAYE", "CHOME_RECUPERABLE"):
@@ -3110,6 +3174,7 @@ def pointage_individuel():
             # NORMAL
             h_sup_10_final = round(h_sup_horaire, 2) if h_sup_horaire > 0 else h_sup_10_man
             h_sup_30_final = h_sup_30_man
+            h_sup_30b_final = h_sup_30b_man
             h_sup_40_final = h_sup_40_man
             h_sup_70_final = h_sup_70_man
 
@@ -3125,6 +3190,7 @@ def pointage_individuel():
             kwargs.update(dict(
                 heures_sup_10 = h_sup_10_final,
                 heures_sup_30 = h_sup_30_final,
+                heures_sup_30b = h_sup_30b_final,
                 heures_sup_40 = h_sup_40_final,
                 heures_sup_70 = h_sup_70_final,
             ))
@@ -3262,6 +3328,7 @@ def pointage_sauvegarder():
             pt.heures_normales = float(request.form.get(f"sal_heures_{sid}", 8) or 8)
             pt.heures_sup_10   = float(request.form.get(f"sal_sup10_{sid}", 0) or 0)
             pt.heures_sup_30   = float(request.form.get(f"sal_sup30_{sid}", 0) or 0)
+            pt.heures_sup_30b  = float(request.form.get(f"sal_sup30b_{sid}", 0) or 0)
             pt.heures_sup_40   = float(request.form.get(f"sal_sup40_{sid}", 0) or 0)
             pt.heures_sup_70   = float(request.form.get(f"sal_sup70_{sid}", 0) or 0)
             pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
@@ -4558,7 +4625,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     # que la colonne « DONT NUIT » de chaque ligne soit cohérente avec le total
     # +40 % affiché en bas (somme des lignes = total).
     nuit_par_date = {}
-    if conv == "BTP":
+    if conv in ("BTP", "PETROLE"):
         from calculs_paie import pointage_vers_jours
         for j in pointage_vers_jours(pts):
             d = j.get("date")
@@ -4571,14 +4638,15 @@ def _pointages_mois_contexte(t, pointages, convention):
         hsup = float(p.heures_sup or 0)     # heures sup "simples" (journaliers, non majorées)
         h10  = float(p.heures_sup_10 or 0)
         h30  = float(p.heures_sup_30 or 0)
+        h30b = float(getattr(p, "heures_sup_30b", 0) or 0)
         h40  = float(p.heures_sup_40 or 0)
         h70  = float(p.heures_sup_70 or 0)
         absent = bool(p.absent)
         present = bool(p.present) and not absent
-        total_jour = hn + hsup + h10 + h30 + h40 + h70
+        total_jour = hn + hsup + h10 + h30 + h30b + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
-        # Nuit du jour : depuis l'horaire (BTP), sinon valeur stockée (journaliers)
-        if conv == "BTP":
+        # Nuit du jour : depuis l'horaire (BTP/Pétrole), sinon valeur stockée (journaliers)
+        if conv in ("BTP", "PETROLE"):
             nuit_jour = nuit_par_date.get(p.date_pointage, 0.0)
         else:
             nuit_jour = h40
@@ -4596,13 +4664,14 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    if conv == "BTP" and pts_travailles:
-        from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
-        v = ventiler_heures_mois_btp(pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
+    if conv in ("BTP", "PETROLE") and pts_travailles:
+        from calculs_paie import ventiler_heures_mois, pointage_vers_jours
+        v = ventiler_heures_mois(conv, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         totaux = {
             "heures_normales": v["heures_normales"],
             "heures_sup_10":   v["heures_sup_10"],
             "heures_sup_30":   v["heures_sup_30"],
+            "heures_sup_30b":  v.get("heures_sup_30b", 0.0),
             "heures_sup_40":   v["heures_sup_40"],
             "heures_sup_70":   v["heures_sup_70"],
         }
@@ -4612,6 +4681,7 @@ def _pointages_mois_contexte(t, pointages, convention):
             "heures_normales": sum(float(p.heures_normales or 0) for p in pts_travailles),
             "heures_sup_10":   sum(float(p.heures_sup_10 or 0) for p in pts_travailles),
             "heures_sup_30":   sum(float(p.heures_sup_30 or 0) for p in pts_travailles),
+            "heures_sup_30b":  sum(float(getattr(p, "heures_sup_30b", 0) or 0) for p in pts_travailles),
             "heures_sup_40":   sum(float(p.heures_sup_40 or 0) for p in pts_travailles),
             "heures_sup_70":   sum(float(p.heures_sup_70 or 0) for p in pts_travailles),
         }
@@ -4623,6 +4693,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     heures_sup_simple = round(sum(float(p.heures_sup or 0) for p in pts_travailles), 2)
     totaux["heures_sup_simple"] = heures_sup_simple
     totaux["total_sup"] = round(totaux["heures_sup_10"] + totaux["heures_sup_30"]
+                                + totaux.get("heures_sup_30b", 0)
                                 + totaux["heures_sup_40"] + totaux["heures_sup_70"]
                                 + heures_sup_simple, 2)
     totaux["total_general"] = round(totaux["heures_normales"] + totaux["total_sup"], 2)
@@ -5025,6 +5096,7 @@ def site_pointage_rapide(id):
             pt.heures_normales = float(request.form.get(f"sal_h_{sid}", 8) or 8)
             pt.heures_sup_10   = float(request.form.get(f"sal_s10_{sid}", 0) or 0)
             pt.heures_sup_30   = float(request.form.get(f"sal_s30_{sid}", 0) or 0)
+            pt.heures_sup_30b  = float(request.form.get(f"sal_s30b_{sid}", 0) or 0)
             pt.heures_sup_40   = float(request.form.get(f"sal_s40_{sid}", 0) or 0)
             pt.heures_sup_70   = float(request.form.get(f"sal_s70_{sid}", 0) or 0)
             pt.motif_absence   = request.form.get(f"sal_motif_{sid}", "") if absent else None
@@ -5239,6 +5311,8 @@ def api_calculer():
                         "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
                         "soumis_irpp": comp.soumis_irpp})
             data["composants"] = comps_live
+        if t:
+            data["convention"] = t.convention
         res = calculer_bulletin(data, nb_parts=nb_parts)
         res["acompte_auto"] = total_acomptes
         return jsonify(res)
@@ -5279,13 +5353,14 @@ def api_pointage_mois(id):
             "message": "Aucun pointage pour cette période"})
     nb_jours = len(pts_travailles)
 
-    if (t.convention or "").upper() == "BTP":
-        # Ventilation réglementaire BTP : semaine par semaine, ligne par ligne
-        from calculs_paie import ventiler_heures_mois_btp, pointage_vers_jours
-        v = ventiler_heures_mois_btp(pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
+    if (t.convention or "").upper() in ("BTP", "PETROLE"):
+        # Ventilation réglementaire (BTP/Pétrole) : semaine par semaine, ligne par ligne
+        from calculs_paie import ventiler_heures_mois, pointage_vers_jours
+        v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         heures_normales = v["heures_normales"]
         heures_sup_10   = v["heures_sup_10"]
         heures_sup_30   = v["heures_sup_30"]
+        heures_sup_30b  = v.get("heures_sup_30b", 0.0)
         heures_sup_40   = v["heures_sup_40"]
         heures_sup_70   = v["heures_sup_70"]
         detail_semaines = v["detail_semaines"]
@@ -5294,6 +5369,7 @@ def api_pointage_mois(id):
         heures_normales = sum(float(p.heures_normales or 8) for p in pts_travailles)
         heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts_travailles)
         heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts_travailles)
+        heures_sup_30b  = sum(float(getattr(p, "heures_sup_30b", 0) or 0) for p in pts_travailles)
         heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts_travailles)
         heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts_travailles)
         detail_semaines = []
@@ -5305,9 +5381,10 @@ def api_pointage_mois(id):
         "heures_normales_total": round(heures_normales, 2),
         "heures_sup_10":         round(heures_sup_10, 2),
         "heures_sup_30":         round(heures_sup_30, 2),
+        "heures_sup_30b":        round(heures_sup_30b, 2),
         "heures_sup_40":         round(heures_sup_40, 2),
         "heures_sup_70":         round(heures_sup_70, 2),
-        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_40+heures_sup_70, 2),
+        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_30b+heures_sup_40+heures_sup_70, 2),
         "detail_semaines":       detail_semaines,
         "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
     })

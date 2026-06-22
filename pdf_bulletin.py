@@ -224,6 +224,8 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
 
     add_hsup("H.sup +10%", b.heures_sup_10, b.base_heures_sup_10, b.taux_heures_sup_10)
     add_hsup("H.sup +30%", b.heures_sup_30, b.base_heures_sup_30, b.taux_heures_sup_30)
+    add_hsup("H.sup +30% (repos/férié)", getattr(b, "heures_sup_30b", 0),
+             getattr(b, "base_heures_sup_30b", 0), getattr(b, "taux_heures_sup_30b", ""))
     add_hsup("H.sup +40% (nuit/dim.)", b.heures_sup_40, b.base_heures_sup_40, b.taux_heures_sup_40)
     add_hsup("H.sup +70% (jours fériés)", b.heures_sup_70, b.base_heures_sup_70, b.taux_heures_sup_70)
 

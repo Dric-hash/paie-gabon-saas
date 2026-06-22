@@ -9,6 +9,33 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
+#### Convention Collective des professionnels du pétrole (SGEPP/GPP, 17 juin 1983)
+- Intégration de la Convention Pétrole (stockage/distribution, hors transport et
+  commerce de détail) :
+  - **Prime d'ancienneté** (Art. 46.5) : **5 %** après 2 ans, +1 %/an, plafond 30 %
+    (barème distinct du BTP/Commerce qui démarrent à 2 %).
+  - **Indemnité de services rendus** (Art. 32) : 20 / 25 / 30 / 40 % selon
+    l'ancienneté (0-5 / 6-10 / 11-15 / ≥ 16 ans), minimum 1 an (ouvrier/employé)
+    ou 2 ans (maîtrise/cadre).
+  - **Préavis** (Art. 30.3) : renvoi au barème du Code du travail.
+  - **Heures supplémentaires** (Art. 38.2) : +20 % (41ᵉ-48ᵉ h), +35 % (> 48ᵉ h),
+    **+30 % repos/dimanche/férié de jour (nouvelle case `heures_sup_30b`)**,
+    +50 % nuit ouvrable, +100 % nuit dimanche/férié. Coefficients désormais
+    résolus par convention (`coeffs_heures_sup`), sans régression sur BTP/Commerce.
+  - **Ventilation mensuelle** dédiée (`ventiler_heures_mois_petrole`) et
+    distribution hebdomadaire (`distribuer_heures_semaine_petrole`).
+  - **Permissions familiales** (Art. 41) : barème identique au BTP/Commerce.
+  - **Primes** : assiduité forfaitaire 5 000 F (Art. 49), naissance 10 000 F
+    (Art. 58), occasionnelle 15 % (Art. 56).
+  - **Grille de classification** (Annexe n°2) : catégories A→I, AMI→AMS, CP0→HC.
+    ⚠️ Montants de 1983 obsolètes : l'import applique un **plancher SMIG** et
+    signale les montants à actualiser.
+- 5ᵉ case d'heures supplémentaires `heures_sup_30b` ajoutée sur `Pointage` et
+  `BulletinPaie` (montant + base/taux), migration Alembic `b2c3d4e5f6a7`.
+  Nulle pour BTP/Commerce/AUCUNE — aucun impact sur les paies existantes.
+- 20 tests unitaires (`tests/test_convention_petrole.py`), suite complète à 360 tests.
+
+
 #### Convention Collective du Secteur Commerce (Gabon)
 - Intégration complète de la Convention Collective du Commerce (Libreville, 8 juin 1988) :
   - **Préavis** (Art. A.30.3) : barème en jours par tranche d'ancienneté.

@@ -203,6 +203,15 @@
             <td class="pf-cell"><input type="text" name="taux_heures_sup_30" id="taux_heures_sup_30" placeholder="1" oninput="calcMontant('heures_sup_30')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_30" id="f_heures_sup_30" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
+          {% if tenant.convention == 'PETROLE' %}
+          <tr style="border-bottom:1px solid #f3f4f6;background:#fffdf5">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup repos/férié (jour) +30%</td>
+            <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_30b" id="base_heures_sup_30b" min="0" placeholder="0" oninput="calcMontant('heures_sup_30b')" class="pf-base"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td class="pf-cell"><input type="text" name="taux_heures_sup_30b" id="taux_heures_sup_30b" placeholder="1" oninput="calcMontant('heures_sup_30b')" class="pf-rate"/></td>
+            <td class="pf-cell"><input type="number" name="heures_sup_30b" id="f_heures_sup_30b" value="0" step="any" min="0" class="champ-calcul pf-amt" oninput="recalculer()"/></td>
+          </tr>
+          {% endif %}
           <tr style="border-bottom:1px solid #f3f4f6">
             <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup nuit dim. +40%</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_40" id="base_heures_sup_40" step="any" min="0" placeholder="0" oninput="calcMontant('heures_sup_40')" class="pf-base"/></td>

@@ -158,6 +158,14 @@
         <td class="tr gain">{{ bulletin.heures_sup_30|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+      {% if bulletin.heures_sup_30b and bulletin.heures_sup_30b|float > 0 %}
+      <tr>
+        <td>Heures supplémentaires +30% (repos/férié)</td>
+        <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_30b|int if bulletin.base_heures_sup_30b else '' }}</td>
+        <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_30b or '' }}</td>
+        <td class="tr gain">{{ bulletin.heures_sup_30b|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
       {% if bulletin.heures_sup_40 and bulletin.heures_sup_40|float > 0 %}
       <tr>
         <td>Heures supplémentaires +40%</td>

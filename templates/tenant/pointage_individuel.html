@@ -467,7 +467,7 @@
     <tbody>
       {% set jours_fr = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"] %}
       {% for p in historique_30j %}
-      {% set h_sup = (p.heures_sup_10|float + p.heures_sup_30|float + p.heures_sup_40|float + p.heures_sup_70|float) if type_w=="sal" else p.heures_sup|float %}
+      {% set h_sup = (p.heures_sup_10|float + p.heures_sup_30|float + p.heures_sup_30b|float + p.heures_sup_40|float + p.heures_sup_70|float) if type_w=="sal" else p.heures_sup|float %}
       {% set total_h = p.heures_normales|float + h_sup if p.present else 0 %}
       {% set is_today = p.date_pointage == date_sel %}
       <tr style="border-bottom:1px solid #f9fafb;{% if p.absent %}background:#fff5f5;{% elif is_today %}background:#eff6ff;{% elif loop.index0 % 2 == 0 %}background:#fafafa;{% endif %}">

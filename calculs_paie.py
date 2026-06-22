@@ -24,11 +24,16 @@ CFP_TAUX             = 0.005
 
 TCS_TAUX             = 0.05
 TCS_EXONERATION      = 150_000
-
 LOGEMENT_PLAFOND_PCT = 0.40
 LOGEMENT_PLAFOND_MAX = 250_000
 TRANSPORT_EXONERATION_IRPP = 100_000
 TRANSPORT_EXONERATION_CNSS = 35_000
+
+# Salaire minimum interprofessionnel garanti (SMIG) — plancher légal mensuel.
+# ⚠️ À CONFIRMER / RENDRE CONFIGURABLE (chantier conformité SMIG/RMM en cours) :
+# valeur de référence retenue par défaut, utilisée notamment comme plancher lors
+# de l'import des grilles conventionnelles anciennes (ex. grille Pétrole de 1983).
+SMIG_GABON           = 150_000
 
 # ─── CONSTANTES BTP ───────────────────────────────────────────────────────────
 H_NORMALES_MENSUEL   = 173.33   # heures normales / mois (40h × 43,33)
@@ -38,6 +43,39 @@ COEFF_SUP_10         = 1.10
 COEFF_SUP_30         = 1.30
 COEFF_SUP_40         = 1.40     # nuit / dimanche
 COEFF_SUP_70         = 1.70     # jours fériés
+COEFF_SUP_30B        = 1.30     # repos/dimanche/férié — heures de JOUR (Pétrole)
+
+# ─── COEFFICIENTS DES HEURES SUPPLÉMENTAIRES PAR CONVENTION ────────────────────
+# Le moteur de paie raisonne sur 5 « cases » : 10 / 30 / 30b / 40 / 70.
+# Chaque case reçoit un multiplicateur qui dépend de la convention applicable.
+# Par défaut (BTP, Commerce, Code du travail seul), la grille historique
+# 10/30/40/70 est conservée à l'identique — la case 30b reste à 0 et son
+# coefficient est sans effet. Seule la convention Pétrole alimente la 5ᵉ case.
+#
+# Convention Pétrole (SGEPP/GPP, 17 juin 1983) — Art. 38.2 :
+#   • 41ᵉ → 48ᵉ heure hebdo, jour ouvrable ........ +20 %  → case 10
+#   • au-delà de la 48ᵉ heure hebdo, jour ouvrable  +35 %  → case 30
+#   • repos hebdo / dimanche / férié, de JOUR ...... +30 %  → case 30b
+#   • nuit (21h-6h), jour ouvrable ................. +50 %  → case 40
+#   • nuit (21h-6h), dimanche / férié ............. +100 %  → case 70
+COEFFS_HEURES_SUP_DEFAUT = {
+    "10":  COEFF_SUP_10,  "30":  COEFF_SUP_30,  "30b": COEFF_SUP_30B,
+    "40":  COEFF_SUP_40,  "70":  COEFF_SUP_70,
+}
+COEFFS_HEURES_SUP_CONVENTION = {
+    "PETROLE": {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00},
+}
+
+
+def coeffs_heures_sup(convention=None) -> dict:
+    """Coefficients de majoration des 5 cases d'heures sup selon la convention.
+
+    Renvoie un dict {"10","30","30b","40","70"} de multiplicateurs. Toute
+    convention non répertoriée (BTP, Commerce, AUCUNE) retombe sur la grille
+    historique, garantissant l'absence de régression.
+    """
+    c = (convention or "").upper()
+    return dict(COEFFS_HEURES_SUP_CONVENTION.get(c, COEFFS_HEURES_SUP_DEFAUT))
 
 # Barème IRPP mensuel Gabon
 BAREME_IRPP = [
@@ -88,30 +126,40 @@ def calculer_taux_horaire(salaire_base: float) -> float:
 
 def calculer_heures_sup_btp(salaire_base: float,
                               h10: float = None, h30: float = None,
-                              h40: float = 0.0,  h70: float = 0.0) -> dict:
+                              h40: float = 0.0,  h70: float = 0.0,
+                              h30b: float = 0.0, convention=None) -> dict:
     """
-    Calcule les montants des heures supplémentaires selon la logique BTP.
+    Calcule les montants des heures supplémentaires selon la convention.
 
     Si h10 et h30 sont None → utilise les valeurs structurelles BTP (17,33h).
+    Les coefficients de majoration sont résolus par `coeffs_heures_sup(convention)` :
+    BTP/Commerce/AUCUNE conservent 10/30/40/70 ; la convention Pétrole applique
+    sa propre grille (20/35/30b/50/100) et alimente la 5ᵉ case `h30b`.
+
     Retourne un dict avec taux_horaire, montants et descriptifs pour le bulletin.
     """
     th = calculer_taux_horaire(salaire_base)
     h10 = H_SUP_STRUCT_10 if h10 is None else float(h10)
     h30 = H_SUP_STRUCT_30 if h30 is None else float(h30)
-    h40 = float(h40)
-    h70 = float(h70)
+    h40  = float(h40)
+    h70  = float(h70)
+    h30b = float(h30b)
+
+    coeffs = coeffs_heures_sup(convention)
 
     # Taux majorés
-    taux_10 = round(th * COEFF_SUP_10, 4)
-    taux_30 = round(th * COEFF_SUP_30, 4)
-    taux_40 = round(th * COEFF_SUP_40, 4)
-    taux_70 = round(th * COEFF_SUP_70, 4)
+    taux_10  = round(th * coeffs["10"],  4)
+    taux_30  = round(th * coeffs["30"],  4)
+    taux_40  = round(th * coeffs["40"],  4)
+    taux_70  = round(th * coeffs["70"],  4)
+    taux_30b = round(th * coeffs["30b"], 4)
 
     # Montants
-    montant_10 = round(h10 * taux_10, 2) if h10 > 0 else 0.0
-    montant_30 = round(h30 * taux_30, 2) if h30 > 0 else 0.0
-    montant_40 = round(h40 * taux_40, 2) if h40 > 0 else 0.0
-    montant_70 = round(h70 * taux_70, 2) if h70 > 0 else 0.0
+    montant_10  = round(h10  * taux_10,  2) if h10  > 0 else 0.0
+    montant_30  = round(h30  * taux_30,  2) if h30  > 0 else 0.0
+    montant_40  = round(h40  * taux_40,  2) if h40  > 0 else 0.0
+    montant_70  = round(h70  * taux_70,  2) if h70  > 0 else 0.0
+    montant_30b = round(h30b * taux_30b, 2) if h30b > 0 else 0.0
 
     return {
         "taux_horaire":    th,
@@ -123,6 +171,10 @@ def calculer_heures_sup_btp(salaire_base: float,
         "h30":             h30,
         "taux_30":         taux_30,
         "montant_30":      montant_30,
+        # Heures repos/férié de jour (case 30b — convention Pétrole)
+        "h30b":            h30b,
+        "taux_30b":        taux_30b,
+        "montant_30b":     montant_30b,
         # Heures +40% (nuit/dimanche)
         "h40":             h40,
         "taux_40":         taux_40,
@@ -132,7 +184,8 @@ def calculer_heures_sup_btp(salaire_base: float,
         "taux_70":         taux_70,
         "montant_70":      montant_70,
         # Total heures sup
-        "total_sup":       round(montant_10 + montant_30 + montant_40 + montant_70, 2),
+        "total_sup":       round(montant_10 + montant_30 + montant_30b
+                                 + montant_40 + montant_70, 2),
     }
 
 
@@ -167,6 +220,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     salaire_base      = g("salaire_base")
     heures_sup_10     = g("heures_sup_10")
     heures_sup_30     = g("heures_sup_30")
+    heures_sup_30b    = g("heures_sup_30b")
     heures_sup_40     = g("heures_sup_40")
     heures_sup_70     = g("heures_sup_70")
     absences          = g("absences")
@@ -195,13 +249,16 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     prime_salisure        = g("prime_salisure")
     acompte               = g("acompte")
 
-    # Taux horaire et détails heures sup (pour le retour enrichi)
+    # Taux horaire et détails heures sup (pour le retour enrichi). Les
+    # coefficients d'affichage suivent la convention transmise (clé "convention")
+    # afin que les taux majorés du bulletin reflètent la grille applicable.
     th = calculer_taux_horaire(salaire_base)
+    _coeffs_hs = coeffs_heures_sup(donnees.get("convention"))
 
     # ── 2. SALAIRE BRUT ─────────────────────────────────────────────────────
     salaire_brut = (
         salaire_base
-        + heures_sup_10 + heures_sup_30 + heures_sup_40 + heures_sup_70
+        + heures_sup_10 + heures_sup_30 + heures_sup_30b + heures_sup_40 + heures_sup_70
         - absences
         + sursalaire
         + prime_caisse + carburant + prime_anciennete
@@ -310,14 +367,16 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         # Heures supplémentaires — montants
         "heures_sup_10":               round(heures_sup_10, 2),
         "heures_sup_30":               round(heures_sup_30, 2),
+        "heures_sup_30b":              round(heures_sup_30b, 2),
         "heures_sup_40":               round(heures_sup_40, 2),
         "heures_sup_70":               round(heures_sup_70, 2),
         # Infos calcul heures sup (pour affichage bulletin)
         "taux_horaire_base":           round(th, 4),
-        "taux_horaire_10":             round(th * COEFF_SUP_10, 4),
-        "taux_horaire_30":             round(th * COEFF_SUP_30, 4),
-        "taux_horaire_40":             round(th * COEFF_SUP_40, 4),
-        "taux_horaire_70":             round(th * COEFF_SUP_70, 4),
+        "taux_horaire_10":             round(th * _coeffs_hs["10"], 4),
+        "taux_horaire_30":             round(th * _coeffs_hs["30"], 4),
+        "taux_horaire_30b":            round(th * _coeffs_hs["30b"], 4),
+        "taux_horaire_40":             round(th * _coeffs_hs["40"], 4),
+        "taux_horaire_70":             round(th * _coeffs_hs["70"], 4),
         "h_normales_mensuel":          H_NORMALES_MENSUEL,
         "h_sup_struct_10":             H_SUP_STRUCT_10,
         "h_sup_struct_30":             H_SUP_STRUCT_30,
@@ -396,6 +455,68 @@ def calculer_masse_salariale(bulletins: list) -> dict:
     )
     totaux["total_charges_patronales"] = totaux["total_charges_pat"]
     return {k: round(v, 2) for k, v in totaux.items()}
+
+
+def distribuer_heures_semaine_petrole(heures_par_jour: list,
+                                       types_par_jour: list = None,
+                                       seuil_normales: float = 40.0) -> dict:
+    """
+    Distribue les heures d'une semaine selon la Convention Pétrole — Art. 38.2.
+
+    Même structure hebdomadaire que le BTP, mais palier +20 % large de 8 h
+    (41ᵉ→48ᵉ) puis +35 % au-delà, et aiguillage pétrolier des cases :
+        0 → S          : Heures normales
+        S → S+8        : case 10 (+20 %)
+        > S+8          : case 30 (+35 %)
+        Dim/Férié jour : case 30b (+30 %)
+        Nuit ouvrable  : case 40 (+50 %)
+        Nuit dim/férié : case 70 (+100 %)
+    """
+    total_norm = 0.0   # heures de jour ordinaires cumulées
+    h30b = 0.0         # dim/férié, heures de jour (+30 %)
+    h40  = 0.0         # nuit ouvrable (+50 %)
+    h70  = 0.0         # nuit dim/férié (+100 %)
+
+    SEUIL_NORM = float(seuil_normales)
+    SEUIL_20   = SEUIL_NORM + 8.0   # fin du palier +20 % (8h) / début +35 %
+
+    for i, jour in enumerate(heures_par_jour):
+        if isinstance(jour, dict):
+            h      = float(jour.get("heures_normales", 0) or 0)
+            h_nuit = float(jour.get("heures_sup_nuit", 0) or 0)
+            tj     = (jour.get("type_jour", "NORMAL") or "NORMAL").upper()
+        else:
+            h = float(jour or 0)
+            h_nuit = 0
+            tj = (types_par_jour[i] if types_par_jour and i < len(types_par_jour) else "NORMAL").upper()
+
+        if tj in ("DIMANCHE", "FERIE", "REPOS"):
+            h30b += h         # heures de jour un dimanche/férié → +30 %
+            h70  += h_nuit    # heures de nuit un dimanche/férié → +100 %
+        else:
+            total_norm += h
+            h40 += h_nuit     # nuit un jour ouvrable → +50 %
+
+    h_norm_finale = min(total_norm, SEUIL_NORM)
+    reste = total_norm - h_norm_finale
+    h_10 = min(reste, SEUIL_20 - SEUIL_NORM)   # S→S+8, max 8h (+20 %)
+    reste -= h_10
+    h_30 = reste                                # au-delà de S+8 (+35 %)
+
+    return {
+        "total_heures":     round(total_norm + h30b + h40 + h70, 2),
+        "heures_normales":  round(h_norm_finale, 2),
+        "heures_sup_10":    round(h_10, 2),     # 41ᵉ-48ᵉ (+20 %)
+        "heures_sup_30":    round(h_30, 2),     # >48ᵉ (+35 %)
+        "heures_sup_30b":   round(h30b, 2),     # dim/férié jour (+30 %)
+        "heures_sup_40":    round(h40, 2),      # nuit ouvrable (+50 %)
+        "heures_sup_70":    round(h70, 2),      # nuit dim/férié (+100 %)
+        "seuil_10_atteint": total_norm >= SEUIL_NORM,
+        "seuil_30_atteint": total_norm >= SEUIL_20,
+        "seuil_48_depasse": total_norm > SEUIL_20,
+        "heures_restantes_avant_10": max(0, round(SEUIL_NORM - total_norm, 2)),
+        "heures_restantes_avant_30": max(0, round(SEUIL_20 - total_norm, 2)),
+    }
 
 
 def distribuer_heures_semaine_btp(heures_par_jour: list,
@@ -629,6 +750,110 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -
         tot["heures_sup_10"] + tot["heures_sup_30"] + tot["heures_sup_40"] + tot["heures_sup_70"], 2)
     resultat["detail_semaines"] = detail_semaines
     return resultat
+
+
+def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = None) -> dict:
+    """
+    Ventile un MOIS de pointage selon la Convention Pétrole (SGEPP/GPP), Art. 38.2.
+
+    Même structure hebdomadaire que le BTP (cumul lundi→dimanche, seuils glissants),
+    mais l'aiguillage des cases diffère pour coller au barème pétrolier :
+
+        • 0 → S (jour ouvrable, hors dim./férié)      → Heures normales
+        • S → S+8 (jour ouvrable)                     → case 10 (+20 % : 41ᵉ-48ᵉ h)
+        • au-delà de S+8 (jour ouvrable)              → case 30 (+35 % : >48ᵉ h)
+        • dimanche / férié TRAVAILLÉ, heures de JOUR  → case 30b (+30 %)
+        • nuit (21h-6h) un jour ouvrable              → case 40 (+50 %)
+        • nuit (21h-6h) un dimanche / férié           → case 70 (+100 %)
+        • férié chômé en semaine                      → 8 h en Heures normales
+
+    Le seuil S vaut 40 h par défaut (déclenchement légal). Une dérogation peut le
+    porter jusqu'à 48 h ; le palier +20 % couvre alors les 8 heures suivantes.
+
+    Retour : dict des totaux mensuels ventilés (5 cases) + le détail par semaine.
+    """
+    feries_set = set(feries) if feries else set()
+    seuil_norm = _SEUIL_NORMALES if seuil_normales is None else float(seuil_normales)
+    # Largeur du 1er palier pétrolier : 41ᵉ → 48ᵉ heure = 8 h (contre 4 h en BTP).
+    seuil_20 = seuil_norm + 8.0
+
+    semaines = {}
+    for jour in jours:
+        d = jour.get("date")
+        if d is None:
+            continue
+        cat, hj, hn = _classer_jour_btp(jour, feries_set)
+        sem = semaines.setdefault(_cle_semaine(d), {
+            "cumul_ordinaire": 0.0,   # heures de jour ordinaires (cumul hebdo)
+            "nuit": 0.0,              # nuit jour ouvrable (+50 %)
+            "dim_ferie_jour": 0.0,    # dim/férié travaillé, heures de jour (+30 %)
+            "dim_ferie_nuit": 0.0,    # dim/férié travaillé, heures de nuit (+100 %)
+            "feries_chomes": 0.0,     # heures normales issues de fériés chômés
+        })
+        if cat == "DIM_FERIE_TRAVAILLE":
+            sem["dim_ferie_jour"] += hj
+            sem["dim_ferie_nuit"] += hn
+        elif cat == "FERIE_CHOME":
+            sem["feries_chomes"] += HEURES_JOUR_FERIE_CHOME
+        elif cat == "ORDINAIRE":
+            sem["cumul_ordinaire"] += hj
+            sem["nuit"] += hn
+        # "REPOS" : rien
+
+    tot = {"heures_normales": 0.0, "heures_sup_10": 0.0, "heures_sup_30": 0.0,
+           "heures_sup_30b": 0.0, "heures_sup_40": 0.0, "heures_sup_70": 0.0}
+    detail_semaines = []
+
+    for cle in sorted(semaines.keys()):
+        s = semaines[cle]
+        cumul = s["cumul_ordinaire"]
+
+        normales = min(cumul, seuil_norm) + s["feries_chomes"]
+        h10  = min(max(cumul - seuil_norm, 0.0), seuil_20 - seuil_norm)  # S→S+8 (+20 %)
+        h30  = max(cumul - seuil_20, 0.0)                                # >S+8  (+35 %)
+        h30b = s["dim_ferie_jour"]                                       # repos/férié jour
+        h40  = s["nuit"]                                                 # nuit ouvrable
+        h70  = s["dim_ferie_nuit"]                                       # nuit dim/férié
+
+        tot["heures_normales"] += normales
+        tot["heures_sup_10"]   += h10
+        tot["heures_sup_30"]   += h30
+        tot["heures_sup_30b"]  += h30b
+        tot["heures_sup_40"]   += h40
+        tot["heures_sup_70"]   += h70
+
+        detail_semaines.append({
+            "semaine": f"{cle[0]}-S{cle[1]:02d}",
+            "cumul_ordinaire": round(cumul, 2),
+            "heures_normales": round(normales, 2),
+            "heures_sup_10": round(h10, 2),
+            "heures_sup_30": round(h30, 2),
+            "heures_sup_30b": round(h30b, 2),
+            "heures_sup_40": round(h40, 2),
+            "heures_sup_70": round(h70, 2),
+        })
+
+    resultat = {k: round(v, 2) for k, v in tot.items()}
+    resultat["total_heures"] = round(sum(tot.values()), 2)
+    resultat["total_heures_sup"] = round(
+        tot["heures_sup_10"] + tot["heures_sup_30"] + tot["heures_sup_30b"]
+        + tot["heures_sup_40"] + tot["heures_sup_70"], 2)
+    resultat["detail_semaines"] = detail_semaines
+    return resultat
+
+
+def ventiler_heures_mois(convention, jours, feries=None, seuil_normales: float = None) -> dict:
+    """Ventilation mensuelle du pointage selon la convention (BTP ou Pétrole).
+
+    Les deux conventions raisonnent par seuils hebdomadaires ; le résultat
+    contient toujours les 5 cases (la case 30b reste à 0 hors Pétrole).
+    """
+    c = (convention or "").upper()
+    if c == "PETROLE":
+        return ventiler_heures_mois_petrole(jours, feries=feries, seuil_normales=seuil_normales)
+    res = ventiler_heures_mois_btp(jours, feries=feries, seuil_normales=seuil_normales)
+    res.setdefault("heures_sup_30b", 0.0)
+    return res
 
 
 def _hhmm_vers_minutes(horaire):
@@ -1076,6 +1301,112 @@ def distribuer_heures_semaine_commerce(heures_par_jour: list,
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# UTILITAIRES CONVENTION PÉTROLE GABON
+# (Convention Collective des professionnels du pétrole — SGEPP/GPP, 17 juin 1983 ;
+#  stockage et distribution, hors transport et commerce de détail.)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ─── Grille conventionnelle des salaires PÉTROLE — Annexe n°2 ──────────────────
+# ⚠️ Les montants de l'Annexe n°2 datent de 1983 : les premières catégories sont
+# DÉSORMAIS INFÉRIEURES AU SMIG en vigueur. Cette grille fournit la STRUCTURE de
+# classification (catégories) ; les montants doivent impérativement être actualisés
+# par l'entreprise et ne peuvent en aucun cas descendre sous le SMIG légal.
+# Catégories : A→I (employés/ouvriers), AMI→AMS (maîtrise), CP0→HC (cadres).
+GRILLE_PETROLE = [
+    # code,  libellé,                              mensuel 1983 (à actualiser)
+    ("A",   "Employé/Ouvrier catégorie A",            51_212),
+    ("B",   "Employé/Ouvrier catégorie B",            55_138),
+    ("C",   "Employé/Ouvrier catégorie C",            56_203),
+    ("D",   "Employé/Ouvrier catégorie D",            63_000),
+    ("E",   "Employé/Ouvrier catégorie E",            68_000),
+    ("F",   "Employé/Ouvrier catégorie F",            78_000),
+    ("G",   "Employé/Ouvrier catégorie G",            91_000),
+    ("H",   "Employé/Ouvrier catégorie H",            97_000),
+    ("I",   "Employé/Ouvrier catégorie I",           124_720),
+    ("AMI", "Agent de maîtrise I",                   133_704),
+    ("AMII","Agent de maîtrise II",                  160_864),
+    ("AMIII","Agent de maîtrise III",                193_646),
+    ("AMS", "Agent de maîtrise supérieur",           253_764),
+    ("CP0", "Cadre CP0",                             270_000),
+    ("CP1", "Cadre CP1",                             305_000),
+    ("CP2", "Cadre CP2",                             350_000),
+    ("CP3", "Cadre CP3",                             400_000),
+    ("CP4", "Cadre CP4",                             500_000),
+    ("CP5", "Cadre CP5",                             650_000),
+    ("CPS", "Cadre supérieur",                       900_000),
+    ("HC",  "Hors catégorie",                      1_200_000),
+]
+
+# Primes forfaitaires PÉTROLE (montants de référence 1983 — à actualiser)
+PRIME_ASSIDUITE_PETROLE        = 5_000    # Art. 49 — forfait mensuel (vs 1,5 % au Commerce)
+PRIME_NAISSANCE_PETROLE        = 10_000   # Art. 58 — par enfant
+PRIME_OCCASIONNELLE_PETROLE_PCT = 0.15    # Art. 56 — 15 % du salaire horaire (pénible/dangereux)
+
+
+def calculer_prime_anciennete_petrole(salaire_base: float, anciennete_annees: int) -> float:
+    """
+    Prime d'ancienneté PÉTROLE — Art. 46.5.
+    Attribuée après 2 ans de présence : **5 %** du salaire de base conventionnel,
+    majorée de 1 % par année supplémentaire.
+
+    ⚠️ Diffère du BTP/Commerce (qui démarrent à 2 % à 2 ans).
+        2 ans → 5 %   |   3 ans → 6 %   |   10 ans → 13 %
+    """
+    if anciennete_annees < 2 or salaire_base <= 0:
+        return 0.0
+    taux = min(0.05 + 0.01 * (anciennete_annees - 2), 0.30)  # plafond 30 %
+    return round(salaire_base * taux, 0)
+
+
+def calculer_indemnite_services_rendus_petrole(
+    moyenne_12_mois: float, anciennete_annees: int, min_anciennete: float = 1.0
+) -> float:
+    """
+    Indemnité de services rendus — Convention PÉTROLE Art. 32.
+    Due au travailleur licencié (hors faute lourde) ou partant à la retraite,
+    sous condition d'ancienneté minimale : 1 an (ouvrier/employé), 2 ans
+    (agent de maîtrise/cadre) — paramètre `min_anciennete`.
+
+    Base : moyenne mensuelle du salaire global des 12 derniers mois.
+    Taux × nombre d'années de présence continue :
+        0 à 5 ans      → 20 %/année
+        6 à 10 ans     → 25 %/année
+        11 à 15 ans    → 30 %/année
+        au-delà de 16 ans → 40 %/année
+    """
+    if anciennete_annees < min_anciennete or moyenne_12_mois <= 0:
+        return 0.0
+    if anciennete_annees <= 5:
+        taux = 0.20
+    elif anciennete_annees <= 10:
+        taux = 0.25
+    elif anciennete_annees <= 15:
+        taux = 0.30
+    else:
+        taux = 0.40
+    return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def permissions_familiales_petrole(evenement: str) -> int:
+    """
+    Permissions exceptionnelles pour événements familiaux — Art. 41.
+    Non déductibles du congé dans la limite de 10 jours/an.
+    Barème identique à celui du BTP/Commerce.
+    """
+    BAREMES = {
+        "mariage_travailleur":          4,
+        "mariage_enfant":               2,
+        "mariage_frere_soeur":          1,
+        "deces_conjoint_parent_enfant": 5,
+        "deces_frere_soeur":            2,
+        "deces_beau_parent":            2,
+        "naissance_enfant":             3,
+        "ceremonie_religieuse":         1,
+    }
+    return BAREMES.get(evenement, 0)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DISPATCHER PAR CONVENTION
 # Permet à l'application d'appliquer le bon barème selon Tenant.convention.
 # Valeurs possibles : "BTP" | "COMMERCE" | "AUCUNE"
@@ -1085,6 +1416,7 @@ CONVENTIONS_DISPONIBLES = {
     "AUCUNE":   "Aucune convention (Code du travail seul)",
     "BTP":      "Convention Collective BTP",
     "COMMERCE": "Convention Collective du Commerce",
+    "PETROLE":  "Convention Collective des professionnels du pétrole",
 }
 
 
@@ -1094,8 +1426,11 @@ def _conv(convention) -> str:
 
 
 def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) -> float:
-    """Prime d'ancienneté selon la convention (BTP/COMMERCE : 2% + 1%/an après 2 ans)."""
+    """Prime d'ancienneté selon la convention (BTP/COMMERCE : 2% + 1%/an après 2 ans ;
+    PÉTROLE : 5% + 1%/an après 2 ans)."""
     c = _conv(convention)
+    if c == "PETROLE":
+        return calculer_prime_anciennete_petrole(salaire_base, anciennete_annees)
     if c == "COMMERCE":
         return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
     if c == "BTP":
@@ -1146,13 +1481,15 @@ def preavis_jours(convention, anciennete_annees: int) -> int:
         return max(calculer_preavis_commerce(anciennete_annees), legal)
     if c == "BTP":
         return max(calculer_preavis_btp(anciennete_annees), legal)
-    # Aucune convention : barème légal du Code du travail.
+    # PÉTROLE (Art. 30.3 : renvoi au Code du travail) et AUCUNE : barème légal.
     return legal
 
 
 def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_annees: int) -> float:
     """Indemnité de services rendus (Art. A.32) selon la convention."""
     c = _conv(convention)
+    if c == "PETROLE":
+        return calculer_indemnite_services_rendus_petrole(moyenne_12_mois, anciennete_annees)
     if c == "COMMERCE":
         return calculer_indemnite_services_rendus_commerce(moyenne_12_mois, anciennete_annees)
     if c == "BTP":
@@ -1215,6 +1552,8 @@ def indemnite_rupture(convention, cause, moyenne_12_mois: float,
 def permissions_familiales(convention, evenement: str) -> int:
     """Jours de permission exceptionnelle (Art. A.41) selon la convention."""
     c = _conv(convention)
+    if c == "PETROLE":
+        return permissions_familiales_petrole(evenement)
     if c == "BTP":
         return permissions_familiales_btp(evenement)
     # COMMERCE et défaut : même barème
@@ -1228,6 +1567,9 @@ def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour:
     seuil_normales : seuil hebdomadaire de déclenchement des heures sup (défaut 40h).
     """
     c = _conv(convention)
+    if c == "PETROLE":
+        return distribuer_heures_semaine_petrole(heures_par_jour, types_par_jour,
+                                                 seuil_normales=seuil_normales)
     if c == "COMMERCE":
         return distribuer_heures_semaine_commerce(heures_par_jour, types_par_jour)
     return distribuer_heures_semaine_btp(heures_par_jour, types_par_jour, seuil_normales=seuil_normales)
