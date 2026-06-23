@@ -9,7 +9,16 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Recherche : prestataires inclus
+#### Journaliers mensuels — date d'embauche & arrondi
+- L'**impression de l'état de paie des journaliers** (vue normale et vue par
+  chantier) affiche désormais la **date d'embauche** sous le nom de chaque
+  journalier.
+- Le **montant des paies mensuelles** des journaliers est **arrondi au multiple
+  de 5 F** le plus proche (plus petite coupure du franc CFA), de sorte qu'un
+  montant comme 1 099 999 devienne 1 100 000 — payable en espèces sans appoint.
+  Nouveau helper `arrondi_pas()`.
+
+
 - La **barre de recherche du tableau de bord** et la **page de recherche
   globale** suggèrent désormais aussi les **prestataires / sous-traitants**
   (par raison sociale, code ou activité), comme pour les salariés et les

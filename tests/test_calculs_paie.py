@@ -28,6 +28,7 @@ from calculs_paie import (
     calculer_bulletin,
     calculer_heures_sup_btp,
     distribuer_heures_semaine_btp,
+    arrondi_pas,
     CNSS_TAUX_SALARIE, CNSS_TAUX_PATRONAL, CNSS_PLAFOND,
     CNAMGS_TAUX_SALARIE, CNAMGS_TAUX_PATRONAL, CNAMGS_PLAFOND,
     TCS_TAUX, TCS_EXONERATION,
@@ -361,3 +362,25 @@ class TestScenariosIntegres:
             # prime_panier, indem_transport, prime_salisure = 0
         )
         assert abs(b["net_a_payer"] - attendu) < 5  # tolérance arrondi
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ARRONDI AU MULTIPLE DE 5 (paies journaliers mensuels réglées en espèces)
+# ─────────────────────────────────────────────────────────────────────────────
+class TestArrondiPas:
+    def test_termine_par_99999_devient_rond(self):
+        assert arrondi_pas(1099999, 5) == 1100000
+        assert arrondi_pas(99999, 5) == 100000
+
+    def test_arrondi_au_multiple_de_5(self):
+        assert arrondi_pas(149999, 5) == 150000
+        assert arrondi_pas(149997, 5) == 149995   # plus proche
+        assert arrondi_pas(149998, 5) == 150000
+
+    def test_montant_deja_rond_inchange(self):
+        assert arrondi_pas(150000, 5) == 150000
+        assert arrondi_pas(0, 5) == 0.0
+
+    def test_resultat_toujours_multiple_de_5(self):
+        for v in (123456, 987654, 451437.985, 1, 7, 12):
+            assert arrondi_pas(v, 5) % 5 == 0

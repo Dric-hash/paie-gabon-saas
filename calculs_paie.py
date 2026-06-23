@@ -117,6 +117,28 @@ def fcfa(valeur, decimales: int = 2) -> float:
         return 0.0
 
 
+def arrondi_pas(valeur, pas: int = 5) -> float:
+    """Arrondit `valeur` au multiple de `pas` le plus proche (round-half-up).
+
+    Utile pour les paies réglées en espèces : la plus petite coupure du franc
+    CFA est de 5 F, donc un montant comme 1 099 999 n'est pas payable tel quel.
+    Avec pas=5 il devient 1 100 000 ; le « …99999 » disparaît.
+
+    >>> arrondi_pas(1099999)      # 1100000.0
+    >>> arrondi_pas(149999, 5)    # 150000.0
+    >>> arrondi_pas(0)            # 0.0
+    """
+    try:
+        v = Decimal(str(valeur or 0))
+        p = int(pas)
+        if p <= 0:
+            return float(v)
+        n = (v / p).quantize(Decimal(1), rounding=ROUND_HALF_UP)
+        return float(n * p)
+    except Exception:
+        return float(valeur or 0)
+
+
 def calculer_taux_horaire(salaire_base: float) -> float:
     """Taux horaire de base = salaire_base / 173,33."""
     if salaire_base <= 0:

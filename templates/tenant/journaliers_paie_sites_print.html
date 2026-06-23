@@ -79,6 +79,7 @@
         <td>
           <b>{{ f.journalier.nom_complet }}</b><br/>
           <span style="color:#9ca3af;font-size:9px">{{ f.journalier.profession or '' }}</span>
+          {% if f.journalier.date_embauche %}<br/><span style="color:#9ca3af;font-size:9px">Embauché le {{ f.journalier.date_embauche.strftime('%d/%m/%Y') }}</span>{% endif %}
         </td>
         <td class="center">
           {% if f.journalier.type_paie == 'MENSUEL' %}

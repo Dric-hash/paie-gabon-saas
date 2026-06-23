@@ -3513,11 +3513,13 @@ def journaliers_paie_generer_mois():
         if total_h <= 0 and nb_jours == 0:
             continue
         taux = float(j.taux_horaire or 0)
+        from calculs_paie import arrondi_pas
+        brut = arrondi_pas(total_h * taux, 5)   # arrondi au multiple de 5 F (paie en espèces)
         db.session.add(FeuillePaieJournalier(
             tenant_id=t.id, journalier_id=j.id,
             date_debut=date_debut, date_fin=date_fin,
             nb_jours=nb_jours, total_heures=total_h,
-            taux_horaire=taux, montant_brut=round(total_h * taux, 2),
+            taux_horaire=taux, montant_brut=brut,
             statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
