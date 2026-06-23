@@ -19,7 +19,7 @@
   </div>
 </div>
 
-<!-- Totaux financiers -->
+<!-- Totaux financiers (tout converti en XAF — avances déduites automatiquement) -->
 <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem">
   <div class="card p-4">
     <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Total facturé (net)</div>
@@ -32,12 +32,16 @@
   <div class="card p-4">
     <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Avances perçues</div>
     <div style="font-size:1.4rem;font-weight:900;color:{{ '#92400e' if total_avances > 0 else '#9ca3af' }};margin-top:.25rem">{{ "{:,.0f}".format(total_avances).replace(",", " ") }} XAF</div>
+    {% if avances_imputees > 0 %}<div style="font-size:.68rem;color:#92400e;margin-top:.15rem">dont {{ "{:,.0f}".format(avances_imputees).replace(",", " ") }} déduites des factures</div>{% endif %}
+    {% if avance_disponible > 0 %}<div style="font-size:.68rem;color:#9ca3af;margin-top:.1rem">{{ "{:,.0f}".format(avance_disponible).replace(",", " ") }} encore disponibles</div>{% endif %}
   </div>
-  <div class="card p-4">
-    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Reste dû</div>
-    <div style="font-size:1.4rem;font-weight:900;color:{{ '#92400e' if total_du > 0 else '#9ca3af' }};margin-top:.25rem">{{ "{:,.0f}".format(total_du).replace(",", " ") }} XAF</div>
+  <div class="card p-4" style="background:{{ '#fffbeb' if solde_net > 0 else '#f0fdf4' }}">
+    <div style="font-size:.73rem;color:#9ca3af;font-weight:700;text-transform:uppercase">Solde net dû</div>
+    <div style="font-size:1.4rem;font-weight:900;color:{{ '#92400e' if solde_net > 0 else '#065f46' }};margin-top:.25rem">{{ "{:,.0f}".format(solde_net).replace(",", " ") }} XAF</div>
+    <div style="font-size:.68rem;color:#9ca3af;margin-top:.15rem">facturé − payé − avances</div>
   </div>
 </div>
+
 
 <!-- Infos -->
 <div class="card p-5 mb-5">
@@ -81,7 +85,13 @@
           {{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }} <span style="color:#9ca3af;font-weight:400;font-size:.72rem">{{ f.devise }}</span>
           {% if f.devise != 'XAF' %}<div style="font-size:.7rem;font-weight:400;color:#9ca3af">≈ {{ "{:,.0f}".format(f.montant_net_en_xaf).replace(",", " ") }} XAF</div>{% endif %}
         </td>
-        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if f.reste_a_payer > 0 else '#9ca3af' }}">{{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if f.reste_a_payer > 0 else '#9ca3af' }}">
+          {{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }} <span style="font-size:.7rem;color:#9ca3af">{{ f.devise }}</span>
+          {% if avance_par_facture.get(f.id, 0) > 0 %}
+          <div style="font-size:.7rem;color:#92400e">− avance {{ "{:,.0f}".format(avance_par_facture[f.id]).replace(",", " ") }} XAF</div>
+          <div style="font-size:.72rem;font-weight:800;color:#0f3d36">solde {{ "{:,.0f}".format(solde_par_facture.get(f.id, 0)).replace(",", " ") }} XAF</div>
+          {% endif %}
+        </td>
         <td style="padding:.6rem 1rem;text-align:center">
           {% set st_bg = {'PAYEE':'#d1fae5','PARTIELLE':'#fef3c7','VALIDEE':'#dbeafe','BROUILLON':'#f3f4f6','ANNULEE':'#f3f4f6'} %}
           {% set st_col = {'PAYEE':'#065f46','PARTIELLE':'#92400e','VALIDEE':'#1e40af','BROUILLON':'#6b7280','ANNULEE':'#9ca3af'} %}

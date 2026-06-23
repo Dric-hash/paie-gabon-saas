@@ -343,6 +343,59 @@ def test_facture_impression(client):
     assert "Dalle béton" in html and "Carrelage" in html
 
 
+# ── Déduction automatique des avances sur les factures (par chantier) ─────────
+def test_avance_deduite_meme_chantier(client):
+    sid = client._ids["site_a"]
+    _creer(client, montant="500000", site_id=str(sid), motif="démarrage")
+    fid = _facture(client, numero="F-CH", site_id=str(sid))   # net 1 900 000 XAF
+    html = client.get(f"/prestataires/factures/{fid}/imprimer").data.decode("utf-8", "ignore")
+    assert "500 000" in html          # avance déduite
+    assert "1 400 000" in html        # solde = 1 900 000 − 500 000
+    # Tableau de bord : solde net dû
+    d = client.get(f"/prestataires/{client._ids['prest_a']}").data.decode("utf-8", "ignore")
+    assert "Solde net dû" in d and "1 400 000" in d
+
+
+def test_avance_en_devise_deduite_en_xaf(client):
+    sid = client._ids["site_a"]
+    # 1000 EUR à parité fixe = 655 957 XAF
+    _creer(client, montant="1000", devise="EUR", taux_change="655.957", site_id=str(sid))
+    fid = _facture(client, numero="F-EURCH", site_id=str(sid))   # 1 900 000 XAF
+    html = client.get(f"/prestataires/factures/{fid}/imprimer").data.decode("utf-8", "ignore")
+    assert "655 957" in html           # avance EUR convertie et déduite
+    assert "1 244 043" in html         # solde = 1 900 000 − 655 957
+
+
+def test_avance_superieure_facture_laisse_solde_zero(client):
+    sid = client._ids["site_a"]
+    _creer(client, montant="3000000", site_id=str(sid))          # avance > facture
+    fid = _facture(client, numero="F-SUP", site_id=str(sid))     # 1 900 000 XAF
+    from blueprints.prestataires import _imputer_avances
+    from models import FacturePrestataire, AvancePrestataire
+    with flask_app.app_context():
+        facts = FacturePrestataire.query.filter_by(prestataire_id=client._ids["prest_a"]).all()
+        avs = AvancePrestataire.query.filter_by(prestataire_id=client._ids["prest_a"]).all()
+        imp = _imputer_avances(facts, avs)
+        assert imp["solde_xaf"][fid] == 0                        # facture entièrement couverte
+        assert imp["avance_disponible_xaf"] == 1100000           # 3 000 000 − 1 900 000
+
+
+def test_imputation_chronologique_entre_factures(client):
+    sid = client._ids["site_a"]
+    _creer(client, montant="2500000", site_id=str(sid))
+    f1 = _facture(client, numero="F-1", date_facture="2026-06-10", site_id=str(sid))  # 1.9M
+    f2 = _facture(client, numero="F-2", date_facture="2026-06-20", site_id=str(sid))  # 1.9M
+    from blueprints.prestataires import _imputer_avances
+    from models import FacturePrestataire, AvancePrestataire
+    with flask_app.app_context():
+        facts = FacturePrestataire.query.filter_by(prestataire_id=client._ids["prest_a"]).all()
+        avs = AvancePrestataire.query.filter_by(prestataire_id=client._ids["prest_a"]).all()
+        imp = _imputer_avances(facts, avs)
+        # La plus ancienne (F-1) est soldée d'abord : 1.9M imputés ; F-2 reçoit 600k
+        assert imp["solde_xaf"][f1] == 0
+        assert imp["solde_xaf"][f2] == 1300000     # 1.9M − 0.6M
+
+
 def test_admin_only_protege_la_suppression(client):
     """Verrou d'autorisation (utilisé par la route de suppression de facture) :
     laisse passer un administrateur, bloque (403) un non-admin. Test unitaire

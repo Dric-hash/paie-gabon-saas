@@ -40,6 +40,75 @@ def _guard():
     return t, None
 
 
+def _imputer_avances(factures, avances):
+    """Impute (déduit) automatiquement les avances sur les factures, par chantier.
+
+    Règle métier :
+      • Une avance rattachée à un chantier est déduite des factures de CE chantier.
+      • Une avance sans chantier alimente un pool « général » déduit des factures
+        sans chantier.
+      • Allocation chronologique : la facture la plus ancienne du chantier est
+        soldée en premier.
+    Tout est converti en **XAF** (via montant_en_xaf / taux_change), de sorte que
+    le solde est correct même si les avances sont en EUR, USD, MAD…
+
+    Renvoie un dict :
+      avance_xaf[fid]  : avance imputée sur la facture (XAF)
+      solde_xaf[fid]   : solde restant après paiements ET avances (XAF, ≥ 0)
+      reste_paye_xaf[fid] : reste après paiements seuls (XAF)
+      total_facture_xaf, total_paye_xaf, total_avances_xaf,
+      total_avances_imputees_xaf, avance_disponible_xaf, solde_net_xaf
+    """
+    from collections import defaultdict
+
+    actives = [a for a in avances if a.statut != "ANNULEE"]
+    pools = defaultdict(float)
+    total_avances_xaf = 0.0
+    for a in actives:
+        pools[a.site_id] += a.montant_en_xaf
+        total_avances_xaf += a.montant_en_xaf
+
+    facts = [f for f in factures if f.statut != "ANNULEE"]
+    facts_ordre = sorted(facts, key=lambda f: (f.date_facture, f.id))
+
+    par_site = defaultdict(list)
+    for f in facts_ordre:
+        par_site[f.site_id].append(f)
+
+    avance_xaf, solde_xaf, reste_paye_xaf = {}, {}, {}
+    total_facture_xaf = total_paye_xaf = 0.0
+    for site_id, fs in par_site.items():
+        pool = pools.get(site_id, 0.0)
+        for f in fs:
+            net   = f.montant_net_en_xaf
+            taux  = float(f.taux_change or 1)
+            paye  = round(float(f.montant_paye or 0) * taux, 2)
+            reste = max(0.0, round(net - paye, 2))
+            imput = round(min(pool, reste), 2)
+            pool  = round(pool - imput, 2)
+            total_facture_xaf += net
+            total_paye_xaf    += paye
+            avance_xaf[f.id]     = imput
+            reste_paye_xaf[f.id] = reste
+            solde_xaf[f.id]      = round(reste - imput, 2)
+        pools[site_id] = pool
+
+    avance_disponible_xaf = round(sum(max(0.0, v) for v in pools.values()), 2)
+    total_avances_imputees_xaf = round(total_avances_xaf - avance_disponible_xaf, 2)
+    solde_net_xaf = round(sum(solde_xaf.values()), 2)
+
+    return {
+        "avance_xaf": avance_xaf, "solde_xaf": solde_xaf,
+        "reste_paye_xaf": reste_paye_xaf,
+        "total_facture_xaf": round(total_facture_xaf, 2),
+        "total_paye_xaf": round(total_paye_xaf, 2),
+        "total_avances_xaf": round(total_avances_xaf, 2),
+        "total_avances_imputees_xaf": total_avances_imputees_xaf,
+        "avance_disponible_xaf": avance_disponible_xaf,
+        "solde_net_xaf": solde_net_xaf,
+    }
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # LISTE DES PRESTATAIRES
 # ══════════════════════════════════════════════════════════════════════════════
@@ -102,14 +171,17 @@ def prestataire_detail(id):
                .filter(AvancePrestataire.statut != "ANNULEE")
                .order_by(AvancePrestataire.date_avance.desc()).all())
 
-    # Totaux
-    total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures
-                        if f.statut != "ANNULEE")
-    total_paye    = sum(float(f.montant_paye or 0) for f in factures)
-    total_du      = round(total_facture - total_paye, 2)
-    # Avances : on totalise en XAF (devises mélangées possibles)
-    total_avances = round(sum(a.montant_en_xaf for a in avances), 2)
-    total_avances_a_regul = round(sum(a.reste_a_regulariser for a in avances), 2)
+    # Imputation automatique des avances sur les factures (par chantier, en XAF)
+    imp = _imputer_avances(factures, avances)
+    total_facture = imp["total_facture_xaf"]
+    total_paye    = imp["total_paye_xaf"]
+    total_avances = imp["total_avances_xaf"]
+    avances_imputees   = imp["total_avances_imputees_xaf"]
+    avance_disponible  = imp["avance_disponible_xaf"]
+    solde_net          = imp["solde_net_xaf"]
+    # Soldes par facture (après paiements ET avances), en XAF
+    solde_par_facture  = imp["solde_xaf"]
+    avance_par_facture = imp["avance_xaf"]
     # La dernière avance en attente : à présenter au chef de chantier pour validation
     derniere_en_attente = next((a for a in avances if a.statut == "EN_ATTENTE"), None)
 
@@ -122,8 +194,10 @@ def prestataire_detail(id):
     return render_template("tenant/prestataire_detail.html",
         tenant=t, p=p, contrats=contrats, factures=factures, avances=avances,
         factures_data=factures_data,
-        total_facture=total_facture, total_paye=total_paye, total_du=total_du,
-        total_avances=total_avances, total_avances_a_regul=total_avances_a_regul,
+        total_facture=total_facture, total_paye=total_paye,
+        total_avances=total_avances, avances_imputees=avances_imputees,
+        avance_disponible=avance_disponible, solde_net=solde_net,
+        solde_par_facture=solde_par_facture, avance_par_facture=avance_par_facture,
         derniere_en_attente=derniere_en_attente,
         devises_dispo=devises_disponibles(),
         sites=Site.query.filter_by(tenant_id=t.id).all())
@@ -554,15 +628,29 @@ def facture_annuler(fid):
 @bp.route("/prestataires/factures/<int:fid>/imprimer")
 @login_required
 def facture_imprimer(fid):
-    """Facture imprimable (lignes de détail, totaux, devise + équivalent XAF)."""
+    """Facture imprimable (lignes de détail, totaux, devise + équivalent XAF,
+    avances du chantier déduites et solde net automatiquement calculé)."""
     t, redir = _guard()
     if redir:
         return redir
     f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
     p = Prestataire.query.filter_by(id=f.prestataire_id, tenant_id=t.id).first_or_404()
     site = Site.query.filter_by(id=f.site_id, tenant_id=t.id).first() if f.site_id else None
+
+    # Imputation des avances sur l'ensemble des factures du prestataire (par chantier)
+    factures = (FacturePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=f.prestataire_id)
+                .order_by(FacturePrestataire.date_facture).all())
+    avances = (AvancePrestataire.query.filter_by(tenant_id=t.id, prestataire_id=f.prestataire_id)
+               .filter(AvancePrestataire.statut != "ANNULEE").all())
+    imp = _imputer_avances(factures, avances)
+    avance_imputee = imp["avance_xaf"].get(f.id, 0.0)      # XAF déduits sur CETTE facture
+    solde_xaf      = imp["solde_xaf"].get(f.id, 0.0)        # solde après paiements + avances
+    # Avances du chantier de cette facture (pour le détail imprimé)
+    avances_site = [a for a in avances if a.site_id == f.site_id]
+
     return render_template("tenant/facture_print.html",
-        tenant=t, p=p, f=f, site=site, now=datetime.now())
+        tenant=t, p=p, f=f, site=site, now=datetime.now(),
+        avance_imputee=avance_imputee, solde_xaf=solde_xaf, avances_site=avances_site)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

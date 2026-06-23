@@ -9,7 +9,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Factures prestataires — lignes, workflow et impression
+#### Déduction automatique des avances sur les factures
+- Les **avances sont désormais déduites automatiquement des factures**, par
+  **chantier / site** : une avance liée à un chantier s'impute sur les factures
+  de ce chantier (la plus ancienne d'abord) ; une avance sans chantier alimente
+  un pool général. Le reliquat non imputé reste « disponible ».
+- Le **solde se calcule automatiquement en XAF**, donc correctement même si
+  l'avance a été perçue en **EUR, USD ou MAD** (conversion au taux retenu).
+- **Tableau de bord du prestataire** : carte « Solde net dû » (= facturé − payé −
+  avances) ; la carte « Avances perçues » indique la part déjà déduite et la part
+  encore disponible ; chaque facture affiche son solde après déduction.
+- **Impression de chaque facture** : bloc des avances du chantier déduites + ligne
+  « Solde à payer » calculée automatiquement.
+
+
 - **Factures multi-lignes** : chaque facture peut comporter plusieurs lignes de
   détail (désignation, quantité, unité — dont m² —, prix unitaire) ; le HT est la
   somme des lignes. Nouveau modèle `LigneFacturePrestataire`.
