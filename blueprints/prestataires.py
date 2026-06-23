@@ -21,7 +21,7 @@ from models import (db, Prestataire, ContratPrestation, FacturePrestataire,
                     PaiementPrestataire, AvancePrestataire, LigneFacturePrestataire,
                     Site)
 from audit import log_action
-from core import get_tenant, can_edit, require_permission, parse_date
+from core import get_tenant, can_edit, require_permission, parse_date, admin_only
 from devises import (taux_xaf, convertir_en_xaf, info_taux, devises_disponibles,
                      DEVISES)
 
@@ -392,8 +392,8 @@ def facture_modifier(fid):
     if redir:
         return redir
     f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
-    if not f.est_modifiable:
-        flash("Cette facture est validée : elle n'est plus modifiable.", "error")
+    if not f.est_modifiable and not current_user.is_tenant_admin:
+        flash("Cette facture est validée : seul l'administrateur du compte peut la modifier.", "error")
         return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
 
     numero = request.form.get("numero", "").strip()
@@ -425,12 +425,47 @@ def facture_modifier(fid):
     f.taux_change   = taux_ch
     _appliquer_lignes(f, t.id)
     f.calculer()
+    # Si l'admin modifie une facture déjà validée/payée, on garde un statut cohérent
+    if f.statut not in ("BROUILLON", "ANNULEE"):
+        paye = float(f.montant_paye or 0)
+        if paye >= float(f.montant_net_a_payer) - 0.01 and paye > 0:
+            f.statut = "PAYEE"
+        elif paye > 0:
+            f.statut = "PARTIELLE"
+        else:
+            f.statut = "VALIDEE"
     db.session.commit()
     log_action("UPDATE", "facture_prestataire", f.id, f"Modification facture {f.numero}",
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
     flash(f"Facture {f.numero} modifiée.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+
+@bp.route("/prestataires/factures/<int:fid>/supprimer", methods=["POST"])
+@login_required
+@admin_only
+def facture_supprimer(fid):
+    """Suppression définitive d'une facture — réservée à l'administrateur du compte.
+
+    Supprime aussi ses paiements et ses lignes de détail (même si la facture est
+    validée ou payée). Action enregistrée dans le journal d'audit.
+    """
+    t, redir = _guard()
+    if redir:
+        return redir
+    f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
+    pid, numero = f.prestataire_id, f.numero
+    # Retirer d'abord les paiements liés (pas de cascade sur cette relation)
+    PaiementPrestataire.query.filter_by(tenant_id=t.id, facture_id=fid).delete()
+    db.session.delete(f)   # les lignes partent par cascade delete-orphan
+    db.session.commit()
+    log_action("DELETE", "facture_prestataire", fid,
+               f"Suppression facture {numero} (admin)",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Facture {numero} supprimée définitivement.", "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=pid))
 
 
 @bp.route("/prestataires/factures/<int:fid>/valider", methods=["POST"])

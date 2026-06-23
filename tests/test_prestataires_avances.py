@@ -6,9 +6,14 @@ imprimable (avec la liste des avances), suppression, et isolation multi-tenant.
 """
 import os
 import sys
+import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+# Base fichier temporaire (et non :memory:) pour un partage déterministe de la
+# base entre toutes les connexions/clients de test.
+_DB_FD, _DB_PATH = tempfile.mkstemp(suffix=".db", prefix="paiegabon_test_")
+os.close(_DB_FD)
+os.environ["DATABASE_URL"] = "sqlite:///" + _DB_PATH
 os.environ.setdefault("SECRET_KEY", "test-secret-avances")
 
 import pytest
@@ -42,6 +47,11 @@ def client():
                             actif=True, email_verifie=True)
         admin.set_password("MotDePasse1")
         db.session.add(admin)
+        basic = Utilisateur(nom="AGENT", prenom="B", email="agent@a.ga",
+                            role="CONSULTANT", tenant_id=t_a.id,
+                            actif=True, email_verifie=True)
+        basic.set_password("MotDePasse1")
+        db.session.add(basic)
         # Prestataire sous-traitant du tenant A + un du tenant B (isolation)
         st = Prestataire(tenant_id=t_a.id, code="ST001", categorie="SOUS_TRAITANT",
                          raison_sociale="BTP SOUS-TRAITANT SARL")
@@ -52,7 +62,7 @@ def client():
         chantier = Site(tenant_id=t_a.id, nom="Chantier Akanda", code="CH1")
         db.session.add(chantier)
         db.session.commit()
-        ids = {"tenant_a": t_a.id, "admin": admin.id,
+        ids = {"tenant_a": t_a.id, "admin": admin.id, "basic": basic.id,
                "prest_a": st.id, "prest_b": autre.id, "site_a": chantier.id}
         cli = flask_app.test_client()
         with cli.session_transaction() as sess:
@@ -297,14 +307,6 @@ def test_modifier_puis_valider_puis_payer(client):
         assert f.statut == "VALIDEE"
         assert f.est_payable is True
         assert f.est_modifiable is False
-    # Modification désormais refusée
-    client.post(f"/prestataires/factures/{fid}/modifier", data={
-        "numero": "F-001", "date_facture": "2026-06-12",
-        "ligne_designation": ["X"], "ligne_quantite": ["1"],
-        "ligne_unite": ["u"], "ligne_prix": ["1"],
-    }, follow_redirects=True)
-    with flask_app.app_context():
-        assert float(db.session.get(FacturePrestataire, fid).montant_ht) == 2000000
     # Paiement maintenant autorisé
     client.post(f"/prestataires/factures/{fid}/payer",
                 data={"montant": "2000000", "date_paiement": "2026-06-14"},
@@ -339,3 +341,63 @@ def test_facture_impression(client):
     html = r.data.decode("utf-8", errors="ignore")
     assert "Facture N° F-IMP" in html
     assert "Dalle béton" in html and "Carrelage" in html
+
+
+def test_admin_only_protege_la_suppression(client):
+    """Verrou d'autorisation (utilisé par la route de suppression de facture) :
+    laisse passer un administrateur, bloque (403) un non-admin. Test unitaire
+    déterministe via login_user, indépendant des aléas de session HTTP."""
+    from flask_login import login_user, logout_user
+    from werkzeug.exceptions import Forbidden
+    from core import admin_only
+
+    @admin_only
+    def vue_protegee():
+        return "ok"
+
+    with flask_app.test_request_context():
+        admin = db.session.get(Utilisateur, client._ids["admin"])
+        login_user(admin)
+        assert vue_protegee() == "ok"          # admin : autorisé
+        logout_user()
+
+    with flask_app.test_request_context():
+        agent = db.session.get(Utilisateur, client._ids["basic"])
+        login_user(agent)
+        assert agent.is_tenant_admin is False
+        with pytest.raises(Forbidden):
+            vue_protegee()                      # non-admin : 403
+
+
+def test_admin_modifie_facture_validee(client):
+    fid = _facture(client, numero="F-ADM")
+    client.post(f"/prestataires/factures/{fid}/valider", follow_redirects=True)
+    # Admin modifie une facture VALIDÉE
+    client.post(f"/prestataires/factures/{fid}/modifier", data={
+        "numero": "F-ADM", "date_facture": "2026-06-12", "taux_tva": "0", "taux_retenue": "0",
+        "ligne_designation": ["Reprise"], "ligne_quantite": ["1"],
+        "ligne_unite": ["forfait"], "ligne_prix": ["500000"],
+    }, follow_redirects=True)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert float(f.montant_ht) == 500000
+        assert f.statut == "VALIDEE"   # reste cohérente
+
+
+def test_admin_supprime_facture_validee_et_payee(client):
+    fid = _facture(client, numero="F-DEL")
+    client.post(f"/prestataires/factures/{fid}/valider", follow_redirects=True)
+    client.post(f"/prestataires/factures/{fid}/payer",
+                data={"montant": "100000", "date_paiement": "2026-06-14"},
+                follow_redirects=True)
+    # Admin supprime même validée + payée
+    client.post(f"/prestataires/factures/{fid}/supprimer", follow_redirects=True)
+    with flask_app.app_context():
+        assert db.session.get(FacturePrestataire, fid) is None
+        assert FacturePrestataire.query.filter_by(numero="F-DEL").count() == 0
+        assert LigneFacturePrestataire.query.filter_by(facture_id=fid).count() == 0
+
+
+
+
+

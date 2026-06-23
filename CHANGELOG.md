@@ -27,6 +27,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   colonnes posées en prod par `run_migrations()`, table par `create_all()`.
   Les factures déjà saisies (ancien statut « En attente ») passent en « Validée »
   pour rester payables.
+- **Override administrateur** : l'administrateur du compte peut **modifier ou
+  supprimer** une facture même validée ou payée (boutons dédiés sur la fiche).
+  La suppression retire aussi les paiements et lignes liés. Réservé au rôle admin
+  (route `facture_supprimer` protégée par `admin_only`).
 
 
 - Nouveau modèle `AvancePrestataire` : sommes versées à un prestataire ou

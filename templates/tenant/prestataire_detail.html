@@ -98,6 +98,15 @@
           {% elif f.est_payable %}
           <button onclick="ouvrirPaiement({{ f.id }}, '{{ f.numero }}', {{ f.reste_a_payer }})" style="background:#0f3d36;color:white;border:none;font-size:.72rem;font-weight:700;padding:.25rem .6rem;border-radius:.4rem;cursor:pointer">Payer</button>
           {% endif %}
+          {% if current_user.is_tenant_admin %}
+            {% if f.statut != 'BROUILLON' and f.statut != 'ANNULEE' %}
+            <button onclick='ouvrirEditFacture({{ factures_data[f.id].f|tojson }}, {{ factures_data[f.id].lignes|tojson }})' title="Modifier (admin)" style="background:none;border:none;color:#0f3d36;font-size:.72rem;font-weight:700;cursor:pointer;margin-left:.3rem">Modifier</button>
+            {% endif %}
+          <form method="POST" action="/prestataires/factures/{{ f.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer définitivement la facture {{ f.numero }} ? Ses paiements et lignes seront aussi supprimés. Action irréversible.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" title="Supprimer (admin)" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer;margin-left:.3rem">Supprimer</button>
+          </form>
+          {% endif %}
         </td>
       </tr>
       {% endfor %}
