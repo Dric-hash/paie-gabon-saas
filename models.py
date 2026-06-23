@@ -1126,11 +1126,18 @@ class FacturePrestataire(db.Model):
     taux_change    = db.Column(db.Numeric(14, 6), default=1)    # XAF pour 1 unité de devise
     montant_xaf    = db.Column(db.Numeric(15, 2), default=0)    # net à payer converti en XAF
 
-    statut         = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | PAYEE | PARTIELLE | ANNULEE
+    statut         = db.Column(db.String(20), default="BROUILLON")  # BROUILLON | VALIDEE | PARTIELLE | PAYEE | ANNULEE
     montant_paye   = db.Column(db.Numeric(15,2), default=0)
+    # Workflow de validation (modifiable tant que BROUILLON ; payable une fois VALIDEE)
+    valide_par_nom     = db.Column(db.String(150))
+    valide_par_user_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    date_validation    = db.Column(db.DateTime)
     date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
 
     paiements = db.relationship("PaiementPrestataire", backref="facture", lazy=True)
+    lignes    = db.relationship("LigneFacturePrestataire", backref="facture",
+                                lazy=True, cascade="all, delete-orphan",
+                                order_by="LigneFacturePrestataire.ordre")
 
     __table_args__ = (
         db.UniqueConstraint("tenant_id", "prestataire_id", "numero"),
@@ -1139,9 +1146,11 @@ class FacturePrestataire(db.Model):
     )
 
     def calculer(self):
-        """Recalcule HT (si m²), TVA, retenue, TTC, net à payer et équivalent XAF."""
-        # BTP : si surface et prix au m² fournis, le HT en découle.
-        if self.surface_m2 and self.prix_unitaire_m2:
+        """Recalcule HT (lignes ou m²), TVA, retenue, TTC, net à payer et équivalent XAF."""
+        # Priorité aux lignes de détail si présentes ; sinon m² ; sinon HT direct.
+        if self.lignes:
+            self.montant_ht = round(sum(float(l.montant or 0) for l in self.lignes), 2)
+        elif self.surface_m2 and self.prix_unitaire_m2:
             self.montant_ht = round(float(self.surface_m2) * float(self.prix_unitaire_m2), 2)
         ht = float(self.montant_ht or 0)
         self.montant_tva = round(ht * float(self.taux_tva or 0) / 100, 2)
@@ -1163,9 +1172,24 @@ class FacturePrestataire(db.Model):
         return round(float(self.montant_net_a_payer or 0) - float(self.montant_paye or 0), 2)
 
     @property
+    def est_modifiable(self):
+        """Modifiable/supprimable uniquement à l'état brouillon."""
+        return self.statut == "BROUILLON"
+
+    @property
+    def est_payable(self):
+        """Payable seulement après validation (et tant que non soldée/annulée)."""
+        return self.statut in ("VALIDEE", "PARTIELLE")
+
+    @property
+    def devise_symbole(self):
+        return {"XAF": "FCFA", "EUR": "€", "USD": "$", "MAD": "DH"}.get(self.devise or "XAF", self.devise)
+
+    @property
     def statut_label(self):
-        return {"EN_ATTENTE": "En attente", "PAYEE": "Payée",
-                "PARTIELLE": "Partielle", "ANNULEE": "Annulée"}.get(self.statut, self.statut)
+        return {"BROUILLON": "Brouillon", "VALIDEE": "Validée", "PAYEE": "Payée",
+                "PARTIELLE": "Partielle", "ANNULEE": "Annulée",
+                "EN_ATTENTE": "Validée"}.get(self.statut, self.statut)
 
     def to_dict(self):
         d = {}
@@ -1176,6 +1200,35 @@ class FacturePrestataire(db.Model):
         d["reste_a_payer"] = self.reste_a_payer
         d["statut_label"] = self.statut_label
         return d
+
+
+class LigneFacturePrestataire(db.Model):
+    """Ligne de détail d'une facture prestataire (désignation, quantité, prix)."""
+    __tablename__ = "lignes_facture_prestataire"
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    facture_id  = db.Column(db.Integer, db.ForeignKey("factures_prestataire.id"), nullable=False)
+
+    designation    = db.Column(db.String(300), nullable=False)
+    quantite       = db.Column(db.Numeric(12, 2), default=1)
+    unite          = db.Column(db.String(20), default="u")   # u | m² | ml | jour | forfait…
+    prix_unitaire  = db.Column(db.Numeric(15, 2), default=0)
+    montant        = db.Column(db.Numeric(15, 2), default=0)  # = quantite × prix_unitaire
+    ordre          = db.Column(db.Integer, default=0)
+
+    __table_args__ = (
+        db.Index("idx_lignes_facture", "tenant_id", "facture_id"),
+    )
+
+    def calculer(self):
+        self.montant = round(float(self.quantite or 0) * float(self.prix_unitaire or 0), 2)
+        return self
+
+    def to_dict(self):
+        return {"id": self.id, "designation": self.designation,
+                "quantite": float(self.quantite or 0), "unite": self.unite,
+                "prix_unitaire": float(self.prix_unitaire or 0),
+                "montant": float(self.montant or 0), "ordre": self.ordre}
 
 
 class PaiementPrestataire(db.Model):

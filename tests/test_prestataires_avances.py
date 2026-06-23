@@ -228,7 +228,114 @@ def test_fiche_contient_fonctions_js(client):
     pid = client._ids["prest_a"]
     html = client.get(f"/prestataires/{pid}").data.decode("utf-8", errors="ignore")
     for fn in ("function ouvrirAvance(", "function ouvrirEditAvance(",
-               "function calculerFacture(", "function ouvrirPaiement("):
+               "function calculerFacture(", "function ouvrirPaiement(",
+               "function ouvrirFacture(", "function ouvrirEditFacture(",
+               "function ajouterLigne("):
         assert fn in html, f"Fonction JS manquante : {fn}"
-    # Le <script> ne doit pas démarrer directement par du code orphelin
     assert "<script>\n  const ht" not in html
+
+
+# ── Factures : multi-lignes + workflow brouillon→validée→payable ──────────────
+from models import FacturePrestataire, LigneFacturePrestataire  # noqa: E402
+
+
+def _facture(client, **extra):
+    pid = client._ids["prest_a"]
+    data = {
+        "numero": extra.pop("numero", "F-001"),
+        "date_facture": "2026-06-12", "taux_tva": "0", "taux_retenue": "0",
+        "ligne_designation": ["Dalle béton", "Carrelage"],
+        "ligne_quantite": ["100", "50"],
+        "ligne_unite": ["m²", "m²"],
+        "ligne_prix": ["15000", "8000"],
+    }
+    data.update(extra)
+    client.post(f"/prestataires/{pid}/factures/nouvelle", data=data, follow_redirects=True)
+    with flask_app.app_context():
+        return FacturePrestataire.query.filter_by(prestataire_id=pid).order_by(
+            FacturePrestataire.id.desc()).first().id
+
+
+def test_facture_multi_lignes(client):
+    fid = _facture(client)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert f.statut == "BROUILLON"
+        assert len(f.lignes) == 2
+        # 100×15000 + 50×8000 = 1 500 000 + 400 000 = 1 900 000
+        assert float(f.montant_ht) == 1900000
+        assert float(f.montant_net_a_payer) == 1900000
+
+
+def test_paiement_bloque_avant_validation(client):
+    fid = _facture(client)
+    client.post(f"/prestataires/factures/{fid}/payer",
+                data={"montant": "100000", "date_paiement": "2026-06-13"},
+                follow_redirects=True)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert float(f.montant_paye or 0) == 0     # paiement refusé
+        assert f.statut == "BROUILLON"
+
+
+def test_modifier_puis_valider_puis_payer(client):
+    fid = _facture(client)
+    # Modification autorisée en brouillon : on remplace par une seule ligne
+    client.post(f"/prestataires/factures/{fid}/modifier", data={
+        "numero": "F-001", "date_facture": "2026-06-12", "taux_tva": "0", "taux_retenue": "0",
+        "ligne_designation": ["Forfait gros œuvre"], "ligne_quantite": ["1"],
+        "ligne_unite": ["forfait"], "ligne_prix": ["2000000"],
+    }, follow_redirects=True)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert len(f.lignes) == 1
+        assert float(f.montant_ht) == 2000000
+    # Validation
+    client.post(f"/prestataires/factures/{fid}/valider", follow_redirects=True)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert f.statut == "VALIDEE"
+        assert f.est_payable is True
+        assert f.est_modifiable is False
+    # Modification désormais refusée
+    client.post(f"/prestataires/factures/{fid}/modifier", data={
+        "numero": "F-001", "date_facture": "2026-06-12",
+        "ligne_designation": ["X"], "ligne_quantite": ["1"],
+        "ligne_unite": ["u"], "ligne_prix": ["1"],
+    }, follow_redirects=True)
+    with flask_app.app_context():
+        assert float(db.session.get(FacturePrestataire, fid).montant_ht) == 2000000
+    # Paiement maintenant autorisé
+    client.post(f"/prestataires/factures/{fid}/payer",
+                data={"montant": "2000000", "date_paiement": "2026-06-14"},
+                follow_redirects=True)
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert f.statut == "PAYEE"
+        assert float(f.montant_paye) == 2000000
+
+
+def test_facture_devise_mad(client):
+    # Facture en dirham : montant_xaf = net × taux
+    fid = _facture(client, numero="F-MAD", devise="MAD", taux_change="60",
+                   ligne_designation=["Étude"], ligne_quantite=["1"],
+                   ligne_unite=["forfait"], ligne_prix=["10000"])
+    with flask_app.app_context():
+        f = db.session.get(FacturePrestataire, fid)
+        assert f.devise == "MAD"
+        assert float(f.montant_ht) == 10000
+        assert abs(f.montant_net_en_xaf - 600000) < 1   # 10000 × 60
+    # Impression : devise + équivalent XAF présents
+    r = client.get(f"/prestataires/factures/{fid}/imprimer")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8", errors="ignore")
+    assert "MAD" in html and "Étude" in html and "600 000" in html
+
+
+def test_facture_impression(client):
+    fid = _facture(client, numero="F-IMP")
+    r = client.get(f"/prestataires/factures/{fid}/imprimer")
+    assert r.status_code == 200
+    html = r.data.decode("utf-8", errors="ignore")
+    assert "Facture N° F-IMP" in html
+    assert "Dalle béton" in html and "Carrelage" in html

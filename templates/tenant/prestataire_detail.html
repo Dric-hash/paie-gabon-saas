@@ -58,15 +58,14 @@
 <div class="card overflow-hidden mb-5">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:.875rem 1.25rem;border-bottom:1px solid #f3f4f6">
     <h2 style="font-weight:900;font-size:.95rem;color:#111827">Factures ({{ factures|length }})</h2>
-    <button onclick="document.getElementById('modal-facture').style.display='flex'" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle facture</button>
+    <button onclick="ouvrirFacture()" class="btn-primary" style="padding:.4rem .9rem;font-size:.8rem">+ Nouvelle facture</button>
   </div>
   {% if factures %}
   <table class="w-full">
     <thead>
       <tr>
-        <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">N°</th>
+        <th style="text-align:left;padding:.5rem 1.25rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">N° · Chantier</th>
         <th style="text-align:left;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Date</th>
-        <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">HT</th>
         <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Net à payer</th>
         <th style="text-align:right;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Reste</th>
         <th style="text-align:center;padding:.5rem 1rem;font-size:.68rem;font-weight:700;color:#9ca3af;text-transform:uppercase;border-bottom:1px solid #f3f4f6">Statut</th>
@@ -76,18 +75,27 @@
     <tbody>
       {% for f in factures %}
       <tr style="border-bottom:1px solid #f9fafb">
-        <td style="padding:.6rem 1.25rem;font-weight:700;font-size:.83rem">{{ f.numero }}</td>
+        <td style="padding:.6rem 1.25rem;font-weight:700;font-size:.83rem">{{ f.numero }}{% if f.site %}<div style="font-size:.72rem;font-weight:400;color:#0f3d36">🏗️ {{ f.site.nom }}</div>{% endif %}</td>
         <td style="padding:.6rem 1rem;font-size:.8rem;color:#6b7280">{{ f.date_facture.strftime('%d/%m/%Y') }}</td>
-        <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem">{{ "{:,.0f}".format(f.montant_ht).replace(",", " ") }}</td>
-        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">{{ "{:,.0f}".format(f.montant_net_a_payer).replace(",", " ") }}</td>
+        <td style="padding:.6rem 1rem;text-align:right;font-weight:700;font-size:.83rem">
+          {{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }} <span style="color:#9ca3af;font-weight:400;font-size:.72rem">{{ f.devise }}</span>
+          {% if f.devise != 'XAF' %}<div style="font-size:.7rem;font-weight:400;color:#9ca3af">≈ {{ "{:,.0f}".format(f.montant_net_en_xaf).replace(",", " ") }} XAF</div>{% endif %}
+        </td>
         <td style="padding:.6rem 1rem;text-align:right;font-size:.82rem;color:{{ '#92400e' if f.reste_a_payer > 0 else '#9ca3af' }}">{{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }}</td>
         <td style="padding:.6rem 1rem;text-align:center">
-          {% set st_bg = {'PAYEE':'#d1fae5','PARTIELLE':'#fef3c7','EN_ATTENTE':'#fee2e2','ANNULEE':'#f3f4f6'} %}
-          {% set st_col = {'PAYEE':'#065f46','PARTIELLE':'#92400e','EN_ATTENTE':'#991b1b','ANNULEE':'#9ca3af'} %}
+          {% set st_bg = {'PAYEE':'#d1fae5','PARTIELLE':'#fef3c7','VALIDEE':'#dbeafe','BROUILLON':'#f3f4f6','ANNULEE':'#f3f4f6'} %}
+          {% set st_col = {'PAYEE':'#065f46','PARTIELLE':'#92400e','VALIDEE':'#1e40af','BROUILLON':'#6b7280','ANNULEE':'#9ca3af'} %}
           <span style="background:{{ st_bg.get(f.statut,'#f3f4f6') }};color:{{ st_col.get(f.statut,'#374151') }};font-size:.68rem;font-weight:700;padding:.12rem .5rem;border-radius:9999px">{{ f.statut_label }}</span>
         </td>
         <td style="padding:.6rem 1rem;text-align:right;white-space:nowrap">
-          {% if f.statut not in ('PAYEE','ANNULEE') %}
+          <a href="/prestataires/factures/{{ f.id }}/imprimer" target="_blank" title="Imprimer" style="text-decoration:none;font-size:.85rem;margin-right:.35rem">🖨️</a>
+          {% if f.statut == 'BROUILLON' %}
+          <button onclick='ouvrirEditFacture({{ factures_data[f.id].f|tojson }}, {{ factures_data[f.id].lignes|tojson }})' style="background:none;border:none;color:#0f3d36;font-size:.72rem;font-weight:700;cursor:pointer">Modifier</button>
+          <form method="POST" action="/prestataires/factures/{{ f.id }}/valider" style="display:inline" onsubmit="return confirm('Valider la facture {{ f.numero }} ? Elle deviendra payable et ne sera plus modifiable.')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" style="background:#1e40af;color:white;border:none;font-size:.72rem;font-weight:700;padding:.25rem .6rem;border-radius:.4rem;cursor:pointer;margin-left:.3rem">Valider</button>
+          </form>
+          {% elif f.est_payable %}
           <button onclick="ouvrirPaiement({{ f.id }}, '{{ f.numero }}', {{ f.reste_a_payer }})" style="background:#0f3d36;color:white;border:none;font-size:.72rem;font-weight:700;padding:.25rem .6rem;border-radius:.4rem;cursor:pointer">Payer</button>
           {% endif %}
         </td>
@@ -225,38 +233,24 @@
 </form>
 {% endif %}
 
-<!-- ═══ MODAL FACTURE ═══ -->
+<!-- ═══ MODAL FACTURE (création + édition, multi-lignes) ═══ -->
 <div id="modal-facture" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:50;align-items:center;justify-content:center;padding:1rem">
-  <div style="background:white;border-radius:1rem;max-width:520px;width:100%;padding:1.5rem;max-height:90vh;overflow:auto">
-    <h2 style="font-weight:900;font-size:1.1rem;margin-bottom:1rem">Nouvelle facture</h2>
-    <form method="POST" action="/prestataires/{{ p.id }}/factures/nouvelle">
+  <div style="background:white;border-radius:1rem;max-width:760px;width:100%;padding:1.5rem;max-height:92vh;overflow:auto">
+    <h2 id="fac_titre" style="font-weight:900;font-size:1.1rem;margin-bottom:1rem">Nouvelle facture</h2>
+    <form method="POST" id="form-facture">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">N° facture *</label>
-          <input type="text" name="numero" required style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="text" name="numero" id="fac_numero" required style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Date facture *</label>
-          <input type="date" name="date_facture" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description</label>
-          <input type="text" name="description" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Montant HT *</label>
-          <input type="number" name="montant_ht" id="f_ht" required step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">TVA (%)</label>
-          <input type="number" name="taux_tva" id="f_tva" value="{{ 18 if p.assujetti_tva else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Retenue source (%)</label>
-          <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="date" name="date_facture" id="fac_date" required value="{{ now.strftime('%Y-%m-%d') if now else '' }}" onchange="fTaux()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Échéance</label>
-          <input type="date" name="date_echeance" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+          <input type="date" name="date_echeance" id="fac_echeance" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Chantier / Site</label>
-          <select name="site_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
+          <select name="site_id" id="fac_site" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
             <option value="">— Aucun —</option>
             {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
           </select></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">% réalisation</label>
-          <input type="number" name="pourcentage_realisation" step="0.01" min="0" max="100" placeholder="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Surface (m²) <span style="color:#9ca3af">BTP</span></label>
-          <input type="number" name="surface_m2" id="f_surf" step="0.01" min="0" oninput="majHtM2()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Prix / m²</label>
-          <input type="number" name="prix_unitaire_m2" id="f_prixm2" step="0.01" min="0" oninput="majHtM2()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Devise</label>
           <select name="devise" id="f_devise" onchange="fTaux()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem">
             {% for code, lib, sym in devises_dispo %}<option value="{{ code }}">{{ code }} — {{ lib }}</option>{% endfor %}
@@ -264,16 +258,51 @@
         <div id="f_taux_wrap" style="display:none"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Taux (1 = ? XAF)</label>
           <input type="number" name="taux_change" id="f_taux" step="0.000001" min="0" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
       </div>
+
+      <!-- Lignes de détail -->
+      <div style="margin-top:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.35rem">
+          <label style="font-size:.78rem;color:#111827;font-weight:800">Lignes de la facture</label>
+          <button type="button" onclick="ajouterLigne()" class="btn-secondary" style="padding:.25rem .7rem;font-size:.75rem">+ Ligne</button>
+        </div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead>
+            <tr>
+              <th style="text-align:left;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem">Désignation</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:80px">Qté</th>
+              <th style="text-align:left;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:90px">Unité</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:120px">Prix unit.</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:120px">Montant</th>
+              <th style="width:28px"></th>
+            </tr>
+          </thead>
+          <tbody id="fac_lignes"></tbody>
+        </table>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:.75rem">
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">TVA (%)</label>
+          <input type="number" name="taux_tva" id="f_tva" value="{{ 18 if p.assujetti_tva else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Retenue source (%)</label>
+          <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">% réalisation</label>
+          <input type="number" name="pourcentage_realisation" id="fac_pct" step="0.01" min="0" max="100" placeholder="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div style="grid-column:span 3"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description / objet</label>
+          <input type="text" name="description" id="fac_desc" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+      </div>
+      <input type="hidden" name="montant_ht" id="f_ht"/>
+
       <div id="f_recap" style="background:#f9fafb;border-radius:.5rem;padding:.75rem;margin-top:.75rem;font-size:.8rem;display:none">
+        <div style="display:flex;justify-content:space-between"><span>Total HT :</span><strong id="r_ht">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>TVA :</span><strong id="r_tva">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>TTC :</span><strong id="r_ttc">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>Retenue :</span><strong id="r_ret" style="color:#dc2626">0</strong></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;margin-top:.4rem;padding-top:.4rem"><span style="font-weight:700">Net à payer :</span><strong id="r_net" style="font-size:1rem">0</strong></div>
-        <div id="r_xaf_wrap" style="display:none;justify-content:space-between;color:#0f3d36"><span>Équivalent XAF :</span><strong id="r_xaf">0</strong></div>
+        <div id="r_xaf_wrap" style="display:none;justify-content:space-between;color:#0f3d36;margin-top:.2rem"><span>Équivalent XAF :</span><strong id="r_xaf">0</strong></div>
       </div>
       <div style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:1rem">
         <button type="button" onclick="document.getElementById('modal-facture').style.display='none'" class="btn-secondary">Annuler</button>
-        <button type="submit" class="btn-primary">Enregistrer</button>
+        <button type="submit" class="btn-primary" id="fac_submit">Enregistrer en brouillon</button>
       </div>
     </form>
   </div>
@@ -399,42 +428,106 @@
 </div>
 
 <script>
-function calculerFacture() {
-  const ht  = parseFloat(document.getElementById('f_ht').value) || 0;
-  const tva = parseFloat(document.getElementById('f_tva').value) || 0;
-  const ret = parseFloat(document.getElementById('f_ret').value) || 0;
-  if (ht <= 0) { document.getElementById('f_recap').style.display = 'none'; return; }
-  fetch('/api/prestataire/calculer-facture', {
-    method: 'POST', headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({montant_ht: ht, taux_tva: tva, taux_retenue: ret})
-  }).then(r => r.json()).then(d => {
-    const fmt = n => Math.round(n).toLocaleString('fr-FR').replace(/,/g, ' ');
-    document.getElementById('r_tva').textContent = fmt(d.montant_tva) + ' XAF';
-    document.getElementById('r_ttc').textContent = fmt(d.montant_ttc) + ' XAF';
-    document.getElementById('r_ret').textContent = '- ' + fmt(d.montant_retenue) + ' XAF';
-    document.getElementById('r_net').textContent = fmt(d.montant_net_a_payer) + ' XAF';
-    document.getElementById('f_recap').style.display = 'block';
-    var dev = document.getElementById('f_devise') ? document.getElementById('f_devise').value : 'XAF';
-    var taux = parseFloat(document.getElementById('f_taux') ? document.getElementById('f_taux').value : 1) || 1;
-    var w = document.getElementById('r_xaf_wrap');
-    if (dev !== 'XAF') { w.style.display = 'flex'; document.getElementById('r_xaf').textContent = fmt(d.montant_net_a_payer * taux) + ' XAF'; }
-    else { w.style.display = 'none'; }
-  }).catch(() => {});
+function facFmt(n){ return Math.round(n).toLocaleString('fr-FR').replace(/,/g,' '); }
+var FAC_UNITES = ['u','m²','ml','m³','jour','h','forfait','lot'];
+
+function ligneHTML(des, qte, unite, prix){
+  des = des || ''; qte = (qte !== undefined && qte !== null) ? qte : 1;
+  unite = unite || 'u'; prix = prix || 0;
+  var opts = FAC_UNITES.map(function(u){ return '<option value="'+u+'"'+(u===unite?' selected':'')+'>'+u+'</option>'; }).join('');
+  if (FAC_UNITES.indexOf(unite) === -1 && unite) opts += '<option value="'+unite+'" selected>'+unite+'</option>';
+  var inp = 'border:1px solid #e5e7eb;border-radius:.4rem;padding:.35rem .45rem;font-size:.8rem;width:100%';
+  return '<tr>'+
+    '<td style="padding:.2rem .3rem"><input type="text" name="ligne_designation" value="'+des.replace(/"/g,'&quot;')+'" oninput="majLignes()" style="'+inp+'"/></td>'+
+    '<td style="padding:.2rem .3rem"><input type="number" name="ligne_quantite" value="'+qte+'" step="0.01" min="0" oninput="majLignes()" style="'+inp+';text-align:right"/></td>'+
+    '<td style="padding:.2rem .3rem"><select name="ligne_unite" style="'+inp+'">'+opts+'</select></td>'+
+    '<td style="padding:.2rem .3rem"><input type="number" name="ligne_prix" value="'+prix+'" step="0.01" min="0" oninput="majLignes()" style="'+inp+';text-align:right"/></td>'+
+    '<td style="padding:.2rem .3rem;text-align:right;font-weight:700;font-size:.8rem" class="ligne_montant">0</td>'+
+    '<td style="padding:.2rem .3rem;text-align:center"><button type="button" onclick="this.closest(\'tr\').remove();majLignes()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900">×</button></td>'+
+    '</tr>';
 }
-function majHtM2(){
-  var s = parseFloat(document.getElementById('f_surf').value) || 0;
-  var pu = parseFloat(document.getElementById('f_prixm2').value) || 0;
-  if (s > 0 && pu > 0) { document.getElementById('f_ht').value = (s * pu).toFixed(2); }
+function ajouterLigne(des, qte, unite, prix){
+  document.getElementById('fac_lignes').insertAdjacentHTML('beforeend', ligneHTML(des, qte, unite, prix));
+  majLignes();
+}
+function majLignes(){
+  var rows = document.querySelectorAll('#fac_lignes tr');
+  var ht = 0;
+  rows.forEach(function(tr){
+    var q = parseFloat(tr.querySelector('input[name=ligne_quantite]').value) || 0;
+    var pu = parseFloat(tr.querySelector('input[name=ligne_prix]').value) || 0;
+    var m = q * pu;
+    tr.querySelector('.ligne_montant').textContent = facFmt(m);
+    ht += m;
+  });
+  document.getElementById('f_ht').value = ht.toFixed(2);
   calculerFacture();
+}
+function calculerFacture() {
+  var ht  = parseFloat(document.getElementById('f_ht').value) || 0;
+  var tva = parseFloat(document.getElementById('f_tva').value) || 0;
+  var ret = parseFloat(document.getElementById('f_ret').value) || 0;
+  var dev = document.getElementById('f_devise').value;
+  var taux = parseFloat(document.getElementById('f_taux').value) || 1;
+  if (ht <= 0) { document.getElementById('f_recap').style.display = 'none'; return; }
+  var mtva = Math.round(ht * tva) / 100;
+  var ttc = ht + mtva;
+  var mret = Math.round(ht * ret) / 100;
+  var net = ttc - mret;
+  var sym = dev;
+  document.getElementById('r_ht').textContent  = facFmt(ht) + ' ' + sym;
+  document.getElementById('r_tva').textContent = facFmt(mtva) + ' ' + sym;
+  document.getElementById('r_ttc').textContent = facFmt(ttc) + ' ' + sym;
+  document.getElementById('r_ret').textContent = '- ' + facFmt(mret) + ' ' + sym;
+  document.getElementById('r_net').textContent = facFmt(net) + ' ' + sym;
+  document.getElementById('f_recap').style.display = 'block';
+  var w = document.getElementById('r_xaf_wrap');
+  if (dev !== 'XAF') { w.style.display = 'flex'; document.getElementById('r_xaf').textContent = facFmt(net * taux) + ' XAF'; }
+  else { w.style.display = 'none'; }
 }
 function fTaux(){
   var dev = document.getElementById('f_devise').value;
   var wrap = document.getElementById('f_taux_wrap');
   if (dev === 'XAF') { wrap.style.display = 'none'; document.getElementById('f_taux').value = 1; calculerFacture(); return; }
   wrap.style.display = 'block';
-  var dt = document.querySelector('#modal-facture input[name=date_facture]');
+  var dt = document.getElementById('fac_date');
   var q = '/api/prestataire/taux-devise?devise=' + dev + (dt && dt.value ? '&date=' + dt.value : '');
   fetch(q).then(function(r){ return r.json(); }).then(function(d){ if (d && d.taux_xaf){ document.getElementById('f_taux').value = d.taux_xaf; calculerFacture(); } }).catch(function(){});
+}
+function ouvrirFacture(){
+  var f = document.getElementById('form-facture');
+  f.action = '/prestataires/{{ p.id }}/factures/nouvelle';
+  f.reset();
+  document.getElementById('fac_titre').textContent = 'Nouvelle facture';
+  document.getElementById('fac_submit').textContent = 'Enregistrer en brouillon';
+  document.getElementById('f_devise').value = 'XAF';
+  document.getElementById('fac_lignes').innerHTML = '';
+  ajouterLigne('', 1, 'u', 0);
+  fTaux();
+  document.getElementById('modal-facture').style.display = 'flex';
+}
+function ouvrirEditFacture(fac, lignes){
+  var f = document.getElementById('form-facture');
+  f.action = '/prestataires/factures/' + fac.id + '/modifier';
+  document.getElementById('fac_titre').textContent = 'Modifier la facture ' + fac.numero;
+  document.getElementById('fac_submit').textContent = 'Enregistrer les modifications';
+  document.getElementById('fac_numero').value = fac.numero || '';
+  document.getElementById('fac_date').value = (fac.date_facture || '').substring(0,10);
+  document.getElementById('fac_echeance').value = fac.date_echeance ? (''+fac.date_echeance).substring(0,10) : '';
+  document.getElementById('fac_site').value = fac.site_id || '';
+  document.getElementById('fac_desc').value = fac.description || '';
+  document.getElementById('fac_pct').value = fac.pourcentage_realisation || '';
+  document.getElementById('f_tva').value = fac.taux_tva || 0;
+  document.getElementById('f_ret').value = fac.taux_retenue || 0;
+  document.getElementById('f_devise').value = fac.devise || 'XAF';
+  document.getElementById('fac_lignes').innerHTML = '';
+  if (lignes && lignes.length){ lignes.forEach(function(l){ ajouterLigne(l.designation, l.quantite, l.unite, l.prix_unitaire); }); }
+  else { ajouterLigne(fac.description || '', 1, 'forfait', fac.montant_ht || 0); }
+  var wrap = document.getElementById('f_taux_wrap');
+  if ((fac.devise || 'XAF') === 'XAF'){ wrap.style.display = 'none'; document.getElementById('f_taux').value = 1; }
+  else { wrap.style.display = 'block'; document.getElementById('f_taux').value = fac.taux_change || 1; }
+  majLignes();
+  document.getElementById('modal-facture').style.display = 'flex';
 }
 function ouvrirPaiement(fid, numero, reste) {
   document.getElementById('form-paiement').action = '/prestataires/factures/' + fid + '/payer';

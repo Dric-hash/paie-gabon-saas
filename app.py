@@ -451,6 +451,11 @@ def run_migrations():
         "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS devise VARCHAR(5) DEFAULT 'XAF'",
         "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS taux_change NUMERIC(14,6) DEFAULT 1",
         "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS montant_xaf NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS valide_par_nom VARCHAR(150)",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS valide_par_user_id INTEGER",
+        "ALTER TABLE factures_prestataire ADD COLUMN IF NOT EXISTS date_validation TIMESTAMP",
+        # Factures déjà saisies (ancien statut EN_ATTENTE = prêtes) → restent payables
+        "UPDATE factures_prestataire SET statut='VALIDEE' WHERE statut='EN_ATTENTE'",
         # ── Prestataires : paiements (% réalisation BTP) ─────────────────────────
         "ALTER TABLE paiements_prestataire ADD COLUMN IF NOT EXISTS pourcentage_realisation NUMERIC(5,2) DEFAULT 0",
         # ── Index de performance sur les tables récentes (multi-tenant) ──────────

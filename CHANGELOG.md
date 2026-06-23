@@ -9,7 +9,26 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Avances prestataires / sous-traitants
+#### Factures prestataires — lignes, workflow et impression
+- **Factures multi-lignes** : chaque facture peut comporter plusieurs lignes de
+  détail (désignation, quantité, unité — dont m² —, prix unitaire) ; le HT est la
+  somme des lignes. Nouveau modèle `LigneFacturePrestataire`.
+- **Workflow** : une facture créée est en **Brouillon** (modifiable et
+  re-modifiable), doit être **validée** pour devenir **payable** ; une fois
+  validée, elle est figée. Le **paiement est bloqué** tant que la facture n'est
+  pas validée.
+- **Impression de la facture** (`/prestataires/factures/<id>/imprimer`) : en-tête
+  entreprise, prestataire, lignes de détail, totaux (HT/TVA/TTC/retenue/net),
+  devise **et** équivalent XAF, statut, signatures.
+- **Devise lisible** : à la saisie et à l'affichage, les montants apparaissent
+  dans la devise choisie (dirham, euro, dollar…) avec l'équivalent FCFA, au lieu
+  d'être toujours libellés en F CFA.
+- Migrations Alembic `e5f6a7b8c9d0` (colonnes de validation + table lignes) ;
+  colonnes posées en prod par `run_migrations()`, table par `create_all()`.
+  Les factures déjà saisies (ancien statut « En attente ») passent en « Validée »
+  pour rester payables.
+
+
 - Nouveau modèle `AvancePrestataire` : sommes versées à un prestataire ou
   sous-traitant **hors facture** (avances de démarrage, acomptes de chantier).
 - **Cycle de validation** : une avance est *En attente* (modifiable et

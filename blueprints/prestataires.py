@@ -18,7 +18,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
 from models import (db, Prestataire, ContratPrestation, FacturePrestataire,
-                    PaiementPrestataire, AvancePrestataire, Site)
+                    PaiementPrestataire, AvancePrestataire, LigneFacturePrestataire,
+                    Site)
 from audit import log_action
 from core import get_tenant, can_edit, require_permission, parse_date
 from devises import (taux_xaf, convertir_en_xaf, info_taux, devises_disponibles,
@@ -112,8 +113,15 @@ def prestataire_detail(id):
     # La dernière avance en attente : à présenter au chef de chantier pour validation
     derniere_en_attente = next((a for a in avances if a.statut == "EN_ATTENTE"), None)
 
+    # Données JSON des factures (pour préremplir la modale d'édition côté JS)
+    factures_data = {
+        f.id: {"f": f.to_dict(), "lignes": [l.to_dict() for l in f.lignes]}
+        for f in factures
+    }
+
     return render_template("tenant/prestataire_detail.html",
         tenant=t, p=p, contrats=contrats, factures=factures, avances=avances,
+        factures_data=factures_data,
         total_facture=total_facture, total_paye=total_paye, total_du=total_du,
         total_avances=total_avances, total_avances_a_regul=total_avances_a_regul,
         derniere_en_attente=derniere_en_attente,
@@ -303,10 +311,8 @@ def facture_nouvelle(id):
         flash("Une facture avec ce numéro existe déjà pour ce prestataire.", "error")
         return redirect(url_for("prestataires.prestataire_detail", id=id))
 
-    # Taux par défaut depuis la fiche prestataire
     taux_tva     = 18 if p.assujetti_tva else 0
     taux_retenue = float(p.taux_retenue_source or 0)
-
     devise = (request.form.get("devise") or "XAF").upper()
     if devise not in DEVISES:
         devise = "XAF"
@@ -322,23 +328,136 @@ def facture_nouvelle(id):
         date_facture=parse_date(request.form.get("date_facture")) or date.today(),
         date_echeance=parse_date(request.form.get("date_echeance")),
         description=request.form.get("description", "").strip(),
-        surface_m2=request.form.get("surface_m2", type=float) or None,
-        prix_unitaire_m2=request.form.get("prix_unitaire_m2", type=float) or None,
         pourcentage_realisation=request.form.get("pourcentage_realisation", type=float) or 0,
         montant_ht=float(request.form.get("montant_ht", 0) or 0),
         taux_tva=float(request.form.get("taux_tva", taux_tva) or 0),
         taux_retenue=float(request.form.get("taux_retenue", taux_retenue) or 0),
         devise=devise, taux_change=taux_ch,
+        statut="BROUILLON",
     )
+    _appliquer_lignes(f, t.id)
     f.calculer()
     db.session.add(f)
     db.session.commit()
     log_action("CREATE", "facture_prestataire", f.id,
-               f"Facture {f.numero} — {p.raison_sociale} — {f.montant_net_a_payer} XAF",
+               f"Facture {f.numero} — {p.raison_sociale} — {f.montant_net_a_payer} {devise}",
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
-    flash(f"Facture {f.numero} enregistrée (net à payer : {int(f.montant_net_a_payer):,} XAF).".replace(",", " "), "success")
+    flash(f"Facture {f.numero} enregistrée en brouillon. Validez-la avant paiement.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=id))
+
+
+def _appliquer_lignes(f, tenant_id):
+    """(Re)construit les lignes de détail d'une facture à partir du formulaire.
+
+    Champs répétés : ligne_designation[], ligne_quantite[], ligne_unite[],
+    ligne_prix[]. Le HT découle de la somme des lignes si au moins une existe.
+    """
+    designations = request.form.getlist("ligne_designation")
+    quantites    = request.form.getlist("ligne_quantite")
+    unites       = request.form.getlist("ligne_unite")
+    prix         = request.form.getlist("ligne_prix")
+
+    # Vider les lignes existantes (édition)
+    if f.id:
+        LigneFacturePrestataire.query.filter_by(facture_id=f.id).delete()
+    f.lignes = []
+
+    ordre = 0
+    for i, des in enumerate(designations):
+        des = (des or "").strip()
+        if not des:
+            continue
+        def _num(lst, idx, defaut=0.0):
+            try:
+                return float(lst[idx]) if idx < len(lst) and lst[idx] not in (None, "") else defaut
+            except (ValueError, TypeError):
+                return defaut
+        q  = _num(quantites, i, 1.0)
+        pu = _num(prix, i, 0.0)
+        u  = (unites[i].strip() if i < len(unites) and unites[i] else "u")
+        ordre += 1
+        ligne = LigneFacturePrestataire(
+            tenant_id=tenant_id, designation=des, quantite=q, unite=u,
+            prix_unitaire=pu, ordre=ordre)
+        ligne.calculer()
+        f.lignes.append(ligne)
+
+
+@bp.route("/prestataires/factures/<int:fid>/modifier", methods=["POST"])
+@login_required
+@can_edit
+def facture_modifier(fid):
+    t, redir = _guard()
+    if redir:
+        return redir
+    f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
+    if not f.est_modifiable:
+        flash("Cette facture est validée : elle n'est plus modifiable.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+    numero = request.form.get("numero", "").strip()
+    doublon = (FacturePrestataire.query
+               .filter_by(tenant_id=t.id, prestataire_id=f.prestataire_id, numero=numero)
+               .filter(FacturePrestataire.id != fid).first())
+    if doublon:
+        flash("Une autre facture porte déjà ce numéro.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+    devise = (request.form.get("devise") or f.devise or "XAF").upper()
+    if devise not in DEVISES:
+        devise = "XAF"
+    taux_ch = request.form.get("taux_change", type=float)
+    if not taux_ch or taux_ch <= 0:
+        taux_ch = taux_xaf(devise, parse_date(request.form.get("date_facture")))
+
+    f.numero        = numero or f.numero
+    f.date_facture  = parse_date(request.form.get("date_facture")) or f.date_facture
+    f.date_echeance = parse_date(request.form.get("date_echeance"))
+    f.description   = request.form.get("description", "").strip()
+    f.site_id       = request.form.get("site_id", type=int) or None
+    f.contrat_id    = request.form.get("contrat_id", type=int) or None
+    f.pourcentage_realisation = request.form.get("pourcentage_realisation", type=float) or 0
+    f.montant_ht    = float(request.form.get("montant_ht", f.montant_ht) or 0)
+    f.taux_tva      = float(request.form.get("taux_tva", f.taux_tva) or 0)
+    f.taux_retenue  = float(request.form.get("taux_retenue", f.taux_retenue) or 0)
+    f.devise        = devise
+    f.taux_change   = taux_ch
+    _appliquer_lignes(f, t.id)
+    f.calculer()
+    db.session.commit()
+    log_action("UPDATE", "facture_prestataire", f.id, f"Modification facture {f.numero}",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Facture {f.numero} modifiée.", "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+
+@bp.route("/prestataires/factures/<int:fid>/valider", methods=["POST"])
+@login_required
+@can_edit
+def facture_valider(fid):
+    """Validation de la facture : la rend payable et la fige (plus de modif)."""
+    t, redir = _guard()
+    if redir:
+        return redir
+    f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
+    if f.statut != "BROUILLON":
+        flash("Seule une facture en brouillon peut être validée.", "info")
+        return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+    if float(f.montant_net_a_payer or 0) <= 0:
+        flash("Impossible de valider une facture à 0. Ajoutez au moins une ligne.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+    f.statut = "VALIDEE"
+    f.valide_par_nom = (request.form.get("valide_par_nom", "").strip() or None)
+    f.valide_par_user_id = current_user.id
+    f.date_validation = datetime.utcnow()
+    db.session.commit()
+    log_action("VALIDATE", "facture_prestataire", f.id, f"Facture {f.numero} validée",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Facture {f.numero} validée. Elle peut maintenant être payée.", "success")
+    return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
 
 
 @bp.route("/prestataires/factures/<int:fid>/payer", methods=["POST"])
@@ -349,12 +468,15 @@ def facture_payer(fid):
     if redir:
         return redir
     f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
+    if not f.est_payable:
+        flash("La facture doit être validée avant d'enregistrer un paiement.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
     montant = float(request.form.get("montant", 0) or 0)
     if montant <= 0:
         flash("Le montant du paiement doit être positif.", "error")
         return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
     if montant > f.reste_a_payer + 0.01:
-        flash(f"Le montant dépasse le reste à payer ({int(f.reste_a_payer):,} XAF).".replace(",", " "), "error")
+        flash(f"Le montant dépasse le reste à payer ({int(f.reste_a_payer):,} {f.devise}).".replace(",", " "), "error")
         return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
 
     paie = PaiementPrestataire(
@@ -366,7 +488,6 @@ def facture_payer(fid):
         notes=request.form.get("notes", "").strip(),
     )
     db.session.add(paie)
-    # Mettre à jour la facture
     f.montant_paye = round(float(f.montant_paye or 0) + montant, 2)
     if f.montant_paye >= float(f.montant_net_a_payer) - 0.01:
         f.statut = "PAYEE"
@@ -374,10 +495,10 @@ def facture_payer(fid):
         f.statut = "PARTIELLE"
     db.session.commit()
     log_action("CREATE", "paiement_prestataire", paie.id,
-               f"Paiement {montant} XAF sur facture {f.numero}",
+               f"Paiement {montant} {f.devise} sur facture {f.numero}",
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
-    flash(f"Paiement de {int(montant):,} XAF enregistré.".replace(",", " "), "success")
+    flash(f"Paiement de {int(montant):,} {f.devise} enregistré.".replace(",", " "), "success")
     return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
 
 
@@ -393,6 +514,20 @@ def facture_annuler(fid):
     db.session.commit()
     flash(f"Facture {f.numero} annulée.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=f.prestataire_id))
+
+
+@bp.route("/prestataires/factures/<int:fid>/imprimer")
+@login_required
+def facture_imprimer(fid):
+    """Facture imprimable (lignes de détail, totaux, devise + équivalent XAF)."""
+    t, redir = _guard()
+    if redir:
+        return redir
+    f = FacturePrestataire.query.filter_by(id=fid, tenant_id=t.id).first_or_404()
+    p = Prestataire.query.filter_by(id=f.prestataire_id, tenant_id=t.id).first_or_404()
+    site = Site.query.filter_by(id=f.site_id, tenant_id=t.id).first() if f.site_id else None
+    return render_template("tenant/facture_print.html",
+        tenant=t, p=p, f=f, site=site, now=datetime.now())
 
 
 # ══════════════════════════════════════════════════════════════════════════════
