@@ -480,3 +480,17 @@ def test_admin_supprime_facture_validee_et_payee(client):
 
 
 
+
+# ── Recherche : les prestataires apparaissent dans les suggestions ────────────
+def test_recherche_rapide_suggere_prestataire(client):
+    r = client.get("/api/recherche-rapide?q=BTP")
+    assert r.status_code == 200
+    data = r.get_json()
+    assert any("BTP SOUS-TRAITANT" in (x.get("titre") or "") for x in data)
+    assert any(x.get("categorie") == "Prestataires" for x in data)
+    assert any(x.get("lien", "").startswith("/prestataires/") for x in data)
+
+
+def test_recherche_globale_inclut_prestataire(client):
+    html = client.get("/recherche?q=BTP").data.decode("utf-8", "ignore")
+    assert "Prestataires" in html and "BTP SOUS-TRAITANT" in html

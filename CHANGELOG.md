@@ -9,7 +9,13 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Pourcentage de réalisation par ligne (automatique)
+#### Recherche : prestataires inclus
+- La **barre de recherche du tableau de bord** et la **page de recherche
+  globale** suggèrent désormais aussi les **prestataires / sous-traitants**
+  (par raison sociale, code ou activité), comme pour les salariés et les
+  journaliers — un clic ouvre directement la fiche.
+
+
 - Le **pourcentage de réalisation est désormais calculé automatiquement et par
   ligne** (et non plus saisi globalement sur la facture). Chaque ligne porte une
   **quantité prévue** (au marché) et une **quantité réalisée** ; le %

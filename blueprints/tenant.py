@@ -7372,6 +7372,18 @@ def recherche_globale():
             "badge": a.statut, "lien": "/acomptes",
             "icone": "💸"} for a in acomps]
 
+    # ── Prestataires / sous-traitants ──────────────────────────────────────────
+    prests = (Prestataire.query.filter_by(tenant_id=t.id)
+              .filter(db.or_(
+                  Prestataire.raison_sociale.ilike(like), Prestataire.code.ilike(like),
+                  Prestataire.activite.ilike(like), Prestataire.telephone.ilike(like)))
+              .order_by(Prestataire.raison_sociale).limit(10).all())
+    if prests:
+        resultats["prestataires"] = [{"id": pr.id, "titre": pr.raison_sociale,
+            "sous_titre": f"{pr.categorie_label} · {pr.code}",
+            "badge": pr.statut if hasattr(pr, "statut") else None,
+            "lien": f"/prestataires/{pr.id}", "icone": "🛠️"} for pr in prests]
+
     nb_total = sum(len(v) for v in resultats.values())
     return render_template("tenant/recherche.html",
                            tenant=t, q=q, resultats=resultats, nb_total=nb_total)
@@ -7407,4 +7419,13 @@ def api_recherche_rapide():
             "sous_titre": j.profession or "Journalier", "lien": f"/journaliers/{j.id}",
             "categorie": "Journaliers"})
 
-    return jsonify(resultats[:10])
+    for pr in (Prestataire.query.filter_by(tenant_id=t.id)
+               .filter(db.or_(Prestataire.raison_sociale.ilike(like),
+                              Prestataire.code.ilike(like),
+                              Prestataire.activite.ilike(like)))
+               .limit(5).all()):
+        resultats.append({"icone": "🛠️", "titre": pr.raison_sociale,
+            "sous_titre": pr.categorie_label or "Prestataire", "lien": f"/prestataires/{pr.id}",
+            "categorie": "Prestataires"})
+
+    return jsonify(resultats[:15])

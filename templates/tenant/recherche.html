@@ -170,6 +170,29 @@
   </div>
   {% endif %}
 
+  <!-- Section Prestataires -->
+  {% if resultats.prestataires %}
+  <div class="card overflow-hidden mb-4">
+    <div style="padding:.75rem 1.25rem;border-bottom:1px solid #f3f4f6;background:#eef2ff;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:.8rem;font-weight:700;color:#3730a3;text-transform:uppercase;letter-spacing:.05em">
+        🛠️ Prestataires — {{ resultats.prestataires|length }} résultat(s)
+      </span>
+      <a href="/prestataires?q={{ q }}" style="font-size:.75rem;color:#3730a3;text-decoration:none;font-weight:600">Voir tout →</a>
+    </div>
+    {% for item in resultats.prestataires %}
+    <a href="{{ item.lien }}" style="display:flex;align-items:center;gap:.875rem;padding:.875rem 1.25rem;text-decoration:none;border-bottom:1px solid #f9fafb"
+       onmouseover="this.style.background='#eef2ff'" onmouseout="this.style.background=''">
+      <div style="width:36px;height:36px;border-radius:50%;background:#e0e7ff;border:1px solid #c7d2fe;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">🛠️</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem;color:#111827">{{ item.titre }}</div>
+        <div style="font-size:.775rem;color:#6b7280;margin-top:.1rem">{{ item.sous_titre }}</div>
+      </div>
+      <span style="color:#d1d5db;flex-shrink:0">→</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% endif %}
 {% endif %}
 
