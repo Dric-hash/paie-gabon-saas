@@ -29,6 +29,7 @@ from calculs_paie import (
     calculer_heures_sup_btp,
     distribuer_heures_semaine_btp,
     arrondi_pas,
+    arrondi_millier_superieur,
     CNSS_TAUX_SALARIE, CNSS_TAUX_PATRONAL, CNSS_PLAFOND,
     CNAMGS_TAUX_SALARIE, CNAMGS_TAUX_PATRONAL, CNAMGS_PLAFOND,
     TCS_TAUX, TCS_EXONERATION,
@@ -384,3 +385,24 @@ class TestArrondiPas:
     def test_resultat_toujours_multiple_de_5(self):
         for v in (123456, 987654, 451437.985, 1, 7, 12):
             assert arrondi_pas(v, 5) % 5 == 0
+
+
+class TestArrondiMillierSuperieur:
+    def test_porte_au_millier_au_dessus(self):
+        assert arrondi_millier_superieur(1099001) == 1100000
+        assert arrondi_millier_superieur(1099999) == 1100000
+        assert arrondi_millier_superieur(149100) == 150000
+        assert arrondi_millier_superieur(149001) == 150000
+
+    def test_millier_exact_inchange(self):
+        assert arrondi_millier_superieur(150000) == 150000
+        assert arrondi_millier_superieur(1100000) == 1100000
+
+    def test_petits_montants(self):
+        assert arrondi_millier_superieur(1) == 1000
+        assert arrondi_millier_superieur(999) == 1000
+        assert arrondi_millier_superieur(0) == 0.0
+
+    def test_toujours_multiple_de_1000(self):
+        for v in (123456, 987654, 451437.985, 7, 1000001):
+            assert arrondi_millier_superieur(v) % 1000 == 0

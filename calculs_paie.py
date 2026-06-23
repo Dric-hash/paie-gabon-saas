@@ -90,7 +90,7 @@ BAREME_IRPP = [
 ]
 
 
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal, ROUND_HALF_UP, ROUND_CEILING
 
 
 def fcfa(valeur, decimales: int = 2) -> float:
@@ -135,6 +135,27 @@ def arrondi_pas(valeur, pas: int = 5) -> float:
             return float(v)
         n = (v / p).quantize(Decimal(1), rounding=ROUND_HALF_UP)
         return float(n * p)
+    except Exception:
+        return float(valeur or 0)
+
+
+def arrondi_millier_superieur(valeur) -> float:
+    """Arrondit au **millier de francs supérieur** (plafond à 1 000).
+
+    Utilisé pour la paie des journaliers mensuels : tout montant est porté au
+    millier au-dessus. 1 099 001 → 1 100 000 ; 150 000 (déjà rond) reste 150 000.
+
+    >>> arrondi_millier_superieur(1099001)   # 1100000.0
+    >>> arrondi_millier_superieur(149100)    # 150000.0
+    >>> arrondi_millier_superieur(150000)    # 150000.0
+    >>> arrondi_millier_superieur(0)         # 0.0
+    """
+    try:
+        v = Decimal(str(valeur or 0))
+        if v <= 0:
+            return 0.0
+        n = (v / 1000).to_integral_value(rounding=ROUND_CEILING)
+        return float(n * 1000)
     except Exception:
         return float(valeur or 0)
 
