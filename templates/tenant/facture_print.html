@@ -76,7 +76,6 @@
           Date : <strong>{{ f.date_facture.strftime('%d/%m/%Y') }}</strong><br/>
           {% if f.date_echeance %}Échéance : {{ f.date_echeance.strftime('%d/%m/%Y') }}<br/>{% endif %}
           {% if site %}Chantier : <strong>{{ site.nom }}</strong><br/>{% endif %}
-          {% if f.pourcentage_realisation and f.pourcentage_realisation|float > 0 %}Réalisation : {{ f.pourcentage_realisation }} %<br/>{% endif %}
           Devise : <strong>{{ f.devise }}</strong>{% if f.devise != 'XAF' %} (1 {{ f.devise }} = {{ "{:,.2f}".format(f.taux_change|float).replace(",", " ") }} XAF){% endif %}
         </div>
       </div>
@@ -88,10 +87,12 @@
       <thead>
         <tr>
           <th>Désignation</th>
-          <th class="r" style="width:70px">Qté</th>
-          <th style="width:70px">Unité</th>
-          <th class="r" style="width:120px">Prix unit.</th>
-          <th class="r" style="width:130px">Montant ({{ f.devise }})</th>
+          <th class="r" style="width:60px">Qté prév.</th>
+          <th class="r" style="width:60px">Qté réal.</th>
+          <th style="width:55px">Unité</th>
+          <th class="r" style="width:55px">% réal.</th>
+          <th class="r" style="width:110px">Prix unit.</th>
+          <th class="r" style="width:120px">Montant ({{ f.devise }})</th>
         </tr>
       </thead>
       <tbody>
@@ -99,8 +100,10 @@
           {% for l in f.lignes %}
           <tr>
             <td>{{ l.designation }}</td>
+            <td class="r">{{ ("{:,.2f}".format(l.quantite_totale|float).replace(",", " ").rstrip('0').rstrip('.')) if l.quantite_totale else '—' }}</td>
             <td class="r">{{ "{:,.2f}".format(l.quantite|float).replace(",", " ").rstrip('0').rstrip('.') }}</td>
             <td>{{ l.unite }}</td>
+            <td class="r">{{ (l.pourcentage_realisation|round|int)|string + ' %' if l.quantite_totale else '—' }}</td>
             <td class="r">{{ "{:,.0f}".format(l.prix_unitaire|float).replace(",", " ") }}</td>
             <td class="r">{{ "{:,.0f}".format(l.montant|float).replace(",", " ") }}</td>
           </tr>
@@ -108,7 +111,8 @@
         {% else %}
           <tr>
             <td>{{ f.description or 'Prestation' }}</td>
-            <td class="r">1</td><td>forfait</td>
+            <td class="r">—</td>
+            <td class="r">1</td><td>forfait</td><td class="r">—</td>
             <td class="r">{{ "{:,.0f}".format(f.montant_ht|float).replace(",", " ") }}</td>
             <td class="r">{{ "{:,.0f}".format(f.montant_ht|float).replace(",", " ") }}</td>
           </tr>

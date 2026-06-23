@@ -1210,7 +1210,8 @@ class LigneFacturePrestataire(db.Model):
     facture_id  = db.Column(db.Integer, db.ForeignKey("factures_prestataire.id"), nullable=False)
 
     designation    = db.Column(db.String(300), nullable=False)
-    quantite       = db.Column(db.Numeric(12, 2), default=1)
+    quantite_totale = db.Column(db.Numeric(12, 2))            # quantité prévue (au marché)
+    quantite       = db.Column(db.Numeric(12, 2), default=1)  # quantité réalisée (facturée)
     unite          = db.Column(db.String(20), default="u")   # u | m² | ml | jour | forfait…
     prix_unitaire  = db.Column(db.Numeric(15, 2), default=0)
     montant        = db.Column(db.Numeric(15, 2), default=0)  # = quantite × prix_unitaire
@@ -1220,15 +1221,28 @@ class LigneFacturePrestataire(db.Model):
         db.Index("idx_lignes_facture", "tenant_id", "facture_id"),
     )
 
+    @property
+    def pourcentage_realisation(self):
+        """% d'avancement de la ligne = quantité réalisée / quantité prévue.
+        Si aucune quantité prévue n'est renseignée, la ligne est considérée
+        réalisée à 100 % (quantité facturée = quantité réalisée)."""
+        prevue = float(self.quantite_totale or 0)
+        realisee = float(self.quantite or 0)
+        if prevue <= 0:
+            return 100.0 if realisee > 0 else 0.0
+        return round(realisee / prevue * 100, 2)
+
     def calculer(self):
         self.montant = round(float(self.quantite or 0) * float(self.prix_unitaire or 0), 2)
         return self
 
     def to_dict(self):
         return {"id": self.id, "designation": self.designation,
+                "quantite_totale": float(self.quantite_totale) if self.quantite_totale is not None else None,
                 "quantite": float(self.quantite or 0), "unite": self.unite,
                 "prix_unitaire": float(self.prix_unitaire or 0),
-                "montant": float(self.montant or 0), "ordre": self.ordre}
+                "montant": float(self.montant or 0), "ordre": self.ordre,
+                "pourcentage_realisation": self.pourcentage_realisation}
 
 
 class PaiementPrestataire(db.Model):

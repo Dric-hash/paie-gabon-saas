@@ -9,7 +9,17 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Déduction automatique des avances sur les factures
+#### Pourcentage de réalisation par ligne (automatique)
+- Le **pourcentage de réalisation est désormais calculé automatiquement et par
+  ligne** (et non plus saisi globalement sur la facture). Chaque ligne porte une
+  **quantité prévue** (au marché) et une **quantité réalisée** ; le %
+  = réalisée / prévue se calcule tout seul, en direct à la saisie et sur
+  l'impression. Sans quantité prévue, la ligne est considérée réalisée à 100 %.
+- Nouvelle colonne `quantite_totale` sur les lignes de facture (migration
+  `f6a7b8c9d0e1` ; ALTER dans `run_migrations`). Le champ « % réalisation »
+  global de la facture est retiré de la saisie et de l'impression.
+
+
 - Les **avances sont désormais déduites automatiquement des factures**, par
   **chantier / site** : une avance liée à un chantier s'impute sur les factures
   de ce chantier (la plus ancienne d'abord) ; une avance sans chantier alimente

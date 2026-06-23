@@ -429,6 +429,7 @@ def _appliquer_lignes(f, tenant_id):
     """
     designations = request.form.getlist("ligne_designation")
     quantites    = request.form.getlist("ligne_quantite")
+    quantites_tot = request.form.getlist("ligne_quantite_totale")
     unites       = request.form.getlist("ligne_unite")
     prix         = request.form.getlist("ligne_prix")
 
@@ -448,11 +449,13 @@ def _appliquer_lignes(f, tenant_id):
             except (ValueError, TypeError):
                 return defaut
         q  = _num(quantites, i, 1.0)
+        qt = _num(quantites_tot, i, 0.0)
         pu = _num(prix, i, 0.0)
         u  = (unites[i].strip() if i < len(unites) and unites[i] else "u")
         ordre += 1
         ligne = LigneFacturePrestataire(
-            tenant_id=tenant_id, designation=des, quantite=q, unite=u,
+            tenant_id=tenant_id, designation=des, quantite=q,
+            quantite_totale=(qt if qt > 0 else None), unite=u,
             prix_unitaire=pu, ordre=ordre)
         ligne.calculer()
         f.lignes.append(ligne)

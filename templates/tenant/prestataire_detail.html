@@ -288,10 +288,12 @@
           <thead>
             <tr>
               <th style="text-align:left;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem">Désignation</th>
-              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:80px">Qté</th>
-              <th style="text-align:left;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:90px">Unité</th>
-              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:120px">Prix unit.</th>
-              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:120px">Montant</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:70px">Qté prévue</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:70px">Qté réal.</th>
+              <th style="text-align:left;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:80px">Unité</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:60px">% réal.</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:110px">Prix unit.</th>
+              <th style="text-align:right;font-size:.66rem;color:#9ca3af;text-transform:uppercase;padding:.25rem .4rem;width:110px">Montant</th>
               <th style="width:28px"></th>
             </tr>
           </thead>
@@ -299,14 +301,12 @@
         </table>
       </div>
 
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem;margin-top:.75rem">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">TVA (%)</label>
           <input type="number" name="taux_tva" id="f_tva" value="{{ 18 if p.assujetti_tva else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Retenue source (%)</label>
           <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">% réalisation</label>
-          <input type="number" name="pourcentage_realisation" id="fac_pct" step="0.01" min="0" max="100" placeholder="0" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
-        <div style="grid-column:span 3"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description / objet</label>
+        <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description / objet</label>
           <input type="text" name="description" id="fac_desc" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
       </div>
       <input type="hidden" name="montant_ht" id="f_ht"/>
@@ -450,33 +450,41 @@
 function facFmt(n){ return Math.round(n).toLocaleString('fr-FR').replace(/,/g,' '); }
 var FAC_UNITES = ['u','m²','ml','m³','jour','h','forfait','lot'];
 
-function ligneHTML(des, qte, unite, prix){
-  des = des || ''; qte = (qte !== undefined && qte !== null) ? qte : 1;
+function ligneHTML(des, qteTot, qte, unite, prix){
+  des = des || '';
+  qte = (qte !== undefined && qte !== null) ? qte : 1;
+  qteTot = (qteTot !== undefined && qteTot !== null) ? qteTot : '';
   unite = unite || 'u'; prix = prix || 0;
   var opts = FAC_UNITES.map(function(u){ return '<option value="'+u+'"'+(u===unite?' selected':'')+'>'+u+'</option>'; }).join('');
   if (FAC_UNITES.indexOf(unite) === -1 && unite) opts += '<option value="'+unite+'" selected>'+unite+'</option>';
   var inp = 'border:1px solid #e5e7eb;border-radius:.4rem;padding:.35rem .45rem;font-size:.8rem;width:100%';
   return '<tr>'+
     '<td style="padding:.2rem .3rem"><input type="text" name="ligne_designation" value="'+des.replace(/"/g,'&quot;')+'" oninput="majLignes()" style="'+inp+'"/></td>'+
+    '<td style="padding:.2rem .3rem"><input type="number" name="ligne_quantite_totale" value="'+qteTot+'" step="0.01" min="0" placeholder="—" oninput="majLignes()" style="'+inp+';text-align:right"/></td>'+
     '<td style="padding:.2rem .3rem"><input type="number" name="ligne_quantite" value="'+qte+'" step="0.01" min="0" oninput="majLignes()" style="'+inp+';text-align:right"/></td>'+
     '<td style="padding:.2rem .3rem"><select name="ligne_unite" style="'+inp+'">'+opts+'</select></td>'+
+    '<td style="padding:.2rem .3rem;text-align:right;font-weight:700;font-size:.8rem;color:#0f3d36" class="ligne_pct">—</td>'+
     '<td style="padding:.2rem .3rem"><input type="number" name="ligne_prix" value="'+prix+'" step="0.01" min="0" oninput="majLignes()" style="'+inp+';text-align:right"/></td>'+
     '<td style="padding:.2rem .3rem;text-align:right;font-weight:700;font-size:.8rem" class="ligne_montant">0</td>'+
     '<td style="padding:.2rem .3rem;text-align:center"><button type="button" onclick="this.closest(\'tr\').remove();majLignes()" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900">×</button></td>'+
     '</tr>';
 }
-function ajouterLigne(des, qte, unite, prix){
-  document.getElementById('fac_lignes').insertAdjacentHTML('beforeend', ligneHTML(des, qte, unite, prix));
+function ajouterLigne(des, qteTot, qte, unite, prix){
+  document.getElementById('fac_lignes').insertAdjacentHTML('beforeend', ligneHTML(des, qteTot, qte, unite, prix));
   majLignes();
 }
 function majLignes(){
   var rows = document.querySelectorAll('#fac_lignes tr');
   var ht = 0;
   rows.forEach(function(tr){
-    var q = parseFloat(tr.querySelector('input[name=ligne_quantite]').value) || 0;
+    var qt = parseFloat(tr.querySelector('input[name=ligne_quantite_totale]').value) || 0;
+    var q  = parseFloat(tr.querySelector('input[name=ligne_quantite]').value) || 0;
     var pu = parseFloat(tr.querySelector('input[name=ligne_prix]').value) || 0;
     var m = q * pu;
     tr.querySelector('.ligne_montant').textContent = facFmt(m);
+    // % réalisation auto = réalisée / prévue
+    var pct = qt > 0 ? (q / qt * 100) : (q > 0 ? 100 : 0);
+    tr.querySelector('.ligne_pct').textContent = (qt > 0 ? pct.toFixed(0) + ' %' : '—');
     ht += m;
   });
   document.getElementById('f_ht').value = ht.toFixed(2);
@@ -521,7 +529,7 @@ function ouvrirFacture(){
   document.getElementById('fac_submit').textContent = 'Enregistrer en brouillon';
   document.getElementById('f_devise').value = 'XAF';
   document.getElementById('fac_lignes').innerHTML = '';
-  ajouterLigne('', 1, 'u', 0);
+  ajouterLigne('', '', 1, 'u', 0);
   fTaux();
   document.getElementById('modal-facture').style.display = 'flex';
 }
@@ -535,13 +543,12 @@ function ouvrirEditFacture(fac, lignes){
   document.getElementById('fac_echeance').value = fac.date_echeance ? (''+fac.date_echeance).substring(0,10) : '';
   document.getElementById('fac_site').value = fac.site_id || '';
   document.getElementById('fac_desc').value = fac.description || '';
-  document.getElementById('fac_pct').value = fac.pourcentage_realisation || '';
   document.getElementById('f_tva').value = fac.taux_tva || 0;
   document.getElementById('f_ret').value = fac.taux_retenue || 0;
   document.getElementById('f_devise').value = fac.devise || 'XAF';
   document.getElementById('fac_lignes').innerHTML = '';
-  if (lignes && lignes.length){ lignes.forEach(function(l){ ajouterLigne(l.designation, l.quantite, l.unite, l.prix_unitaire); }); }
-  else { ajouterLigne(fac.description || '', 1, 'forfait', fac.montant_ht || 0); }
+  if (lignes && lignes.length){ lignes.forEach(function(l){ ajouterLigne(l.designation, l.quantite_totale, l.quantite, l.unite, l.prix_unitaire); }); }
+  else { ajouterLigne(fac.description || '', '', 1, 'forfait', fac.montant_ht || 0); }
   var wrap = document.getElementById('f_taux_wrap');
   if ((fac.devise || 'XAF') === 'XAF'){ wrap.style.display = 'none'; document.getElementById('f_taux').value = 1; }
   else { wrap.style.display = 'block'; document.getElementById('f_taux').value = fac.taux_change || 1; }

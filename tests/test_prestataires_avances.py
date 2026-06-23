@@ -277,6 +277,32 @@ def test_facture_multi_lignes(client):
         assert float(f.montant_net_a_payer) == 1900000
 
 
+def test_pourcentage_realisation_par_ligne(client):
+    """Le % de réalisation est calculé automatiquement PAR LIGNE
+    (= quantité réalisée / quantité prévue) et affiché sur l'impression."""
+    pid = client._ids["prest_a"]
+    client.post(f"/prestataires/{pid}/factures/nouvelle", data={
+        "numero": "F-PCT", "date_facture": "2026-06-12", "taux_tva": "0", "taux_retenue": "0",
+        "ligne_designation": ["Dalle béton", "Peinture"],
+        "ligne_quantite_totale": ["200", ""],     # prévue : 200 m² ; 2e ligne sans prévision
+        "ligne_quantite": ["50", "10"],           # réalisée
+        "ligne_unite": ["m²", "u"],
+        "ligne_prix": ["10000", "5000"],
+    }, follow_redirects=True)
+    with flask_app.app_context():
+        f = FacturePrestataire.query.filter_by(prestataire_id=pid, numero="F-PCT").first()
+        lignes = sorted(f.lignes, key=lambda x: x.ordre)
+        assert float(lignes[0].quantite_totale) == 200
+        assert lignes[0].pourcentage_realisation == 25.0      # 50 / 200
+        assert float(lignes[0].montant) == 500000              # 50 × 10000
+        assert lignes[1].quantite_totale is None
+        assert lignes[1].pourcentage_realisation == 100.0      # pas de prévision → 100 %
+        fid = f.id
+    html = client.get(f"/prestataires/factures/{fid}/imprimer").data.decode("utf-8", "ignore")
+    assert "25 %" in html                                      # % par ligne sur l'impression
+    assert "Réalisation :" not in html                        # plus de % global sur la facture
+
+
 def test_paiement_bloque_avant_validation(client):
     fid = _facture(client)
     client.post(f"/prestataires/factures/{fid}/payer",
