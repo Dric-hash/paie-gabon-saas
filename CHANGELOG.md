@@ -9,7 +9,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Avances des journaliers (déduites de la paie de période)
+#### Journal d'audit (Audit Trail) étendu
+- Le **journal d'audit** (page « 🔍 Journal d'audit » du menu, réservé à
+  l'administrateur, avec filtres par action/objet/utilisateur et export CSV)
+  couvre désormais beaucoup plus d'actions : **salariés** (création, modification,
+  suppression), **bulletins** (validation, paiement), **journaliers** (création,
+  modification), **paie journalière** (génération mensuelle, paiement) et
+  **avances des journaliers** (création, modification, validation, suppression),
+  en plus des actions déjà tracées (connexions, prestataires, factures…).
+- Chaque entrée enregistre **qui, quoi, quand, sur quel objet, depuis quelle IP**.
+  Les filtres de la page incluent les nouveaux types d'objets.
+
+
 - On peut désormais enregistrer des **avances versées à un journalier** (depuis sa
   fiche : montant, date, motif) et les **déduire automatiquement de sa paie de
   période**. Le net à payer = montant de la paie − avances non encore régularisées.

@@ -20,7 +20,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-arrondi")
 import pytest
 from app import app as flask_app
 from models import (db, Plan, Tenant, Utilisateur, Journalier,
-                    FeuillePaieJournalier, AvanceJournalier)
+                    FeuillePaieJournalier, AvanceJournalier, AuditLog)
 
 
 @pytest.fixture
@@ -205,3 +205,29 @@ def test_avance_validee_toujours_deduite(client):
     with flask_app.app_context():
         fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
         assert float(fm.avance_deduite) == 50000    # déduite même validée
+
+
+# ── Journal d'audit ──────────────────────────────────────────────────────────
+def test_action_journalisee_dans_audit(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000", "motif": "test"}, follow_redirects=True)
+    with flask_app.app_context():
+        log = (AuditLog.query.filter_by(entite="avance_journalier", action="CREATE")
+               .order_by(AuditLog.id.desc()).first())
+        assert log is not None
+        assert log.user_id == client._ids["admin"]
+        assert log.tenant_id == client._ids["tenant"]
+
+
+def test_paiement_journalise(client):
+    client.post(f"/journaliers/paie/{client._ids['fm']}/payer", follow_redirects=True)
+    with flask_app.app_context():
+        log = AuditLog.query.filter_by(entite="feuille_journalier", action="PAY").first()
+        assert log is not None
+
+
+def test_page_audit_admin_ok(client):
+    r = client.get("/audit")
+    assert r.status_code == 200
+    assert "audit" in r.data.decode("utf-8", "ignore").lower()

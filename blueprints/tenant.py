@@ -966,6 +966,8 @@ def salarie_modifier(id):
                 aff.motif    = "Retiré via formulaire salarié"
                 db.session.commit()
         flash("Fiche mise à jour.", "success")
+        log_action("UPDATE", "salarie", s.id, f"Modification fiche salarié {s.nom_complet}")
+        db.session.commit()
         return redirect(url_for("tenant.salarie_detail", id=s.id))
     # Récupérer site actuel + liste des sites
     aff_actuelle = AffectationSite.query.filter_by(
@@ -1180,6 +1182,8 @@ def salarie_supprimer(id):
         Acompte.query.filter_by(salarie_id=id).delete()
         Conge.query.filter_by(salarie_id=id).delete()
         db.session.delete(s); db.session.commit()
+        log_action("DELETE", "salarie", id, f"Suppression salarié {nom}")
+        db.session.commit()
         flash(f"Salarié {nom} supprimé.", "success")
     except Exception as e:
         db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
@@ -1538,6 +1542,10 @@ def bulletin_valider(id):
     b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
     attribuer_numero_bulletin(b)
     db.session.commit()
+    log_action("VALIDATE", "bulletin", b.id,
+               f"Validation bulletin {b.salarie.nom_complet if b.salarie else ''} "
+               f"(net {float(b.net_a_payer or 0):,.0f} F)".replace(",", " "))
+    db.session.commit()
     flash("Bulletin validé avec succès.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
 
@@ -1549,6 +1557,9 @@ def bulletin_paye(id):
     if not t: return redirect(url_for("auth.login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     b.statut = "PAYÉ"; db.session.commit()
+    log_action("PAY", "bulletin", b.id,
+               f"Bulletin payé {b.salarie.nom_complet if b.salarie else ''}")
+    db.session.commit()
     flash("Bulletin marqué comme payé.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
 
@@ -2617,8 +2628,10 @@ def audit_trail():
         users=users,
         ACTIONS=["CREATE","UPDATE","DELETE","VALIDATE","CANCEL","PAY",
                  "LOGIN","LOGOUT","EXPORT","IMPORT"],
-        ENTITES=["salarie","bulletin","conge","acompte","periode",
-                 "utilisateur","parametres","paiement"],
+        ENTITES=["salarie","bulletin","conge","acompte","periode","paiement",
+                 "journalier","avance_journalier","feuille_journalier",
+                 "prestataire","facture_prestataire","contrat_prestation",
+                 "avance_prestataire","utilisateur","parametres"],
     )
 
 
@@ -2914,6 +2927,9 @@ def journalier_nouveau():
             nationalite=  request.form.get("nationalite","").strip() or None,
             statut="ACTIF")
         db.session.add(j); db.session.commit()
+        log_action("CREATE", "journalier", j.id,
+                   f"Création journalier {j.nom_complet} ({j.type_paie})", apres=j.to_dict())
+        db.session.commit()
         flash(f"Journalier {j.nom_complet} créé.", "success")
         return redirect(url_for("tenant.journaliers"))
     return render_template("tenant/journalier_form.html", tenant=t, journalier=None)
@@ -3011,6 +3027,9 @@ def journalier_modifier(id):
                 aff.actif    = False
                 aff.date_fin = date.today()
                 aff.motif    = "Retiré via formulaire journalier"
+        db.session.commit()
+        log_action("UPDATE", "journalier", j.id,
+                   f"Modification journalier {j.nom_complet}", apres=j.to_dict())
         db.session.commit()
         flash("Journalier mis à jour.", "success")
         return redirect(url_for("tenant.journaliers"))
@@ -3537,6 +3556,10 @@ def journaliers_paie_generer_mois():
             statut="EN_ATTENTE"))
         nb += 1
     db.session.commit()
+    if nb:
+        log_action("CREATE", "feuille_journalier", None,
+                   f"Génération paie mensuelle : {nb} feuille(s) ({mois:02d}/{annee})")
+        db.session.commit()
     msg = f"{nb} feuille(s) mensuelle(s) générée(s) pour {mois:02d}/{annee}."
     if nb_existant:
         msg += f" {nb_existant} déjà existante(s) ignorée(s)."
@@ -3618,6 +3641,10 @@ def journalier_avance_nouvelle(id):
         reference=(request.form.get("reference", "") or "").strip() or None,
         motif=(request.form.get("motif", "") or "").strip() or None)
     db.session.add(av); db.session.commit()
+    log_action("CREATE", "avance_journalier", av.id,
+               f"Avance {montant:,.0f} F — {j.nom_complet}".replace(",", " "),
+               apres=av.to_dict())
+    db.session.commit()
     flash(f"Avance de {montant:,.0f} F enregistrée pour {j.nom_complet}.".replace(",", " "), "success")
     return redirect(url_for("tenant.journalier_detail", id=id))
 
@@ -3646,6 +3673,9 @@ def journalier_avance_modifier(aid):
         av.date_avance = d
     av.motif = (request.form.get("motif", "") or "").strip() or None
     db.session.commit()
+    log_action("UPDATE", "avance_journalier", av.id,
+               f"Modification avance — {av.journalier.nom_complet}", apres=av.to_dict())
+    db.session.commit()
     flash("Avance modifiée.", "success")
     return redirect(url_for("tenant.journalier_detail", id=jid))
 
@@ -3658,6 +3688,9 @@ def journalier_avance_valider(aid):
     if not t: return redirect(url_for("auth.login"))
     av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
     av.statut = "VALIDEE"
+    db.session.commit()
+    log_action("VALIDATE", "avance_journalier", av.id,
+               f"Validation avance {float(av.montant):,.0f} F — {av.journalier.nom_complet}".replace(",", " "))
     db.session.commit()
     flash("Avance validée — elle est désormais figée.", "success")
     return redirect(url_for("tenant.journalier_detail", id=av.journalier_id))
@@ -3675,6 +3708,9 @@ def journalier_avance_supprimer(aid):
         flash("Avance validée ou déjà déduite : suppression impossible.", "error")
         return redirect(url_for("tenant.journalier_detail", id=jid))
     db.session.delete(av); db.session.commit()
+    log_action("DELETE", "avance_journalier", aid,
+               f"Suppression avance {float(av.montant):,.0f} F".replace(",", " "), avant=av.to_dict())
+    db.session.commit()
     flash("Avance supprimée.", "success")
     return redirect(url_for("tenant.journalier_detail", id=jid))
 
@@ -3705,6 +3741,12 @@ def journalier_payer(id):
         reste = round(reste - pris, 2)
     f.statut = "PAYÉ"; f.date_paiement = datetime.now().date(); db.session.commit()
     net = float(f.montant_brut) - a_deduire
+    log_action("PAY", "feuille_journalier", f.id,
+               f"Paiement {f.journalier.nom_complet} — net {net:,.0f} F"
+               + (f" (avances {a_deduire:,.0f} F)" if a_deduire else ""),
+               apres={"montant_brut": float(f.montant_brut), "avance_deduite": a_deduire,
+                      "net": net, "periode": f"{f.date_debut}→{f.date_fin}"})
+    db.session.commit()
     if a_deduire > 0:
         flash(f"Paiement de {f.journalier.nom_complet} enregistré "
               f"(net {net:,.0f} F après {a_deduire:,.0f} F d'avances).".replace(",", " "), "success")
