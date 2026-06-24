@@ -13,15 +13,19 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 - On peut désormais enregistrer des **avances versées à un journalier** (depuis sa
   fiche : montant, date, motif) et les **déduire automatiquement de sa paie de
   période**. Le net à payer = montant de la paie − avances non encore régularisées.
+- **Workflow** : une avance créée est **modifiable**, puis on la **valide** → elle
+  est **figée** (plus modifiable ni supprimable). Une avance déjà déduite par un
+  paiement est aussi figée. Mise en page de la section Avances corrigée (s'affiche
+  entièrement à l'écran, formulaire empilé, édition en ligne).
 - L'avance est plafonnée au montant de la paie : si elle dépasse, le reliquat
   reste dû et sera déduit de la paie suivante. Au **paiement**, la déduction est
-  figée et l'avance marquée régularisée (une avance déjà déduite ne peut plus être
-  supprimée).
+  figée et l'avance marquée régularisée.
 - Affichage du net (brut − avance) sur la **fiche du journalier**, la **liste de
   paie** et les **deux impressions** (normale et par chantier) ; les totaux sont
   calculés en net.
-- Nouveau modèle `AvanceJournalier` (table `avances_journalier`) + colonne
-  `avance_deduite` sur les feuilles de paie (migration `a7b8c9d0e1f2`).
+- Nouveau modèle `AvanceJournalier` (table `avances_journalier`, colonnes
+  `statut` / `montant_regularise`) + colonne `avance_deduite` sur les feuilles de
+  paie (migration `a7b8c9d0e1f2`).
 
 
 - L'**impression de l'état de paie des journaliers** (vue normale et vue par

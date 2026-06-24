@@ -856,6 +856,7 @@ class AvanceJournalier(db.Model):
     site_id       = db.Column(db.Integer, db.ForeignKey("sites.id"))
     montant       = db.Column(db.Numeric(15,2), nullable=False)
     montant_regularise = db.Column(db.Numeric(15,2), default=0)
+    statut        = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | VALIDEE
     date_avance   = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     mode_paiement = db.Column(db.String(30), default="ESPECES")
     reference     = db.Column(db.String(80))
@@ -877,11 +878,25 @@ class AvanceJournalier(db.Model):
     def est_soldee(self):
         return self.reste_a_regulariser <= 0.009
 
+    @property
+    def est_validee(self):
+        return self.statut == "VALIDEE"
+
+    @property
+    def est_modifiable(self):
+        """Modifiable/supprimable tant qu'elle n'est ni validée ni déjà déduite."""
+        return self.statut == "EN_ATTENTE" and float(self.montant_regularise or 0) == 0
+
+    @property
+    def statut_label(self):
+        return {"EN_ATTENTE": "En attente", "VALIDEE": "Validée"}.get(self.statut, self.statut)
+
     def to_dict(self):
         return {"id": self.id, "journalier_id": self.journalier_id,
                 "site_id": self.site_id, "montant": float(self.montant or 0),
                 "montant_regularise": float(self.montant_regularise or 0),
                 "reste_a_regulariser": self.reste_a_regulariser,
+                "statut": self.statut, "est_modifiable": self.est_modifiable,
                 "date_avance": str(self.date_avance) if self.date_avance else None,
                 "mode_paiement": self.mode_paiement, "reference": self.reference,
                 "motif": self.motif}

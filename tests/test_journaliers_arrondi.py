@@ -163,3 +163,45 @@ def test_avance_non_deduite_supprimable(client):
     client.post(f"/journaliers/avances/{aid}/supprimer", follow_redirects=True)
     with flask_app.app_context():
         assert db.session.get(AvanceJournalier, aid) is None       # supprimée
+
+
+def test_avance_modifiable_avant_validation(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle", data={"montant": "50000"}, follow_redirects=True)
+    with flask_app.app_context():
+        aid = AvanceJournalier.query.filter_by(journalier_id=jid).first().id
+    client.post(f"/journaliers/avances/{aid}/modifier",
+                data={"montant": "70000", "date_avance": "2026-06-12", "motif": "corrigé"},
+                follow_redirects=True)
+    with flask_app.app_context():
+        a = db.session.get(AvanceJournalier, aid)
+        assert float(a.montant) == 70000 and a.motif == "corrigé"
+
+
+def test_avance_validee_est_figee(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle", data={"montant": "50000"}, follow_redirects=True)
+    with flask_app.app_context():
+        aid = AvanceJournalier.query.filter_by(journalier_id=jid).first().id
+    client.post(f"/journaliers/avances/{aid}/valider", follow_redirects=True)
+    # Modification refusée
+    client.post(f"/journaliers/avances/{aid}/modifier", data={"montant": "999"}, follow_redirects=True)
+    # Suppression refusée
+    client.post(f"/journaliers/avances/{aid}/supprimer", follow_redirects=True)
+    with flask_app.app_context():
+        a = db.session.get(AvanceJournalier, aid)
+        assert a is not None                       # pas supprimée
+        assert a.statut == "VALIDEE" and a.est_modifiable is False
+        assert float(a.montant) == 50000            # pas modifiée
+
+
+def test_avance_validee_toujours_deduite(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle", data={"montant": "50000"}, follow_redirects=True)
+    with flask_app.app_context():
+        aid = AvanceJournalier.query.filter_by(journalier_id=jid).first().id
+    client.post(f"/journaliers/avances/{aid}/valider", follow_redirects=True)
+    client.post(f"/journaliers/paie/{client._ids['fm']}/payer", follow_redirects=True)
+    with flask_app.app_context():
+        fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
+        assert float(fm.avance_deduite) == 50000    # déduite même validée

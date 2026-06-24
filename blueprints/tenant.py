@@ -3622,16 +3622,57 @@ def journalier_avance_nouvelle(id):
     return redirect(url_for("tenant.journalier_detail", id=id))
 
 
-@bp.route("/journaliers/avances/<int:aid>/supprimer", methods=["POST"])
+@bp.route("/journaliers/avances/<int:aid>/modifier", methods=["POST"])
 @login_required
-def journalier_avance_supprimer(aid):
-    """Supprime une avance (uniquement si elle n'a pas encore été déduite/régularisée)."""
+def journalier_avance_modifier(aid):
+    """Modifie une avance, tant qu'elle n'est ni validée ni déjà déduite."""
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
     jid = av.journalier_id
-    if float(av.montant_regularise or 0) > 0:
-        flash("Cette avance a déjà été déduite d'une paie : suppression impossible.", "error")
+    if not av.est_modifiable:
+        flash("Cette avance est validée ou déjà déduite : elle n'est plus modifiable.", "error")
+        return redirect(url_for("tenant.journalier_detail", id=jid))
+    try:
+        montant = float(request.form.get("montant", av.montant) or av.montant)
+    except (TypeError, ValueError):
+        montant = float(av.montant)
+    if montant <= 0:
+        flash("Le montant de l'avance doit être supérieur à zéro.", "error")
+        return redirect(url_for("tenant.journalier_detail", id=jid))
+    av.montant = montant
+    d = _parse_date(request.form.get("date_avance", ""))
+    if d:
+        av.date_avance = d
+    av.motif = (request.form.get("motif", "") or "").strip() or None
+    db.session.commit()
+    flash("Avance modifiée.", "success")
+    return redirect(url_for("tenant.journalier_detail", id=jid))
+
+
+@bp.route("/journaliers/avances/<int:aid>/valider", methods=["POST"])
+@login_required
+def journalier_avance_valider(aid):
+    """Valide une avance : elle devient figée (plus modifiable ni supprimable)."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    av.statut = "VALIDEE"
+    db.session.commit()
+    flash("Avance validée — elle est désormais figée.", "success")
+    return redirect(url_for("tenant.journalier_detail", id=av.journalier_id))
+
+
+@bp.route("/journaliers/avances/<int:aid>/supprimer", methods=["POST"])
+@login_required
+def journalier_avance_supprimer(aid):
+    """Supprime une avance (uniquement si non validée et non encore déduite)."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    jid = av.journalier_id
+    if not av.est_modifiable:
+        flash("Avance validée ou déjà déduite : suppression impossible.", "error")
         return redirect(url_for("tenant.journalier_detail", id=jid))
     db.session.delete(av); db.session.commit()
     flash("Avance supprimée.", "success")

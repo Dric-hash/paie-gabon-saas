@@ -462,6 +462,7 @@ def run_migrations():
         "ALTER TABLE lignes_facture_prestataire ADD COLUMN IF NOT EXISTS quantite_totale NUMERIC(12,2)",
         # ── Journaliers : avances déduites de la paie de période ──
         "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS avance_deduite NUMERIC(15,2) DEFAULT 0",
+        "ALTER TABLE avances_journalier ADD COLUMN IF NOT EXISTS statut VARCHAR(20) DEFAULT 'EN_ATTENTE'",
         # ── Index de performance sur les tables récentes (multi-tenant) ──────────
         # Idempotents (IF NOT EXISTS). Accélèrent les listes et impressions filtrées
         # par tenant_id / statut / dates / site.
