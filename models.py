@@ -815,6 +815,24 @@ class FeuillePaieJournalier(db.Model):
     observation   = db.Column(db.String(200))
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
     journalier = db.relationship("Journalier", backref="feuilles_paie")
+
+    @property
+    def montant_a_payer(self):
+        """Montant réellement dû. Pour les journaliers de type MENSUEL, il est
+        arrondi au millier de franc supérieur (ex. 229 999 → 230 000). Pour les
+        journaliers payés à la journée, le brut exact est conservé.
+
+        Calculé à la lecture : les feuilles déjà enregistrées avant la mise en
+        place de l'arrondi sont donc affichées correctement, sans régénération."""
+        from calculs_paie import arrondi_millier_superieur
+        montant = float(self.montant_brut or 0)
+        try:
+            if self.journalier and self.journalier.type_paie == "MENSUEL":
+                return arrondi_millier_superieur(montant)
+        except Exception:
+            pass
+        return montant
+
     def to_dict(self):
         d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
         for k in ["date_debut","date_fin","date_paiement","date_creation"]:

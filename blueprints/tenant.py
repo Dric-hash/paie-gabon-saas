@@ -3538,6 +3538,7 @@ def journalier_payer(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    f.montant_brut = f.montant_a_payer   # fige l'arrondi millier sup. pour les mensuels
     f.statut="PAYÉ"; f.date_paiement=datetime.now().date(); db.session.commit()
     flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
@@ -3618,7 +3619,7 @@ def journaliers_paie_imprimer_sites():
         if key not in groupes:
             groupes[key] = {"site": s, "feuilles": [], "total": 0.0}
         groupes[key]["feuilles"].append(f)
-        groupes[key]["total"] += float(f.montant_brut or 0)
+        groupes[key]["total"] += float(f.montant_a_payer or 0)
 
     # Ordonner : sites par nom (selon sites_list), puis "Sans site" à la fin
     groupes_ordonnes = []
@@ -3666,7 +3667,7 @@ def journaliers_paie_imprimer():
         q = q.filter(FeuillePaieJournalier.date_fin <= date_fin)
     feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
         FeuillePaieJournalier.date_fin.desc()).all()
-    total = sum(float(f.montant_brut or 0) for f in feuilles)
+    total = sum(float(f.montant_a_payer or 0) for f in feuilles)
     return render_template("tenant/journaliers_paie_print.html",
         tenant=t, feuilles=feuilles, site=site, statut=statut_f,
         date_debut=date_debut, date_fin=date_fin, total=total,

@@ -17,7 +17,10 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
   de franc supérieur** (uniquement la paie des journaliers de type *Mensuel* ;
   la paie journalière par période n'est pas arrondie). Ainsi 1 099 001 → 1 100 000
   et 150 001 → 151 000 ; un montant déjà rond (150 000) reste inchangé.
-  Helper `arrondi_millier_superieur()`.
+  L'arrondi est appliqué **à l'affichage** (liste, impressions, totaux) — donc
+  les feuilles déjà enregistrées avant la mise à jour sont également arrondies,
+  sans avoir à les régénérer — et il est **figé au moment du paiement**.
+  Helpers `arrondi_millier_superieur()` / propriété `FeuillePaieJournalier.montant_a_payer`.
 
 
 - La **barre de recherche du tableau de bord** et la **page de recherche

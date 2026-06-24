@@ -337,7 +337,7 @@
         <td style="text-align:center;font-weight:700">{{ f.nb_jours }}</td>
         <td style="text-align:right;font-family:monospace;font-size:.8rem">{{ "%.1f"|format(f.total_heures|float) }}h</td>
         <td style="text-align:right;font-family:monospace;font-size:.8rem;color:#6b7280">{{ f.taux_horaire|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace;font-weight:900">{{ f.montant_brut|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900">{{ f.montant_a_payer|int|fcfa }}</td>
         <td style="text-align:center">
           <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;
             {{ 'background:#d1fae5;color:#065f46' if f.statut=='PAYÉ' else 'background:#fef3c7;color:#92400e' }}">
@@ -371,7 +371,7 @@
           <div id="edit_{{ f.id }}" style="display:none;margin-top:.5rem">
             <form method="POST" action="/journaliers/paie/{{ f.id }}/modifier">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-              <input type="number" name="montant_brut" value="{{ f.montant_brut|int }}" step="any"
+              <input type="number" name="montant_brut" value="{{ f.montant_a_payer|int }}" step="any"
                 style="width:100px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.3rem .5rem;font-size:.8rem;text-align:right">
               <button type="submit" style="background:#2563eb;color:white;border:none;padding:.3rem .5rem;border-radius:.5rem;font-size:.75rem;cursor:pointer">✓</button>
             </form>
@@ -384,7 +384,7 @@
       <tr style="background:#f9fafb;font-weight:900">
         <td style="padding:.5rem .75rem;font-size:.8rem" colspan="6">TOTAL ({{ feuilles|length }} feuilles)</td>
         <td style="text-align:right;padding:.5rem .75rem;font-family:monospace;font-size:.875rem;color:#0f3d36">
-          {{ feuilles|sum(attribute='montant_brut')|int|fcfa }}
+          {{ feuilles|sum(attribute='montant_a_payer')|int|fcfa }}
         </td>
         <td colspan="2"></td>
       </tr>

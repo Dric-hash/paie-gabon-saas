@@ -92,7 +92,7 @@
         <td class="center">{{ f.nb_jours }}</td>
         <td class="num">{{ "%.1f"|format(f.total_heures|float) }}h</td>
         <td class="num">{{ f.taux_horaire|int }}</td>
-        <td class="num"><b>{{ f.montant_brut|int }}</b></td>
+        <td class="num"><b>{{ f.montant_a_payer|int }}</b></td>
         <td class="sig-cell">&nbsp;</td>
       </tr>
       {% else %}
