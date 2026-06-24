@@ -811,6 +811,7 @@ class FeuillePaieJournalier(db.Model):
     total_heures  = db.Column(db.Numeric(7,2), default=0)
     taux_horaire  = db.Column(db.Numeric(12,2), nullable=False)
     montant_brut  = db.Column(db.Numeric(15,2), default=0)
+    avance_deduite = db.Column(db.Numeric(15,2), default=0)  # avances déduites (figé au paiement)
     statut        = db.Column(db.String(20), default="EN_ATTENTE")
     observation   = db.Column(db.String(200))
     date_creation = db.Column(db.DateTime, default=datetime.utcnow)
@@ -840,6 +841,50 @@ class FeuillePaieJournalier(db.Model):
         for k in ["total_heures","taux_horaire","montant_brut"]:
             if d[k] is not None: d[k] = float(d[k])
         return d
+
+
+class AvanceJournalier(db.Model):
+    """Avance versée à un journalier, déduite ensuite de sa paie de période.
+
+    Montants en XAF. `montant_regularise` est la part déjà déduite des feuilles
+    de paie ; `reste_a_regulariser` est ce qu'il reste à récupérer.
+    """
+    __tablename__ = "avances_journalier"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    journalier_id = db.Column(db.Integer, db.ForeignKey("journaliers.id"), nullable=False)
+    site_id       = db.Column(db.Integer, db.ForeignKey("sites.id"))
+    montant       = db.Column(db.Numeric(15,2), nullable=False)
+    montant_regularise = db.Column(db.Numeric(15,2), default=0)
+    date_avance   = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    mode_paiement = db.Column(db.String(30), default="ESPECES")
+    reference     = db.Column(db.String(80))
+    motif         = db.Column(db.String(200))
+    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+
+    journalier = db.relationship("Journalier", backref="avances")
+    site       = db.relationship("Site")
+
+    __table_args__ = (
+        db.Index("idx_avances_journalier", "tenant_id", "journalier_id"),
+    )
+
+    @property
+    def reste_a_regulariser(self):
+        return round(float(self.montant or 0) - float(self.montant_regularise or 0), 2)
+
+    @property
+    def est_soldee(self):
+        return self.reste_a_regulariser <= 0.009
+
+    def to_dict(self):
+        return {"id": self.id, "journalier_id": self.journalier_id,
+                "site_id": self.site_id, "montant": float(self.montant or 0),
+                "montant_regularise": float(self.montant_regularise or 0),
+                "reste_a_regulariser": self.reste_a_regulariser,
+                "date_avance": str(self.date_avance) if self.date_avance else None,
+                "mode_paiement": self.mode_paiement, "reference": self.reference,
+                "motif": self.motif}
 
 
 class Paiement(db.Model):

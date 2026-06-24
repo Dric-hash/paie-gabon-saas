@@ -20,7 +20,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-arrondi")
 import pytest
 from app import app as flask_app
 from models import (db, Plan, Tenant, Utilisateur, Journalier,
-                    FeuillePaieJournalier)
+                    FeuillePaieJournalier, AvanceJournalier)
 
 
 @pytest.fixture
@@ -95,3 +95,71 @@ def test_paiement_fige_le_montant_arrondi(client):
         fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
         assert fm.statut == "PAYÉ"
         assert float(fm.montant_brut) == 230000     # arrondi figé au paiement
+
+
+# ── Avances des journaliers : déduction de la paie de période ─────────────────
+def _journalier_mensuel_id(client):
+    with flask_app.app_context():
+        return db.session.get(FeuillePaieJournalier, client._ids["fm"]).journalier_id
+
+
+def test_avance_deduite_de_la_paie_a_l_impression(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000", "date_avance": "2026-06-10", "motif": "avance"},
+                follow_redirects=True)
+    # Brut mensuel 230 000 − avance 50 000 = net 180 000
+    html = client.get("/journaliers/paie/imprimer"
+                      "?date_debut=2026-06-01&date_fin=2026-06-30").data.decode("utf-8", "ignore")
+    assert "180000" in html
+
+
+def test_paiement_regularise_l_avance(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000", "date_avance": "2026-06-10"}, follow_redirects=True)
+    client.post(f"/journaliers/paie/{client._ids['fm']}/payer", follow_redirects=True)
+    with flask_app.app_context():
+        fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
+        assert fm.statut == "PAYÉ"
+        assert float(fm.montant_brut) == 230000          # arrondi figé
+        assert float(fm.avance_deduite) == 50000          # avance déduite figée
+        av = AvanceJournalier.query.filter_by(journalier_id=jid).first()
+        assert float(av.montant_regularise) == 50000      # avance régularisée
+        assert av.reste_a_regulariser == 0
+
+
+def test_avance_superieure_au_net_plafonnee(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "500000", "date_avance": "2026-06-10"}, follow_redirects=True)
+    client.post(f"/journaliers/paie/{client._ids['fm']}/payer", follow_redirects=True)
+    with flask_app.app_context():
+        fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
+        assert float(fm.avance_deduite) == 230000         # plafonné au brut
+        av = AvanceJournalier.query.filter_by(journalier_id=jid).first()
+        assert float(av.montant_regularise) == 230000     # seulement 230 000 régularisés
+        assert av.reste_a_regulariser == 270000           # 500 000 − 230 000 restent dus
+
+
+def test_avance_regularisee_non_supprimable(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000"}, follow_redirects=True)
+    client.post(f"/journaliers/paie/{client._ids['fm']}/payer", follow_redirects=True)
+    with flask_app.app_context():
+        aid = AvanceJournalier.query.filter_by(journalier_id=jid).first().id
+    client.post(f"/journaliers/avances/{aid}/supprimer", follow_redirects=True)
+    with flask_app.app_context():
+        assert db.session.get(AvanceJournalier, aid) is not None   # toujours là (déduite)
+
+
+def test_avance_non_deduite_supprimable(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000"}, follow_redirects=True)
+    with flask_app.app_context():
+        aid = AvanceJournalier.query.filter_by(journalier_id=jid).first().id
+    client.post(f"/journaliers/avances/{aid}/supprimer", follow_redirects=True)
+    with flask_app.app_context():
+        assert db.session.get(AvanceJournalier, aid) is None       # supprimée

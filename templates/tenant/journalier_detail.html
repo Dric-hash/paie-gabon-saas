@@ -116,7 +116,11 @@
               {{ f.date_fin.strftime('%d/%m/%Y') if f.date_fin else '?' }}
             </td>
             <td style="text-align:right;font-family:monospace;font-weight:700;font-size:.8rem">
-              {{ f.montant_brut|int|fcfa }}
+              {{ f.montant_a_payer|int|fcfa }}
+              {% if imput_av.get(f.id) and imput_av[f.id].avance > 0 %}
+              <div style="font-size:.7rem;color:#b45309;font-weight:600">− avance {{ imput_av[f.id].avance|int|fcfa }}</div>
+              <div style="font-size:.72rem;color:#0f3d36;font-weight:800">net {{ imput_av[f.id].net|int|fcfa }}</div>
+              {% endif %}
             </td>
             <td style="text-align:center">
               <span style="font-size:.65rem;font-weight:700;padding:.15rem .4rem;border-radius:9999px;
@@ -141,6 +145,79 @@
       <div style="text-align:center;padding:2rem;color:#9ca3af;font-size:.875rem">
         <div style="font-size:2rem;margin-bottom:.5rem">📋</div>
         Aucune feuille de paie
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Avances -->
+    <div class="card overflow-hidden mt-4">
+      <div style="padding:1rem 1.25rem;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;background:#fffbeb">
+        <h2 class="text-xs font-bold uppercase tracking-widest" style="color:#92400e">
+          Avances ({{ avances|length }})
+        </h2>
+        <div style="text-align:right;font-size:.72rem;color:#92400e">
+          Total : <b>{{ total_avances|int|fcfa }} F</b>
+          {% if avances_reste > 0 %}· Reste à déduire : <b>{{ avances_reste|int|fcfa }} F</b>{% endif %}
+        </div>
+      </div>
+
+      <!-- Formulaire d'ajout d'avance -->
+      <form method="POST" action="/journaliers/{{ journalier.id }}/avances/nouvelle"
+            style="padding:.85rem 1.25rem;border-bottom:1px solid #f3f4f6;display:grid;grid-template-columns:1fr 1fr 2fr auto;gap:.6rem;align-items:end">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div>
+          <label style="font-size:.68rem;color:#6b7280;font-weight:700">Montant (XAF)</label>
+          <input type="number" name="montant" step="any" min="1" required
+                 style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .55rem;font-size:.82rem"/>
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:#6b7280;font-weight:700">Date</label>
+          <input type="date" name="date_avance" value="{{ now.strftime('%Y-%m-%d') if now else '' }}"
+                 style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .55rem;font-size:.82rem"/>
+        </div>
+        <div>
+          <label style="font-size:.68rem;color:#6b7280;font-weight:700">Motif (facultatif)</label>
+          <input type="text" name="motif" placeholder="Avance sur salaire…"
+                 style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .55rem;font-size:.82rem"/>
+        </div>
+        <button type="submit" class="btn-primary" style="font-size:.78rem;white-space:nowrap">+ Avance</button>
+      </form>
+
+      {% if avances %}
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th><th>Motif</th>
+            <th style="text-align:right">Montant</th>
+            <th style="text-align:right">Reste à déduire</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for a in avances %}
+          <tr>
+            <td style="font-size:.8rem">{{ a.date_avance.strftime('%d/%m/%Y') if a.date_avance else '?' }}</td>
+            <td style="font-size:.8rem;color:#6b7280">{{ a.motif or '—' }}</td>
+            <td style="text-align:right;font-family:monospace;font-weight:700;font-size:.8rem">{{ a.montant|int|fcfa }}</td>
+            <td style="text-align:right;font-family:monospace;font-size:.8rem;color:{{ '#b45309' if a.reste_a_regulariser > 0 else '#059669' }}">
+              {{ a.reste_a_regulariser|int|fcfa }}{% if a.est_soldee %} <span style="font-size:.65rem">(soldée)</span>{% endif %}
+            </td>
+            <td style="text-align:right">
+              {% if a.montant_regularise|float == 0 %}
+              <form method="POST" action="/journaliers/avances/{{ a.id }}/supprimer" style="display:inline"
+                    onsubmit="return confirm('Supprimer cette avance ?')">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" style="background:none;border:none;color:#dc2626;cursor:pointer;font-weight:900">×</button>
+              </form>
+              {% else %}<span style="color:#d1d5db" title="Déjà déduite">🔒</span>{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div style="text-align:center;padding:1.5rem;color:#9ca3af;font-size:.85rem">
+        Aucune avance enregistrée pour ce journalier.
       </div>
       {% endif %}
     </div>

@@ -19,7 +19,8 @@ from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement, OAuthClient, AuditLog,
-                    Prestataire, FacturePrestataire, ComposantPaie, BulletinComposant)
+                    Prestataire, FacturePrestataire, ComposantPaie, BulletinComposant,
+                    AvanceJournalier)
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
@@ -2932,6 +2933,13 @@ def journalier_detail(id):
     ).order_by(FeuillePaieJournalier.date_fin.desc()).all()
     total_percu = sum(float(f.montant_brut or 0) for f in feuilles if f.statut == "PAYÉ")
 
+    # ── Avances du journalier + déduction sur les feuilles ────────────────────
+    avances = (AvanceJournalier.query.filter_by(journalier_id=id, tenant_id=t.id)
+               .order_by(AvanceJournalier.date_avance.desc()).all())
+    total_avances = round(sum(float(a.montant or 0) for a in avances), 2)
+    avances_reste = round(sum(a.reste_a_regulariser for a in avances), 2)
+    imput_av = _imputer_avances_journalier(feuilles, {id: avances})
+
     # Affectation site courante
     aff = AffectationSite.query.filter_by(
         journalier_id=id, tenant_id=t.id, actif=True).first()
@@ -2956,6 +2964,8 @@ def journalier_detail(id):
     return render_template("tenant/journalier_detail.html",
         journalier=j, tenant=t, feuilles=feuilles,
         total_percu=total_percu, aff=aff,
+        avances=avances, total_avances=total_avances, avances_reste=avances_reste,
+        imput_av=imput_av,
         pts_hist=pts_hist, nb_jours=nb_jours,
         nb_presences=nb_presences, nb_absences=nb_absences,
         nb_non_pointes=nb_non_pointes,
@@ -3392,6 +3402,10 @@ def journaliers_paie():
     pagination_f     = q_feuilles.order_by(FeuillePaieJournalier.date_fin.desc()).paginate(page=page_f, per_page=25, error_out=False)
     feuilles         = pagination_f.items
 
+    # Déduction des avances pour les feuilles affichées
+    imput_av = _imputer_avances_journalier(
+        feuilles, _avances_par_journalier(t.id, {f.journalier_id for f in feuilles}))
+
     # Affectation site de chaque journalier (pour affichage dans la liste)
     aff_jour = {a.journalier_id: a.site for a in AffectationSite.query.filter_by(
         tenant_id=t.id, actif=True
@@ -3404,7 +3418,7 @@ def journaliers_paie():
         tenant=t, feuilles=feuilles, journaliers=journaliers_list,
         sites=sites_list, site_filtre=site_filtre, statut_filtre=statut_filtre,
         total_en_attente=total_en_attente, total_paye=total_paye,
-        nb_en_attente=nb_en_attente, aff_jour=aff_jour,
+        nb_en_attente=nb_en_attente, aff_jour=aff_jour, imput_av=imput_av,
         pagination=pagination_f, pagination_base=_base + _sep,
         now=datetime.now())
 
@@ -3532,6 +3546,98 @@ def journaliers_paie_generer_mois():
     return redirect(url_for("tenant.journaliers_paie"))
 
 
+def _avances_par_journalier(tenant_id, journalier_ids=None):
+    """Charge les avances et les regroupe par journalier : {jid: [AvanceJournalier]}."""
+    from collections import defaultdict
+    q = AvanceJournalier.query.filter_by(tenant_id=tenant_id)
+    if journalier_ids is not None:
+        if not journalier_ids:
+            return {}
+        q = q.filter(AvanceJournalier.journalier_id.in_(list(journalier_ids)))
+    par_j = defaultdict(list)
+    for a in q.order_by(AvanceJournalier.date_avance).all():
+        par_j[a.journalier_id].append(a)
+    return par_j
+
+
+def _imputer_avances_journalier(feuilles, avances_par_journalier):
+    """Déduit les avances des feuilles de paie, par journalier.
+
+    Les feuilles PAYÉ utilisent le montant d'avance figé (`avance_deduite`).
+    Pour les feuilles EN_ATTENTE, l'encours d'avances non régularisées du
+    journalier est réparti sur ses feuilles (la plus ancienne d'abord), plafonné
+    au montant de chaque feuille.
+
+    Renvoie {feuille_id: {"avance": x, "net": y}} (en XAF).
+    """
+    from collections import defaultdict
+    encours = {}
+    for jid, avs in avances_par_journalier.items():
+        encours[jid] = round(sum(max(0.0, float(a.montant or 0) - float(a.montant_regularise or 0))
+                                 for a in avs), 2)
+    res = {}
+    par_j = defaultdict(list)
+    for f in feuilles:
+        par_j[f.journalier_id].append(f)
+    for jid, fs in par_j.items():
+        rem = encours.get(jid, 0.0)
+        for f in fs:                       # feuilles déjà payées : déduction figée
+            if f.statut == "PAYÉ":
+                ded = float(f.avance_deduite or 0)
+                res[f.id] = {"avance": ded, "net": round(float(f.montant_a_payer) - ded, 2)}
+        for f in sorted([f for f in fs if f.statut != "PAYÉ"],
+                        key=lambda x: (x.date_fin, x.id)):
+            base = float(f.montant_a_payer)
+            ded  = round(min(rem, base), 2)
+            rem  = round(rem - ded, 2)
+            res[f.id] = {"avance": ded, "net": round(base - ded, 2)}
+    return res
+
+
+@bp.route("/journaliers/<int:id>/avances/nouvelle", methods=["POST"])
+@login_required
+def journalier_avance_nouvelle(id):
+    """Enregistre une avance versée à un journalier."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    try:
+        montant = float(request.form.get("montant", 0) or 0)
+    except (TypeError, ValueError):
+        montant = 0
+    if montant <= 0:
+        flash("Le montant de l'avance doit être supérieur à zéro.", "error")
+        return redirect(url_for("tenant.journalier_detail", id=id))
+    aff = AffectationSite.query.filter_by(journalier_id=id, tenant_id=t.id, actif=True).first()
+    av = AvanceJournalier(
+        tenant_id=t.id, journalier_id=j.id,
+        site_id=(aff.site_id if aff else None),
+        montant=montant,
+        date_avance=_parse_date(request.form.get("date_avance", "")) or datetime.now().date(),
+        mode_paiement=(request.form.get("mode_paiement", "ESPECES") or "ESPECES").strip(),
+        reference=(request.form.get("reference", "") or "").strip() or None,
+        motif=(request.form.get("motif", "") or "").strip() or None)
+    db.session.add(av); db.session.commit()
+    flash(f"Avance de {montant:,.0f} F enregistrée pour {j.nom_complet}.".replace(",", " "), "success")
+    return redirect(url_for("tenant.journalier_detail", id=id))
+
+
+@bp.route("/journaliers/avances/<int:aid>/supprimer", methods=["POST"])
+@login_required
+def journalier_avance_supprimer(aid):
+    """Supprime une avance (uniquement si elle n'a pas encore été déduite/régularisée)."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    jid = av.journalier_id
+    if float(av.montant_regularise or 0) > 0:
+        flash("Cette avance a déjà été déduite d'une paie : suppression impossible.", "error")
+        return redirect(url_for("tenant.journalier_detail", id=jid))
+    db.session.delete(av); db.session.commit()
+    flash("Avance supprimée.", "success")
+    return redirect(url_for("tenant.journalier_detail", id=jid))
+
+
 @bp.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
 @login_required
 def journalier_payer(id):
@@ -3539,8 +3645,30 @@ def journalier_payer(id):
     if not t: return redirect(url_for("auth.login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     f.montant_brut = f.montant_a_payer   # fige l'arrondi millier sup. pour les mensuels
-    f.statut="PAYÉ"; f.date_paiement=datetime.now().date(); db.session.commit()
-    flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
+    # Déduction des avances non régularisées du journalier (plus ancienne d'abord)
+    avs = (AvanceJournalier.query.filter_by(tenant_id=t.id, journalier_id=f.journalier_id)
+           .order_by(AvanceJournalier.date_avance).all())
+    a_deduire = round(min(
+        sum(a.reste_a_regulariser for a in avs),
+        float(f.montant_a_payer)), 2)
+    f.avance_deduite = a_deduire
+    reste = a_deduire
+    for a in avs:
+        if reste <= 0:
+            break
+        dispo = a.reste_a_regulariser
+        if dispo <= 0:
+            continue
+        pris = min(dispo, reste)
+        a.montant_regularise = float(a.montant_regularise or 0) + pris
+        reste = round(reste - pris, 2)
+    f.statut = "PAYÉ"; f.date_paiement = datetime.now().date(); db.session.commit()
+    net = float(f.montant_brut) - a_deduire
+    if a_deduire > 0:
+        flash(f"Paiement de {f.journalier.nom_complet} enregistré "
+              f"(net {net:,.0f} F après {a_deduire:,.0f} F d'avances).".replace(",", " "), "success")
+    else:
+        flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
 
 @bp.route("/journaliers/paie/<int:id>/modifier", methods=["POST"])
@@ -3610,6 +3738,10 @@ def journaliers_paie_imprimer_sites():
 
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
 
+    # Déduction des avances (par journalier) sur les feuilles affichées
+    imput_av = _imputer_avances_journalier(
+        feuilles, _avances_par_journalier(t.id, {f.journalier_id for f in feuilles}))
+
     # Regroupement : { site_id : {"site": Site|None, "feuilles": [...], "total": x} }
     groupes = {}
     SANS_SITE = 0
@@ -3617,9 +3749,13 @@ def journaliers_paie_imprimer_sites():
         s = site_par_journalier.get(f.journalier_id)
         key = s.id if s else SANS_SITE
         if key not in groupes:
-            groupes[key] = {"site": s, "feuilles": [], "total": 0.0}
+            groupes[key] = {"site": s, "feuilles": [], "total": 0.0,
+                            "total_brut": 0.0, "total_avance": 0.0}
         groupes[key]["feuilles"].append(f)
-        groupes[key]["total"] += float(f.montant_a_payer or 0)
+        net = imput_av.get(f.id, {}).get("net", float(f.montant_a_payer or 0))
+        groupes[key]["total"]       += net
+        groupes[key]["total_brut"]  += float(f.montant_a_payer or 0)
+        groupes[key]["total_avance"]+= imput_av.get(f.id, {}).get("avance", 0.0)
 
     # Ordonner : sites par nom (selon sites_list), puis "Sans site" à la fin
     groupes_ordonnes = []
@@ -3634,7 +3770,7 @@ def journaliers_paie_imprimer_sites():
     return render_template("tenant/journaliers_paie_sites_print.html",
         tenant=t, groupes=groupes_ordonnes, total_general=total_general,
         nb_total=nb_total, statut=statut_f, date_debut=date_debut, date_fin=date_fin,
-        now=datetime.now())
+        imput_av=imput_av, now=datetime.now())
 
 
 @bp.route("/journaliers/paie/imprimer")
@@ -3667,11 +3803,13 @@ def journaliers_paie_imprimer():
         q = q.filter(FeuillePaieJournalier.date_fin <= date_fin)
     feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
         FeuillePaieJournalier.date_fin.desc()).all()
-    total = sum(float(f.montant_a_payer or 0) for f in feuilles)
+    imput_av = _imputer_avances_journalier(
+        feuilles, _avances_par_journalier(t.id, {f.journalier_id for f in feuilles}))
+    total = sum(imput_av.get(f.id, {}).get("net", float(f.montant_a_payer or 0)) for f in feuilles)
     return render_template("tenant/journaliers_paie_print.html",
         tenant=t, feuilles=feuilles, site=site, statut=statut_f,
         date_debut=date_debut, date_fin=date_fin, total=total,
-        now=datetime.now())
+        imput_av=imput_av, now=datetime.now())
 
 
 @bp.route("/journaliers/paie/export")

@@ -337,7 +337,13 @@
         <td style="text-align:center;font-weight:700">{{ f.nb_jours }}</td>
         <td style="text-align:right;font-family:monospace;font-size:.8rem">{{ "%.1f"|format(f.total_heures|float) }}h</td>
         <td style="text-align:right;font-family:monospace;font-size:.8rem;color:#6b7280">{{ f.taux_horaire|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace;font-weight:900">{{ f.montant_a_payer|int|fcfa }}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:900">
+          {{ f.montant_a_payer|int|fcfa }}
+          {% if imput_av.get(f.id) and imput_av[f.id].avance > 0 %}
+          <div style="font-size:.7rem;color:#b45309;font-weight:600">− avance {{ imput_av[f.id].avance|int|fcfa }}</div>
+          <div style="font-size:.72rem;color:#0f3d36;font-weight:800">net {{ imput_av[f.id].net|int|fcfa }}</div>
+          {% endif %}
+        </td>
         <td style="text-align:center">
           <span style="font-size:.75rem;font-weight:700;padding:.2rem .625rem;border-radius:9999px;
             {{ 'background:#d1fae5;color:#065f46' if f.statut=='PAYÉ' else 'background:#fef3c7;color:#92400e' }}">

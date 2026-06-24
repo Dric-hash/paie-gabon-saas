@@ -92,7 +92,13 @@
         <td class="center">{{ f.nb_jours }}</td>
         <td class="num">{{ "%.1f"|format(f.total_heures|float) }}h</td>
         <td class="num">{{ f.taux_horaire|int }}</td>
-        <td class="num"><b>{{ f.montant_a_payer|int }}</b></td>
+        <td class="num">
+          <b>{{ f.montant_a_payer|int }}</b>
+          {% if imput_av.get(f.id) and imput_av[f.id].avance > 0 %}
+          <div style="color:#b45309;font-size:9px">− avance {{ imput_av[f.id].avance|int }}</div>
+          <div style="font-weight:700;font-size:11px">net {{ imput_av[f.id].net|int }}</div>
+          {% endif %}
+        </td>
         <td class="sig-cell">&nbsp;</td>
       </tr>
       {% else %}
