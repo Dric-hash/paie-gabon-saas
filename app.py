@@ -302,6 +302,19 @@ def pwa_sw():
     return send_from_directory(app.static_folder, "sw.js",
                                mimetype="application/javascript")
 
+# ── Favicon servi à la racine (onglet navigateur, toutes pages) ───────────────
+@app.route("/favicon.ico")
+def favicon_ico():
+    from flask import send_from_directory
+    return send_from_directory(app.static_folder, "favicon.ico",
+                               mimetype="image/vnd.microsoft.icon")
+
+@app.route("/favicon.svg")
+def favicon_svg():
+    from flask import send_from_directory
+    return send_from_directory(app.static_folder, "favicon.svg",
+                               mimetype="image/svg+xml")
+
 @app.route("/offline")
 def pwa_offline():
     return render_template("tenant/offline.html")

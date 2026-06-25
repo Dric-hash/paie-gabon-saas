@@ -30,6 +30,8 @@
   <!-- Icônes Apple -->
   <link rel="apple-touch-icon" href="/static/icons/icon-152.png"/>
   <link rel="apple-touch-icon" sizes="192x192" href="/static/icons/icon-192.png"/>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg"/>
+  <link rel="icon" href="/static/favicon.ico" sizes="any"/>
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png"/>
   <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png"/>
   <script>
@@ -138,12 +140,26 @@
   <aside class="w-64 text-white flex flex-col fixed h-full z-20 shadow-2xl" style="background:var(--brand)">
     <!-- Logo -->
     <div class="px-6 py-5 border-b border-white/10">
-      <div class="display text-lg font-extrabold">Ameriack I.T. Solutions</div>
-      <div class="text-xs text-white/50 mt-0.5 truncate">
-        {% if tenant %}{{ tenant.denomination }}{% else %}Espace entreprise{% endif %}
-      </div>
+      <a href="/dashboard" class="flex items-center gap-3" style="text-decoration:none">
+        <svg width="38" height="38" viewBox="0 0 124 124" style="flex-shrink:0" aria-hidden="true">
+          <circle cx="62" cy="62" r="60" fill="#ffffff" opacity="0.08"/>
+          <circle cx="62" cy="62" r="52.5" fill="none" stroke="#E9B043" stroke-width="2.2"/>
+          <rect x="46" y="33" width="11.5" height="58" rx="5.7" fill="#ffffff"/>
+          <circle cx="62" cy="51" r="15" fill="#ffffff"/>
+          <circle cx="62" cy="51" r="6.4" fill="#0f3d36"/>
+          <circle cx="62" cy="51" r="2.7" fill="#E9B043"/>
+        </svg>
+        <div style="min-width:0">
+          <div class="display text-lg font-extrabold" style="letter-spacing:-.3px;line-height:1.05">
+            <span style="color:#ffffff">Paie</span><span style="color:#E9B043">Gabon</span>
+          </div>
+          <div class="text-xs text-white/50 mt-0.5 truncate" style="max-width:135px">
+            {% if tenant %}{{ tenant.denomination }}{% else %}Espace entreprise{% endif %}
+          </div>
+        </div>
+      </a>
       {% if tenant and tenant.plan %}
-      <span class="text-xs px-2 py-0.5 rounded-full font-bold mt-1 inline-block" style="background:rgba(184,134,47,.18);color:#e3b765">
+      <span class="text-xs px-2 py-0.5 rounded-full font-bold mt-2 inline-block" style="background:rgba(184,134,47,.18);color:#e3b765">
         {{ tenant.plan.nom }}
       </span>
       {% endif %}

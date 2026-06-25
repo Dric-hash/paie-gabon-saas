@@ -1,0 +1,14 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="PaieGabon">
+  <defs>
+    <linearGradient id="fav" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="15" fill="url(#fav)"/>
+  <rect x="3.5" y="3.5" width="57" height="57" rx="12.5" fill="none" stroke="#E9B043" stroke-width="1.4" opacity="0.7"/>
+  <!-- P -->
+  <rect x="22" y="15" width="7.5" height="35" rx="3.7" fill="#FFFFFF"/>
+  <circle cx="33" cy="26.5" r="9.6" fill="#FFFFFF"/>
+  <circle cx="34" cy="26.5" r="4" fill="url(#fav)"/>
+  <circle cx="34" cy="26.5" r="1.9" fill="#E9B043"/>
+</svg>

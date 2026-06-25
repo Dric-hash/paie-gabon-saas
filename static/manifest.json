@@ -4,8 +4,8 @@
   "description": "Gestion de la paie pour les entreprises au Gabon",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#1a2332",
+  "background_color": "#0f3d36",
+  "theme_color": "#0f3d36",
   "orientation": "portrait-primary",
   "lang": "fr",
   "icons": [
