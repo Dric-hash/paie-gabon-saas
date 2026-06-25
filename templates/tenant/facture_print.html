@@ -130,13 +130,15 @@
       {% if f.montant_paye and f.montant_paye|float > 0 %}
       <div class="row" style="margin-top:5px"><span>Déjà payé</span><span>- {{ "{:,.0f}".format(f.montant_paye|float).replace(",", " ") }} {{ f.devise }}</span></div>
       {% endif %}
-      {% if avance_imputee and avance_imputee > 0 %}
-      <div class="row" style="color:#92400e"><span>Avances perçues{% if site %} (chantier {{ site.nom }}){% endif %} déduites</span><span>- {{ "{:,.0f}".format(avance_imputee).replace(",", " ") }} XAF</span></div>
+      {% if avance_imputee_dev and avance_imputee_dev > 0 %}
+      <div class="row" style="color:#92400e"><span>Avances perçues{% if site %} (chantier {{ site.nom }}){% endif %} déduites</span><span>- {{ "{:,.0f}".format(avance_imputee_dev).replace(",", " ") }} {{ f.devise }}</span></div>
+      {% if f.devise != 'XAF' %}<div class="row xaf"><span></span><span>(≈ - {{ "{:,.0f}".format(avance_imputee).replace(",", " ") }} XAF)</span></div>{% endif %}
       {% endif %}
-      <div class="row net" style="border-top:2px solid #0f3d36;margin-top:6px;padding-top:7px"><span>SOLDE À PAYER</span><span>{{ "{:,.0f}".format(solde_xaf|default(0)).replace(",", " ") }} XAF</span></div>
+      <div class="row net" style="border-top:2px solid #0f3d36;margin-top:6px;padding-top:7px"><span>SOLDE À PAYER</span><span>{{ "{:,.0f}".format(solde_dev|default(0)).replace(",", " ") }} {{ f.devise }}</span></div>
+      {% if f.devise != 'XAF' %}<div class="row xaf"><span>Équivalent</span><span>{{ "{:,.0f}".format(solde_xaf|default(0)).replace(",", " ") }} XAF</span></div>{% endif %}
     </div>
 
-    {% if avances_site and avance_imputee and avance_imputee > 0 %}
+    {% if avances_site and avance_imputee_dev and avance_imputee_dev > 0 %}
     <div style="margin-top:14px;border:1px solid #fde68a;background:#fffbeb;border-radius:8px;padding:10px 14px">
       <h3 style="font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:#92400e;margin-bottom:6px">Avances perçues{% if site %} — chantier {{ site.nom }}{% endif %}</h3>
       <table class="items" style="margin-top:0">
@@ -152,7 +154,7 @@
           {% endfor %}
         </tbody>
       </table>
-      <div style="font-size:9px;color:#9ca3af;margin-top:4px">Avances converties en XAF au taux retenu (EUR à parité fixe 655,957 ; USD/MAD au taux du jour) et déduites du net à payer.</div>
+      <div style="font-size:9px;color:#9ca3af;margin-top:4px">Les avances sont converties dans la devise de la facture (EUR à parité fixe 655,957 ; USD/MAD au taux du jour) avant d'être déduites du net à payer.</div>
     </div>
     {% endif %}
 

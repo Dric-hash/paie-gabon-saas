@@ -494,3 +494,39 @@ def test_recherche_rapide_suggere_prestataire(client):
 def test_recherche_globale_inclut_prestataire(client):
     html = client.get("/recherche?q=BTP").data.decode("utf-8", "ignore")
     assert "Prestataires" in html and "BTP SOUS-TRAITANT" in html
+
+
+def test_imputation_multidevise_convertit_avance_dans_devise_facture():
+    """Une facture en EUR, une avance en XAF : l'avance est convertie en EUR
+    avant d'être déduite, et le solde s'exprime dans la devise de la facture."""
+    from types import SimpleNamespace
+    from blueprints.prestataires import _imputer_avances
+    from datetime import date as _d
+    fac = SimpleNamespace(
+        id=1, statut="VALIDEE", site_id=10, date_facture=_d(2026, 4, 13),
+        montant_net_a_payer=1000, taux_change=655.957, montant_paye=0,
+        montant_net_en_xaf=round(1000 * 655.957, 2),
+    )
+    av = SimpleNamespace(statut="VALIDEE", site_id=10, montant_en_xaf=300000.0)
+    imp = _imputer_avances([fac], [av])
+    # 300 000 XAF → € : 300000 / 655,957 ≈ 457,35 €
+    assert abs(imp["avance_dev"][1] - 457.35) < 0.5
+    # Solde en € : 1000 − 457,35 ≈ 542,65 €
+    assert abs(imp["solde_dev"][1] - 542.65) < 0.5
+    # Cohérence XAF : 655 957 − 300 000 = 355 957
+    assert imp["solde_xaf"][1] == 355957.0
+
+
+def test_imputation_xaf_inchangee():
+    """Facture et avance en XAF : devise = XAF, montants identiques au calcul XAF."""
+    from types import SimpleNamespace
+    from blueprints.prestataires import _imputer_avances
+    from datetime import date as _d
+    fac = SimpleNamespace(id=2, statut="VALIDEE", site_id=None, date_facture=_d(2026, 4, 13),
+                          montant_net_a_payer=523002, taux_change=1, montant_paye=0,
+                          montant_net_en_xaf=523002.0)
+    av = SimpleNamespace(statut="VALIDEE", site_id=None, montant_en_xaf=300000.0)
+    imp = _imputer_avances([fac], [av])
+    assert imp["avance_dev"][2] == 300000.0
+    assert imp["solde_dev"][2] == 223002.0          # 523 002 − 300 000
+    assert imp["solde_dev"][2] == imp["solde_xaf"][2]

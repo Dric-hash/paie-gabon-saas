@@ -76,12 +76,15 @@ def _imputer_avances(factures, avances):
         par_site[f.site_id].append(f)
 
     avance_xaf, solde_xaf, reste_paye_xaf = {}, {}, {}
+    # Mêmes montants, mais exprimés dans la DEVISE de chaque facture
+    # (l'avance imputée, en XAF, est reconvertie dans la devise de la facture).
+    avance_dev, solde_dev, reste_paye_dev = {}, {}, {}
     total_facture_xaf = total_paye_xaf = 0.0
     for site_id, fs in par_site.items():
         pool = pools.get(site_id, 0.0)
         for f in fs:
             net   = f.montant_net_en_xaf
-            taux  = float(f.taux_change or 1)
+            taux  = float(f.taux_change or 1) or 1
             paye  = round(float(f.montant_paye or 0) * taux, 2)
             reste = max(0.0, round(net - paye, 2))
             imput = round(min(pool, reste), 2)
@@ -91,6 +94,15 @@ def _imputer_avances(factures, avances):
             avance_xaf[f.id]     = imput
             reste_paye_xaf[f.id] = reste
             solde_xaf[f.id]      = round(reste - imput, 2)
+            # ── Conversion dans la devise de la facture ──────────────────────
+            net_d   = round(float(f.montant_net_a_payer or 0), 2)
+            paye_d  = round(float(f.montant_paye or 0), 2)
+            reste_d = max(0.0, round(net_d - paye_d, 2))
+            imput_d = round(imput / taux, 2)              # XAF → devise facture
+            imput_d = min(imput_d, reste_d)               # garde-fou arrondi
+            avance_dev[f.id]     = imput_d
+            reste_paye_dev[f.id] = reste_d
+            solde_dev[f.id]      = max(0.0, round(reste_d - imput_d, 2))
         pools[site_id] = pool
 
     avance_disponible_xaf = round(sum(max(0.0, v) for v in pools.values()), 2)
@@ -100,6 +112,8 @@ def _imputer_avances(factures, avances):
     return {
         "avance_xaf": avance_xaf, "solde_xaf": solde_xaf,
         "reste_paye_xaf": reste_paye_xaf,
+        "avance_dev": avance_dev, "solde_dev": solde_dev,
+        "reste_paye_dev": reste_paye_dev,
         "total_facture_xaf": round(total_facture_xaf, 2),
         "total_paye_xaf": round(total_paye_xaf, 2),
         "total_avances_xaf": round(total_avances_xaf, 2),
@@ -179,9 +193,10 @@ def prestataire_detail(id):
     avances_imputees   = imp["total_avances_imputees_xaf"]
     avance_disponible  = imp["avance_disponible_xaf"]
     solde_net          = imp["solde_net_xaf"]
-    # Soldes par facture (après paiements ET avances), en XAF
-    solde_par_facture  = imp["solde_xaf"]
-    avance_par_facture = imp["avance_xaf"]
+    # Soldes par facture (après paiements ET avances), DANS LA DEVISE de la facture
+    # (l'avance imputée est convertie XAF → devise de la facture).
+    solde_par_facture  = imp["solde_dev"]
+    avance_par_facture = imp["avance_dev"]
     # La dernière avance en attente : à présenter au chef de chantier pour validation
     derniere_en_attente = next((a for a in avances if a.statut == "EN_ATTENTE"), None)
 
@@ -648,12 +663,17 @@ def facture_imprimer(fid):
     imp = _imputer_avances(factures, avances)
     avance_imputee = imp["avance_xaf"].get(f.id, 0.0)      # XAF déduits sur CETTE facture
     solde_xaf      = imp["solde_xaf"].get(f.id, 0.0)        # solde après paiements + avances
+    # Mêmes montants dans la DEVISE de la facture (avance convertie XAF → devise)
+    avance_imputee_dev = imp["avance_dev"].get(f.id, 0.0)
+    solde_dev          = imp["solde_dev"].get(f.id, f.reste_a_payer)
     # Avances du chantier de cette facture (pour le détail imprimé)
     avances_site = [a for a in avances if a.site_id == f.site_id]
 
     return render_template("tenant/facture_print.html",
         tenant=t, p=p, f=f, site=site, now=datetime.now(),
-        avance_imputee=avance_imputee, solde_xaf=solde_xaf, avances_site=avances_site)
+        avance_imputee=avance_imputee, solde_xaf=solde_xaf,
+        avance_imputee_dev=avance_imputee_dev, solde_dev=solde_dev,
+        avances_site=avances_site)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -814,19 +834,20 @@ def prestataire_releve(id):
                .filter(AvancePrestataire.statut != "ANNULEE")
                .order_by(AvancePrestataire.date_avance).all())
 
-    total_facture = sum(float(f.montant_net_a_payer or 0) for f in factures)
-    total_paye    = sum(float(f.montant_paye or 0) for f in factures)
-    total_avances = round(sum(a.montant_en_xaf for a in avances), 2)
-    total_avances_regul = sum(float(a.montant_regularise or 0) for a in avances)
-    # Solde net dû = net facturé - déjà payé - avances non encore régularisées.
-    avances_non_regul = round(total_avances - total_avances_regul, 2)
-    solde = round(total_facture - total_paye - avances_non_regul, 2)
+    imp = _imputer_avances(factures, avances)
+
+    total_facture = imp["total_facture_xaf"]
+    total_paye    = imp["total_paye_xaf"]
+    total_avances = imp["total_avances_xaf"]
+    # Solde net dû (XAF) = net facturé − déjà payé − avances imputées.
+    avances_non_regul = imp["total_avances_imputees_xaf"]
+    solde = imp["solde_net_xaf"]
     # Y a-t-il au moins une devise étrangère à afficher ?
     multi_devises = any((a.devise or "XAF") != "XAF" for a in avances) or \
                     any((f.devise or "XAF") != "XAF" for f in factures)
 
     return render_template("tenant/prestataire_releve_print.html",
-        tenant=t, p=p, factures=factures, avances=avances,
+        tenant=t, p=p, factures=factures, avances=avances, imp=imp,
         total_facture=total_facture, total_paye=total_paye,
         total_avances=total_avances, avances_non_regul=avances_non_regul,
         solde=solde, multi_devises=multi_devises, DEVISES=DEVISES,

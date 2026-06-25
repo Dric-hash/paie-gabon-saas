@@ -127,28 +127,40 @@
         <thead>
           <tr>
             <th>N°</th><th>Date</th><th>Description</th>
-            <th class="r">Net à payer</th><th class="r">Payé</th><th class="r">Reste</th>
+            <th class="r">Net à payer</th><th class="r">Payé</th>
+            <th class="r">Avance déduite</th><th class="r">Solde</th>
           </tr>
         </thead>
         <tbody>
           {% for f in factures %}
+          {% set sym = '' if (f.devise or 'XAF') == 'XAF' else (' ' ~ f.devise_symbole) %}
+          {% set av_d = imp.avance_dev.get(f.id, 0) %}
+          {% set so_d = imp.solde_dev.get(f.id, f.reste_a_payer) %}
           <tr>
             <td>{{ f.numero }}</td>
             <td>{{ f.date_facture.strftime('%d/%m/%Y') }}</td>
             <td>{{ f.description or '—' }}</td>
-            <td class="r">{{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }}</td>
-            <td class="r">{{ "{:,.0f}".format(f.montant_paye|float).replace(",", " ") }}</td>
-            <td class="r">{{ "{:,.0f}".format(f.reste_a_payer).replace(",", " ") }}</td>
+            <td class="r">{{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }}{{ sym }}</td>
+            <td class="r">{{ "{:,.0f}".format(f.montant_paye|float).replace(",", " ") }}{{ sym }}</td>
+            <td class="r">{% if av_d > 0 %}− {{ "{:,.0f}".format(av_d).replace(",", " ") }}{{ sym }}{% else %}—{% endif %}</td>
+            <td class="r" style="font-weight:700">{{ "{:,.0f}".format(so_d).replace(",", " ") }}{{ sym }}</td>
           </tr>
           {% endfor %}
           <tr class="tot-row">
-            <td colspan="3">TOTAL FACTURÉ (net)</td>
+            <td colspan="3">TOTAL{{ ' (équiv. XAF)' if multi_devises else ' FACTURÉ (net)' }}</td>
             <td class="r">{{ "{:,.0f}".format(total_facture).replace(",", " ") }}</td>
             <td class="r">{{ "{:,.0f}".format(total_paye).replace(",", " ") }}</td>
-            <td class="r">{{ "{:,.0f}".format(total_facture - total_paye).replace(",", " ") }}</td>
+            <td class="r">{% if avances_non_regul > 0 %}− {{ "{:,.0f}".format(avances_non_regul).replace(",", " ") }}{% else %}—{% endif %}</td>
+            <td class="r">{{ "{:,.0f}".format(solde).replace(",", " ") }}</td>
           </tr>
         </tbody>
       </table>
+      {% if multi_devises %}
+      <div style="font-size:10px;color:#6b7280;margin-top:4px">
+        Chaque facture est affichée dans sa devise. Les avances en devise différente
+        sont converties dans la devise de la facture avant déduction. Le total est en équivalent XAF.
+      </div>
+      {% endif %}
       {% else %}
       <div style="color:#9ca3af;font-size:11px;padding:8px 0">Aucune facture enregistrée.</div>
       {% endif %}
@@ -160,7 +172,9 @@
     </div>
 
     <footer>
-      Montants en francs CFA (XAF). Le solde dû = net facturé − déjà payé − avances non encore régularisées.
+      Synthèse en francs CFA (XAF). Les factures sont affichées dans leur devise ; les avances
+      en devise différente sont converties dans la devise de la facture avant déduction.
+      Le solde dû = net facturé − déjà payé − avances imputées.
       Document généré par PaieGabon le {{ now.strftime('%d/%m/%Y') }}.
     </footer>
   </div>

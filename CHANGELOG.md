@@ -9,7 +9,20 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
-#### Journal d'audit (Audit Trail) étendu
+#### Prestataires — factures affichées dans leur devise
+- Sur le **relevé** et la **fiche** d'un prestataire, chaque **facture est désormais
+  affichée dans sa propre devise** (XAF, EUR, USD, MAD…) et non plus convertie en XAF.
+- Quand une **avance est dans une devise différente de la facture**, elle est
+  d'abord **convertie dans la devise de la facture** (via les taux retenus :
+  EUR à parité fixe 655,957 ; USD/MAD au taux du jour) **avant d'être déduite**.
+  Le solde de chaque facture s'exprime donc dans sa devise.
+- Le relevé gagne une colonne **« Avance déduite »** et une colonne **« Solde »**
+  par facture ; la synthèse en haut et la ligne de total restent en **équivalent
+  XAF** (puisqu'elles agrègent des devises différentes).
+- L'impression d'une facture seule affiche aussi l'avance déduite et le solde dans
+  la devise de la facture, avec l'équivalent XAF en rappel.
+
+
 - Le **journal d'audit** (page « 🔍 Journal d'audit » du menu, réservé à
   l'administrateur) couvre désormais quasiment toutes les actions sensibles :
   **salariés**, **bulletins** (validation, paiement), **journaliers**,
