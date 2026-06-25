@@ -231,3 +231,22 @@ def test_page_audit_admin_ok(client):
     r = client.get("/audit")
     assert r.status_code == 200
     assert "audit" in r.data.decode("utf-8", "ignore").lower()
+
+
+def test_audit_recherche_filtre(client):
+    jid = _journalier_mensuel_id(client)
+    client.post(f"/journaliers/{jid}/avances/nouvelle",
+                data={"montant": "50000"}, follow_redirects=True)
+    ok = client.get("/audit?q=DIARRA").data.decode("utf-8", "ignore")
+    assert "DIARRA" in ok                       # trouvé par la recherche
+    ko = client.get("/audit?q=ZZQWERTYINTROUVABLE").data.decode("utf-8", "ignore")
+    assert "DIARRA" not in ko                    # filtré
+
+
+def test_parametres_modele_journalise(client):
+    client.post("/parametres/modele-bulletin",
+                data={"modele_bulletin": "moderne"}, follow_redirects=True)
+    with flask_app.app_context():
+        log = (AuditLog.query.filter_by(entite="parametres", action="UPDATE")
+               .order_by(AuditLog.id.desc()).first())
+        assert log is not None

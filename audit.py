@@ -155,7 +155,7 @@ def _serialize(data: dict) -> str:
 
 def get_audit_logs(tenant_id, limit=100, offset=0,
                    action=None, entite=None, user_id=None,
-                   date_debut=None, date_fin=None):
+                   date_debut=None, date_fin=None, recherche=None):
     """
     Récupère les logs d'audit d'un tenant avec filtres.
 
@@ -177,6 +177,9 @@ def get_audit_logs(tenant_id, limit=100, offset=0,
         q = q.filter(AuditLog.date_action >= date_debut)
     if date_fin:
         q = q.filter(AuditLog.date_action <= date_fin)
+    if recherche:
+        like = f"%{recherche.strip()}%"
+        q = q.filter(AuditLog.description.ilike(like))
 
     total = q.count()
     logs  = (q.order_by(desc(AuditLog.date_action))

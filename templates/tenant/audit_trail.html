@@ -9,7 +9,7 @@
       {{ total }} action(s) enregistrée(s)
     </p>
   </div>
-  <a href="/audit/export"
+  <a href="/audit/export?action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}&q={{ recherche|urlencode }}&date_debut={{ date_debut }}&date_fin={{ date_fin }}"
     style="background:#0f3d36;color:white;padding:.625rem 1.25rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">
     📥 Exporter CSV
   </a>
@@ -45,11 +45,26 @@
         {% endfor %}
       </select>
     </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Du</label>
+      <input type="date" name="date_debut" value="{{ date_debut }}"
+        style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .5rem;font-size:.8rem"/>
+    </div>
+    <div>
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Au</label>
+      <input type="date" name="date_fin" value="{{ date_fin }}"
+        style="border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .5rem;font-size:.8rem"/>
+    </div>
+    <div style="flex:1;min-width:180px">
+      <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Recherche</label>
+      <input type="text" name="q" value="{{ recherche }}" placeholder="Mot dans la description…"
+        style="width:100%;box-sizing:border-box;border:1px solid #e5e7eb;border-radius:.5rem;padding:.375rem .625rem;font-size:.8rem"/>
+    </div>
     <button type="submit"
       style="background:#0f3d36;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
       Filtrer
     </button>
-    {% if action_filtre or entite_filtre or user_filtre %}
+    {% if action_filtre or entite_filtre or user_filtre or recherche or date_debut or date_fin %}
     <a href="/audit" style="font-size:.78rem;color:#6b7280;text-decoration:none;padding:.375rem .5rem">
       ✕ Réinitialiser
     </a>
@@ -120,9 +135,18 @@
             </span>
           </td>
           <td style="padding:.5rem .75rem">
+            {% set entite_labels = {
+              'salarie':'Salarié','bulletin':'Bulletin','conge':'Congé','acompte':'Acompte',
+              'periode':'Période','paiement':'Paiement','pointage':'Pointage',
+              'journalier':'Journalier','avance_journalier':'Avance journalier',
+              'feuille_journalier':'Paie journalier','prestataire':'Prestataire',
+              'facture_prestataire':'Facture prestataire','contrat_prestation':'Contrat prestation',
+              'avance_prestataire':'Avance prestataire','utilisateur':'Utilisateur',
+              'parametres':'Paramètres','tenant':'Société','systeme':'Système'
+            } %}
             {% if log.entite %}
             <span style="font-size:.75rem;background:#f3f4f6;padding:.15rem .5rem;border-radius:.25rem;color:#374151">
-              {{ log.entite }}{% if log.entite_id %} #{{ log.entite_id }}{% endif %}
+              {{ entite_labels.get(log.entite, log.entite) }}{% if log.entite_id %} #{{ log.entite_id }}{% endif %}
             </span>
             {% else %}—{% endif %}
           </td>
@@ -172,7 +196,7 @@
   {% if nb_pages > 1 %}
   <div style="display:flex;justify-content:center;gap:.5rem;padding:1rem;border-top:1px solid #f3f4f6">
     {% if page > 1 %}
-    <a href="?page={{ page-1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}"
+    <a href="?page={{ page-1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}&q={{ recherche|urlencode }}&date_debut={{ date_debut }}&date_fin={{ date_fin }}"
       style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">
       ← Précédent
     </a>
@@ -181,7 +205,7 @@
       Page {{ page }} / {{ nb_pages }}
     </span>
     {% if page < nb_pages %}
-    <a href="?page={{ page+1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}"
+    <a href="?page={{ page+1 }}&action={{ action_filtre }}&entite={{ entite_filtre }}&user_id={{ user_filtre or '' }}&q={{ recherche|urlencode }}&date_debut={{ date_debut }}&date_fin={{ date_fin }}"
       style="padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">
       Suivant →
     </a>

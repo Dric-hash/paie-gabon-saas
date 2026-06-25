@@ -2420,6 +2420,8 @@ def parametres_logo():
         try:
             db.session.execute(db.text("UPDATE tenants SET logo_url = :logo WHERE id = :id"),{"logo": logo_data, "id": t.id})
             db.session.commit(); db.session.expire(t)
+            log_action("UPDATE", "parametres", t.id, "Mise à jour du logo de la société")
+            db.session.commit()
             flash("Logo mis à jour avec succès.", "success")
         except Exception as e:
             db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
@@ -2433,6 +2435,8 @@ def parametres_logo_supprimer():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     t.logo_url = None; db.session.commit()
+    log_action("UPDATE", "parametres", t.id, "Suppression du logo de la société")
+    db.session.commit()
     flash("Logo supprime.", "success")
     return redirect(url_for("tenant.parametres"))
 
@@ -2447,6 +2451,8 @@ def parametres_modele_bulletin():
     if modele not in ("classique", "moderne", "minimaliste"):
         modele = "classique"
     t.modele_bulletin = modele
+    db.session.commit()
+    log_action("UPDATE", "parametres", t.id, f"Modèle d'impression bulletins : {modele}")
     db.session.commit()
     flash(f"Modèle d'impression « {modele.capitalize()} » appliqué.", "success")
     return redirect(url_for("tenant.parametres"))
@@ -2486,6 +2492,8 @@ def parametres_societe():
     if langue is not None and langue in SUPPORTED_LANGUAGES:
         t.langue = langue
         set_language(langue)
+    db.session.commit()
+    log_action("UPDATE", "parametres", t.id, "Modification des informations de la société")
     db.session.commit()
     flash("Informations mises à jour." if (t.langue or "fr") == "fr" else "Settings updated.", "success")
     return redirect(url_for("tenant.parametres"))
@@ -2604,7 +2612,14 @@ def audit_trail():
     action    = request.args.get("action", "")
     entite    = request.args.get("entite", "")
     user_id   = request.args.get("user_id", type=int)
+    recherche = request.args.get("q", "").strip()
+    d_debut   = _parse_date(request.args.get("date_debut", ""))
+    d_fin     = _parse_date(request.args.get("date_fin", ""))
     per_page  = 50
+
+    # La date de fin est inclusive (jusqu'à 23:59:59)
+    from datetime import datetime as _dt, time as _time
+    d_fin_dt = _dt.combine(d_fin, _time.max) if d_fin else None
 
     logs, total = get_audit_logs(
         tenant_id  = t.id,
@@ -2613,6 +2628,9 @@ def audit_trail():
         action     = action or None,
         entite     = entite or None,
         user_id    = user_id or None,
+        date_debut = d_debut or None,
+        date_fin   = d_fin_dt,
+        recherche  = recherche or None,
     )
 
     # Liste des utilisateurs pour le filtre
@@ -2625,11 +2643,14 @@ def audit_trail():
         tenant=t, logs=logs, total=total,
         page=page, nb_pages=nb_pages, per_page=per_page,
         action_filtre=action, entite_filtre=entite, user_filtre=user_id,
+        recherche=recherche,
+        date_debut=request.args.get("date_debut", ""),
+        date_fin=request.args.get("date_fin", ""),
         users=users,
         ACTIONS=["CREATE","UPDATE","DELETE","VALIDATE","CANCEL","PAY",
                  "LOGIN","LOGOUT","EXPORT","IMPORT"],
         ENTITES=["salarie","bulletin","conge","acompte","periode","paiement",
-                 "journalier","avance_journalier","feuille_journalier",
+                 "pointage","journalier","avance_journalier","feuille_journalier",
                  "prestataire","facture_prestataire","contrat_prestation",
                  "avance_prestataire","utilisateur","parametres"],
     )
@@ -2644,7 +2665,17 @@ def audit_export():
         flash("Accès réservé à l'administrateur.", "error")
         return redirect(url_for("tenant.audit_trail"))
 
-    logs, _ = get_audit_logs(tenant_id=t.id, limit=5000)
+    from datetime import datetime as _dt, time as _time
+    d_debut = _parse_date(request.args.get("date_debut", ""))
+    d_fin   = _parse_date(request.args.get("date_fin", ""))
+    logs, _ = get_audit_logs(
+        tenant_id=t.id, limit=5000,
+        action=request.args.get("action") or None,
+        entite=request.args.get("entite") or None,
+        user_id=request.args.get("user_id", type=int) or None,
+        recherche=request.args.get("q", "").strip() or None,
+        date_debut=d_debut or None,
+        date_fin=(_dt.combine(d_fin, _time.max) if d_fin else None))
 
     import csv, io as _io
     output = _io.StringIO()
@@ -2761,6 +2792,9 @@ def utilisateur_nouveau():
     u = Utilisateur(nom=nom, prenom=prenom, email=email, role=role, tenant_id=t.id, actif=True)
     u.set_password(password)
     db.session.add(u); db.session.commit()
+    log_action("CREATE", "utilisateur", u.id,
+               f"Création utilisateur {u.nom_complet} ({u.role})")
+    db.session.commit()
     flash(f"Utilisateur {u.nom_complet} créé.", "success")
     return redirect(url_for("tenant.utilisateurs"))
 
@@ -3332,6 +3366,8 @@ def pointage_supprimer(ptg_id):
     wid      = pt.salarie_id or pt.journalier_id
     db.session.delete(pt)
     db.session.commit()
+    log_action("DELETE", "pointage", ptg_id, f"Suppression pointage du {date_str}")
+    db.session.commit()
     flash("🗑️ Pointage supprimé.", "success")
     return redirect(next_url or f"/pointage/individuel?date={date_str}&type={type_w}&id={wid}")
 
@@ -3374,6 +3410,10 @@ def pointage_sauvegarder():
             pt.motif_absence   = request.form.get(f"jour_motif_{jid}", "") if absent else None
             nb += 1
     db.session.commit()
+    if nb:
+        log_action("UPDATE", "pointage", None,
+                   f"Pointage du {date_p.strftime('%d/%m/%Y')} enregistré ({nb} ligne(s))")
+        db.session.commit()
     flash(f"Pointage du {date_p.strftime('%d/%m/%Y')} sauvegardé ({nb} lignes).", "success")
     return redirect(url_for("tenant.pointage", date=date_str))
 
@@ -4294,8 +4334,13 @@ def acompte_nouveau():
             if contrat and montant > float(contrat.salaire_base) * 0.5:
                 flash(f"Acompte maximum 50% du salaire de base ({float(contrat.salaire_base)*0.5:,.0f} FCFA).".replace(",", " "), "error")
                 return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
-            db.session.add(Acompte(tenant_id=t.id, salarie_id=salarie_id, montant=montant,
-                date_acompte=date_ac, mois=mois, annee=annee, motif=motif, statut="EN_ATTENTE"))
+            ac = Acompte(tenant_id=t.id, salarie_id=salarie_id, montant=montant,
+                date_acompte=date_ac, mois=mois, annee=annee, motif=motif, statut="EN_ATTENTE")
+            db.session.add(ac)
+            db.session.commit()
+            sal = Salarie.query.get(salarie_id)
+            log_action("CREATE", "acompte", ac.id,
+                       f"Acompte {montant:,.0f} F — {sal.nom_complet if sal else ''}".replace(",", " "))
             db.session.commit()
             flash(f"Acompte de {montant:,.0f} FCFA enregistré.".replace(",", " "), "success")
             return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
@@ -4308,6 +4353,8 @@ def acompte_valider(id):
     if not t: return redirect(url_for("auth.login"))
     a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     a.statut = "DEDUIT"; db.session.commit()
+    log_action("VALIDATE", "acompte", a.id, f"Acompte déduit ({float(a.montant or 0):,.0f} F)".replace(",", " "))
+    db.session.commit()
     flash("Acompte marqué comme déduit.", "success")
     return redirect(url_for("tenant.acomptes", mois=a.mois, annee=a.annee))
 
@@ -4318,6 +4365,8 @@ def acompte_annuler(id):
     if not t: return redirect(url_for("auth.login"))
     a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     a.statut = "ANNULE"; db.session.commit()
+    log_action("CANCEL", "acompte", a.id, "Acompte annulé")
+    db.session.commit()
     flash("Acompte annulé.", "success")
     return redirect(url_for("tenant.acomptes", mois=a.mois, annee=a.annee))
 
@@ -4329,6 +4378,8 @@ def acompte_supprimer(id):
     a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     mois, annee = a.mois, a.annee
     db.session.delete(a); db.session.commit()
+    log_action("DELETE", "acompte", id, "Suppression acompte")
+    db.session.commit()
     flash("Acompte supprimé.", "success")
     return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
 
@@ -4726,6 +4777,10 @@ def conge_nouveau():
         conge.statut       = "DEMANDÉ"
         conge.jours_pris   = float(conge.jours_pris or 0)  # ne pas écraser les jours déjà pris
         db.session.commit()
+        log_action("CREATE", "conge", conge.id,
+                   f"Demande de congé {conge.salarie.nom_complet if conge.salarie else ''} "
+                   f"({jours} j) — {conge.date_debut}→{conge.date_fin}")
+        db.session.commit()
         flash(f"✅ Demande de congé enregistrée ({jours} jour(s)).", "success")
         return redirect(url_for("tenant.conges"))
     return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
@@ -4754,6 +4809,9 @@ def conge_modifier(id):
         c.date_retour = date_ret
         c.type_conge  = type_c
         c.statut      = request.form.get("statut", c.statut)
+        db.session.commit()
+        log_action("UPDATE", "conge", c.id,
+                   f"Modification congé — {c.salarie.nom_complet if c.salarie else ''} ({new_jours} j)")
         db.session.commit()
         flash(f"✅ Congé modifié ({new_jours} jour(s)).", "success")
         return redirect(url_for("tenant.conges"))
@@ -4785,6 +4843,9 @@ def conge_approuver(id):
         c.jours_pris     = float(c.jours_pris or 0) + jours
     c.statut = "APPROUVÉ"
     db.session.commit()
+    log_action("VALIDATE", "conge", c.id,
+               f"Congé approuvé — {c.salarie.nom_complet if c.salarie else ''}")
+    db.session.commit()
     flash(f"✅ Congé de {c.salarie.nom_complet} approuvé.", "success")
     return redirect(url_for("tenant.conges"))
 
@@ -4795,6 +4856,9 @@ def conge_refuser(id):
     if not t: return redirect(url_for("auth.login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     c.statut="REFUSÉ"; db.session.commit()
+    log_action("CANCEL", "conge", c.id,
+               f"Congé refusé — {c.salarie.nom_complet if c.salarie else ''}")
+    db.session.commit()
     flash("Congé refusé.", "success")
     return redirect(url_for("tenant.conges"))
 
@@ -4805,6 +4869,9 @@ def conge_supprimer(id):
     if not t: return redirect(url_for("auth.login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     db.session.delete(c); db.session.commit()
+    log_action("DELETE", "conge", id,
+               f"Suppression demande de congé — {c.salarie.nom_complet if c.salarie else ''}")
+    db.session.commit()
     flash("Demande supprimée.", "success")
     return redirect(url_for("tenant.conges"))
 

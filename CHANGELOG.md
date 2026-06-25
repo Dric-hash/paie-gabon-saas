@@ -11,14 +11,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 #### Journal d'audit (Audit Trail) étendu
 - Le **journal d'audit** (page « 🔍 Journal d'audit » du menu, réservé à
-  l'administrateur, avec filtres par action/objet/utilisateur et export CSV)
-  couvre désormais beaucoup plus d'actions : **salariés** (création, modification,
-  suppression), **bulletins** (validation, paiement), **journaliers** (création,
-  modification), **paie journalière** (génération mensuelle, paiement) et
-  **avances des journaliers** (création, modification, validation, suppression),
-  en plus des actions déjà tracées (connexions, prestataires, factures…).
+  l'administrateur) couvre désormais quasiment toutes les actions sensibles :
+  **salariés**, **bulletins** (validation, paiement), **journaliers**,
+  **paie journalière** (génération, paiement), **avances journaliers**,
+  **congés**, **acomptes**, **pointages**, **utilisateurs** (création,
+  modification, activation, suppression) et **paramètres** (société, logo,
+  modèle de bulletin), en plus des connexions, prestataires et factures.
+- **Page d'audit enrichie** : filtres par **plage de dates** (du / au) et
+  **recherche texte** dans la description, en plus des filtres action / objet /
+  utilisateur ; bouton **« 👁 Voir »** affichant le détail **avant / après** de
+  l'action ; libellés d'objets lisibles ; filtres conservés dans la pagination et
+  repris dans l'**export CSV**.
 - Chaque entrée enregistre **qui, quoi, quand, sur quel objet, depuis quelle IP**.
-  Les filtres de la page incluent les nouveaux types d'objets.
 
 
 - On peut désormais enregistrer des **avances versées à un journalier** (depuis sa
