@@ -28,6 +28,11 @@ def _rate_limit(limit_str):
 
 bp = Blueprint("auth", __name__)
 
+# Hash factice (mot de passe aléatoire) servant à égaliser le temps de réponse
+# du login lorsqu'aucun compte ne correspond (anti-énumération par timing).
+from werkzeug.security import generate_password_hash as _gph
+_DUMMY_PW_HASH = _gph(sec.token_hex(16))
+
 
 # ── Index ─────────────────────────────────────────────────────────────────────
 @bp.route("/")
@@ -53,6 +58,15 @@ def login():
         email = request.form.get("email", "").strip().lower()
         pw    = request.form.get("password", "")
         user  = Utilisateur.query.filter_by(email=email, actif=True).first()
+
+        # Anti-énumération : égalise le temps de réponse que le compte existe ou
+        # non, en exécutant toujours un hash factice quand l'utilisateur est absent.
+        if not user:
+            try:
+                from werkzeug.security import check_password_hash
+                check_password_hash(_DUMMY_PW_HASH, pw or "x")
+            except Exception:
+                pass
 
         now          = datetime.utcnow()
         MAX_ECHECS   = int(os.environ.get("LOGIN_MAX_ECHECS",  "5"))

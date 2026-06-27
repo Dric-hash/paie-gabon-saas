@@ -48,6 +48,35 @@ logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("tenant", __name__)
 
+# ── Rôles assignables au sein d'un tenant ─────────────────────────────────────
+# Liste blanche stricte : un admin de tenant ne peut JAMAIS attribuer le rôle
+# plateforme SUPER_ADMIN (sinon escalade de privilèges → accès cross-tenant).
+ROLES_TENANT_AUTORISES = {
+    "TENANT_ADMIN", "RH", "COMPTABLE", "DIRECTEUR", "GESTIONNAIRE", "LECTURE",
+}
+
+
+@bp.before_request
+def _exiger_email_confirme():
+    """
+    Bloque l'accès aux pages tenant tant que l'email n'est pas confirmé.
+    Ne s'applique qu'aux utilisateurs tenant authentifiés et non vérifiés.
+    Les routes de déconnexion / confirmation / renvoi appartiennent au
+    blueprint `auth` et ne sont donc jamais interceptées ici. Les appels
+    JSON (calcul temps réel, simulateur) sont laissés passer pour ne pas
+    casser le front : un utilisateur non confirmé ne peut de toute façon
+    pas naviguer vers les pages qui les déclenchent.
+    """
+    if not current_user.is_authenticated:
+        return
+    if current_user.is_super_admin or getattr(current_user, "email_verifie", True):
+        return
+    # Laisser passer les requêtes JSON/API internes (pas de blocage HTML utile).
+    if request.path.rsplit("/", 1)[-1].startswith("api") or "/api/" in request.path \
+       or request.is_json or "application/json" in (request.headers.get("Accept", "")):
+        return
+    return render_template("auth/email_non_confirme.html", email=current_user.email), 403
+
 @bp.route("/dashboard")
 @login_required
 def dashboard():
@@ -546,6 +575,12 @@ def salaries_import():
     fichier = request.files.get("fichier")
     if not fichier or not fichier.filename.endswith((".xlsx", ".xls")):
         flash("❌ Fichier invalide. Utilisez le modèle Excel fourni (.xlsx).", "error")
+        return redirect(url_for("tenant.salaries_import"))
+
+    # Garde anti-DoS (zip-bomb / fichier surdimensionné) : 5 Mo max.
+    fichier.seek(0, 2); _taille = fichier.tell(); fichier.seek(0)
+    if _taille > 5_000_000:
+        flash("❌ Fichier trop volumineux (max 5 Mo).", "error")
         return redirect(url_for("tenant.salaries_import"))
 
     mode = request.form.get("mode", "ignorer")  # ignorer | ecraser
@@ -2782,7 +2817,11 @@ def utilisateur_nouveau():
     nom = request.form.get("nom", "").strip().upper()
     prenom = request.form.get("prenom", "").strip()
     password = request.form.get("password", "")
-    role = request.form.get("role", "GESTIONNAIRE")
+    role = request.form.get("role", "GESTIONNAIRE").strip().upper()
+    # Liste blanche : empêche l'attribution de SUPER_ADMIN ou d'un rôle inconnu.
+    if role not in ROLES_TENANT_AUTORISES:
+        flash("Rôle invalide.", "error")
+        return redirect(url_for("tenant.utilisateurs"))
     if not email or not nom or not password:
         flash("Veuillez remplir tous les champs.", "error")
         return render_template("tenant/utilisateur_form.html", tenant=t)
@@ -2837,7 +2876,11 @@ def utilisateur_modifier(id):
 
     if request.method == "POST":
         ancien_role = u.role
-        nouveau_role = request.form.get("role", u.role)
+        nouveau_role = request.form.get("role", u.role).strip().upper()
+        # Liste blanche : empêche l'escalade vers SUPER_ADMIN ou un rôle inconnu.
+        if nouveau_role not in ROLES_TENANT_AUTORISES:
+            flash("Rôle invalide.", "error")
+            return redirect(url_for("tenant.utilisateurs"))
 
         # Empêcher de retirer son propre rôle admin
         if u.id == current_user.id and nouveau_role != "TENANT_ADMIN":
@@ -4330,6 +4373,11 @@ def acompte_nouveau():
         if not salarie_id or montant <= 0 or not date_ac:
             flash("Veuillez remplir tous les champs.", "error")
         else:
+            # Valider que le salarié appartient bien au tenant (anti-IDOR).
+            sal = Salarie.query.filter_by(id=salarie_id, tenant_id=t.id).first()
+            if not sal:
+                flash("Salarié introuvable.", "error")
+                return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
             contrat = Contrat.query.filter_by(salarie_id=salarie_id, tenant_id=t.id, actif=True).first()
             if contrat and montant > float(contrat.salaire_base) * 0.5:
                 flash(f"Acompte maximum 50% du salaire de base ({float(contrat.salaire_base)*0.5:,.0f} FCFA).".replace(",", " "), "error")
@@ -4338,9 +4386,8 @@ def acompte_nouveau():
                 date_acompte=date_ac, mois=mois, annee=annee, motif=motif, statut="EN_ATTENTE")
             db.session.add(ac)
             db.session.commit()
-            sal = Salarie.query.get(salarie_id)
             log_action("CREATE", "acompte", ac.id,
-                       f"Acompte {montant:,.0f} F — {sal.nom_complet if sal else ''}".replace(",", " "))
+                       f"Acompte {montant:,.0f} F — {sal.nom_complet}".replace(",", " "))
             db.session.commit()
             flash(f"Acompte de {montant:,.0f} FCFA enregistré.".replace(",", " "), "success")
             return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))

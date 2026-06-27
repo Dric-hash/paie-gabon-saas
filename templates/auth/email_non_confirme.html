@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Confirmez votre email — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
+<div class="w-full max-w-md">
+  <div class="bg-white rounded-2xl shadow-xl p-8 text-center">
+    <div class="text-5xl mb-4">✉️</div>
+    <h1 class="text-xl font-black text-slate-900 mb-2">Confirmez votre adresse email</h1>
+    <p class="text-gray-500 text-sm leading-relaxed mb-6">
+      Pour accéder à votre espace, confirmez d'abord l'adresse
+      <strong>{{ email }}</strong>. Un lien de confirmation vous a été envoyé.
+      Pensez à vérifier vos courriers indésirables.
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for category, message in messages %}
+          <div class="mb-4 text-sm rounded-xl px-4 py-2
+            {{ 'bg-green-50 text-green-700' if category == 'success' else 'bg-amber-50 text-amber-700' }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <a href="{{ url_for('auth.renvoyer_confirmation') }}"
+       class="inline-block w-full bg-slate-900 hover:bg-slate-700 text-white font-black py-3 rounded-xl text-sm transition-colors">
+      Renvoyer le lien de confirmation
+    </a>
+
+    <div class="mt-5">
+      <a href="{{ url_for('auth.logout') }}" class="text-gray-400 hover:text-gray-600 text-xs">
+        Se déconnecter
+      </a>
+    </div>
+  </div>
+
+  <p class="text-center text-slate-400 text-xs mt-6">
+    © 2026 Ameriack I.T. Solutions. Tous droits réservés.
+  </p>
+</div>
+</body>
+</html>

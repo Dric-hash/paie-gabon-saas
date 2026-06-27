@@ -333,6 +333,11 @@ def admin_regenerer_token(id):
 def admin_impersonate(id):
     u=Utilisateur.query.filter_by(tenant_id=id,role="TENANT_ADMIN").first()
     if not u: flash("Aucun admin trouvé.","error"); return redirect(url_for("admin.admin_tenant_detail",id=id))
+    # Trace d'audit : qui (super-admin) prend la main sur quel tenant.
+    log_action("IMPERSONATE", "tenant", id,
+               f"Super-admin {current_user.email} se connecte en tant que {u.nom_complet}",
+               user_id=current_user.id, tenant_id=id)
+    db.session.commit()
     logout_user(); login_user(u)
     flash(f"Connecté en tant que {u.nom_complet} ({u.tenant.denomination})","warning")
     return redirect(url_for("tenant.dashboard"))
@@ -461,6 +466,11 @@ def admin_import_excel():
         f = request.files.get("excel_file")
         if not f or not f.filename.endswith(".xlsx"):
             flash("Fichier invalide. Utilisez un fichier .xlsx", "error")
+            return render_template("admin/import_excel.html", tenants=tenants)
+        # Garde anti-DoS (zip-bomb / fichier surdimensionné) : 5 Mo max.
+        f.seek(0, 2); _taille = f.tell(); f.seek(0)
+        if _taille > 5_000_000:
+            flash("Fichier trop volumineux (max 5 Mo).", "error")
             return render_template("admin/import_excel.html", tenants=tenants)
         imp_societe  = "import_societe"  in request.form
         imp_salaries = "import_salaries" in request.form

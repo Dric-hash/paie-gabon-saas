@@ -184,7 +184,7 @@
         </td>
         <td style="padding:.6rem 1rem;text-align:right;white-space:nowrap">
           {% if a.est_modifiable %}
-          <button onclick='ouvrirEditAvance({{ a.id }}, {{ a.montant|float }}, "{{ a.devise }}", {{ a.taux_change|float }}, "{{ a.date_avance.strftime("%Y-%m-%d") }}", "{{ a.mode_paiement }}", "{{ a.reference|default("",true) }}", {{ (a.motif or "")|tojson }}, {{ a.site_id or 'null' }})' style="background:none;border:none;color:#0f3d36;font-size:.72rem;font-weight:700;cursor:pointer">Modifier</button>
+          <button onclick='ouvrirEditAvance({{ a.id }}, {{ a.montant|float }}, {{ a.devise|tojson }}, {{ a.taux_change|float }}, {{ a.date_avance.strftime("%Y-%m-%d")|tojson }}, {{ a.mode_paiement|tojson }}, {{ (a.reference or "")|tojson }}, {{ (a.motif or "")|tojson }}, {{ a.site_id or 'null' }})' style="background:none;border:none;color:#0f3d36;font-size:.72rem;font-weight:700;cursor:pointer">Modifier</button>
           <form method="POST" action="/prestataires/avances/{{ a.id }}/supprimer" onsubmit="return confirm('Supprimer cette avance ?')" style="display:inline">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer;margin-left:.4rem">Supprimer</button>

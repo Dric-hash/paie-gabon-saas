@@ -268,6 +268,15 @@ app.register_blueprint(api_v1_bp)
 app.register_blueprint(prestataires_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
 
+# ── Rate limiting de l'API REST ───────────────────────────────────────────────
+# L'API étant exemptée de CSRF, le rate-limit est la principale barrière contre
+# le brute-force (X-API-Key / OAuth) et l'abus. Limite par IP (Flask-Limiter).
+if limiter:
+    try:
+        limiter.limit(os.environ.get("API_RATE_LIMIT_STR", "100/minute"))(api_v1_bp)
+    except Exception as _e:
+        logger.warning(f"[LIMITER] Limite API non appliquée : {_e}")
+
 # ── Exemption CSRF des routes API internes JSON ───────────────────────────────
 # Ces routes sont appelées en POST par le JavaScript (calcul temps réel,
 # simulateur, BTP). Elles sont protégées par @login_required + session et ne
@@ -516,4 +525,4 @@ if not os.environ.get("SKIP_BOOTSTRAP"):
             logger.error(f"Erreur au démarrage : {e}")
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=False, port=5000)
