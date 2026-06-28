@@ -2,7 +2,7 @@
 core.py — Utilitaires partagés : cache Redis, décorateurs, helpers, email
 """
 import os, threading, logging, json as _json
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from functools import wraps
 from flask import redirect, url_for, abort, flash, request, session
 from flask_login import current_user, logout_user
@@ -69,6 +69,54 @@ def cache_delete(key_prefix: str):
                 break
     except Exception:
         pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# STORE DE TOKENS OAUTH2
+# Persiste les access tokens OAuth dans Redis (TTL natif, partagé entre workers
+# Gunicorn). À défaut de Redis, repli sur un dict mémoire process — utilisable en
+# dev/mono-worker, avec expiration vérifiée à la lecture.
+# ══════════════════════════════════════════════════════════════════════════════
+_oauth_mem: dict = {}  # repli : token → {tenant_id, client_id, expires_at}
+_OAUTH_PREFIX = "oauth:tok:"
+
+
+def oauth_token_store(token: str, tenant_id: int, client_id: str, ttl_seconds: int):
+    payload = {"tenant_id": tenant_id, "client_id": client_id}
+    if _redis_client:
+        try:
+            _redis_client.setex(_OAUTH_PREFIX + token, ttl_seconds, _json.dumps(payload))
+            return
+        except Exception:
+            pass
+    _oauth_mem[token] = {**payload,
+                         "expires_at": datetime.utcnow() + timedelta(seconds=ttl_seconds)}
+
+
+def oauth_token_get(token: str):
+    """Retourne {tenant_id, client_id} si le token est valide et non expiré, sinon None."""
+    if _redis_client:
+        try:
+            raw = _redis_client.get(_OAUTH_PREFIX + token)
+            return _json.loads(raw) if raw else None
+        except Exception:
+            return None
+    entry = _oauth_mem.get(token)
+    if not entry:
+        return None
+    if datetime.utcnow() >= entry["expires_at"]:
+        _oauth_mem.pop(token, None)
+        return None
+    return {"tenant_id": entry["tenant_id"], "client_id": entry["client_id"]}
+
+
+def oauth_token_delete(token: str):
+    if _redis_client:
+        try:
+            _redis_client.delete(_OAUTH_PREFIX + token)
+        except Exception:
+            pass
+    _oauth_mem.pop(token, None)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

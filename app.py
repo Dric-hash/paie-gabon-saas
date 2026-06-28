@@ -10,7 +10,7 @@ import os, sys, logging, secrets as sec
 from datetime import datetime, date, timedelta
 
 from flask import (Flask, render_template, request, redirect, url_for,
-                   flash, abort, session, jsonify)
+                   flash, abort, session, jsonify, g)
 from flask_login import LoginManager, logout_user, current_user
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
@@ -151,6 +151,17 @@ def load_user(uid):
 
 # ── Middleware inactivité ─────────────────────────────────────────────────────
 @app.before_request
+def _generer_csp_nonce():
+    """Nonce CSP par requête (préparation à une CSP stricte sans 'unsafe-inline')."""
+    g.csp_nonce = sec.token_urlsafe(16)
+
+
+@app.context_processor
+def _injecter_csp_nonce():
+    return {"csp_nonce": getattr(g, "csp_nonce", "")}
+
+
+@app.before_request
 def gerer_session_inactivite():
     excluded = ["/login", "/inscription", "/confirmer-email",
                 "/mot-de-passe-oublie", "/reinitialiser-mdp",
@@ -208,6 +219,25 @@ def add_security_headers(response):
         if EST_PRODUCTION:
             csp += " upgrade-insecure-requests;"
         response.headers["Content-Security-Policy"] = csp
+
+        # ── Phase 1 de la migration vers une CSP stricte (F2) ────────────────
+        # Opt-in via CSP_REPORT_ONLY=1 : publie une politique stricte à base de
+        # nonce en mode *Report-Only* (n'impose RIEN, ne casse rien) pour collecter
+        # les violations sur /csp-report avant de basculer en enforce. Désactivé
+        # par défaut pour ne pas générer de bruit tant que la migration des
+        # handlers inline n'est pas faite.
+        if os.environ.get("CSP_REPORT_ONLY", "").lower() in ("1", "true", "yes"):
+            nonce = getattr(g, "csp_nonce", "")
+            strict = (
+                "default-src 'self'; "
+                f"script-src 'self' 'nonce-{nonce}' cdn.tailwindcss.com cdnjs.cloudflare.com cdn.jsdelivr.net; "
+                f"style-src 'self' 'nonce-{nonce}' fonts.googleapis.com cdnjs.cloudflare.com; "
+                "font-src 'self' data: fonts.gstatic.com cdnjs.cloudflare.com; "
+                "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; "
+                "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; "
+                "report-uri /csp-report;"
+            )
+            response.headers["Content-Security-Policy-Report-Only"] = strict
         # ✅ HSTS — force HTTPS pendant 1 an (uniquement en production)
         if EST_PRODUCTION:
             response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
@@ -271,6 +301,24 @@ def health_check():
         logger.error(f"Health check échoué : {e}")
         return {"status": "degraded", "database": "error"}, 503
 
+
+@app.route("/csp-report", methods=["POST"])
+def csp_report():
+    """Reçoit les rapports de violation CSP (mode Report-Only). Journalise et
+    renvoie 204. Sans authentification ni CSRF (POST émis par le navigateur)."""
+    try:
+        rapport = request.get_json(force=True, silent=True) or {}
+        détail = rapport.get("csp-report", rapport)
+        logger.warning(
+            "[CSP] violation: directive=%s blocked=%s doc=%s",
+            détail.get("violated-directive") or détail.get("effectiveDirective"),
+            détail.get("blocked-uri") or détail.get("blockedURL"),
+            détail.get("document-uri") or détail.get("documentURL"),
+        )
+    except Exception:
+        pass
+    return ("", 204)
+
 # ── Blueprints ────────────────────────────────────────────────────────────────
 from blueprints.auth   import bp as auth_bp
 from blueprints.admin  import bp as admin_bp
@@ -310,6 +358,7 @@ _CSRF_EXEMPT_ENDPOINTS = [
     # api_cache_clear retiré de l'exemption : il modifie l'état (vide le cache) et
     # le front envoie déjà un en-tête X-CSRFToken — la protection CSRF s'applique.
     "prestataires.api_calculer_facture",
+    "csp_report",   # rapports CSP émis par le navigateur (pas de CSRF)
 ]
 for _ep in _CSRF_EXEMPT_ENDPOINTS:
     _view = app.view_functions.get(_ep)
@@ -454,6 +503,7 @@ def run_migrations():
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_code_hash VARCHAR(256)",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_expiry TIMESTAMP",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_tentatives INTEGER DEFAULT 0",
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS twofa_active BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS base NUMERIC(15,2)",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS taux NUMERIC(8,4)",
         # ── Jeton de session (invalidation au changement de mot de passe) ────────

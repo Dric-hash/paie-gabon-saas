@@ -582,6 +582,31 @@
       <p style="font-size:.875rem">Seul l'administrateur peut gérer les utilisateurs.</p>
     </div>
     {% endif %}
+
+    <!-- Sécurité du compte : double authentification (self-service) -->
+    <div id="securite" class="card p-6" style="margin-top:1.5rem">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest" style="margin-bottom:.75rem">Sécurité de mon compte</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+        <div>
+          <p style="font-weight:700;color:#0f3d36;margin:0">Double authentification (2FA)</p>
+          <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0;max-width:36rem">
+            À chaque connexion, un code à 6 chiffres est envoyé à votre adresse email
+            ({{ current_user.email }}) et vous est demandé en plus du mot de passe.
+          </p>
+        </div>
+        <form method="POST" action="{{ url_for('tenant.basculer_2fa') }}" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="activer" value="{{ '0' if current_user.twofa_active else '1' }}"/>
+          <button type="submit"
+            style="background:{{ '#fee2e2' if current_user.twofa_active else '#0f3d36' }};color:{{ '#dc2626' if current_user.twofa_active else 'white' }};padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
+            {{ 'Désactiver la 2FA' if current_user.twofa_active else 'Activer la 2FA' }}
+          </button>
+        </form>
+      </div>
+      <p style="font-size:.75rem;color:{{ '#16a34a' if current_user.twofa_active else '#9ca3af' }};margin:.75rem 0 0">
+        Statut : <strong>{{ 'Activée ✓' if current_user.twofa_active else 'Désactivée' }}</strong>
+      </p>
+    </div>
   </div>
 </div>
 

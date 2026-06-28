@@ -51,9 +51,6 @@ sont invalidées** (anti-détournement après vol de mot de passe). *Note : au
 premier déploiement, les sessions existantes restent valides jusqu'à expiration
 par inactivité, puis basculent au nouveau format.*
 
-### Tests
-- **`tests/test_securite_audit.py`** (nouveau) — 10 tests verrouillant C1, M1, M5, F7 et M4.
-
 ### 🟠 M4 — Secrets stockés hachés (token API + client_secret OAuth)
 **`models.py`** (`hash_secret`/`verifier_secret`, colonne `token_api_hash`,
 `generate_token()` renvoie le token en clair une fois et ne stocke qu'un hash
@@ -70,34 +67,53 @@ tenant `regenerer_token_api` + boutons UI mis à jour (token affiché une seule 
 **`app.py`** — endpoint retiré de la liste d'exemptions CSRF (le front envoyait
 déjà un en-tête `X-CSRFToken`, aucun changement JS nécessaire).
 
+### 🟡 F1 — Flux OAuth2 branché + store de tokens Redis
+**`blueprints/api_v1.py`** (route `/oauth/token` désormais branchée — elle était
+définie sans décorateur, donc inactive) + **`core.py`** (`oauth_token_store/get/
+delete` : persistance Redis avec TTL natif, partagée entre workers Gunicorn, repli
+mémoire si Redis absent) + **`api_rest.py`** (lookup via le store). Le dict en
+mémoire process (inopérant en multi-workers) est supprimé. Le endpoint est protégé
+par le rate-limit de blueprint (M2) et vérifie le `client_secret` haché (M4). Flux
+testé de bout en bout (obtention → usage Bearer → révocation).
+
+### 🟡 F9 — 2FA optionnelle pour les utilisateurs tenant
+**`models.py`** (colonne `twofa_active`) + **`app.py`** (migration) +
+**`blueprints/auth.py`** (déclenchement du code email généralisé aux utilisateurs
+ayant activé l'option, en plus du super-admin) + **`blueprints/tenant.py`** (route
+`basculer_2fa`) + **`templates/tenant/parametres.html`** (carte « Sécurité de mon
+compte »). Réutilise la machinerie OTP email existante : un utilisateur 2FA-activé
+doit saisir un code à 6 chiffres reçu par email à chaque connexion.
+
+### 🟡 F2 — Phase 1 : outillage pour une CSP stricte
+**`app.py`** (nonce par requête `{{ csp_nonce }}`, **CSP Report-Only opt-in** via
+`CSP_REPORT_ONLY=1`, endpoint `/csp-report`). La CSP imposée reste inchangée (aucun
+risque de casse) ; le mode Report-Only collecte les violations avant de basculer en
+politique stricte. La migration des 341 handlers inline est documentée dans
+**`GUIDE_MIGRATION_CSP.md`** (chantier front à mener écran par écran).
+
+### Tests
+- **`tests/test_securite_audit.py`** — 18 tests verrouillant C1, M1, M5, M4, F7, F1,
+  F9 et F2. **Suite globale : 434 tests verts.**
+
 ---
 
-## ⏸️ Volontairement différé (nécessite une fenêtre de migration / décision)
+## ⏸️ Reste à faire (chantier dédié)
 
-Ces points sont réels mais représentent des **chantiers à part entière** (refonte
-front, nouvelle fonctionnalité) ou sont sans impact tant qu'une fonction reste
-inactive. À planifier séparément :
-
-- **F1 — Tokens OAuth en mémoire → Redis.** Le dict `_oauth_tokens` ne fonctionne
-  pas avec plusieurs workers Gunicorn (et se vide au redéploiement). À migrer vers
-  Redis (déjà dans la stack). **Sans impact aujourd'hui** : le endpoint OAuth
-  `api_oauth_token` n'a pas de décorateur `@bp.route` — il n'est pas branché (le
-  `client_secret` est néanmoins déjà haché, cf. M4, prêt pour le jour où il le sera).
-
-- **F2 — CSP : retrait de `'unsafe-inline'` + passage à une CSP à nonce.** Suppose
-  d'avoir d'abord migré tous les handlers inline (`onclick`, `oninput`…) vers des
-  écouteurs JS. Chantier front à part entière. *(Le principal handler à risque a
-  déjà été neutralisé via `|tojson`, cf. M3.)*
-
-- **F9 — 2FA optionnelle pour les `TENANT_ADMIN`** (aujourd'hui réservée au
-  super-admin). Fonctionnalité à concevoir (TOTP ou OTP email + écrans associés).
+- **F2 — Phase 2 : migration des handlers inline + bascule CSP en enforce.**
+  L'outillage est livré (nonce, Report-Only opt-in, endpoint de report). Reste à
+  migrer les ≈ 341 handlers `on*=` vers des écouteurs JS nonce'd, écran par écran,
+  puis retirer `'unsafe-inline'` de la CSP imposée. Procédure détaillée dans
+  **`GUIDE_MIGRATION_CSP.md`**. Sans urgence : le principal vecteur XSS en texte
+  libre est déjà neutralisé (M3) et le reste de la CSP est verrouillé.
 
 ---
 
 ## Recommandation de déploiement
 
-1. Déployer ce lot complet (C1 + M1/M2/M3/M4/M5 + F3/F4/F5/F6/F7/F8/F10) — testé
-   (426 tests verts), migration de tokens vérifiée idempotente et sans rupture des
-   clients API en place.
-2. Garder F1/F2/F9 pour des itérations dédiées (refonte front, fonctionnalité 2FA).
-3. Garder F2/F7/F9 pour une itération front/UX dédiée.
+1. Déployer ce lot complet (C1 + M1→M5 + F1, F3→F10) — **434 tests verts**,
+   migration des tokens vérifiée idempotente et sans rupture des clients API.
+2. Après déploiement : activer `CSP_REPORT_ONLY=1` en staging pour amorcer la
+   phase 2 de F2 (observer les violations avant de durcir).
+3. La 2FA tenant (F9) est livrée **désactivée par défaut** — chaque utilisateur
+   l'active depuis Paramètres → Utilisateurs → « Sécurité de mon compte ». Elle
+   nécessite que l'email serveur (`MAIL_PASSWORD`) soit configuré.

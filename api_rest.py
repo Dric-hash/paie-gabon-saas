@@ -51,7 +51,6 @@ OAUTH_TOKEN_TTL    = int(os.environ.get("OAUTH_TOKEN_TTL",    "3600"))  # second
 API_MAX_PAGE_SIZE  = int(os.environ.get("API_MAX_PAGE_SIZE",  "100"))
 
 # Cache simple en mémoire pour les tokens OAuth (remplacé par Redis si dispo)
-_oauth_tokens: dict = {}  # token → {tenant_id, expires_at, scopes}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -85,17 +84,15 @@ def _get_tenant_from_request(request, Tenant):
         return tenant, None
 
     # ── Token OAuth2 ─────────────────────────────────────────────────────────
-    oauth_entry = _oauth_tokens.get(token)
+    from core import oauth_token_get
+    oauth_entry = oauth_token_get(token)
     if oauth_entry:
-        if datetime.utcnow() < oauth_entry["expires_at"]:
-            tenant = Tenant.query.filter_by(
-                id=oauth_entry["tenant_id"], statut="ACTIF"
-            ).first()
-            if tenant:
-                return tenant, None
-        else:
-            del _oauth_tokens[token]
-            return None, "TOKEN_EXPIRED"
+        tenant = Tenant.query.filter_by(
+            id=oauth_entry["tenant_id"], statut="ACTIF"
+        ).first()
+        if tenant:
+            return tenant, None
+        return None, "TENANT_INACTIVE"
 
     return None, "TOKEN_INVALID"
 

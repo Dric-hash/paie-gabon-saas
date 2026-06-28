@@ -93,6 +93,26 @@ def regenerer_token_api():
     return redirect(url_for("api_v1.api_clients_list"))
 
 
+@bp.route("/profil/2fa", methods=["POST"])
+@login_required
+def basculer_2fa():
+    """Active ou désactive la double authentification par email pour soi-même."""
+    if current_user.is_super_admin:
+        flash("La 2FA du super-admin est gérée séparément.", "error")
+        return redirect(url_for("tenant.parametres") + "#securite")
+    activer = request.form.get("activer") == "1"
+    if activer and not os.environ.get("MAIL_PASSWORD"):
+        flash("La 2FA nécessite la configuration de l'email serveur. Contactez l'administrateur.", "error")
+        return redirect(url_for("tenant.parametres") + "#securite")
+    current_user.twofa_active = activer
+    db.session.commit()
+    log_action("UPDATE", "utilisateur", current_user.id,
+               f"2FA {'activée' if activer else 'désactivée'}")
+    db.session.commit()
+    flash(f"Double authentification {'activée' if activer else 'désactivée'}.", "success")
+    return redirect(url_for("tenant.parametres") + "#securite")
+
+
 @bp.route("/dashboard")
 @login_required
 def dashboard():
@@ -7648,7 +7668,7 @@ En cas de problème : support@paiegalon.com
 
 from api_rest import (api_auth_required, _ok, _err, _paginate,
                       _salarie_dict, _bulletin_dict, _periode_dict,
-                      _oauth_tokens, OAUTH_TOKEN_TTL)
+                      OAUTH_TOKEN_TTL)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

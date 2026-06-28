@@ -256,3 +256,96 @@ class TestSecretsHaches:
         """Un token invalide est rejeté."""
         r = client.get("/api/v1/me", headers={"X-API-Key": "mauvais-token-xyz"})
         assert r.status_code in (401, 403)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F1 — Flux OAuth2 branché + store de tokens (Redis / repli mémoire)
+# ══════════════════════════════════════════════════════════════════════════════
+class TestOAuthFlow:
+    def _creer_client(self):
+        from models import OAuthClient, hash_secret
+        with flask_app.app_context():
+            t = Tenant.query.filter_by(slug="ent-a").first()
+            secret = "secret-oauth-test-123456"
+            c = OAuthClient(tenant_id=t.id, nom="SIRH", client_id="pg_testclient",
+                            client_secret=hash_secret(secret), actif=True)
+            db.session.add(c); db.session.commit()
+            return "pg_testclient", secret
+
+    def test_obtenir_et_utiliser_token_oauth(self, client):
+        cid, secret = self._creer_client()
+        # 1. Obtenir un access token
+        r = client.post("/api/v1/oauth/token", json={
+            "grant_type": "client_credentials",
+            "client_id": cid, "client_secret": secret,
+        })
+        assert r.status_code == 200, r.data
+        token = r.get_json()["access_token"]
+        # 2. L'utiliser comme Bearer
+        r2 = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+        assert r2.status_code == 200
+        # 3. Le révoquer → il ne fonctionne plus
+        client.post("/api/v1/oauth/revoke", json={"token": token})
+        r3 = client.get("/api/v1/me", headers={"Authorization": f"Bearer {token}"})
+        assert r3.status_code in (401, 403)
+
+    def test_mauvais_secret_refuse(self, client):
+        cid, _ = self._creer_client()
+        r = client.post("/api/v1/oauth/token", json={
+            "grant_type": "client_credentials",
+            "client_id": cid, "client_secret": "mauvais",
+        })
+        assert r.status_code == 401
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F9 — 2FA optionnelle pour les utilisateurs tenant
+# ══════════════════════════════════════════════════════════════════════════════
+class TestTenant2FA:
+    def test_activer_desactiver_2fa(self, client, monkeypatch):
+        monkeypatch.setenv("MAIL_PASSWORD", "x")  # 2FA exige l'email serveur
+        _login(client, "admin@a.ga")
+        client.post("/profil/2fa", data={"activer": "1", "csrf_token":
+                    _csrf(client.get("/parametres").data)}, follow_redirects=True)
+        with flask_app.app_context():
+            assert Utilisateur.query.filter_by(email="admin@a.ga").first().twofa_active is True
+        client.post("/profil/2fa", data={"activer": "0", "csrf_token":
+                    _csrf(client.get("/parametres").data)}, follow_redirects=True)
+        with flask_app.app_context():
+            assert Utilisateur.query.filter_by(email="admin@a.ga").first().twofa_active is False
+
+    def test_login_avec_2fa_demande_le_code(self, client, monkeypatch):
+        """Un utilisateur avec 2FA activée est redirigé vers la saisie du code."""
+        monkeypatch.setenv("MAIL_PASSWORD", "x")
+        with flask_app.app_context():
+            u = Utilisateur.query.filter_by(email="admin@a.ga").first()
+            u.twofa_active = True
+            db.session.commit()
+        r = _login(client, "admin@a.ga")
+        assert r.status_code == 302 and "verifier-2fa" in (r.headers.get("Location") or "")
+        # Pas encore authentifié : le dashboard renvoie vers login.
+        assert client.get("/dashboard", follow_redirects=False).status_code in (302, 401)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F2 — Infrastructure CSP stricte (nonce + Report-Only opt-in)
+# ══════════════════════════════════════════════════════════════════════════════
+class TestCSP:
+    def test_csp_enforce_toujours_presente(self, client):
+        r = client.get("/login")
+        assert "Content-Security-Policy" in r.headers
+
+    def test_report_only_desactive_par_defaut(self, client, monkeypatch):
+        monkeypatch.delenv("CSP_REPORT_ONLY", raising=False)
+        r = client.get("/login")
+        assert "Content-Security-Policy-Report-Only" not in r.headers
+
+    def test_report_only_actif_si_optin(self, client, monkeypatch):
+        monkeypatch.setenv("CSP_REPORT_ONLY", "1")
+        r = client.get("/login")
+        pol = r.headers.get("Content-Security-Policy-Report-Only", "")
+        assert "nonce-" in pol and "report-uri /csp-report" in pol
+
+    def test_endpoint_csp_report_accepte_le_post(self, client):
+        r = client.post("/csp-report", json={"csp-report": {"violated-directive": "script-src"}})
+        assert r.status_code == 204

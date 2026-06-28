@@ -189,6 +189,8 @@ class Utilisateur(db.Model, UserMixin):
     otp_code_hash            = db.Column(db.String(256))
     otp_expiry               = db.Column(db.DateTime)
     otp_tentatives           = db.Column(db.Integer, default=0)
+    # 2FA optionnelle activée par l'utilisateur (super-admin : toujours active).
+    twofa_active             = db.Column(db.Boolean, default=False)
     # ── Jeton de session ──────────────────────────────────────────────────────
     # Régénéré à chaque changement de mot de passe : invalide toutes les sessions
     # ouvertes (anti-détournement de session après reset / vol de mot de passe).

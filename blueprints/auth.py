@@ -90,7 +90,8 @@ def login():
                 # de désactiver temporairement la 2FA si le super-admin est bloqué
                 # (ex. problème d'envoi d'email). À retirer une fois le souci réglé.
                 _2fa_off = os.environ.get("DISABLE_SUPERADMIN_2FA", "").lower() in ("1", "true", "yes")
-                if user.is_super_admin and os.environ.get("MAIL_PASSWORD") and not _2fa_off:
+                _besoin_2fa = (user.is_super_admin and not _2fa_off) or getattr(user, "twofa_active", False)
+                if _besoin_2fa and os.environ.get("MAIL_PASSWORD"):
                     code = f"{sec.randbelow(1000000):06d}"
                     user.set_otp(code)
                     db.session.commit()
@@ -100,7 +101,7 @@ def login():
                             subject="🔐 Votre code de connexion — PaieGabon",
                             recipients=[user.email],
                             html=(f"<p>Bonjour {user.prenom},</p>"
-                                  f"<p>Votre code de connexion super-admin est :</p>"
+                                  f"<p>Votre code de connexion est :</p>"
                                   f"<p style='font-size:28px;font-weight:bold;letter-spacing:4px'>{code}</p>"
                                   f"<p>Ce code expire dans 10 minutes. "
                                   f"Si vous n'êtes pas à l'origine de cette connexion, "

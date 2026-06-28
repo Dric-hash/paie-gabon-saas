@@ -19,12 +19,14 @@ from core import (calculer_parts_irpp, tenant_required, get_tenant,
 
 from api_rest import (api_auth_required, _ok, _err, _paginate,
                       _salarie_dict, _bulletin_dict, _periode_dict,
-                      _oauth_tokens, OAUTH_TOKEN_TTL)
+                      OAUTH_TOKEN_TTL)
+from core import oauth_token_store, oauth_token_delete
 
 logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("api_v1", __name__, url_prefix="/api/v1")
 
+@bp.route("/oauth/token", methods=["POST"])
 def api_oauth_token():
     """
     OAuth2 client_credentials flow.
@@ -52,12 +54,7 @@ def api_oauth_token():
     # Générer un access token
     import secrets as _sec
     access_token = _sec.token_hex(32)
-    expires_at   = datetime.utcnow() + timedelta(seconds=OAUTH_TOKEN_TTL)
-    _oauth_tokens[access_token] = {
-        "tenant_id":  tenant.id,
-        "expires_at": expires_at,
-        "client_id":  client_id,
-    }
+    oauth_token_store(access_token, tenant.id, client_id, OAUTH_TOKEN_TTL)
     client.derniere_utilisation = datetime.utcnow()
     db.session.commit()
 
@@ -75,8 +72,8 @@ def api_oauth_revoke():
     """Révoque un access token OAuth2."""
     data  = request.get_json(force=True) or {}
     token = data.get("token", "").strip()
-    if token in _oauth_tokens:
-        del _oauth_tokens[token]
+    if token:
+        oauth_token_delete(token)
     return jsonify({"success": True, "message": "Token révoqué."}), 200
 
 
