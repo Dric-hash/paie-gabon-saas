@@ -130,7 +130,24 @@ login_manager.login_message = "Veuillez vous connecter."
 
 @login_manager.user_loader
 def load_user(uid):
-    return Utilisateur.query.get(int(uid))
+    # Format nouveau : "id.jeton" — on vérifie que le jeton correspond (sinon la
+    # session a été invalidée par un changement de mot de passe).
+    suid = str(uid)
+    if "." in suid:
+        sid, tok = suid.split(".", 1)
+        try:
+            u = Utilisateur.query.get(int(sid))
+        except (ValueError, TypeError):
+            return None
+        if u and (u.session_token or "") == tok:
+            return u
+        return None
+    # Sessions héritées (créées avant l'ajout du jeton) : chargement par id.
+    # Elles expireront via le timeout d'inactivité.
+    try:
+        return Utilisateur.query.get(int(suid))
+    except (ValueError, TypeError):
+        return None
 
 # ── Middleware inactivité ─────────────────────────────────────────────────────
 @app.before_request
@@ -290,7 +307,8 @@ _CSRF_EXEMPT_ENDPOINTS = [
     "tenant.api_simuler_scenarios",
     "tenant.api_simuler_net_vers_brut",
     "tenant.api_simuler_augmentation",
-    "tenant.api_cache_clear",
+    # api_cache_clear retiré de l'exemption : il modifie l'état (vide le cache) et
+    # le front envoie déjà un en-tête X-CSRFToken — la protection CSRF s'applique.
     "prestataires.api_calculer_facture",
 ]
 for _ep in _CSRF_EXEMPT_ENDPOINTS:
@@ -378,7 +396,7 @@ def init_db():
         t = Tenant(slug="demo", denomination="ENTREPRISE DEMO", sigle="DEMO",
                    activite="À RENSEIGNER", nif="", ville="Libreville", pays="Gabon",
                    plan_id=plan.id if plan else None, statut="ACTIF")
-        t.token_api = sec.token_hex(32)
+        t.generate_token()
         db.session.add(t); db.session.flush()
         for code, lib in [("C1","Ouvriers"),("C2","Techniciens"),
                           ("C3","Conducteurs"),("C4","Cadres")]:
@@ -438,6 +456,12 @@ def run_migrations():
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS otp_tentatives INTEGER DEFAULT 0",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS base NUMERIC(15,2)",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS taux NUMERIC(8,4)",
+        # ── Jeton de session (invalidation au changement de mot de passe) ────────
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS session_token VARCHAR(32)",
+        "UPDATE utilisateurs SET session_token = substr(md5(random()::text), 1, 32) WHERE session_token IS NULL",
+        # ── Hash du token API (M4) : ne plus stocker le secret en clair ──────────
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS token_api_hash VARCHAR(64)",
+        "CREATE INDEX IF NOT EXISTS idx_tenants_token_api_hash ON tenants (token_api_hash)",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
@@ -510,6 +534,30 @@ def run_migrations():
         except Exception as e:
             db.session.rollback()
             logger.debug(f"Migration skipped ({sql[:50]}…): {e}")
+
+    # ── Backfill M4 : hacher les tokens API encore stockés en clair ───────────────
+    # Idempotent : un token déjà migré porte un préfixe « …  » et a un hash ; on
+    # ne retraite donc jamais deux fois la même ligne. Les clients API existants
+    # continuent de fonctionner (le hash du token qu'ils envoient correspond).
+    try:
+        from models import Tenant, hash_secret
+        a_migrer = (Tenant.query
+                    .filter(Tenant.token_api.isnot(None))
+                    .filter(Tenant.token_api_hash.is_(None))
+                    .all())
+        for t in a_migrer:
+            raw = t.token_api or ""
+            if "…" in raw:           # déjà sous forme de préfixe → ignorer
+                continue
+            t.token_api_hash = hash_secret(raw)
+            t.token_api = (raw[:8] + "…") if len(raw) > 8 else raw
+        if a_migrer:
+            db.session.commit()
+            logger.info(f"[M4] {len(a_migrer)} token(s) API migré(s) vers un stockage haché.")
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"[M4] Backfill des tokens API ignoré : {e}")
+
     logger.info("✅ Migrations terminées.")
 
 # Bootstrap du schéma au démarrage (create_all + migrations idempotentes).

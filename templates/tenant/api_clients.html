@@ -22,15 +22,20 @@
   </div>
   <div style="background:#f9fafb;border-radius:.75rem;padding:.75rem;display:flex;align-items:center;gap:.75rem;margin-bottom:.75rem">
     <code style="font-family:monospace;font-size:.8rem;color:#0f3d36;flex:1;word-break:break-all" id="token-api">
-      {{ tenant.token_api or '—' }}
+      {% if tenant.token_api_hash %}{{ tenant.token_api or 'Token actif' }} (masqué){% else %}Aucun token{% endif %}
     </code>
-    <button onclick="navigator.clipboard.writeText('{{ tenant.token_api }}');this.textContent='Copié ✓';setTimeout(()=>this.textContent='Copier',2000)"
-      style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
-      Copier
-    </button>
+    <form method="POST" action="{{ url_for('tenant.regenerer_token_api') }}" style="margin:0"
+          onsubmit="return confirm('Régénérer le token invalidera l\'ancien. Continuer ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button type="submit"
+        style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
+        {% if tenant.token_api_hash %}Régénérer{% else %}Générer{% endif %}
+      </button>
+    </form>
   </div>
   <p style="font-size:.75rem;color:#9ca3af;margin:0">
-    Ajoutez ce header à chaque requête : <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:.25rem">X-API-Key: {{ tenant.token_api or 'VOTRE_TOKEN' }}</code>
+    Pour des raisons de sécurité, le token complet n'est affiché qu'au moment de sa génération.
+    Ajoutez-le en header à chaque requête : <code style="background:#f3f4f6;padding:.1rem .4rem;border-radius:.25rem">X-API-Key: VOTRE_TOKEN</code>
   </p>
 </div>
 

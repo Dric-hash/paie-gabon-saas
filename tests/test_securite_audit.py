@@ -182,3 +182,77 @@ class TestIdorAcompte:
         }, follow_redirects=True)
         with flask_app.app_context():
             assert Acompte.query.filter_by(salarie_id=sal_b_id).count() == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F7 — Invalidation des sessions au changement de mot de passe
+# ══════════════════════════════════════════════════════════════════════════════
+class TestInvalidationSession:
+    def test_changement_mdp_invalide_session(self, client):
+        """Après un changement de mot de passe, l'ancienne session est rejetée."""
+        _login(client, "admin@a.ga")
+        # La session est valide au départ.
+        assert client.get("/dashboard", follow_redirects=False).status_code == 200
+        # Un changement de mot de passe fait tourner le jeton de session.
+        with flask_app.app_context():
+            u = Utilisateur.query.filter_by(email="admin@a.ga").first()
+            u.set_password("UnAutreMdp1")
+            db.session.commit()
+        # L'ancienne session (jeton périmé) n'est plus authentifiée → redirection.
+        r = client.get("/dashboard", follow_redirects=False)
+        assert r.status_code == 302
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# F7 — Invalidation des sessions au changement de mot de passe
+# ══════════════════════════════════════════════════════════════════════════════
+class TestInvalidationSession:
+    def test_load_user_rejette_jeton_perime(self, client):
+        """
+        Cœur de F7 : load_user n'authentifie une session que si le jeton qu'elle
+        porte correspond au jeton courant. Après rotation (changement de mot de
+        passe), l'ancienne identité de session est rejetée, la nouvelle acceptée.
+        """
+        from app import load_user
+        with flask_app.app_context():
+            u = Utilisateur.query.filter_by(email="admin@a.ga").first()
+            ancienne_identite = u.get_id()           # "id.jeton1"
+            assert load_user(ancienne_identite) is not None
+
+            u.set_password("NouveauMdp9")            # rotation du jeton
+            db.session.commit()
+
+            nouvelle_identite = u.get_id()           # "id.jeton2"
+            # L'ancienne session est invalidée, la nouvelle est valide.
+            assert load_user(ancienne_identite) is None
+            assert load_user(nouvelle_identite) is not None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# M4 — Stockage haché des secrets (token API, client_secret OAuth)
+# ══════════════════════════════════════════════════════════════════════════════
+class TestSecretsHaches:
+    def test_token_api_stocke_hache(self, client):
+        """generate_token() stocke un hash + un préfixe, jamais le secret en clair."""
+        from models import hash_secret
+        with flask_app.app_context():
+            t = Tenant.query.filter_by(slug="ent-a").first()
+            raw = t.generate_token()
+            db.session.commit()
+            assert t.token_api_hash == hash_secret(raw)
+            assert raw not in (t.token_api or "")      # le clair n'est pas stocké
+            assert t.token_api_hash != raw             # ce n'est pas le clair
+
+    def test_auth_api_fonctionne_avec_token_hache(self, client):
+        """Un appel API authentifié par le token en clair est accepté (lookup par hash)."""
+        with flask_app.app_context():
+            t = Tenant.query.filter_by(slug="ent-a").first()
+            raw = t.generate_token()
+            db.session.commit()
+        r = client.get("/api/v1/me", headers={"X-API-Key": raw})
+        assert r.status_code == 200
+
+    def test_auth_api_refuse_mauvais_token(self, client):
+        """Un token invalide est rejeté."""
+        r = client.get("/api/v1/me", headers={"X-API-Key": "mauvais-token-xyz"})
+        assert r.status_code in (401, 403)

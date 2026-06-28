@@ -162,50 +162,20 @@
           <div style="display:flex;align-items:center;gap:.5rem;margin-top:.25rem">
             <code id="token-display-{{ tenant.id }}"
               style="font-family:monospace;font-size:.75rem;background:#f3f4f6;padding:.375rem .75rem;border-radius:.5rem;flex:1;word-break:break-all;color:#1a2332">
-              {% if tenant.token_api %}{{ tenant.token_api[:16] }}●●●●●●●●●●●●●●●●{% else %}Non généré{% endif %}
+              {% if tenant.token_api_hash %}{{ tenant.token_api or 'Token actif' }} ●●●●● (haché, non affichable){% else %}Non généré{% endif %}
             </code>
-            {% if tenant.token_api %}
-            <button type="button"
-              onclick="
-                const el = document.getElementById('token-display-{{ tenant.id }}');
-                const full = '{{ tenant.token_api }}';
-                if (el.dataset.shown === '1') {
-                  el.textContent = full.substring(0,16) + '●●●●●●●●●●●●●●●●';
-                  el.dataset.shown = '0';
-                  this.textContent = 'Voir';
-                } else {
-                  el.textContent = full;
-                  el.dataset.shown = '1';
-                  this.textContent = 'Masquer';
-                }"
-              style="background:#f3f4f6;color:#374151;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
-              Voir
-            </button>
-            <button type="button"
-              onclick="navigator.clipboard.writeText('{{ tenant.token_api }}');this.textContent='Copié ✓';setTimeout(()=>this.textContent='Copier',2000)"
-              style="background:#1a2332;color:white;padding:.375rem .75rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
-              Copier
-            </button>
-            {% endif %}
           </div>
-          {% if not tenant.token_api %}
-          <form method="POST" action="/admin/tenants/{{ tenant.id }}/regenerer-token" style="margin-top:.5rem">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <button type="submit"
-              style="background:#7c3aed;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
-              Générer un token API
-            </button>
-          </form>
-          {% else %}
           <form method="POST" action="/admin/tenants/{{ tenant.id }}/regenerer-token" style="margin-top:.5rem"
-            onsubmit="return confirm('Régénérer le token ? L\'ancien ne fonctionnera plus immédiatement.')">
+            {% if tenant.token_api_hash %}onsubmit="return confirm('Régénérer le token ? L\'ancien ne fonctionnera plus immédiatement.')"{% endif %}>
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button type="submit"
-              style="background:#fee2e2;color:#dc2626;padding:.25rem .625rem;border-radius:.5rem;font-size:.72rem;font-weight:700;border:none;cursor:pointer">
-              Régénérer le token
+              style="background:{% if tenant.token_api_hash %}#fee2e2;color:#dc2626{% else %}#7c3aed;color:white{% endif %};padding:.375rem .875rem;border-radius:.5rem;font-size:.72rem;font-weight:700;border:none;cursor:pointer">
+              {% if tenant.token_api_hash %}Régénérer le token{% else %}Générer un token API{% endif %}
             </button>
           </form>
-          {% endif %}
+          <p style="font-size:.7rem;color:#9ca3af;margin:.4rem 0 0">
+            Le token complet n'est affiché qu'à sa génération (stockage haché).
+          </p>
         </div>
 
         <!-- Clients OAuth2 -->

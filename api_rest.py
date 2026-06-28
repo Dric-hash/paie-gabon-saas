@@ -79,7 +79,8 @@ def _get_tenant_from_request(request, Tenant):
         return None, "AUTH_MISSING"
 
     # ── Token API fixe ────────────────────────────────────────────────────────
-    tenant = Tenant.query.filter_by(token_api=token, statut="ACTIF").first()
+    from models import hash_secret
+    tenant = Tenant.query.filter_by(token_api_hash=hash_secret(token), statut="ACTIF").first()
     if tenant:
         return tenant, None
 

@@ -42,46 +42,62 @@ référençant un salarié d'un autre tenant et de fuiter son nom.
 - **F6** — login : hash factice à temps constant quand le compte n'existe pas (anti-énumération par timing, `blueprints/auth.py`).
 - **F8** — garde anti zip-bomb : import Excel limité à 5 Mo (`blueprints/tenant.py` + `blueprints/admin.py`).
 
+### 🟡 F7 — Invalidation des sessions au changement de mot de passe
+**`models.py`** (colonne `session_token`, `get_id()` = `id.jeton`, rotation dans
+`set_password`) + **`app.py`** (`load_user` vérifie le jeton et tolère les
+sessions héritées ; migration `ALTER TABLE … session_token`). Après un reset ou
+un changement de mot de passe, le jeton tourne et **toutes les sessions ouvertes
+sont invalidées** (anti-détournement après vol de mot de passe). *Note : au
+premier déploiement, les sessions existantes restent valides jusqu'à expiration
+par inactivité, puis basculent au nouveau format.*
+
 ### Tests
-- **`tests/test_securite_audit.py`** (nouveau) — 6 tests verrouillant C1, M1 et M5.
+- **`tests/test_securite_audit.py`** (nouveau) — 10 tests verrouillant C1, M1, M5, F7 et M4.
+
+### 🟠 M4 — Secrets stockés hachés (token API + client_secret OAuth)
+**`models.py`** (`hash_secret`/`verifier_secret`, colonne `token_api_hash`,
+`generate_token()` renvoie le token en clair une fois et ne stocke qu'un hash
+SHA-256 + un préfixe lisible) + **`api_rest.py`** (lookup par hash) +
+**`blueprints/api_v1.py`** (vérification du `client_secret` par hash, création
+qui n'affiche le secret qu'une fois) + **`app.py`** (migration `token_api_hash`
+et **backfill Python idempotent**). Le token API et le `client_secret` ne sont
+**plus stockés en clair**. La migration hache les tokens existants en place : les
+intégrations API en cours **continuent de fonctionner** (vérifié : le token
+d'origine est retrouvé par hash, et le backfill est idempotent). Nouvelle route
+tenant `regenerer_token_api` + boutons UI mis à jour (token affiché une seule fois).
+
+### 🟡 F10 — `api_cache_clear` repassé sous protection CSRF
+**`app.py`** — endpoint retiré de la liste d'exemptions CSRF (le front envoyait
+déjà un en-tête `X-CSRFToken`, aucun changement JS nécessaire).
 
 ---
 
 ## ⏸️ Volontairement différé (nécessite une fenêtre de migration / décision)
 
-Ces points sont réels mais **risqués à appliquer à l'aveugle sur la prod** sans
-migration de données ou validation manuelle. À planifier séparément :
-
-- **M4 — Hachage de `Tenant.token_api` et `OAuthClient.client_secret`.**
-  Aujourd'hui stockés en clair. Les hacher casserait les intégrations API
-  existantes sans migration (re-hash des valeurs en place + bascule du lookup
-  vers une comparaison de hash + affichage du token uniquement à la génération).
-  *Note : le flux OAuth est actuellement du code mort — `api_oauth_token` n'a pas
-  de décorateur `@bp.route` — donc hacher `client_secret` seul serait sans risque
-  immédiat et constitue un bon premier pas.*
+Ces points sont réels mais représentent des **chantiers à part entière** (refonte
+front, nouvelle fonctionnalité) ou sont sans impact tant qu'une fonction reste
+inactive. À planifier séparément :
 
 - **F1 — Tokens OAuth en mémoire → Redis.** Le dict `_oauth_tokens` ne fonctionne
   pas avec plusieurs workers Gunicorn (et se vide au redéploiement). À migrer vers
-  Redis (déjà dans la stack). Sans impact tant que le endpoint OAuth reste non branché.
+  Redis (déjà dans la stack). **Sans impact aujourd'hui** : le endpoint OAuth
+  `api_oauth_token` n'a pas de décorateur `@bp.route` — il n'est pas branché (le
+  `client_secret` est néanmoins déjà haché, cf. M4, prêt pour le jour où il le sera).
 
 - **F2 — CSP : retrait de `'unsafe-inline'` + passage à une CSP à nonce.** Suppose
   d'avoir d'abord migré tous les handlers inline (`onclick`, `oninput`…) vers des
-  écouteurs JS. Chantier front à part entière.
+  écouteurs JS. Chantier front à part entière. *(Le principal handler à risque a
+  déjà été neutralisé via `|tojson`, cf. M3.)*
 
-- **F7 — Invalidation des sessions au changement de mot de passe.** Nécessite un
-  « security stamp » dans `get_id()` de Flask-Login ; déconnecte les sessions
-  actives au reset (comportement souhaité mais à tester).
-
-- **F9 — 2FA optionnelle pour les `TENANT_ADMIN`** (aujourd'hui réservée au super-admin).
-
-- **F10 — `tenant.api_cache_clear` exempté de CSRF.** Impact très faible (simple
-  invalidation de cache) ; le retirer de l'exemption obligerait à ajouter un token
-  CSRF à l'appel JS correspondant.
+- **F9 — 2FA optionnelle pour les `TENANT_ADMIN`** (aujourd'hui réservée au
+  super-admin). Fonctionnalité à concevoir (TOTP ou OTP email + écrans associés).
 
 ---
 
 ## Recommandation de déploiement
 
-1. Déployer ce lot (C1 + M1/M2/M3/M5 + durcissements) — sûr, testé, sans migration.
-2. Planifier ensuite M4 + F1 (sécurité des secrets/tokens) avec une vraie fenêtre.
+1. Déployer ce lot complet (C1 + M1/M2/M3/M4/M5 + F3/F4/F5/F6/F7/F8/F10) — testé
+   (426 tests verts), migration de tokens vérifiée idempotente et sans rupture des
+   clients API en place.
+2. Garder F1/F2/F9 pour des itérations dédiées (refonte front, fonctionnalité 2FA).
 3. Garder F2/F7/F9 pour une itération front/UX dédiée.

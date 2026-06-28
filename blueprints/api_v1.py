@@ -41,7 +41,8 @@ def api_oauth_token():
         return jsonify(_err("MISSING_CREDENTIALS", "client_id et client_secret requis.")), 400
 
     client = OAuthClient.query.filter_by(client_id=client_id, actif=True).first()
-    if not client or not hmac.compare_digest(client.client_secret, client_sec):
+    from models import verifier_secret
+    if not client or not verifier_secret(client_sec, client.client_secret):
         return jsonify(_err("INVALID_CLIENT", "Identifiants OAuth invalides.")), 401
 
     tenant = Tenant.query.filter_by(id=client.tenant_id, statut="ACTIF").first()
@@ -459,17 +460,22 @@ def api_client_creer():
         return redirect(url_for("tenant.api_clients_list"))
 
     import secrets as _sec
+    from models import hash_secret
+    secret_clair = _sec.token_hex(32)
     client = OAuthClient(
         tenant_id     = t.id,
         nom           = nom,
         client_id     = f"pg_{_sec.token_hex(16)}",
-        client_secret = _sec.token_hex(32),
+        client_secret = hash_secret(secret_clair),   # stocké haché
         description   = request.form.get("description", "").strip(),
         actif         = True,
     )
     db.session.add(client)
     db.session.commit()
-    flash(f"Client OAuth '{nom}' créé. Conservez le secret — il ne sera plus affiché.", "success")
+    # Le secret en clair n'est affiché qu'ici, une seule fois.
+    flash(f"Client OAuth '{nom}' créé. client_id : {client.client_id} — "
+          f"client_secret : {secret_clair} — conservez-le, il ne sera plus affiché.",
+          "success")
     return redirect(url_for("tenant.api_clients_list"))
 
 

@@ -77,6 +77,22 @@ def _exiger_email_confirme():
         return
     return render_template("auth/email_non_confirme.html", email=current_user.email), 403
 
+@bp.route("/parametres/api/regenerer-token", methods=["POST"])
+@tenant_required
+@admin_only
+def regenerer_token_api():
+    """Régénère le token API du tenant. Le token en clair n'est affiché qu'ici,
+    une seule fois (il est stocké haché). Réservé aux administrateurs du tenant."""
+    t = get_tenant()
+    raw = t.generate_token()
+    db.session.commit()
+    log_action("REGENERATE", "token_api", t.id, "Régénération du token API")
+    db.session.commit()
+    flash(f"Nouveau token API : {raw} — copiez-le maintenant, il ne sera plus affiché.",
+          "success")
+    return redirect(url_for("api_v1.api_clients_list"))
+
+
 @bp.route("/dashboard")
 @login_required
 def dashboard():

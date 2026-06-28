@@ -260,7 +260,7 @@ def inscription():
             statut="ESSAI",
             date_expiration=datetime.utcnow() + timedelta(days=30),
         )
-        t.token_api = sec.token_hex(32)
+        t.generate_token()
         db.session.add(t)
         db.session.flush()
 

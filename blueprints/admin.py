@@ -245,7 +245,7 @@ def admin_tenant_nouveau():
             statut=statut,
             date_expiration=datetime.utcnow() + timedelta(days=30),
         )
-        t.token_api = sec.token_hex(32)
+        t.generate_token()
         db.session.add(t)
         db.session.flush()
 
@@ -319,12 +319,13 @@ def admin_tenant_notes(id):
 def admin_regenerer_token(id):
     """Génère ou régénère le token API d'un tenant."""
     t = Tenant.query.get_or_404(id)
-    ancien = t.token_api
-    t.token_api = sec.token_hex(32)
+    ancien = t.token_api_hash
+    raw = t.generate_token()
     db.session.commit()
     action = "généré" if not ancien else "régénéré"
     flash(f"Token API {action} pour {t.denomination}. "
-          f"Transmettez-le de façon sécurisée au développeur RH du client.", "success")
+          f"X-API-Key : {raw} — transmettez-le de façon sécurisée ; "
+          f"il ne sera plus affiché.", "success")
     logger.info(f"[SuperAdmin] Token API {action} — tenant={t.id} par {current_user.email}")
     return redirect(url_for("admin.admin_tenant_detail", id=id))
 

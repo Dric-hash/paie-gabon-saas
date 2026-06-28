@@ -410,7 +410,7 @@
     <!-- Clients API actifs -->
     <div class="card" style="padding:1rem">
       <div style="font-size:.7rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem">🔑 Intégrations API</div>
-      {% set nb_tokens = tenants | selectattr('token_api') | list | length %}
+      {% set nb_tokens = tenants | selectattr('token_api_hash') | list | length %}
       <div style="font-size:2rem;font-weight:900;color:#a78bfa">{{ nb_tokens }}</div>
       <div style="font-size:.75rem;color:#64748b;margin-top:.25rem">clients avec token API</div>
       <div style="margin-top:.875rem;font-size:.75rem;color:#64748b">

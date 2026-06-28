@@ -6,8 +6,27 @@ from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import secrets
+import hashlib
+import hmac as _hmac
 
 db = SQLAlchemy()
+
+
+def hash_secret(raw: str) -> str:
+    """
+    Hash déterministe (SHA-256) d'un secret à haute entropie (token API,
+    client_secret OAuth). Comme ces secrets sont des aléas de 256 bits, un hash
+    non salé suffit (aucune attaque par dictionnaire/rainbow-table possible) et
+    reste indépendant de SECRET_KEY. Permet une recherche par égalité de hash.
+    """
+    return hashlib.sha256((raw or "").encode("utf-8")).hexdigest()
+
+
+def verifier_secret(raw: str, hashe: str) -> bool:
+    """Comparaison à temps constant entre un secret fourni et son hash stocké."""
+    if not hashe:
+        return False
+    return _hmac.compare_digest(hash_secret(raw), hashe)
 
 class Plan(db.Model):
     __tablename__ = "plans"
@@ -47,6 +66,9 @@ class Tenant(db.Model):
     date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
     date_expiration  = db.Column(db.DateTime)
     token_api        = db.Column(db.String(64), unique=True)
+    # Hash SHA-256 du token API (le secret n'est plus stocké en clair ; `token_api`
+    # ne conserve qu'un préfixe lisible pour identifier le token côté UI).
+    token_api_hash   = db.Column(db.String(64), index=True)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
@@ -69,7 +91,17 @@ class Tenant(db.Model):
     periodes     = db.relationship("PeriodePaie", backref="tenant", lazy=True)
     categories   = db.relationship("CategorieEmploi", backref="tenant", lazy=True)
 
-    def generate_token(self): self.token_api = secrets.token_hex(32)
+    def generate_token(self):
+        """Génère un nouveau token API. Stocke uniquement son hash + un préfixe
+        lisible ; renvoie le token en clair à afficher UNE SEULE fois à l'usager."""
+        raw = secrets.token_hex(32)
+        self.token_api_hash = hash_secret(raw)
+        self.token_api = raw[:8] + "…"   # préfixe non secret, pour l'affichage
+        return raw
+
+    @staticmethod
+    def hash_token(raw: str) -> str:
+        return hash_secret(raw)
 
     @property
     def seuil_hs(self) -> float:
@@ -157,8 +189,22 @@ class Utilisateur(db.Model, UserMixin):
     otp_code_hash            = db.Column(db.String(256))
     otp_expiry               = db.Column(db.DateTime)
     otp_tentatives           = db.Column(db.Integer, default=0)
+    # ── Jeton de session ──────────────────────────────────────────────────────
+    # Régénéré à chaque changement de mot de passe : invalide toutes les sessions
+    # ouvertes (anti-détournement de session après reset / vol de mot de passe).
+    session_token            = db.Column(db.String(32))
 
-    def set_password(self, pw): self.mot_de_passe_hash = generate_password_hash(pw)
+    def get_id(self):
+        """Identité de session = id + jeton. Le changement de mot de passe fait
+        tourner le jeton, ce qui invalide les sessions précédentes."""
+        return f"{self.id}.{self.session_token or ''}"
+
+    def _rotate_session_token(self):
+        self.session_token = secrets.token_hex(16)
+
+    def set_password(self, pw):
+        self.mot_de_passe_hash = generate_password_hash(pw)
+        self._rotate_session_token()
     def check_password(self, pw): return check_password_hash(self.mot_de_passe_hash, pw)
 
     def set_otp(self, code):
@@ -974,6 +1020,7 @@ class OAuthClient(db.Model):
     tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
     nom           = db.Column(db.String(100), nullable=False)
     client_id     = db.Column(db.String(64), unique=True, nullable=False)
+    # Hash SHA-256 du client_secret (jamais stocké en clair). Voir hash_secret().
     client_secret = db.Column(db.String(128), nullable=False)
     description   = db.Column(db.String(300))
     actif         = db.Column(db.Boolean, default=True)
