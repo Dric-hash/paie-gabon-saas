@@ -38,6 +38,7 @@ from io import BytesIO
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from core import csv_safe
 
 
 class DASVide(Exception):
@@ -444,7 +445,7 @@ def generer_das_excel(tenant, annee: int, models=None) -> bytes:
     for label, val in infos:
         c1 = ws.cell(row=r, column=1, value=label)
         c1.font = Font(name="Arial", size=9, bold=True, color="374151")
-        c2 = ws.cell(row=r, column=2, value=val)
+        c2 = ws.cell(row=r, column=2, value=csv_safe(val) if isinstance(val, str) else val)
         c2.font = Font(name="Arial", size=9)
         r += 1
     ws.column_dimensions["A"].width = 28
@@ -510,7 +511,8 @@ def generer_das_excel(tenant, annee: int, models=None) -> bytes:
     for i, ligne in enumerate(lignes):
         rr = data_start + i
         for j, (key, label, width, fmt) in enumerate(cols, start=1):
-            cell = ws2.cell(row=rr, column=j, value=ligne.get(key))
+            _v = ligne.get(key)
+            cell = ws2.cell(row=rr, column=j, value=csv_safe(_v) if isinstance(_v, str) else _v)
             cell.font = Font(name="Arial", size=8)
             cell.border = border
             if fmt:
@@ -644,7 +646,8 @@ def generer_das_excel(tenant, annee: int, models=None) -> bytes:
         for i, lh in enumerate(lignes_hono):
             rr2 = h_start + i
             for j, (key, label, width, fmt) in enumerate(cols_h, start=1):
-                cell = ws4.cell(row=rr2, column=j, value=lh.get(key))
+                _v = lh.get(key)
+                cell = ws4.cell(row=rr2, column=j, value=csv_safe(_v) if isinstance(_v, str) else _v)
                 cell.font = Font(name="Arial", size=8)
                 cell.border = border
                 if fmt:

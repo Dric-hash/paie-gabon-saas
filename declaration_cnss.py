@@ -31,6 +31,7 @@ Constantes CNAMGS 2026 :
 import csv
 import io
 import logging
+from core import csv_safe
 from datetime import datetime
 
 logger = logging.getLogger("paiegalon.declaration_cnss")
@@ -76,9 +77,9 @@ def generer_csv_cnss(sal_data, periode, tenant, trim_debut, trim_fin) -> bytes:
 
     # ── En-tête employeur ─────────────────────────────────────────────────────
     writer.writerow(["DECLARATION TRIMESTRIELLE CNSS GABON"])
-    writer.writerow(["Employeur",        tenant.denomination])
-    writer.writerow(["N° Matricule CNSS", getattr(tenant, "numero_cnss", "") or ""])
-    writer.writerow(["NIF",              tenant.nif or ""])
+    writer.writerow(["Employeur",        csv_safe(tenant.denomination)])
+    writer.writerow(["N° Matricule CNSS", csv_safe(getattr(tenant, "numero_cnss", "") or "")])
+    writer.writerow(["NIF",              csv_safe(tenant.nif or "")])
     writer.writerow(["Trimestre",        trim_label])
     writer.writerow(["Généré le",        datetime.now().strftime("%d/%m/%Y %H:%M")])
     writer.writerow([])
@@ -119,10 +120,10 @@ def generer_csv_cnss(sal_data, periode, tenant, trim_debut, trim_fin) -> bytes:
         nom    = parts[1] if len(parts) > 1 else nom_complet
 
         writer.writerow([
-            s.get("matricule", ""),
-            nom.upper(),
-            prenom,
-            s.get("numero_cnss", ""),
+            csv_safe(s.get("matricule", "")),
+            csv_safe(nom.upper()),
+            csv_safe(prenom),
+            csv_safe(s.get("numero_cnss", "")),
             s.get("date_embauche", ""),
             m1 or "",
             m2 or "",
@@ -183,9 +184,9 @@ def generer_csv_cnamgs(sal_data, periode, tenant, trim_debut, trim_fin) -> bytes
 
     # ── En-tête employeur ─────────────────────────────────────────────────────
     writer.writerow(["DECLARATION TRIMESTRIELLE CNAMGS GABON"])
-    writer.writerow(["Employeur",          tenant.denomination])
+    writer.writerow(["Employeur",          csv_safe(tenant.denomination)])
     writer.writerow(["N° Matricule CNAMGS", getattr(tenant, "numero_cnamgs", "") or ""])
-    writer.writerow(["NIF",                tenant.nif or ""])
+    writer.writerow(["NIF",                csv_safe(tenant.nif or "")])
     writer.writerow(["Trimestre",          trim_label])
     writer.writerow(["Généré le",          datetime.now().strftime("%d/%m/%Y %H:%M")])
     writer.writerow([])
@@ -223,10 +224,10 @@ def generer_csv_cnamgs(sal_data, periode, tenant, trim_debut, trim_fin) -> bytes
         nom    = parts[1] if len(parts) > 1 else nom_complet
 
         writer.writerow([
-            s.get("matricule", ""),
-            nom.upper(),
-            prenom,
-            s.get("numero_cnamgs", ""),
+            csv_safe(s.get("matricule", "")),
+            csv_safe(nom.upper()),
+            csv_safe(prenom),
+            csv_safe(s.get("numero_cnamgs", "")),
             s.get("date_embauche", ""),
             m1 or "",
             m2 or "",

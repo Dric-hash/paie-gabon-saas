@@ -33,6 +33,7 @@ Plan comptable OHADA adapté Gabon :
 import csv
 import io
 import logging
+from core import csv_safe
 from datetime import date, datetime
 
 logger = logging.getLogger("paiegalon.export_comptable")
@@ -292,9 +293,9 @@ def generer_livre_paie(bulletins, periode, tenant) -> bytes:
     mois_nom = _nom_mois(periode.mois)
 
     # ── En-tête entreprise ────────────────────────────────────────────────────
-    writer.writerow([f"LIVRE DE PAIE — {tenant.denomination}"])
+    writer.writerow([f"LIVRE DE PAIE — {csv_safe(tenant.denomination)}"])
     writer.writerow([f"Période : {mois_nom} {periode.annee}"])
-    writer.writerow([f"NIF : {tenant.nif or '—'}"])
+    writer.writerow([f"NIF : {csv_safe(tenant.nif) or '—'}"])
     writer.writerow([f"Généré le : {datetime.now().strftime('%d/%m/%Y à %H:%M')}"])
     writer.writerow([f"Nombre de bulletins : {len(bulletins)}"])
     writer.writerow([])  # ligne vide
@@ -360,11 +361,11 @@ def generer_livre_paie(bulletins, periode, tenant) -> bytes:
         cat_nom = s.categorie.libelle if s.categorie else "—"
 
         writer.writerow([
-            s.matricule,
-            s.nom.upper(),
-            s.prenom,
-            s.emploi or "—",
-            cat_nom,
+            csv_safe(s.matricule),
+            csv_safe(s.nom.upper()),
+            csv_safe(s.prenom),
+            csv_safe(s.emploi or "—"),
+            csv_safe(cat_nom),
             _xaf(b.salaire_base),
             _xaf(total_primes),
             _xaf(total_hsup),

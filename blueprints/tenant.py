@@ -28,7 +28,7 @@ from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
 from audit import log_action, get_audit_logs
 from core import (get_tenant, tenant_required, can_edit, admin_only,
                   require_permission, calculer_parts_irpp, parse_date,
-                  cache_get, cache_set, cache_delete,
+                  cache_get, cache_set, cache_delete, csv_safe,
                   _cache_get, _cache_set, _cache_delete, _parse_date, _pd,
                   send_email_async, plan_required,
                   TTL_KPIS_DASH, TTL_EVOLUTION, TTL_CATS_STATS, TTL_ALERTES)
@@ -2755,10 +2755,10 @@ def audit_export():
     for l in logs:
         writer.writerow([
             l.date_action.strftime("%d/%m/%Y %H:%M:%S") if l.date_action else "",
-            l.user.nom_complet if l.user else "Système",
+            csv_safe(l.user.nom_complet if l.user else "Système"),
             l.user.role_label  if l.user else "—",
-            l.action, l.entite or "", l.entite_id or "",
-            l.description or "", l.ip_address or "",
+            csv_safe(l.action), csv_safe(l.entite or ""), l.entite_id or "",
+            csv_safe(l.description or ""), l.ip_address or "",
         ])
 
     log_action("EXPORT", "audit", None, "Export CSV journal d'audit")
@@ -4120,16 +4120,16 @@ def journaliers_paie_export():
         total_jours   += jours
         total_heures  += heures
         row_data = [
-            f.journalier.nom_complet,
-            f.journalier.profession or "—",
-            site_nom,
+            csv_safe(f.journalier.nom_complet),
+            csv_safe(f.journalier.profession or "—"),
+            csv_safe(site_nom),
             f.date_debut.strftime("%d/%m/%Y") if f.date_debut else "",
             f.date_fin.strftime("%d/%m/%Y")   if f.date_fin   else "",
             jours,
             round(heures, 2),
             float(f.taux_horaire or 0),
             montant,
-            f.statut,
+            csv_safe(f.statut),
             f.date_paiement.strftime("%d/%m/%Y") if f.date_paiement else "",
         ]
         ws.append(row_data)
@@ -4214,7 +4214,7 @@ def journaliers_paie_export():
         pct_paye = int(data["nb_payes"] / data["nb_total"] * 100) if data["nb_total"] else 0
         statut_txt = f"{data['nb_payes']}/{data['nb_total']} payé(s) ({pct_paye}%)"
         row_data = [
-            s_nom,
+            csv_safe(s_nom),
             len(data["journaliers"]),
             data["jours"],
             round(data["heures"], 2),
@@ -4286,7 +4286,7 @@ def journaliers_paie_export():
 
     grand_total3 = 0
     for row_idx, (jid, d) in enumerate(sorted(by_jour.items(), key=lambda x: x[1]["nom"]), 3):
-        row_data = [d["nom"], d["profession"], d["site"],
+        row_data = [csv_safe(d["nom"]), csv_safe(d["profession"]), csv_safe(d["site"]),
                     d["periodes"], d["jours"], round(d["heures"],2), round(d["montant"],2)]
         ws3.append(row_data)
         grand_total3 += d["montant"]
@@ -5644,7 +5644,7 @@ def export_journal(periode_id):
               float(b.salaire_net or 0),float(b.net_a_payer or 0),float(b.cnss_patronale or 0),
               float(b.cnamgs_patronale or 0),float(b.fnh or 0),float(b.cfp or 0),b.statut]
         for col,v in enumerate(vals,1):
-            cell=ws.cell(row=row,column=col,value=v)
+            cell=ws.cell(row=row,column=col,value=csv_safe(v) if isinstance(v,str) else v)
             if isinstance(v,float): cell.number_format='#,##0'
             if row%2==0: cell.fill=PatternFill("solid",fgColor="F5F5F5")
     out=io.BytesIO(); wb.save(out); out.seek(0)
@@ -6413,7 +6413,7 @@ def rapport_mensuel_site_export():
             buls = BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=per.id)                .filter(BulletinPaie.salarie_id.in_(ids_sal)).all()
             mn = round(sum(float(b.net_a_payer or 0) for b in buls))
         eff = len(ids_sal) + len(ids_jour)
-        row_data = [s.nom, eff, len(ids_sal), len(ids_jour),
+        row_data = [csv_safe(s.nom), eff, len(ids_sal), len(ids_jour),
                     nb_p, nb_a, f"{taux}%", hn, hs, mj, mn]
         ws.append(row_data)
         for ci, v in enumerate(row_data, 1):

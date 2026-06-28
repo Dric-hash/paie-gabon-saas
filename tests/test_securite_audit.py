@@ -31,7 +31,16 @@ def app():
         "TESTING": True,
         "WTF_CSRF_ENABLED": True,
         "SERVER_NAME": "localhost",
+        "RATELIMIT_ENABLED": False,
     })
+    # Le limiter (mémoire) est partagé sur toute la session pytest : on le
+    # neutralise ici pour que les nombreux logins cumulés des autres fichiers de
+    # test n'épuisent pas la fenêtre 20/min sur 127.0.0.1.
+    try:
+        from app import limiter
+        limiter.enabled = False
+    except Exception:
+        pass
     with flask_app.app_context():
         db.drop_all()
         db.create_all()
@@ -349,3 +358,23 @@ class TestCSP:
     def test_endpoint_csp_report_accepte_le_post(self, client):
         r = client.post("/csp-report", json={"csp-report": {"violated-directive": "script-src"}})
         assert r.status_code == 204
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# S1 (2ᵉ passe) — Anti-injection de formule CSV/Excel dans les exports
+# ══════════════════════════════════════════════════════════════════════════════
+class TestInjectionFormuleCSV:
+    def test_csv_safe_neutralise_les_prefixes_dangereux(self):
+        from core import csv_safe
+        assert csv_safe("=SUM(A1:A9)") == "'=SUM(A1:A9)"
+        assert csv_safe("+1+1") == "'+1+1"
+        assert csv_safe("-2+3") == "'-2+3"
+        assert csv_safe("@cmd") == "'@cmd"
+        assert csv_safe("\tx") == "'\tx"
+
+    def test_csv_safe_laisse_le_texte_normal_intact(self):
+        from core import csv_safe
+        assert csv_safe("OBAME Jean") == "OBAME Jean"
+        assert csv_safe("Maçon BTP") == "Maçon BTP"
+        assert csv_safe("") == ""
+        assert csv_safe(None) == ""

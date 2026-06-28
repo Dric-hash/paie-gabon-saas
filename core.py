@@ -120,6 +120,23 @@ def oauth_token_delete(token: str):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+# SÉCURITÉ DES EXPORTS — anti-injection de formule CSV/Excel
+# Un champ texte (nom, matricule, dénomination…) commençant par = + - @ ou un
+# caractère de contrôle est interprété comme une formule par Excel/LibreOffice à
+# l'ouverture du fichier. On le neutralise en le préfixant d'une apostrophe.
+# À n'appliquer qu'aux champs TEXTE issus de la saisie utilisateur (jamais aux
+# montants formatés, dont le signe « - » est légitime).
+# ══════════════════════════════════════════════════════════════════════════════
+def csv_safe(value):
+    if value is None:
+        return ""
+    s = str(value)
+    if s[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + s
+    return s
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 # DÉCORATEURS
 # ══════════════════════════════════════════════════════════════════════════════
 

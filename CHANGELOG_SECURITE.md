@@ -97,6 +97,35 @@ politique stricte. La migration des 341 handlers inline est documentée dans
 
 ---
 
+## 🔁 Seconde passe (revue approfondie au-delà de l'audit initial)
+
+### 🟠 S1 — Injection de formule CSV/Excel dans les exports
+**Découverte lors d'une revue ciblée des modules d'export.** Les exports écrivaient
+des champs texte issus de la saisie (noms de salariés, matricule, emploi, profession,
+dénomination, raison sociale, nom de site, description d'audit…) **sans neutraliser**
+les préfixes `=`, `+`, `-`, `@`. Un comptable ouvrant le fichier dans Excel/LibreOffice
+aurait pu déclencher une **formule malveillante** (exfiltration via `HYPERLINK`, voire
+exécution via DDE). Vecteur réel pour une paie : les exports partent chez le comptable.
+
+**Correctif :** helper `csv_safe()` dans **`core.py`** (préfixe une apostrophe aux
+valeurs texte commençant par un caractère dangereux ; n'affecte jamais les montants),
+appliqué à **tous** les exports concernés : `export_comptable.py` (livre de paie),
+`declaration_cnss.py` (CNSS/CNAMGS), `declaration_das.py` (DAS — CSV + xlsx), et les
+exports `tenant.py` (journal d'audit CSV, journal de paie, feuilles journaliers,
+récaps site/journalier). Les PDF ne sont pas concernés (pas d'évaluation de formule).
+2 tests unitaires.
+
+### Autres points vérifiés (sains)
+- **Open redirect** : aucun paramètre `next` exploité au login.
+- **Fixation de session** : sessions à cookie signé (le scénario classique ne s'applique pas).
+- **Actions sensibles en GET** : les suppressions/validations/toggles sont toutes en POST + CSRF.
+
+### Tests (total)
+- **`tests/test_securite_audit.py`** — **20 tests** (C1, M1, M5, M4, F7, F1, F9, F2, S1).
+  **Suite globale : 436 tests verts.**
+
+---
+
 ## ⏸️ Reste à faire (chantier dédié)
 
 - **F2 — Phase 2 : migration des handlers inline + bascule CSP en enforce.**
@@ -110,7 +139,7 @@ politique stricte. La migration des 341 handlers inline est documentée dans
 
 ## Recommandation de déploiement
 
-1. Déployer ce lot complet (C1 + M1→M5 + F1, F3→F10) — **434 tests verts**,
+1. Déployer ce lot complet (C1 + M1→M5 + S1 + F1, F3→F10) — **436 tests verts**,
    migration des tokens vérifiée idempotente et sans rupture des clients API.
 2. Après déploiement : activer `CSP_REPORT_ONLY=1` en staging pour amorcer la
    phase 2 de F2 (observer les violations avant de durcir).
