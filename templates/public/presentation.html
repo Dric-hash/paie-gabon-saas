@@ -4,108 +4,250 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>PaieGabon — Le logiciel de paie conçu pour le Gabon</title>
-<meta name="description" content="Calculez automatiquement bulletins, cotisations CNSS et impôts selon la réglementation gabonaise. Essai gratuit, à partir de 15 000 FCFA/mois."/>
+<meta name="description" content="Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et déclarations sociales calculés automatiquement selon la loi gabonaise. Conventions BTP, Commerce, Pétrole et Industrie intégrées. Essai gratuit, sans carte bancaire."/>
+<link rel="canonical" href="https://www.paiegabon.com/"/>
+<meta name="theme-color" content="#0f3d36"/>
+
+<!-- Favicon / icônes -->
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+<link rel="icon" href="/static/favicon.ico" sizes="any"/>
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png"/>
+<link rel="manifest" href="/static/manifest.json"/>
+
+<!-- Open Graph / Twitter -->
+<meta property="og:type" content="website"/>
+<meta property="og:locale" content="fr_GA"/>
+<meta property="og:site_name" content="PaieGabon"/>
+<meta property="og:title" content="PaieGabon — La paie, juste et sans calcul"/>
+<meta property="og:description" content="Saisissez le salaire, PaieGabon calcule cotisations, impôt et bulletins selon la réglementation gabonaise. Essai gratuit."/>
+<meta property="og:url" content="https://www.paiegabon.com/"/>
+<meta property="og:image" content="https://www.paiegabon.com/static/icons/icon-512.png"/>
+<meta name="twitter:card" content="summary"/>
+<meta name="twitter:title" content="PaieGabon — La paie, juste et sans calcul"/>
+<meta name="twitter:description" content="Le logiciel de paie conçu pour la réglementation gabonaise. Essai gratuit, sans carte bancaire."/>
+<meta name="twitter:image" content="https://www.paiegabon.com/static/icons/icon-512.png"/>
+
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
+
+{% set prix_min = (plans|map(attribute='prix_mensuel')|min) if plans else 15000 %}
+
+<!-- Données structurées -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "PaieGabon",
+  "applicationCategory": "BusinessApplication",
+  "operatingSystem": "Web",
+  "description": "Logiciel de paie en ligne conçu pour la réglementation gabonaise : bulletins, cotisations CNSS et CNAMGS, IRPP, déclarations sociales et conventions collectives.",
+  "url": "https://www.paiegabon.com/",
+  "offers": {
+    "@type": "Offer",
+    "price": "{{ '%d'|format(prix_min) }}",
+    "priceCurrency": "XAF"
+  },
+  "publisher": {
+    "@type": "Organization",
+    "name": "Ameriack I.T. Solutions",
+    "url": "https://www.paiegabon.com/"
+  }
+}
+</script>
+
 <style>
   :root{
-    --brand:#0f3d36; --brand-soft:#11463e; --brand-hover:#16554b;
-    --accent:#b8862f; --accent-light:#e3b765;
+    --brand:#0f3d36; --brand-soft:#11463e; --brand-deep:#0c322c; --brand-hover:#16554b;
+    --accent:#b8862f; --accent-light:#e3b765; --accent-warm:#e9b043;
     --page:#f6f6f3; --surface:#ffffff; --ink:#1c2b2a;
     --sub:#5b6b68; --border:#e7e6e0;
   }
-  *{font-family:'Inter',system-ui,sans-serif}
+  *{font-family:'Inter',system-ui,sans-serif;box-sizing:border-box}
   .display{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-.02em}
   .num{font-variant-numeric:tabular-nums}
-  body{background:var(--page);color:var(--ink);margin:0}
+  body{background:var(--page);color:var(--ink);margin:0;-webkit-font-smoothing:antialiased}
   .accent{color:var(--accent)}
+  a{color:inherit}
+  .wrap{max-width:1100px;margin:0 auto;padding-left:1.5rem;padding-right:1.5rem}
+
   .btn-primary{background:var(--accent);color:#1c1206;font-weight:700;padding:.85rem 1.75rem;border-radius:.75rem;text-decoration:none;display:inline-block;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 14px rgba(184,134,47,.3)}
   .btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(184,134,47,.4)}
   .btn-ghost{background:transparent;color:#fff;font-weight:600;padding:.85rem 1.5rem;border:1px solid rgba(255,255,255,.25);border-radius:.75rem;text-decoration:none;display:inline-block;transition:background .15s}
   .btn-ghost:hover{background:rgba(255,255,255,.1)}
+
+  a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--accent-warm);outline-offset:2px;border-radius:.4rem}
+
   .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
   .reveal.visible{opacity:1;transform:none}
-  @media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none;transition:none}}
+  @media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none;transition:none}*{scroll-behavior:auto!important}}
+
+  html{scroll-behavior:smooth}
+
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:3rem;align-items:center}
+  @media(min-width:920px){.hero-grid{grid-template-columns:1.05fr .95fr;gap:3.5rem}}
+
+  .two-col{display:grid;grid-template-columns:1fr;gap:2.5rem;align-items:center}
+  @media(min-width:820px){.two-col{grid-template-columns:1fr 1fr}}
+
+  .eyebrow{display:inline-flex;align-items:center;gap:.45rem;font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+
+  .step-num{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:.95rem;color:var(--accent);
+    width:2.4rem;height:2.4rem;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    border:1.5px solid var(--accent);border-radius:9999px}
+
+  .faq details{border:1px solid var(--border);border-radius:.9rem;background:var(--surface);margin-bottom:.75rem;overflow:hidden}
+  .faq summary{list-style:none;cursor:pointer;padding:1.15rem 1.35rem;font-weight:600;color:var(--ink);
+    display:flex;justify-content:space-between;align-items:center;gap:1rem}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary .chev{transition:transform .2s;color:var(--accent);font-size:1.25rem;flex:0 0 auto;line-height:1}
+  .faq details[open] summary .chev{transform:rotate(45deg)}
+  .faq .answer{padding:0 1.35rem 1.25rem;color:var(--sub);line-height:1.7;font-size:.95rem}
+
+  /* Curseur du calculateur du héros */
+  .calc-range{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:9999px;
+    background:linear-gradient(90deg,var(--accent-warm) 0%,var(--accent-warm) var(--fill,40%),rgba(255,255,255,.18) var(--fill,40%),rgba(255,255,255,.18) 100%);
+    outline:none;cursor:pointer;margin:.2rem 0}
+  .calc-range::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+    background:#fff;border:3px solid var(--accent-warm);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer;transition:transform .12s}
+  .calc-range::-webkit-slider-thumb:hover{transform:scale(1.12)}
+  .calc-range::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--accent-warm);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
+  .calc-val{transition:color .2s}
 </style>
 </head>
 <body>
 
-<!-- ══ EN-TÊTE ══ -->
-<header style="position:sticky;top:0;z-index:50;background:rgba(15,61,54,.97);backdrop-filter:blur(8px)">
-  <div style="max-width:1100px;margin:0 auto;padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between">
-    <div class="display" style="color:#fff;font-weight:800;font-size:1.15rem">PaieGabon</div>
+<!-- ══════════════ EN-TÊTE ══════════════ -->
+<header style="position:sticky;top:0;z-index:50;background:rgba(15,61,54,.97);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06)">
+  <div class="wrap" style="padding-top:.85rem;padding-bottom:.85rem;display:flex;align-items:center;justify-content:space-between">
+    <a href="/" style="display:flex;align-items:center;gap:.6rem;text-decoration:none">
+      <svg width="30" height="30" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo PaieGabon">
+        <defs><linearGradient id="lg" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs>
+        <rect width="64" height="64" rx="15" fill="url(#lg)"/>
+        <rect x="3.5" y="3.5" width="57" height="57" rx="12.5" fill="none" stroke="#E9B043" stroke-width="1.6" opacity=".75"/>
+        <rect x="22" y="15" width="7.5" height="35" rx="3.7" fill="#fff"/>
+        <path d="M29 17h9a10 10 0 0 1 0 20h-9" fill="none" stroke="#E9B043" stroke-width="7.2" stroke-linecap="round"/>
+      </svg>
+      <span class="display" style="color:#fff;font-weight:800;font-size:1.15rem">PaieGabon</span>
+    </a>
     <nav style="display:flex;align-items:center;gap:1.25rem">
-      <a href="#fonctions" style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Fonctions</a>
-      <a href="#tarifs" style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Tarifs</a>
-      <a href="/login" style="color:#fff;text-decoration:none;font-size:.9rem;font-weight:600">Se connecter</a>
+      <a href="#fonctions"   style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Fonctions</a>
+      <a href="#conventions" style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Conventions</a>
+      <a href="#tarifs"      style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Tarifs</a>
+      <a href="#faq"         style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Questions</a>
+      <a href="/login"       style="color:#fff;text-decoration:none;font-size:.9rem;font-weight:600">Se connecter</a>
       <a href="/inscription" class="btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem">Essai gratuit</a>
     </nav>
   </div>
 </header>
 
-<!-- ══ HÉROS ══ -->
+<!-- ══════════════ HÉROS ══════════════ -->
 <section style="background:linear-gradient(160deg,#0f3d36 0%,#11463e 55%,#0c322c 100%);color:#fff;overflow:hidden">
-  <div style="max-width:1100px;margin:0 auto;padding:4.5rem 1.5rem 5rem;display:grid;grid-template-columns:1fr;gap:3rem">
-    <div style="max-width:620px">
-      <div style="display:inline-block;background:rgba(184,134,47,.18);color:var(--accent-light);font-size:.78rem;font-weight:700;padding:.35rem .85rem;border-radius:9999px;margin-bottom:1.5rem">
-        Conçu pour la réglementation gabonaise
+  <div class="wrap hero-grid" style="padding-top:4.5rem;padding-bottom:5rem">
+    <div>
+      <div class="eyebrow" style="background:rgba(184,134,47,.18);color:var(--accent-light);padding:.4rem .9rem;border-radius:9999px;margin-bottom:1.5rem">
+        <span aria-hidden="true">🇬🇦</span> Conçu pour la réglementation gabonaise
       </div>
-      <h1 class="display" style="font-size:2.75rem;line-height:1.1;font-weight:800;margin:0 0 1.25rem">
+      <h1 class="display" style="font-size:2.9rem;line-height:1.08;font-weight:800;margin:0 0 1.25rem">
         La paie de votre entreprise,<br/><span class="accent">juste et sans calcul.</span>
       </h1>
-      <p style="font-size:1.15rem;color:rgba(255,255,255,.8);line-height:1.6;margin:0 0 2rem;max-width:540px">
-        Saisissez le salaire, PaieGabon calcule tout le reste — cotisations CNSS, CNAMGS, impôt IRPP, bulletins —
-        selon la loi gabonaise. Aucun tableur, aucune erreur.
+      <p style="font-size:1.15rem;color:rgba(255,255,255,.82);line-height:1.6;margin:0 0 2rem;max-width:540px">
+        Saisissez le salaire — PaieGabon calcule le reste : cotisations CNSS et CNAMGS, impôt IRPP,
+        bulletins et déclarations, selon la loi gabonaise. Aucun tableur, aucune erreur de redressement.
       </p>
       <div style="display:flex;gap:.85rem;flex-wrap:wrap;align-items:center">
         <a href="/inscription" class="btn-primary" style="font-size:1.05rem">Démarrer l'essai gratuit →</a>
-        <a href="#demo" class="btn-ghost">Voir comment ça marche</a>
+        <a href="#comment" class="btn-ghost">Voir comment ça marche</a>
       </div>
       <p style="font-size:.82rem;color:rgba(255,255,255,.55);margin-top:1rem">
-        Sans engagement · Accessible depuis votre téléphone
+        Sans carte bancaire · Sans engagement · Accessible depuis votre téléphone
       </p>
     </div>
 
-    <!-- Démonstration : la promesse en direct -->
-    <div id="demo" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.25rem;padding:1.75rem;max-width:520px">
-      <div style="font-size:.78rem;color:rgba(255,255,255,.55);font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem">Exemple de calcul</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:.6rem 0;border-bottom:1px solid rgba(255,255,255,.1)">
-        <span style="color:rgba(255,255,255,.7)">Salaire brut saisi</span>
-        <span class="num" style="font-weight:700;font-size:1.05rem">500 000 FCFA</span>
+    <!-- Signature : la promesse, calculée réellement en direct -->
+    <div id="demo" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.25rem;padding:1.75rem;box-shadow:0 24px 60px rgba(0,0,0,.25)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.1rem">
+        <span style="font-size:.78rem;color:rgba(255,255,255,.55);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Calculez un net en direct</span>
+        <span style="font-size:.7rem;color:var(--accent-light);background:rgba(184,134,47,.16);padding:.2rem .6rem;border-radius:9999px;font-weight:700">temps réel</span>
       </div>
-      <div style="padding:.55rem 0;font-size:.9rem;color:rgba(255,255,255,.55)">
-        <div style="display:flex;justify-content:space-between;padding:.2rem 0"><span>– CNSS (5 %)</span><span class="num">25 000</span></div>
-        <div style="display:flex;justify-content:space-between;padding:.2rem 0"><span>– CNAMGS (2 %)</span><span class="num">10 000</span></div>
-        <div style="display:flex;justify-content:space-between;padding:.2rem 0"><span>– TCS + IRPP</span><span class="num">calculés auto.</span></div>
+
+      <label for="calc-brut" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.15rem">
+        <span style="color:rgba(255,255,255,.7);font-size:.92rem">Salaire brut mensuel</span>
+        <span><span id="calc-brut-val" class="num display" style="font-weight:800;font-size:1.25rem">500 000</span><span style="color:rgba(255,255,255,.55);font-size:.85rem"> FCFA</span></span>
+      </label>
+      <input id="calc-brut" class="calc-range" type="range" min="80000" max="3000000" step="10000" value="500000"
+             aria-label="Salaire brut mensuel en francs CFA" style="--fill:14%"/>
+
+      <div style="padding:.6rem 0 .15rem;font-size:.92rem;color:rgba(255,255,255,.62)">
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNSS (part salariale, 5 %)</span><span class="num calc-val" id="calc-cnss">25 000</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNAMGS (2 %)</span><span class="num calc-val" id="calc-cnamgs">10 000</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– Impôt IRPP</span><span class="num calc-val" id="calc-irpp">33 900</span></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 0 0;border-top:1px solid rgba(255,255,255,.18);margin-top:.4rem">
         <span class="display" style="font-weight:700">Net à payer</span>
-        <span class="num accent" style="font-weight:800;font-size:1.4rem">≈ 417 000 FCFA</span>
+        <span class="num accent calc-val" id="calc-net" style="font-weight:800;font-size:1.55rem;color:var(--accent-warm)">431 100 FCFA</span>
       </div>
       <p style="font-size:.75rem;color:rgba(255,255,255,.45);margin:.9rem 0 0;line-height:1.5">
-        Exemple simplifié. Le calcul réel intègre votre situation familiale, vos primes et indemnités.
+        Estimation pour 1 part (célibataire, sans prime). Le calcul réel intègre votre situation familiale,
+        les primes et indemnités, et votre convention collective.
       </p>
     </div>
   </div>
 </section>
 
-<!-- ══ PROBLÈME / PROMESSE ══ -->
-<section style="max-width:900px;margin:0 auto;padding:4rem 1.5rem;text-align:center">
-  <h2 class="display reveal" style="font-size:1.9rem;font-weight:800;margin:0 0 1rem">
+<!-- ══════════════ BANDE DE CONFIANCE ══════════════ -->
+<section style="background:var(--surface);border-bottom:1px solid var(--border)">
+  <div class="wrap" style="padding-top:1.5rem;padding-bottom:1.5rem;display:flex;flex-wrap:wrap;gap:1rem 2.5rem;justify-content:center;align-items:center">
+    {% set gages = [
+      ("⚖️","Conforme au Code du travail 2021"),
+      ("🏛️","CNSS · CNAMGS · IRPP à jour"),
+      ("📚","4 conventions collectives"),
+      ("🔒","Données chiffrées & sauvegardées")
+    ] %}
+    {% for ic, txt in gages %}
+    <div style="display:flex;align-items:center;gap:.5rem;color:var(--sub);font-size:.88rem;font-weight:600">
+      <span aria-hidden="true" style="font-size:1.05rem">{{ ic }}</span> {{ txt }}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ══════════════ PROBLÈME / PROMESSE ══════════════ -->
+<section class="wrap" style="padding-top:4rem;padding-bottom:1rem;text-align:center;max-width:860px">
+  <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
     Fini les calculs de paie sur Excel
   </h2>
   <p class="reveal" style="font-size:1.1rem;color:var(--sub);line-height:1.7;max-width:680px;margin:0 auto">
-    Les taux changent, les conventions sont complexes, une erreur coûte cher en redressement CNSS.
-    PaieGabon applique automatiquement la réglementation gabonaise à jour, pour chaque bulletin.
+    Les taux changent, les conventions sont complexes, et une erreur coûte cher en redressement CNSS.
+    PaieGabon applique automatiquement la réglementation gabonaise à jour, pour chaque bulletin, chaque mois.
   </p>
 </section>
 
-<!-- ══ FONCTIONS ══ -->
-<section id="fonctions" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border)">
-  <div style="max-width:1100px;margin:0 auto;padding:4.5rem 1.5rem">
-    <h2 class="display reveal" style="font-size:1.9rem;font-weight:800;text-align:center;margin:0 0 .75rem">
+<!-- ══════════════ COMMENT ÇA MARCHE ══════════════ -->
+<section id="comment" class="wrap" style="padding-top:3.5rem;padding-bottom:1rem">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.75rem">
+    {% set etapes = [
+      ("1","Créez votre entreprise","Renseignez votre société et choisissez votre convention collective. Tout est préconfiguré selon la loi gabonaise."),
+      ("2","Ajoutez vos salariés","Mensuels ou journaliers, avec primes et indemnités. Vos informations sont sauvegardées en sécurité."),
+      ("3","Générez les bulletins","Un clic suffit : bulletins, cotisations et déclarations sont calculés et prêts à imprimer.")
+    ] %}
+    {% for n, titre, desc in etapes %}
+    <div class="reveal" style="display:flex;gap:1rem;align-items:flex-start">
+      <div class="step-num num">{{ n }}</div>
+      <div>
+        <h3 class="display" style="font-weight:700;font-size:1.08rem;margin:.25rem 0 .4rem">{{ titre }}</h3>
+        <p style="color:var(--sub);font-size:.93rem;line-height:1.6;margin:0">{{ desc }}</p>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ══════════════ FONCTIONS ══════════════ -->
+<section id="fonctions" style="background:var(--surface);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-top:3.5rem">
+  <div class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem">
+    <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;text-align:center;margin:0 0 .75rem">
       Tout ce qu'il faut pour gérer votre paie
     </h2>
     <p class="reveal" style="text-align:center;color:var(--sub);font-size:1.05rem;margin:0 0 3rem">
@@ -113,16 +255,16 @@
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem">
       {% set fonctions = [
-        ('🧮','Calcul automatique','Cotisations CNSS, CNAMGS, FNH, CFP, TCS et impôt IRPP calculés selon les taux gabonais. Aucun calcul manuel.'),
-        ('📄','Bulletins en un clic','Générez et imprimez les bulletins du mois, individuellement ou tous ensemble en PDF.'),
-        ('🏗️','Spécial BTP','Convention Collective BTP intégrée : heures supplémentaires, prime d\'ancienneté, indemnités, chantiers et pointage.'),
-        ('👷','Salariés & journaliers','Gérez à la fois vos employés mensuels et vos travailleurs payés à la journée.'),
-        ('📋','Déclaration CNSS','Votre déclaration sociale préparée automatiquement, prête à transmettre.'),
-        ('🔔','Rappels intelligents','Contrats à échéance, congés à valider, périodes à clôturer : ne ratez plus rien.')
+        ("🧮","Calcul automatique","Cotisations CNSS, CNAMGS, FNH, CFP, TCS et impôt IRPP calculés selon les taux gabonais. Aucun calcul manuel."),
+        ("📄","Bulletins en un clic","Générez et imprimez les bulletins du mois, un par un ou tous ensemble, en PDF."),
+        ("👷","Salariés & journaliers","Gérez à la fois vos employés mensuels et vos travailleurs payés à la journée, avec pointage par chantier."),
+        ("📋","Déclarations sociales","Vos déclarations CNSS et DAS préparées automatiquement, prêtes à transmettre."),
+        ("🧾","Composants sur mesure","Ajoutez vos primes et retenues spécifiques : elles s'intègrent au bulletin et aux calculs."),
+        ("🔔","Rappels intelligents","Contrats à échéance, congés à valider, périodes à clôturer : ne ratez plus rien.")
       ] %}
       {% for icone, titre, desc in fonctions %}
       <div class="reveal" style="background:var(--page);border:1px solid var(--border);border-radius:1rem;padding:1.5rem">
-        <div style="font-size:1.75rem;margin-bottom:.85rem">{{ icone }}</div>
+        <div style="font-size:1.75rem;margin-bottom:.85rem" aria-hidden="true">{{ icone }}</div>
         <h3 class="display" style="font-weight:700;font-size:1.1rem;margin:0 0 .5rem">{{ titre }}</h3>
         <p style="color:var(--sub);font-size:.92rem;line-height:1.6;margin:0">{{ desc }}</p>
       </div>
@@ -131,9 +273,68 @@
   </div>
 </section>
 
-<!-- ══ TARIFS ══ -->
-<section id="tarifs" style="max-width:1100px;margin:0 auto;padding:4.5rem 1.5rem">
-  <h2 class="display reveal" style="font-size:1.9rem;font-weight:800;text-align:center;margin:0 0 .75rem">
+<!-- ══════════════ CONVENTIONS COLLECTIVES ══════════════ -->
+<section id="conventions" class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem">
+  <div class="two-col">
+    <div>
+      <div class="eyebrow accent" style="margin-bottom:1rem">Votre secteur, vos règles</div>
+      <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
+        Les conventions collectives, déjà intégrées
+      </h2>
+      <p class="reveal" style="color:var(--sub);font-size:1.05rem;line-height:1.7;margin:0 0 1.5rem">
+        Heures supplémentaires, prime d'ancienneté, préavis, indemnités de services rendus :
+        chaque convention a ses propres barèmes. PaieGabon les applique pour vous, sans paramétrage complexe.
+      </p>
+      <a href="/inscription" class="btn-primary" style="font-size:1rem;background:var(--brand);color:#fff;box-shadow:none">Choisir ma convention →</a>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      {% set conv = [
+        ("🏗️","BTP","Bâtiment & travaux publics"),
+        ("🛒","Commerce","Entreprises commerciales"),
+        ("🛢️","Pétrole","Professionnels du pétrole"),
+        ("🏭","Industrie","Entreprises industrielles")
+      ] %}
+      {% for ic, nom, desc in conv %}
+      <div class="reveal" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
+        <div style="font-size:1.5rem;margin-bottom:.5rem" aria-hidden="true">{{ ic }}</div>
+        <div class="display" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
+        <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SÉCURITÉ ══════════════ -->
+<section style="background:var(--brand);color:#fff">
+  <div class="wrap" style="padding-top:4rem;padding-bottom:4rem">
+    <h2 class="display reveal" style="font-size:1.85rem;font-weight:800;text-align:center;margin:0 0 .75rem">
+      Vos données de paie en sécurité
+    </h2>
+    <p class="reveal" style="text-align:center;color:rgba(255,255,255,.75);font-size:1.02rem;margin:0 auto 2.75rem;max-width:620px">
+      La paie, c'est confidentiel. PaieGabon protège vos informations à chaque étape.
+    </p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem">
+      {% set secu = [
+        ("🔐","Double authentification","Protégez l'accès aux comptes par un code à usage unique envoyé par email."),
+        ("🔒","Données chiffrées","Vos identifiants et secrets ne sont jamais stockés en clair."),
+        ("📑","Journal d'audit","Chaque modification de salaire, bulletin ou paramètre est tracée et consultable."),
+        ("💾","Sauvegardes","Vos données sont sauvegardées et restaurables à tout moment.")
+      ] %}
+      {% for ic, titre, desc in secu %}
+      <div class="reveal" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1rem;padding:1.4rem">
+        <div style="font-size:1.5rem;margin-bottom:.6rem" aria-hidden="true">{{ ic }}</div>
+        <h3 class="display" style="font-weight:700;font-size:1rem;margin:0 0 .4rem">{{ titre }}</h3>
+        <p style="color:rgba(255,255,255,.7);font-size:.88rem;line-height:1.6;margin:0">{{ desc }}</p>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ TARIFS ══════════════ -->
+<section id="tarifs" class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem">
+  <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;text-align:center;margin:0 0 .75rem">
     Une formule pour chaque entreprise
   </h2>
   <p class="reveal" style="text-align:center;color:var(--sub);font-size:1.05rem;margin:0 0 3rem">
@@ -153,16 +354,16 @@
       </div>
       <ul style="list-style:none;padding:0;margin:0 0 1.75rem">
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
-          <span class="accent">✓</span> {{ "Jusqu'à " ~ plan.max_salaries ~ " salariés" if plan.max_salaries else "Salariés illimités" }}
+          <span class="accent" aria-hidden="true">✓</span> {{ "Jusqu'à " ~ plan.max_salaries ~ " salariés" if plan.max_salaries else "Salariés illimités" }}
         </li>
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
-          <span class="accent">✓</span> {{ plan.max_utilisateurs }} utilisateur{{ "s" if plan.max_utilisateurs > 1 else "" }}
+          <span class="accent" aria-hidden="true">✓</span> {{ plan.max_utilisateurs }} utilisateur{{ "s" if plan.max_utilisateurs > 1 else "" }}
         </li>
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
-          <span class="accent">✓</span> Toutes les fonctions de paie
+          <span class="accent" aria-hidden="true">✓</span> Toutes les fonctions de paie
         </li>
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
-          <span class="accent">✓</span> Déclarations & documents RH
+          <span class="accent" aria-hidden="true">✓</span> Déclarations & documents RH
         </li>
       </ul>
       <a href="/inscription" style="display:block;text-align:center;{{ 'background:var(--accent);color:#1c1206' if populaire else 'background:var(--brand);color:#fff' }};font-weight:700;padding:.75rem;border-radius:.75rem;text-decoration:none">
@@ -176,9 +377,32 @@
   </p>
 </section>
 
-<!-- ══ APPEL FINAL ══ -->
+<!-- ══════════════ FAQ ══════════════ -->
+<section id="faq" style="background:var(--surface);border-top:1px solid var(--border)">
+  <div class="wrap faq" style="padding-top:4.5rem;padding-bottom:4.5rem;max-width:780px">
+    <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;text-align:center;margin:0 0 2.5rem">
+      Questions fréquentes
+    </h2>
+    {% set faqs = [
+      ("Les taux et la réglementation sont-ils à jour ?","Oui. PaieGabon applique les taux de cotisation (CNSS, CNAMGS, FNH, CFP), le barème IRPP et les règles du Code du travail gabonais en vigueur. Les mises à jour réglementaires sont intégrées sans intervention de votre part."),
+      ("Faut-il installer un logiciel ?","Non. PaieGabon fonctionne dans votre navigateur, sur ordinateur comme sur téléphone. Vous y accédez partout, sans installation ni mise à jour à gérer."),
+      ("Mes données sont-elles protégées ?","Oui. L'accès peut être protégé par une double authentification, vos secrets ne sont jamais stockés en clair, chaque action sensible est tracée dans un journal d'audit, et vos données sont sauvegardées."),
+      ("Puis-je gérer mes journaliers et mes chantiers ?","Oui. En plus des salariés mensuels, vous gérez les travailleurs payés à la journée, avec pointage par site et application des règles de votre convention (heures supplémentaires, indemnités)."),
+      ("Comment commencer ?","Créez votre compte, ajoutez votre entreprise et vos salariés, puis générez votre premier bulletin. L'essai est gratuit et ne demande pas de carte bancaire."),
+      ("Puis-je changer de formule ou arrêter ?","Oui. Vous changez de formule à tout moment selon le nombre de salariés et d'utilisateurs, sans engagement de durée.")
+    ] %}
+    {% for q, a in faqs %}
+    <details class="reveal"{% if loop.first %} open{% endif %}>
+      <summary>{{ q }} <span class="chev" aria-hidden="true">+</span></summary>
+      <div class="answer">{{ a }}</div>
+    </details>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ══════════════ APPEL FINAL ══════════════ -->
 <section style="background:linear-gradient(160deg,#0f3d36,#0c322c);color:#fff">
-  <div style="max-width:760px;margin:0 auto;padding:4.5rem 1.5rem;text-align:center">
+  <div class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem;text-align:center;max-width:760px">
     <h2 class="display reveal" style="font-size:2rem;font-weight:800;margin:0 0 1rem">
       Prêt à simplifier votre paie ?
     </h2>
@@ -189,12 +413,21 @@
   </div>
 </section>
 
-<!-- ══ PIED ══ -->
+<!-- ══════════════ PIED ══════════════ -->
 <footer style="background:#0c322c;color:rgba(255,255,255,.6)">
-  <div style="max-width:1100px;margin:0 auto;padding:2.5rem 1.5rem;display:flex;flex-wrap:wrap;gap:1.5rem;justify-content:space-between;align-items:center">
-    <div>
-      <div class="display" style="color:#fff;font-weight:800;font-size:1.05rem">PaieGabon</div>
-      <div style="font-size:.82rem;margin-top:.25rem">Une solution Ameriack I.T. Solutions</div>
+  <div class="wrap" style="padding-top:2.5rem;padding-bottom:2.5rem;display:flex;flex-wrap:wrap;gap:1.5rem;justify-content:space-between;align-items:center">
+    <div style="display:flex;align-items:center;gap:.6rem">
+      <svg width="26" height="26" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <defs><linearGradient id="lgf" x1="0" y1="0" x2="64" y2="64" gradientUnits="userSpaceOnUse"><stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs>
+        <rect width="64" height="64" rx="15" fill="url(#lgf)"/>
+        <rect x="3.5" y="3.5" width="57" height="57" rx="12.5" fill="none" stroke="#E9B043" stroke-width="1.6" opacity=".75"/>
+        <rect x="22" y="15" width="7.5" height="35" rx="3.7" fill="#fff"/>
+        <path d="M29 17h9a10 10 0 0 1 0 20h-9" fill="none" stroke="#E9B043" stroke-width="7.2" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="display" style="color:#fff;font-weight:800;font-size:1.05rem">PaieGabon</div>
+        <div style="font-size:.82rem;margin-top:.15rem">Une solution Ameriack I.T. Solutions</div>
+      </div>
     </div>
     <div style="display:flex;gap:1.5rem;font-size:.88rem;flex-wrap:wrap">
       <a href="/login" style="color:rgba(255,255,255,.7);text-decoration:none">Se connecter</a>
@@ -211,11 +444,60 @@
 </footer>
 
 <script>
-// Révélation au défilement
-const io = new IntersectionObserver((entries) => {
-  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
-}, { threshold: 0.12 });
-document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+// Révélation au défilement (désactivée si l'utilisateur préfère moins d'animations)
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var els = document.querySelectorAll('.reveal');
+  if (reduce || !('IntersectionObserver' in window)) {
+    els.forEach(function(el){ el.classList.add('visible'); });
+    return;
+  }
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } });
+  }, { threshold: 0.12 });
+  els.forEach(function(el){ io.observe(el); });
+})();
+
+// Calculateur de net en direct — réplique fidèle de la formule serveur
+// (CNSS 5 %, CNAMGS 2 %, abattement 20 %, plancher au millier, barème IRPP, 1 part).
+(function(){
+  var slider = document.getElementById('calc-brut');
+  if (!slider) return;
+  var BAREME = [
+    [0,125000,0.00],[125001,160000,0.05],[160001,225000,0.10],
+    [225001,300000,0.15],[300001,430000,0.20],[430001,625000,0.25],
+    [625001,916667,0.30],[916668,Infinity,0.35]
+  ];
+  function fmt(n){ return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
+  function irpp(base){
+    if (base <= 0) return 0;
+    var b = Math.floor((base*0.80)/1000)*1000;   // abattement 20 % puis plancher au millier
+    var rpp = b, impot = 0;                        // 1 part
+    for (var i=0;i<BAREME.length;i++){
+      var inf=BAREME[i][0], sup=BAREME[i][1], taux=BAREME[i][2];
+      if (rpp <= inf) break;
+      impot += (Math.min(rpp,sup)-inf)*taux;
+    }
+    return impot;
+  }
+  function set(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+  function maj(){
+    var brut = parseInt(slider.value,10)||0;
+    var cnss   = Math.min(brut,1500000)*0.05;
+    var cnamgs = Math.min(brut,2500000)*0.02;
+    var imp    = irpp(brut - cnss - cnamgs);
+    var net    = brut - cnss - cnamgs - imp;
+    set('calc-brut-val', fmt(brut));
+    set('calc-cnss',   fmt(cnss));
+    set('calc-cnamgs', fmt(cnamgs));
+    set('calc-irpp',   fmt(imp));
+    set('calc-net',    fmt(net)+' FCFA');
+    var pct = ((brut - slider.min) / (slider.max - slider.min)) * 100;
+    slider.style.setProperty('--fill', pct.toFixed(1)+'%');
+  }
+  slider.addEventListener('input', maj);
+  maj();
+})();
 </script>
 
 </body>
