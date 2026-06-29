@@ -3290,9 +3290,9 @@ def pointage_individuel():
         _conv_t = (t.convention or "").upper()
 
         if type_jour == "DIMANCHE":
-            if _conv_t == "PETROLE":
-                # Pétrole : dimanche de jour → +30% (case 30b) ; la nuit est
-                # recalculée par la ventilation mensuelle (+100%).
+            if _conv_t in ("PETROLE", "INDUSTRIE"):
+                # Pétrole / Industrie : dimanche de jour → case 30b ; la nuit est
+                # recalculée par la ventilation mensuelle.
                 h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
                 h_sup_70_final = 0
             else:
@@ -3301,7 +3301,7 @@ def pointage_individuel():
             h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
             heures_normales_final = 0
         elif type_jour == "FERIE":
-            if _conv_t == "PETROLE":
+            if _conv_t in ("PETROLE", "INDUSTRIE"):
                 h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
                 h_sup_70_final = 0
             else:
@@ -4999,7 +4999,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     # que la colonne « DONT NUIT » de chaque ligne soit cohérente avec le total
     # +40 % affiché en bas (somme des lignes = total).
     nuit_par_date = {}
-    if conv in ("BTP", "PETROLE"):
+    if conv in ("BTP", "PETROLE", "INDUSTRIE"):
         from calculs_paie import pointage_vers_jours
         for j in pointage_vers_jours(pts):
             d = j.get("date")
@@ -5019,8 +5019,8 @@ def _pointages_mois_contexte(t, pointages, convention):
         present = bool(p.present) and not absent
         total_jour = hn + hsup + h10 + h30 + h30b + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
-        # Nuit du jour : depuis l'horaire (BTP/Pétrole), sinon valeur stockée (journaliers)
-        if conv in ("BTP", "PETROLE"):
+        # Nuit du jour : depuis l'horaire (BTP/Pétrole/Industrie), sinon valeur stockée (journaliers)
+        if conv in ("BTP", "PETROLE", "INDUSTRIE"):
             nuit_jour = nuit_par_date.get(p.date_pointage, 0.0)
         else:
             nuit_jour = h40
@@ -5038,7 +5038,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    if conv in ("BTP", "PETROLE") and pts_travailles:
+    if conv in ("BTP", "PETROLE", "INDUSTRIE") and pts_travailles:
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
         v = ventiler_heures_mois(conv, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         totaux = {
@@ -5727,8 +5727,8 @@ def api_pointage_mois(id):
             "message": "Aucun pointage pour cette période"})
     nb_jours = len(pts_travailles)
 
-    if (t.convention or "").upper() in ("BTP", "PETROLE"):
-        # Ventilation réglementaire (BTP/Pétrole) : semaine par semaine, ligne par ligne
+    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE"):
+        # Ventilation réglementaire (BTP/Pétrole/Industrie) : semaine par semaine, ligne par ligne
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
         v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         heures_normales = v["heures_normales"]

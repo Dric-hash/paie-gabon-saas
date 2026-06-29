@@ -64,6 +64,13 @@ COEFFS_HEURES_SUP_DEFAUT = {
 }
 COEFFS_HEURES_SUP_CONVENTION = {
     "PETROLE": {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00},
+    # Entreprises Industrielles — Art. A.38 :
+    #   40→48 h ouvrable .......... +16 %  → case 10
+    #   au-delà de 48 h ouvrable .. +35 %  → case 30
+    #   heures fériés de JOUR ..... +50 %  → case 30b
+    #   heures de nuit (ouvrable) . +80 %  → case 40
+    #   heures de nuit fériés ..... +135 % → case 70
+    "INDUSTRIE": {"10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35},
 }
 
 
@@ -892,7 +899,10 @@ def ventiler_heures_mois(convention, jours, feries=None, seuil_normales: float =
     contient toujours les 5 cases (la case 30b reste à 0 hors Pétrole).
     """
     c = (convention or "").upper()
-    if c == "PETROLE":
+    if c in ("PETROLE", "INDUSTRIE"):
+        # Même structure de ventilation : bande 41→48 h (8 h) puis >48 h, et
+        # 5 cases distinctes (jour férié / nuit / nuit férié). Seuls les
+        # coefficients diffèrent (cf. COEFFS_HEURES_SUP_CONVENTION).
         return ventiler_heures_mois_petrole(jours, feries=feries, seuil_normales=seuil_normales)
     res = ventiler_heures_mois_btp(jours, feries=feries, seuil_normales=seuil_normales)
     res.setdefault("heures_sup_30b", 0.0)
@@ -1129,6 +1139,127 @@ def calculer_indemnite_services_rendus_btp(
     else:
         taux = 0.35
     return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def calculer_preavis_industrie(anciennete_annees: int) -> int:
+    """
+    Durée du préavis (jours) — Convention Entreprises Industrielles, Art. A.30.3.
+    Applicable aux CDI. Barème confirmé sur l'original :
+
+      1 mois à 1 an  → 15 jours
+      1 à 3 ans      → 1 mois  (30 j)
+      3 à 5 ans      → 2 mois  (60 j)
+      5 à 10 ans     → 3 mois  (90 j)
+      10 à 15 ans    → 5 mois  (150 j)
+      15 à 20 ans    → 6 mois  (180 j)
+      20 à 30 ans    → 7 mois  (210 j)
+      au-delà de 30  → 210 j + 21 jours par année de présence supplémentaire
+    (Conversion mois→jours à 30 j, comme pour le barème légal.)
+    """
+    if anciennete_annees < 1:
+        return 15
+    elif anciennete_annees < 3:
+        return 30
+    elif anciennete_annees < 5:
+        return 60
+    elif anciennete_annees < 10:
+        return 90
+    elif anciennete_annees < 15:
+        return 150
+    elif anciennete_annees < 20:
+        return 180
+    elif anciennete_annees <= 30:
+        return 210
+    else:
+        return 210 + (anciennete_annees - 30) * 21
+
+
+def calculer_indemnite_services_rendus_industrie(
+    moyenne_12_mois: float, anciennete_annees: int
+) -> float:
+    """
+    Indemnité de services rendus — Convention Entreprises Industrielles, Art. A.32.
+    Due après 2 ans de présence, pour un motif autre que la faute lourde.
+
+    Base : moyenne mensuelle du salaire global des 12 derniers mois.
+    Taux (par année de présence) :
+      0 à 5 ans   → 20 %
+      5 à 15 ans  → 25 %
+      au-delà 15  → 33 %
+    """
+    if anciennete_annees < 2 or moyenne_12_mois <= 0:
+        return 0.0
+    if anciennete_annees <= 5:
+        taux = 0.20
+    elif anciennete_annees <= 15:
+        taux = 0.25
+    else:
+        taux = 0.33
+    return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+
+# ── Indemnités & primes déterministes — Convention Entreprises Industrielles ───
+def prime_assiduite_industrie(nb_retards: int = 0, absence_injustifiee: bool = False) -> float:
+    """
+    Prime d'assiduité — Art. A.49.
+    Base : 3 000 F/mois, quelle que soit la catégorie.
+      • Absence injustifiée → suppression totale.
+      • Chaque retard      → suppression d'un quart (¼) de la prime.
+    """
+    if absence_injustifiee:
+        return 0.0
+    montant = 3000.0 * (1 - 0.25 * max(0, int(nb_retards)))
+    return round(max(0.0, montant), 0)
+
+
+def indemnite_transport_industrie(jours_presence: int = 26) -> float:
+    """
+    Indemnité de transport — Art. A.55.
+    60 F × 2 voyages × 26 j (matin) + idem (soir) = 6 240 F/mois,
+    calculée au prorata des jours de présence (référence : 26 jours).
+    """
+    base_mensuelle = 60.0 * 2 * 26 + 60.0 * 2 * 26   # matin + soir = 6 240 F
+    jp = max(0, min(int(jours_presence), 26))
+    return round(base_mensuelle * jp / 26, 0)
+
+
+def indemnite_logement_industrie(salaire_mensuel_categorie: float,
+                                 hors_categorie: bool = False) -> float:
+    """
+    Indemnité d'aide au logement — Art. A.58 (travailleur déplacé de son lieu
+    de recrutement). 25 % du salaire mensuel de la catégorie ; 12 % hors catégorie.
+    """
+    taux = 0.12 if hors_categorie else 0.25
+    return round(max(0.0, salaire_mensuel_categorie) * taux, 0)
+
+
+def indemnite_veuvage_industrie(brut_12_mois: float) -> float:
+    """
+    Indemnité (allocation) de veuvage — Art. A.56.
+    Allocation unique = 1/24 du salaire brut des 12 derniers mois.
+    Éligibilité (≥ 8 ans de présence, mariage ≥ 1 an avant le décès) à vérifier
+    en amont par l'appelant.
+    """
+    return round(max(0.0, brut_12_mois) / 24.0, 0)
+
+
+def indemnite_deplacement_industrie(salaire_horaire_min: float,
+                                    repas: int = 1, couchage: bool = False) -> float:
+    """
+    Indemnité de déplacement — Art. A.48, multiple du salaire de base horaire
+    minimal de la catégorie :
+      • 4×  → 1 repas principal hors lieu d'emploi,
+      • 6×  → 2 repas principaux,
+      • 8×  → 2 repas principaux + couchage.
+    """
+    if couchage:
+        mult = 8
+    elif repas >= 2:
+        mult = 6
+    else:
+        mult = 4
+    return round(max(0.0, salaire_horaire_min) * mult, 0)
 
 
 def permissions_familiales_btp(evenement: str) -> int:
@@ -1460,6 +1591,7 @@ CONVENTIONS_DISPONIBLES = {
     "BTP":      "Convention Collective BTP",
     "COMMERCE": "Convention Collective du Commerce",
     "PETROLE":  "Convention Collective des professionnels du pétrole",
+    "INDUSTRIE": "Convention Collective des Entreprises Industrielles",
 }
 
 
@@ -1476,7 +1608,8 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
         return calculer_prime_anciennete_petrole(salaire_base, anciennete_annees)
     if c == "COMMERCE":
         return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
-    if c == "BTP":
+    if c in ("BTP", "INDUSTRIE"):
+        # A.46 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
     return 0.0
 
@@ -1524,6 +1657,8 @@ def preavis_jours(convention, anciennete_annees: int) -> int:
         return max(calculer_preavis_commerce(anciennete_annees), legal)
     if c == "BTP":
         return max(calculer_preavis_btp(anciennete_annees), legal)
+    if c == "INDUSTRIE":
+        return max(calculer_preavis_industrie(anciennete_annees), legal)
     # PÉTROLE (Art. 30.3 : renvoi au Code du travail) et AUCUNE : barème légal.
     return legal
 
@@ -1535,6 +1670,8 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
         return calculer_indemnite_services_rendus_petrole(moyenne_12_mois, anciennete_annees)
     if c == "COMMERCE":
         return calculer_indemnite_services_rendus_commerce(moyenne_12_mois, anciennete_annees)
+    if c == "INDUSTRIE":
+        return calculer_indemnite_services_rendus_industrie(moyenne_12_mois, anciennete_annees)
     if c == "BTP":
         return calculer_indemnite_services_rendus_btp(moyenne_12_mois, anciennete_annees)
     return 0.0
@@ -1597,7 +1734,8 @@ def permissions_familiales(convention, evenement: str) -> int:
     c = _conv(convention)
     if c == "PETROLE":
         return permissions_familiales_petrole(evenement)
-    if c == "BTP":
+    if c in ("BTP", "INDUSTRIE"):
+        # A.41 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
         return permissions_familiales_btp(evenement)
     # COMMERCE et défaut : même barème
     return permissions_familiales_commerce(evenement)
@@ -1610,7 +1748,7 @@ def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour:
     seuil_normales : seuil hebdomadaire de déclenchement des heures sup (défaut 40h).
     """
     c = _conv(convention)
-    if c == "PETROLE":
+    if c in ("PETROLE", "INDUSTRIE"):
         return distribuer_heures_semaine_petrole(heures_par_jour, types_par_jour,
                                                  seuil_normales=seuil_normales)
     if c == "COMMERCE":
