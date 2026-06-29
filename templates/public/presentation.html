@@ -114,9 +114,50 @@
   .calc-range::-webkit-slider-thumb:hover{transform:scale(1.12)}
   .calc-range::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--accent-warm);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
   .calc-val{transition:color .2s}
+
+  /* Cartes : micro-interactions au survol */
+  .card{transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease}
+  .card:hover{transform:translateY(-4px);box-shadow:0 16px 36px rgba(15,61,54,.13);border-color:var(--accent-light)}
+  .card-dark{transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease}
+  .card-dark:hover{transform:translateY(-4px);box-shadow:0 16px 36px rgba(0,0,0,.32);border-color:rgba(233,176,67,.55)}
+  @media (prefers-reduced-motion: reduce){.card:hover,.card-dark:hover{transform:none}}
+
+  /* Chip d'icône (SVG) */
+  .ico-chip{display:inline-flex;align-items:center;justify-content:center;width:2.85rem;height:2.85rem;
+    border-radius:.8rem;background:rgba(15,61,54,.07);color:var(--brand);margin-bottom:.9rem;
+    transition:background .2s ease, color .2s ease}
+  .card:hover .ico-chip{background:rgba(184,134,47,.14);color:var(--accent)}
+  .ico-chip-dark{display:inline-flex;align-items:center;justify-content:center;width:2.85rem;height:2.85rem;
+    border-radius:.8rem;background:rgba(255,255,255,.07);color:var(--accent-light);margin-bottom:.9rem}
+  .ico-chip svg,.ico-chip-dark svg{display:block}
 </style>
 </head>
 <body>
+
+{# ─── Jeu d'icônes (tracés style Lucide) + macro de rendu ─── #}
+{% set ICON_PATHS = {
+  "scale": '<path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>',
+  "landmark": '<line x1="3" x2="21" y1="22" y2="22"/><line x1="6" x2="6" y1="18" y2="11"/><line x1="10" x2="10" y1="18" y2="11"/><line x1="14" x2="14" y1="18" y2="11"/><line x1="18" x2="18" y1="18" y2="11"/><polygon points="12 2 20 7 4 7"/>',
+  "book-open": '<path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>',
+  "shield-check": '<path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/>',
+  "calculator": '<rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/>',
+  "file-text": '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/>',
+  "users": '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  "clipboard-check": '<rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/>',
+  "sliders": '<line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/>',
+  "bell": '<path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/>',
+  "building": '<path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/><path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path d="M10 6h4"/><path d="M10 10h4"/><path d="M10 14h4"/><path d="M10 18h4"/>',
+  "shopping-bag": '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
+  "fuel": '<line x1="3" x2="15" y1="22" y2="22"/><line x1="4" x2="14" y1="9" y2="9"/><path d="M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18"/><path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 2 2 2 2 0 0 0 2-2V9.83a2 2 0 0 0-.59-1.42L18 5"/>',
+  "factory": '<path d="M2 20a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8l-7 5V8l-7 5V4a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M17 18h1"/><path d="M12 18h1"/><path d="M7 18h1"/>',
+  "key": '<path d="M2.6 17.4A2 2 0 0 0 2 18.83V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.17a2 2 0 0 0 1.42-.59l.81-.81a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  "lock": '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  "scroll": '<path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>',
+  "database": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
+} %}
+{% macro icon(name, size=24, sw=1.85) -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ sw }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICON_PATHS.get(name, '')|safe }}</svg>
+{%- endmacro %}
 
 <!-- ══════════════ EN-TÊTE ══════════════ -->
 <header style="position:sticky;top:0;z-index:50;background:rgba(15,61,54,.97);backdrop-filter:blur(8px);border-bottom:1px solid rgba(255,255,255,.06)">
@@ -200,14 +241,14 @@
 <section style="background:var(--surface);border-bottom:1px solid var(--border)">
   <div class="wrap" style="padding-top:1.5rem;padding-bottom:1.5rem;display:flex;flex-wrap:wrap;gap:1rem 2.5rem;justify-content:center;align-items:center">
     {% set gages = [
-      ("⚖️","Conforme au Code du travail 2021"),
-      ("🏛️","CNSS · CNAMGS · IRPP à jour"),
-      ("📚","4 conventions collectives"),
-      ("🔒","Données chiffrées & sauvegardées")
+      ("scale","Conforme au Code du travail 2021"),
+      ("landmark","CNSS · CNAMGS · IRPP à jour"),
+      ("book-open","4 conventions collectives"),
+      ("shield-check","Données chiffrées & sauvegardées")
     ] %}
     {% for ic, txt in gages %}
     <div style="display:flex;align-items:center;gap:.5rem;color:var(--sub);font-size:.88rem;font-weight:600">
-      <span aria-hidden="true" style="font-size:1.05rem">{{ ic }}</span> {{ txt }}
+      <span style="color:var(--accent);display:inline-flex">{{ icon(ic, 18) }}</span> {{ txt }}
     </div>
     {% endfor %}
   </div>
@@ -255,16 +296,16 @@
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem">
       {% set fonctions = [
-        ("🧮","Calcul automatique","Cotisations CNSS, CNAMGS, FNH, CFP, TCS et impôt IRPP calculés selon les taux gabonais. Aucun calcul manuel."),
-        ("📄","Bulletins en un clic","Générez et imprimez les bulletins du mois, un par un ou tous ensemble, en PDF."),
-        ("👷","Salariés & journaliers","Gérez à la fois vos employés mensuels et vos travailleurs payés à la journée, avec pointage par chantier."),
-        ("📋","Déclarations sociales","Vos déclarations CNSS et DAS préparées automatiquement, prêtes à transmettre."),
-        ("🧾","Composants sur mesure","Ajoutez vos primes et retenues spécifiques : elles s'intègrent au bulletin et aux calculs."),
-        ("🔔","Rappels intelligents","Contrats à échéance, congés à valider, périodes à clôturer : ne ratez plus rien.")
+        ("calculator","Calcul automatique","Cotisations CNSS, CNAMGS, FNH, CFP, TCS et impôt IRPP calculés selon les taux gabonais. Aucun calcul manuel."),
+        ("file-text","Bulletins en un clic","Générez et imprimez les bulletins du mois, un par un ou tous ensemble, en PDF."),
+        ("users","Salariés & journaliers","Gérez à la fois vos employés mensuels et vos travailleurs payés à la journée, avec pointage par chantier."),
+        ("clipboard-check","Déclarations sociales","Vos déclarations CNSS et DAS préparées automatiquement, prêtes à transmettre."),
+        ("sliders","Composants sur mesure","Ajoutez vos primes et retenues spécifiques : elles s'intègrent au bulletin et aux calculs."),
+        ("bell","Rappels intelligents","Contrats à échéance, congés à valider, périodes à clôturer : ne ratez plus rien.")
       ] %}
       {% for icone, titre, desc in fonctions %}
-      <div class="reveal" style="background:var(--page);border:1px solid var(--border);border-radius:1rem;padding:1.5rem">
-        <div style="font-size:1.75rem;margin-bottom:.85rem" aria-hidden="true">{{ icone }}</div>
+      <div class="reveal card" style="background:var(--page);border:1px solid var(--border);border-radius:1rem;padding:1.5rem">
+        <span class="ico-chip">{{ icon(icone, 24) }}</span>
         <h3 class="display" style="font-weight:700;font-size:1.1rem;margin:0 0 .5rem">{{ titre }}</h3>
         <p style="color:var(--sub);font-size:.92rem;line-height:1.6;margin:0">{{ desc }}</p>
       </div>
@@ -289,14 +330,14 @@
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
       {% set conv = [
-        ("🏗️","BTP","Bâtiment & travaux publics"),
-        ("🛒","Commerce","Entreprises commerciales"),
-        ("🛢️","Pétrole","Professionnels du pétrole"),
-        ("🏭","Industrie","Entreprises industrielles")
+        ("building","BTP","Bâtiment & travaux publics"),
+        ("shopping-bag","Commerce","Entreprises commerciales"),
+        ("fuel","Pétrole","Professionnels du pétrole"),
+        ("factory","Industrie","Entreprises industrielles")
       ] %}
       {% for ic, nom, desc in conv %}
-      <div class="reveal" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
-        <div style="font-size:1.5rem;margin-bottom:.5rem" aria-hidden="true">{{ ic }}</div>
+      <div class="reveal card" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
+        <span class="ico-chip" style="width:2.5rem;height:2.5rem;margin-bottom:.6rem">{{ icon(ic, 22) }}</span>
         <div class="display" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
         <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
       </div>
@@ -316,14 +357,14 @@
     </p>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.25rem">
       {% set secu = [
-        ("🔐","Double authentification","Protégez l'accès aux comptes par un code à usage unique envoyé par email."),
-        ("🔒","Données chiffrées","Vos identifiants et secrets ne sont jamais stockés en clair."),
-        ("📑","Journal d'audit","Chaque modification de salaire, bulletin ou paramètre est tracée et consultable."),
-        ("💾","Sauvegardes","Vos données sont sauvegardées et restaurables à tout moment.")
+        ("key","Double authentification","Protégez l'accès aux comptes par un code à usage unique envoyé par email."),
+        ("lock","Données chiffrées","Vos identifiants et secrets ne sont jamais stockés en clair."),
+        ("scroll","Journal d'audit","Chaque modification de salaire, bulletin ou paramètre est tracée et consultable."),
+        ("database","Sauvegardes","Vos données sont sauvegardées et restaurables à tout moment.")
       ] %}
       {% for ic, titre, desc in secu %}
-      <div class="reveal" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1rem;padding:1.4rem">
-        <div style="font-size:1.5rem;margin-bottom:.6rem" aria-hidden="true">{{ ic }}</div>
+      <div class="reveal card-dark" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1rem;padding:1.4rem">
+        <span class="ico-chip-dark">{{ icon(ic, 22) }}</span>
         <h3 class="display" style="font-weight:700;font-size:1rem;margin:0 0 .4rem">{{ titre }}</h3>
         <p style="color:rgba(255,255,255,.7);font-size:.88rem;line-height:1.6;margin:0">{{ desc }}</p>
       </div>
@@ -343,7 +384,7 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
     {% for plan in plans %}
     {% set populaire = (plan.code == 'PRO') %}
-    <div class="reveal" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
+    <div class="reveal card" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
       {% if populaire %}
       <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1c1206;font-size:.72rem;font-weight:700;padding:.25rem .85rem;border-radius:9999px">Le plus choisi</div>
       {% endif %}
