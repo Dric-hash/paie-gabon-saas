@@ -53,7 +53,7 @@
   <div style="text-align:right;">
     <b>Jours travaillés :</b> {{ totaux.nb_jours }}<br/>
     <b>Absences :</b> {{ totaux.nb_absences }}<br/>
-    {% if convention == 'BTP' %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
+    {% if convention in ['BTP','PETROLE','INDUSTRIE'] %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
   </div>
 </div>
 
@@ -82,7 +82,7 @@
     <tr class="tot-row">
       <td colspan="3">TOTAL HEURES TRAVAILLÉES</td>
       <td class="num">{{ '%g'|format(totaux.total_general) }}</td>
-      <td class="num">{{ '%g'|format(totaux.heures_sup_40) if totaux.heures_sup_40 else '—' }}</td>
+      <td class="num">{{ '%g'|format(totaux.heures_nuit) if totaux.heures_nuit else '—' }}</td>
       <td></td>
     </tr>
     {% endif %}
@@ -91,27 +91,32 @@
 
 {% if lignes %}
 <div class="recap">
-  <h3>Répartition des heures{{ ' (convention BTP)' if convention == 'BTP' else '' }}</h3>
-  {% if personne.type == 'Journalier' %}
+  <h3>Répartition des heures</h3>
+  <!-- Récapitulatif principal : normales / supplémentaires / nuit (catégories additives) -->
   <div class="grid-totaux">
     <div class="carte"><div class="lbl">Heures normales</div><div class="val">{{ '%g'|format(totaux.heures_normales) }}</div></div>
-    <div class="carte"><div class="lbl">Heures supplémentaires</div><div class="val">{{ '%g'|format(totaux.total_sup) }}</div></div>
-    <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total heures</div><div class="val">{{ '%g'|format(totaux.total_general) }}</div></div>
+    <div class="carte"><div class="lbl">Heures supplémentaires{{ ' (de jour)' if totaux.heures_nuit else '' }}</div><div class="val">{{ '%g'|format(totaux.heures_sup_jour) }}</div></div>
+    <div class="carte" style="background:#fbf3e3;border-color:#b8862f;"><div class="lbl">Heures de nuit</div><div class="val" style="color:#b8862f;">{{ '%g'|format(totaux.heures_nuit) }}</div></div>
+    <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total travaillé</div><div class="val">{{ '%g'|format(totaux.total_general) }}</div></div>
   </div>
-  <p class="note">Pour les journaliers, les heures supplémentaires ne sont pas majorées : elles sont rémunérées au même taux horaire que les heures normales.</p>
-  {% else %}
+  <p class="note">Heures normales + heures supplémentaires de jour + heures de nuit = total travaillé.
+     Les heures de nuit sont comptées séparément car majorées au taux de nuit de la convention.</p>
+
+  {% if personne.type == 'Journalier' %}
+  <p class="note">Pour les journaliers, les heures supplémentaires ne sont pas majorées : elles sont
+     rémunérées au même taux horaire que les heures normales.</p>
+  {% elif convention in ['BTP','PETROLE','INDUSTRIE'] %}
+  <h3 style="margin-top:14px;">Détail des majorations — convention {{ convention|capitalize }}</h3>
   <div class="grid-totaux">
-    <div class="carte"><div class="lbl">Heures normales</div><div class="val">{{ '%g'|format(totaux.heures_normales) }}</div></div>
-    <div class="carte"><div class="lbl">Heures sup. +10 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>
-    <div class="carte"><div class="lbl">Heures sup. +30 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30) }}</div></div>
-    <div class="carte"><div class="lbl">Heures nuit +40 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_40) }}</div></div>
-    <div class="carte"><div class="lbl">Dim./Férié +70 %</div><div class="val">{{ '%g'|format(totaux.heures_sup_70) }}</div></div>
+    {% if totaux.heures_sup_10 %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['10'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>{% endif %}
+    {% if totaux.heures_sup_30 %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['30'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30) }}</div></div>{% endif %}
+    {% if totaux.heures_sup_30b %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['30b'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30b) }}</div></div>{% endif %}
+    {% if totaux.heures_sup_40 %}<div class="carte"><div class="lbl">Nuit à +{{ coeffs_pct['40'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_40) }}</div></div>{% endif %}
+    {% if totaux.heures_sup_70 %}<div class="carte"><div class="lbl">Nuit dim./férié à +{{ coeffs_pct['70'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_70) }}</div></div>{% endif %}
     <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total heures sup.</div><div class="val">{{ '%g'|format(totaux.total_sup) }}</div></div>
   </div>
-  {% if convention == 'BTP' %}
-  <p class="note">Les heures supplémentaires se déclenchent au-delà de {{ '%g'|format(tenant.seuil_hs) }} h par semaine
-     (palier +10 % sur les 4 premières heures, +30 % au-delà). Répartition détaillée ci-dessous.</p>
-  {% endif %}
+  <p class="note">Les heures supplémentaires se déclenchent au-delà de {{ '%g'|format(tenant.seuil_hs) }} h par semaine.
+     Taux de majoration appliqués selon la convention {{ convention|capitalize }}. Détail semaine par semaine ci-dessous.</p>
   {% endif %}
 </div>
 
@@ -124,10 +129,10 @@
         <th>Semaine</th>
         <th class="num">Cumul ordinaire</th>
         <th class="num">Normales</th>
-        <th class="num">+10 %</th>
-        <th class="num">+30 %</th>
-        <th class="num">Nuit +40 %</th>
-        <th class="num">Dim/Férié +70 %</th>
+        <th class="num">+{{ coeffs_pct['10'] }} %</th>
+        <th class="num">+{{ coeffs_pct['30'] }} %</th>
+        <th class="num">Nuit +{{ coeffs_pct['40'] }} %</th>
+        <th class="num">Nuit dim./férié +{{ coeffs_pct['70'] }} %</th>
       </tr>
     </thead>
     <tbody>

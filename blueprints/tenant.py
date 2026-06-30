@@ -5071,11 +5071,24 @@ def _pointages_mois_contexte(t, pointages, convention):
                                 + totaux["heures_sup_40"] + totaux["heures_sup_70"]
                                 + heures_sup_simple, 2)
     totaux["total_general"] = round(totaux["heures_normales"] + totaux["total_sup"], 2)
+    # Total des heures de nuit = somme des heures de nuit de chaque ligne (cohérent
+    # avec la colonne « dont nuit » du tableau).
+    totaux["heures_nuit"] = round(sum(l["heures_nuit"] for l in lignes), 2)
+    # Heures supplémentaires DE JOUR = total des sup. moins la part de nuit, pour
+    # trois catégories additives sans double comptage :
+    #   heures normales + heures sup. de jour + heures de nuit = total travaillé.
+    totaux["heures_sup_jour"] = round(max(0.0, totaux["total_sup"] - totaux["heures_nuit"]), 2)
     totaux["nb_jours"]    = len(pts_travailles)
     totaux["nb_absences"] = len(pts_absents)
 
+    # Taux de majoration RÉELS de la convention, pour étiqueter correctement les
+    # tranches (BTP ≠ Pétrole ≠ Industrie). Évite d'afficher « +10 % » à tort.
+    from calculs_paie import coeffs_heures_sup
+    _c = coeffs_heures_sup(conv)
+    coeffs_pct = {k: int(round((float(v) - 1) * 100)) for k, v in _c.items()}
+
     return {"lignes": lignes, "totaux": totaux, "detail_semaines": detail_semaines,
-            "convention": conv}
+            "convention": conv, "coeffs_pct": coeffs_pct}
 
 
 def _resoudre_mois_annee():
