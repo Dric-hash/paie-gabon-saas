@@ -176,6 +176,24 @@
   </div>
 
   <!-- Footer -->
+  {% if multi_sites and recap_sites %}
+  <div style="margin-top:12px;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;">
+    <div style="font-size:10px;font-weight:700;color:#0f3d36;margin-bottom:4px;">Heures travaillées par site (période)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:9px;">
+      <tbody>
+        {% for s in recap_sites %}
+        <tr>
+          <td style="padding:2px 0;color:#374151;">{{ s.nom }}</td>
+          <td style="padding:2px 0;text-align:right;color:#6b7280;">{{ s.jours }} j</td>
+          <td style="padding:2px 0;text-align:right;font-weight:700;color:#0f3d36;width:64px;">{{ '%g'|format(s.heures) }} h</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="font-size:7.5px;color:#9ca3af;margin-top:3px;font-style:italic;">Travail sur plusieurs chantiers — rémunération sur l'ensemble des heures, tous sites confondus.</div>
+  </div>
+  {% endif %}
+
   <div class="footer">
     <div>Édité le {{ now.strftime('%d/%m/%Y') }} · PaieGabon by Ameriack I.T. Solutions</div>
     <div class="sig-zone">

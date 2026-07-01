@@ -60,7 +60,7 @@
 <table>
   <thead>
     <tr>
-      <th>Date</th><th>Jour</th><th>Type</th>
+      <th>Date</th><th>Jour</th><th>Type</th><th>Site / chantier</th>
       <th class="num">H. travaillées</th><th class="num">dont nuit</th>
       <th>Observation</th>
     </tr>
@@ -71,16 +71,17 @@
       <td>{{ l.date.strftime('%d/%m/%Y') }}</td>
       <td>{{ l.jour_sem }}</td>
       <td>{% if l.absent %}Absence{{ ' (' + l.motif + ')' if l.motif else '' }}{% else %}{{ l.type_label }}{% endif %}</td>
+      <td>{{ l.site or '—' }}</td>
       <td class="num">{{ '%g'|format(l.heures_travaillees) if not l.absent else '—' }}</td>
       <td class="num">{{ '%g'|format(l.heures_nuit) if l.heures_nuit else '—' }}</td>
       <td>{{ l.observation }}</td>
     </tr>
     {% else %}
-    <tr><td colspan="6" style="text-align:center;color:#9ca3af;padding:14px;">Aucun pointage enregistré pour cette période.</td></tr>
+    <tr><td colspan="7" style="text-align:center;color:#9ca3af;padding:14px;">Aucun pointage enregistré pour cette période.</td></tr>
     {% endfor %}
     {% if lignes %}
     <tr class="tot-row">
-      <td colspan="3">TOTAL HEURES TRAVAILLÉES</td>
+      <td colspan="4">TOTAL HEURES TRAVAILLÉES</td>
       <td class="num">{{ '%g'|format(totaux.total_general) }}</td>
       <td class="num">{{ '%g'|format(totaux.heures_nuit) if totaux.heures_nuit else '—' }}</td>
       <td></td>
@@ -119,6 +120,42 @@
      Taux de majoration appliqués selon la convention {{ convention|capitalize }}. Détail semaine par semaine ci-dessous.</p>
   {% endif %}
 </div>
+
+{% if recap_sites %}
+<div class="recap">
+  <h3>Répartition par site{{ ' — %d chantiers'|format(recap_sites|length) if multi_sites else '' }}</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Site / chantier</th>
+        <th class="num">Jours</th>
+        <th class="num">Heures travaillées</th>
+        <th class="num">dont nuit</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in recap_sites %}
+      <tr>
+        <td>{{ s.nom }}</td>
+        <td class="num">{{ s.jours }}</td>
+        <td class="num">{{ '%g'|format(s.heures) }}</td>
+        <td class="num">{{ '%g'|format(s.nuit) if s.nuit else '—' }}</td>
+      </tr>
+      {% endfor %}
+      <tr class="tot-row">
+        <td>TOTAL</td>
+        <td class="num">{{ totaux.nb_jours }}</td>
+        <td class="num">{{ '%g'|format(totaux.total_general) }}</td>
+        <td class="num">{{ '%g'|format(totaux.heures_nuit) if totaux.heures_nuit else '—' }}</td>
+      </tr>
+    </tbody>
+  </table>
+  {% if multi_sites %}
+  <p class="note">Ce {{ personne.type|lower }} a travaillé sur plusieurs chantiers durant le mois.
+     Sa rémunération couvre l'ensemble des heures, tous sites confondus.</p>
+  {% endif %}
+</div>
+{% endif %}
 
 {% if detail_semaines and personne.type != 'Journalier' %}
 <div class="recap">

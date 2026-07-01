@@ -255,6 +255,24 @@
   </div>
 
   <!-- Footer -->
+  {% if multi_sites and recap_sites %}
+  <div style="margin:10px 16px 0;border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;">
+    <div style="font-size:10.5px;font-weight:700;color:#0f3d36;margin-bottom:5px;">Heures travaillées par site (période)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:9.5px;">
+      <tbody>
+        {% for s in recap_sites %}
+        <tr>
+          <td style="padding:2px 0;color:#374151;">{{ s.nom }}</td>
+          <td style="padding:2px 0;text-align:right;color:#6b7280;">{{ s.jours }} j</td>
+          <td style="padding:2px 0;text-align:right;font-weight:700;color:#0f3d36;width:70px;">{{ '%g'|format(s.heures) }} h</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div style="font-size:8px;color:#9ca3af;margin-top:4px;font-style:italic;">Travail sur plusieurs chantiers ce mois — la rémunération couvre l'ensemble des heures, tous sites confondus.</div>
+  </div>
+  {% endif %}
+
   <div class="footer">
     <div class="mention">
       Document confidentiel — {{ tenant.denomination }}<br>

@@ -1731,6 +1731,43 @@ def bulletins_export_zip(periode_id):
 @bp.route("/bulletins/<int:id>/imprimer")
 @login_required
 def bulletin_imprimer(id):
+    """Aperçu imprimable du bulletin (HTML), disponible dès le brouillon."""
+    return _bulletin_imprimer_impl(id)
+
+
+def _recap_sites_salarie_periode(t, salarie_id, annee, mois):
+    """Heures travaillées par site pour un salarié sur un mois (multi-chantiers).
+
+    Un salarié peut pointer sur plusieurs chantiers dans le mois. On agrège ses
+    heures par site pour les afficher sur le bulletin. Renvoie (recap_sites,
+    multi_sites). N'altère pas le calcul de paie : la rémunération couvre déjà
+    l'ensemble des heures, tous sites confondus.
+    """
+    import calendar
+    debut = date(annee, mois, 1)
+    fin   = date(annee, mois, calendar.monthrange(annee, mois)[1])
+    pts = (Pointage.query
+           .filter_by(tenant_id=t.id, salarie_id=salarie_id)
+           .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
+                   Pointage.present == True, Pointage.absent == False)
+           .all())
+    agg = {}
+    for p in pts:
+        h = (float(p.heures_normales or 0) + float(p.heures_sup or 0)
+             + float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0)
+             + float(getattr(p, "heures_sup_30b", 0) or 0)
+             + float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0))
+        nom = (p.site.nom if getattr(p, "site", None) else None) or "Non affecté"
+        e = agg.setdefault(nom, {"nom": nom, "heures": 0.0, "jours": 0})
+        e["heures"] += h
+        e["jours"]  += 1
+    recap = sorted(agg.values(), key=lambda x: -x["heures"])
+    for e in recap:
+        e["heures"] = round(e["heures"], 2)
+    return recap, (len(recap) > 1)
+
+
+def _bulletin_imprimer_impl(id):
     """Aperçu imprimable du bulletin (HTML), disponible dès le brouillon.
 
     Impression = consultation : accessible à tout utilisateur du tenant
@@ -1761,7 +1798,14 @@ def bulletin_imprimer(id):
     if not os.path.exists(tpl_path):
         template = "tenant/bulletin_print.html"
     composants = BulletinComposant.query.filter_by(bulletin_id=b.id).all()
-    return render_template(template, bulletin=b, tenant=t, composants=composants)
+    # Répartition par site (multi-chantiers) — affichée seulement si > 1 site.
+    from models import PeriodePaie
+    per = PeriodePaie.query.get(b.periode_id)
+    recap_sites, multi_sites = ([], False)
+    if per is not None:
+        recap_sites, multi_sites = _recap_sites_salarie_periode(t, b.salarie_id, per.annee, per.mois)
+    return render_template(template, bulletin=b, tenant=t, composants=composants,
+                           recap_sites=recap_sites, multi_sites=multi_sites)
 
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
@@ -5030,6 +5074,7 @@ def _pointages_mois_contexte(t, pointages, convention):
             "type_label": _TYPE_JOUR_LABEL.get(tj, tj.title()),
             "present": present, "absent": absent,
             "motif": p.motif_absence or "",
+            "site": (p.site.nom if getattr(p, "site", None) else ""),
             "heures_travaillees": round(total_jour, 2),
             "heures_nuit": round(nuit_jour, 2),
             "observation": p.observation or "",
@@ -5087,8 +5132,27 @@ def _pointages_mois_contexte(t, pointages, convention):
     _c = coeffs_heures_sup(conv)
     coeffs_pct = {k: int(round((float(v) - 1) * 100)) for k, v in _c.items()}
 
+    # Répartition par site (multi-chantiers) : un salarié/journalier peut
+    # travailler sur plusieurs sites dans le mois. On agrège ses heures par site
+    # à partir des lignes (jours travaillés uniquement).
+    sites_agg = {}
+    for p, l in zip(pts, lignes):
+        if l["absent"]:
+            continue
+        nom = (p.site.nom if getattr(p, "site", None) else None) or "Non affecté"
+        e = sites_agg.setdefault(nom, {"nom": nom, "heures": 0.0, "nuit": 0.0, "jours": 0})
+        e["heures"] += l["heures_travaillees"]
+        e["nuit"]   += l["heures_nuit"]
+        e["jours"]  += 1
+    recap_sites = sorted(sites_agg.values(), key=lambda x: -x["heures"])
+    for e in recap_sites:
+        e["heures"] = round(e["heures"], 2)
+        e["nuit"]   = round(e["nuit"], 2)
+    multi_sites = len(recap_sites) > 1
+
     return {"lignes": lignes, "totaux": totaux, "detail_semaines": detail_semaines,
-            "convention": conv, "coeffs_pct": coeffs_pct}
+            "convention": conv, "coeffs_pct": coeffs_pct,
+            "recap_sites": recap_sites, "multi_sites": multi_sites}
 
 
 def _resoudre_mois_annee():
