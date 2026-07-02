@@ -71,6 +71,15 @@ COEFFS_HEURES_SUP_CONVENTION = {
     #   heures de nuit (ouvrable) . +80 %  → case 40
     #   heures de nuit fériés ..... +135 % → case 70
     "INDUSTRIE": {"10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35},
+    # Transports Aériens — Art. A.39 (grille à 7 taux ramenée aux 5 cases) :
+    #   8 h au-delà de 40 h (jour) . +15 %  → case 10
+    #   au-delà de 48 h (jour) ..... +30 %  → case 30
+    #   repos hebdo / fériés (jour)  +50 %  → case 30b
+    #   nuit ouvrable (21h-6h) ..... +60 %  → case 40
+    #   nuit repos / fériés ........ +100 % → case 70
+    # (Les taux « jour chômé récupérable » +40 % jour / +80 % nuit ne sont pas
+    #  captés faute de bucket dédié ; ils sont rares en pratique.)
+    "AERIEN": {"10": 1.15, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00},
 }
 
 
@@ -899,7 +908,7 @@ def ventiler_heures_mois(convention, jours, feries=None, seuil_normales: float =
     contient toujours les 5 cases (la case 30b reste à 0 hors Pétrole).
     """
     c = (convention or "").upper()
-    if c in ("PETROLE", "INDUSTRIE"):
+    if c in ("PETROLE", "INDUSTRIE", "AERIEN"):
         # Même structure de ventilation : bande 41→48 h (8 h) puis >48 h, et
         # 5 cases distinctes (jour férié / nuit / nuit férié). Seuls les
         # coefficients diffèrent (cf. COEFFS_HEURES_SUP_CONVENTION).
@@ -1196,6 +1205,93 @@ def calculer_indemnite_services_rendus_industrie(
     else:
         taux = 0.33
     return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def calculer_preavis_aerien(anciennete_annees: int, cadre: bool = False) -> int:
+    """
+    Durée du préavis (jours) — Convention Transports Aériens, Art. A.30.3.
+    Deux barèmes selon la qualification :
+
+    Personnel d'exécution (cadre=False) :
+      <1 an 15 j · 1-3 ans 1 mois · 3-5 2 mois · 5-10 3 mois · 10-15 4 mois ·
+      15-20 5 mois · 20-30 6 mois · au-delà de 30 : +10 j / année.
+
+    Personnel de maîtrise & cadres (cadre=True) :
+      <1 an 1 mois · 1-3 ans 2 mois · 3-5 3 mois · 5-10 4 mois · 10-15 5 mois ·
+      15-20 6 mois · 20-30 7 mois · au-delà de 30 : +15 j / année.
+    (Conversion mois→jours à 30 j.)
+    """
+    if cadre:
+        if anciennete_annees < 1:   return 30
+        elif anciennete_annees < 3: return 60
+        elif anciennete_annees < 5: return 90
+        elif anciennete_annees < 10: return 120
+        elif anciennete_annees < 15: return 150
+        elif anciennete_annees < 20: return 180
+        elif anciennete_annees <= 30: return 210
+        else: return 210 + (anciennete_annees - 30) * 15
+    else:
+        if anciennete_annees < 1:   return 15
+        elif anciennete_annees < 3: return 30
+        elif anciennete_annees < 5: return 60
+        elif anciennete_annees < 10: return 90
+        elif anciennete_annees < 15: return 120
+        elif anciennete_annees < 20: return 150
+        elif anciennete_annees <= 30: return 180
+        else: return 180 + (anciennete_annees - 30) * 10
+
+
+def calculer_indemnite_services_rendus_aerien(
+    moyenne_12_mois: float, anciennete_annees: int
+) -> float:
+    """
+    Indemnité de services rendus — Convention Transports Aériens, Art. A.32.
+    Due après 2 ans de présence, pour un motif autre que la faute lourde.
+    Base : moyenne mensuelle du salaire global des 12 derniers mois.
+    Taux (par année de présence) :
+      jusqu'à 5 ans → 20 % · 5-10 → 25 % · 10-15 → 30 % · 15-20 → 35 % · >20 → 40 %
+    """
+    if anciennete_annees < 2 or moyenne_12_mois <= 0:
+        return 0.0
+    if anciennete_annees <= 5:
+        taux = 0.20
+    elif anciennete_annees <= 10:
+        taux = 0.25
+    elif anciennete_annees <= 15:
+        taux = 0.30
+    elif anciennete_annees <= 20:
+        taux = 0.35
+    else:
+        taux = 0.40
+    return round(moyenne_12_mois * taux * anciennete_annees, 0)
+
+
+def prime_assiduite_aerien(salaire_mensuel_base: float, nb_absences: int = 0) -> float:
+    """
+    Prime d'assiduité — Convention Transports Aériens, Art. A.53.
+    Taux : 3 % du salaire mensuel de base conventionnel de la catégorie ;
+    abattement de 50 % pour une absence, 100 % pour deux absences dans le mois.
+    """
+    if salaire_mensuel_base <= 0:
+        return 0.0
+    nb_absences = max(0, int(nb_absences))
+    prime = salaire_mensuel_base * 0.03
+    if nb_absences >= 2:
+        return 0.0
+    if nb_absences == 1:
+        prime *= 0.5
+    return round(prime, 0)
+
+
+def prime_panier_aerien(salaire_horaire_base: float, smig_horaire: float = 0.0) -> float:
+    """
+    Prime de panier — Convention Transports Aériens, Art. A.48.
+    Égale à 1,5 × le salaire horaire de base de la catégorie, sans être inférieure
+    à 4 × le SMIG horaire.
+    """
+    if salaire_horaire_base <= 0:
+        return 0.0
+    return round(max(salaire_horaire_base * 1.5, smig_horaire * 4), 0)
 
 
 
@@ -1592,6 +1688,7 @@ CONVENTIONS_DISPONIBLES = {
     "COMMERCE": "Convention Collective du Commerce",
     "PETROLE":  "Convention Collective des professionnels du pétrole",
     "INDUSTRIE": "Convention Collective des Entreprises Industrielles",
+    "AERIEN":    "Convention Collective des Compagnies de Transports Aériens",
 }
 
 
@@ -1608,8 +1705,8 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
         return calculer_prime_anciennete_petrole(salaire_base, anciennete_annees)
     if c == "COMMERCE":
         return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
-    if c in ("BTP", "INDUSTRIE"):
-        # A.46 identique : 2 % après 2 ans, +1 %/an.
+    if c in ("BTP", "INDUSTRIE", "AERIEN"):
+        # A.46/A.47 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
     return 0.0
 
@@ -1646,10 +1743,12 @@ def calculer_preavis_code(anciennete_annees: int) -> int:
         return 180 + (anciennete_annees - 30) * 10
 
 
-def preavis_jours(convention, anciennete_annees: int) -> int:
+def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> int:
     """
     Durée du préavis (jours) selon la convention applicable, en retenant
     toujours la durée la plus favorable au salarié (Code Art. 80 & 82).
+    Le paramètre `cadre` distingue, pour les conventions à double barème
+    (ex. Transports Aériens), le personnel de maîtrise/cadres de l'exécution.
     """
     c = _conv(convention)
     legal = calculer_preavis_code(anciennete_annees)
@@ -1659,6 +1758,8 @@ def preavis_jours(convention, anciennete_annees: int) -> int:
         return max(calculer_preavis_btp(anciennete_annees), legal)
     if c == "INDUSTRIE":
         return max(calculer_preavis_industrie(anciennete_annees), legal)
+    if c == "AERIEN":
+        return max(calculer_preavis_aerien(anciennete_annees, cadre=cadre), legal)
     # PÉTROLE (Art. 30.3 : renvoi au Code du travail) et AUCUNE : barème légal.
     return legal
 
@@ -1672,6 +1773,8 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
         return calculer_indemnite_services_rendus_commerce(moyenne_12_mois, anciennete_annees)
     if c == "INDUSTRIE":
         return calculer_indemnite_services_rendus_industrie(moyenne_12_mois, anciennete_annees)
+    if c == "AERIEN":
+        return calculer_indemnite_services_rendus_aerien(moyenne_12_mois, anciennete_annees)
     if c == "BTP":
         return calculer_indemnite_services_rendus_btp(moyenne_12_mois, anciennete_annees)
     return 0.0
@@ -1734,8 +1837,8 @@ def permissions_familiales(convention, evenement: str) -> int:
     c = _conv(convention)
     if c == "PETROLE":
         return permissions_familiales_petrole(evenement)
-    if c in ("BTP", "INDUSTRIE"):
-        # A.41 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
+    if c in ("BTP", "INDUSTRIE", "AERIEN"):
+        # A.41/A.42 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
         return permissions_familiales_btp(evenement)
     # COMMERCE et défaut : même barème
     return permissions_familiales_commerce(evenement)
@@ -1748,7 +1851,7 @@ def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour:
     seuil_normales : seuil hebdomadaire de déclenchement des heures sup (défaut 40h).
     """
     c = _conv(convention)
-    if c in ("PETROLE", "INDUSTRIE"):
+    if c in ("PETROLE", "INDUSTRIE", "AERIEN"):
         return distribuer_heures_semaine_petrole(heures_par_jour, types_par_jour,
                                                  seuil_normales=seuil_normales)
     if c == "COMMERCE":

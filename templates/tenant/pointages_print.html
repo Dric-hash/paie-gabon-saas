@@ -53,7 +53,7 @@
   <div style="text-align:right;">
     <b>Jours travaillés :</b> {{ totaux.nb_jours }}<br/>
     <b>Absences :</b> {{ totaux.nb_absences }}<br/>
-    {% if convention in ['BTP','PETROLE','INDUSTRIE'] %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
+    {% if convention in ['BTP','PETROLE','INDUSTRIE','AERIEN'] %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
   </div>
 </div>
 
@@ -106,7 +106,7 @@
   {% if personne.type == 'Journalier' %}
   <p class="note">Pour les journaliers, les heures supplémentaires ne sont pas majorées : elles sont
      rémunérées au même taux horaire que les heures normales.</p>
-  {% elif convention in ['BTP','PETROLE','INDUSTRIE'] %}
+  {% elif convention in ['BTP','PETROLE','INDUSTRIE','AERIEN'] %}
   <h3 style="margin-top:14px;">Détail des majorations — convention {{ convention|capitalize }}</h3>
   <div class="grid-totaux">
     {% if totaux.heures_sup_10 %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['10'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>{% endif %}

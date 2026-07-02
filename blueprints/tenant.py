@@ -5136,7 +5136,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     # que la colonne « DONT NUIT » de chaque ligne soit cohérente avec le total
     # +40 % affiché en bas (somme des lignes = total).
     nuit_par_date = {}
-    if conv in ("BTP", "PETROLE", "INDUSTRIE"):
+    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
         from calculs_paie import pointage_vers_jours
         for j in pointage_vers_jours(pts):
             d = j.get("date")
@@ -5157,7 +5157,7 @@ def _pointages_mois_contexte(t, pointages, convention):
         total_jour = hn + hsup + h10 + h30 + h30b + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
         # Nuit du jour : depuis l'horaire (BTP/Pétrole/Industrie), sinon valeur stockée (journaliers)
-        if conv in ("BTP", "PETROLE", "INDUSTRIE"):
+        if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
             nuit_jour = nuit_par_date.get(p.date_pointage, 0.0)
         else:
             nuit_jour = h40
@@ -5176,7 +5176,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    if conv in ("BTP", "PETROLE", "INDUSTRIE") and pts_travailles:
+    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN") and pts_travailles:
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
         v = ventiler_heures_mois(conv, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
         totaux = {
@@ -5897,7 +5897,7 @@ def api_pointage_mois(id):
             "message": "Aucun pointage pour cette période"})
     nb_jours = len(pts_travailles)
 
-    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE"):
+    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
         # Ventilation réglementaire (BTP/Pétrole/Industrie) : semaine par semaine, ligne par ligne
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
         v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
