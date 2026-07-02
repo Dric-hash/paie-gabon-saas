@@ -576,6 +576,11 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS idx_conges_salarie ON conges (salarie_id)",
         "CREATE INDEX IF NOT EXISTS idx_sites_tenant_actif ON sites (tenant_id, actif)",
         "CREATE INDEX IF NOT EXISTS idx_pointages_journalier_date ON pointages (journalier_id, date_pointage)",
+        # ── Contrats : interrogés par salarié à chaque paie (seul trou restant) ───
+        "CREATE INDEX IF NOT EXISTS idx_contrats_salarie_actif ON contrats (salarie_id, actif)",
+        "CREATE INDEX IF NOT EXISTS idx_contrats_tenant_salarie ON contrats (tenant_id, salarie_id)",
+        # ── Pointages par chantier (relevé multi-sites) ──────────────────────────
+        "CREATE INDEX IF NOT EXISTS idx_pointages_tenant_site ON pointages (tenant_id, site_id)",
     ]
     for sql in migrations:
         try:

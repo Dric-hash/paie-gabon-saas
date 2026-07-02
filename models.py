@@ -487,6 +487,12 @@ class Contrat(db.Model):
     poste        = db.Column(db.String(200))
     categorie_id = db.Column(db.Integer, db.ForeignKey("categories_emploi.id"))
     actif        = db.Column(db.Boolean, default=True)
+    __table_args__ = (
+        # Le contrat est presque toujours cherché par salarié (paie, fiche, conversion),
+        # souvent filtré sur actif → index dédiés (le point non couvert jusqu'ici).
+        db.Index("idx_contrats_salarie_actif", "salarie_id", "actif"),
+        db.Index("idx_contrats_tenant_salarie", "tenant_id", "salarie_id"),
+    )
     def to_dict(self):
         d = {c.name: getattr(self,c.name) for c in self.__table__.columns}
         for k in ["date_debut","date_fin"]:
