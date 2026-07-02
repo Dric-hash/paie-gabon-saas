@@ -936,6 +936,99 @@ def salarie_nouveau():
     return render_template("tenant/salarie_form.html", salarie=None, categories=cats,
         action="nouveau", tenant=t, sites=sites, aff_actuelle=None)
 
+@bp.route("/journaliers/<int:id>/convertir", methods=["GET", "POST"])
+@login_required
+def journalier_convertir(id):
+    """Transforme un journalier en salarié (mensuel).
+
+    Principe : on CRÉE un nouveau salarié à partir des données du journalier, on
+    ARCHIVE le journalier (statut CONVERTI) pour préserver tout son historique de
+    paie journalière (pointages/avances/paies passés restent attachés au
+    journalier), et on reporte son affectation de site active. L'opération est
+    neutre pour le quota (−1 journalier actif, +1 salarié actif)."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    j = Journalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if (j.statut or "").upper() != "ACTIF":
+        flash("Ce journalier n'est pas actif — il a peut-être déjà été converti.", "error")
+        return redirect(url_for("tenant.journalier_detail", id=j.id))
+    cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
+
+    # Matricule suggéré (préfixe sur le nom + séquence, garanti unique).
+    import re as _re
+    base = (_re.sub(r"[^A-Z]", "", (j.nom or "").upper())[:4]) or "SAL"
+    _n = 1
+    while Salarie.query.filter_by(tenant_id=t.id, matricule=f"{base}{_n:03d}").first():
+        _n += 1
+    suggestion = f"{base}{_n:03d}"
+
+    if request.method == "POST":
+        matricule = (request.form.get("matricule") or "").strip().upper()
+        if not matricule:
+            flash("Le matricule est obligatoire.", "error")
+            return redirect(url_for("tenant.journalier_convertir", id=j.id))
+        if Salarie.query.filter_by(tenant_id=t.id, matricule=matricule).first():
+            flash(f"Le matricule « {matricule} » existe déjà. Choisissez-en un autre.", "error")
+            return redirect(url_for("tenant.journalier_convertir", id=j.id))
+        sb = float(request.form.get("salaire_base") or 0)
+
+        s = Salarie(
+            tenant_id=t.id, matricule=matricule,
+            categorie_id=request.form.get("categorie_id") or None,
+            nom=(request.form.get("nom") or j.nom).strip().upper(),
+            prenom=(request.form.get("prenom") or j.prenom).strip(),
+            telephone=request.form.get("telephone") or j.telephone,
+            email=(request.form.get("email") or "").strip() or None,
+            nationalite=request.form.get("nationalite") or j.nationalite or "GABONAISE",
+            sexe=request.form.get("sexe"),
+            date_naissance=_pd(request.form.get("date_naissance")),
+            date_embauche=_pd(request.form.get("date_embauche")) or j.date_embauche or date.today(),
+            situation_matrimoniale=request.form.get("situation_matrimoniale"),
+            nb_enfants=int(request.form.get("nb_enfants") or 0),
+            nb_enfants_moins_16ans=int(request.form.get("nb_enfants_moins_16ans") or 0),
+            nombre_parts=float(request.form.get("nombre_parts") or 1),
+            numero_cnss=request.form.get("numero_cnss"),
+            numero_cnamgs=request.form.get("numero_cnamgs"),
+            emploi=request.form.get("emploi") or j.profession,
+            assujetti_cnamgs=request.form.get("assujetti_cnamgs") == "OUI",
+            statut="ACTIF",
+        )
+        db.session.add(s)
+        if sb:
+            db.session.add(Contrat(
+                tenant_id=t.id, salarie=s,
+                type_contrat=request.form.get("type_contrat", "CDI"),
+                date_debut=s.date_embauche, salaire_base=sb, poste=s.emploi, actif=True))
+        # Archiver le journalier (historique préservé, retiré des listes actives).
+        j.statut = "CONVERTI"
+        db.session.flush()
+        # Reporter l'affectation de site active vers le nouveau salarié.
+        aff = AffectationSite.query.filter_by(
+            tenant_id=t.id, journalier_id=j.id, actif=True).first()
+        if aff:
+            db.session.add(AffectationSite(
+                tenant_id=t.id, site_id=aff.site_id, salarie_id=s.id, actif=True))
+            aff.actif = False
+        log_action("UPDATE", "journalier", j.id,
+                   f"Journalier {j.nom_complet} converti en salarié (matricule {s.matricule})")
+        log_action("CREATE", "salarie", s.id,
+                   f"Salarié issu de la conversion du journalier {j.nom_complet}",
+                   apres={"nom": s.nom, "prenom": s.prenom, "matricule": s.matricule,
+                          "salaire_base": sb, "origine": "journalier"})
+        db.session.commit()
+        flash(f"{s.nom_complet} est désormais salarié (matricule {s.matricule}). "
+              f"L'historique du journalier est conservé.", "success")
+        return redirect(url_for("tenant.salarie_detail", id=s.id))
+
+    return render_template("tenant/journalier_convertir.html",
+                           journalier=j, categories=cats, tenant=t, suggestion=suggestion)
+
+
 @bp.route("/salaries/<int:id>")
 @login_required
 def salarie_detail(id):

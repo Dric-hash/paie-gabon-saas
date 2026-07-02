@@ -303,7 +303,18 @@
            style="flex:1;text-align:center;background:#f3f4f6;color:#374151;padding:.5rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
           ✏️ Modifier
         </a>
+        {% if (journalier.statut or 'ACTIF')|upper == 'ACTIF' %}
+        <a href="/journaliers/{{ journalier.id }}/convertir"
+           style="flex:1;text-align:center;background:#0f3d36;color:#fff;padding:.5rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+          ⇪ Transformer en salarié
+        </a>
+        {% endif %}
       </div>
+      {% if (journalier.statut or '')|upper == 'CONVERTI' %}
+      <div style="margin-top:.625rem;background:#eef3f1;color:#0f3d36;border-radius:.625rem;padding:.5rem .625rem;font-size:.72rem;font-weight:700;text-align:center">
+        Ce journalier a été transformé en salarié. Historique conservé.
+      </div>
+      {% endif %}
     </div>
 
   </div>

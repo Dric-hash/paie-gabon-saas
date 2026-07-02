@@ -1,0 +1,157 @@
+{% extends "tenant/base.html" %}
+{% block title %}Transformer en salarié — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6">
+  <a href="{{ url_for('tenant.journalier_detail', id=journalier.id) }}" class="text-gray-400 hover:text-gray-700">← Retour</a>
+  <h1 class="text-2xl font-black text-gray-900">Transformer en salarié</h1>
+</div>
+
+<div class="card p-4 mb-6" style="background:#eef3f1;border:1px solid #0f3d36">
+  <div class="text-sm" style="color:#0f3d36">
+    <b>{{ journalier.nom_complet }}</b> (journalier, {{ journalier.profession or 'profession non renseignée' }})
+    devient salarié mensuel. Son <b>historique de journalier est conservé</b>
+    (pointages, avances et paies passés) ; le journalier est simplement archivé.
+    Les <b>nouveaux</b> pointages se feront sur la fiche salarié.
+  </div>
+</div>
+
+<form method="POST" action="{{ url_for('tenant.journalier_convertir', id=journalier.id) }}" class="grid grid-cols-2 gap-6">
+
+  <!-- Identité -->
+  <div class="card p-6 space-y-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Identité</div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Nom</label>
+        <input name="nom" value="{{ journalier.nom }}" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Prénom</label>
+        <input name="prenom" value="{{ journalier.prenom }}" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Sexe</label>
+        <select name="sexe" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="">—</option><option value="M">Masculin</option><option value="F">Féminin</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Date de naissance</label>
+        <input type="date" name="date_naissance" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Téléphone</label>
+        <input name="telephone" value="{{ journalier.telephone or '' }}" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Email</label>
+        <input type="email" name="email" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Nationalité</label>
+      <input name="nationalite" value="{{ journalier.nationalite or 'GABONAISE' }}" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+    </div>
+  </div>
+
+  <!-- Emploi & contrat -->
+  <div class="card p-6 space-y-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Emploi &amp; contrat</div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Matricule</label>
+        <input name="matricule" value="{{ suggestion }}" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Catégorie</label>
+        <select name="categorie_id" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="">—</option>
+          {% for c in categories %}<option value="{{ c.id }}">{{ c.libelle or c.code }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Emploi / poste</label>
+      <input name="emploi" value="{{ journalier.profession or '' }}" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Type de contrat</label>
+        <select name="type_contrat" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="CDI">CDI</option><option value="CDD">CDD</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Date d'embauche</label>
+        <input type="date" name="date_embauche" value="{{ journalier.date_embauche.isoformat() if journalier.date_embauche else '' }}" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Salaire de base mensuel (FCFA)</label>
+      <input type="number" name="salaire_base" min="0" step="1" required class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono" placeholder="Ex. 150000">
+      <p class="text-xs text-gray-400 mt-1">La date d'embauche reprend par défaut celle du journalier, ce qui préserve son ancienneté (préavis, indemnités). Modifiez-la si besoin.</p>
+    </div>
+  </div>
+
+  <!-- Situation familiale -->
+  <div class="card p-6 space-y-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Situation familiale</div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Situation matrimoniale</label>
+      <select name="situation_matrimoniale" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="">—</option><option>Célibataire</option><option>Marié(e)</option>
+        <option>Divorcé(e)</option><option>Veuf(ve)</option>
+      </select>
+    </div>
+    <div class="grid grid-cols-3 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Enfants</label>
+        <input type="number" name="nb_enfants" value="0" min="0" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">dont −16 ans</label>
+        <input type="number" name="nb_enfants_moins_16ans" value="0" min="0" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Parts</label>
+        <input type="number" name="nombre_parts" value="1" min="1" step="0.5" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-center">
+      </div>
+    </div>
+  </div>
+
+  <!-- Social -->
+  <div class="card p-6 space-y-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Cotisations sociales</div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">N° CNSS</label>
+        <input name="numero_cnss" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono">
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">N° CNAMGS</label>
+        <input name="numero_cnamgs" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono">
+      </div>
+    </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Assujetti CNAMGS</label>
+      <select name="assujetti_cnamgs" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="OUI" selected>Oui</option><option value="NON">Non</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="col-span-2 flex gap-3">
+    <a href="{{ url_for('tenant.journalier_detail', id=journalier.id) }}"
+       class="flex-1 text-center bg-gray-100 text-gray-700 rounded-xl py-3 text-sm font-bold">Annuler</a>
+    <button type="submit" class="btn-primary flex-1" style="font-weight:700">
+      Confirmer la transformation en salarié
+    </button>
+  </div>
+</form>
+
+{% endblock %}
