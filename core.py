@@ -318,24 +318,55 @@ def get_limiter():
     return _limiter
 
 def init_limiter(app):
-    """Attache Flask-Limiter à l'app Flask."""
+    """Attache Flask-Limiter à l'app Flask.
+
+    Si REDIS_URL est défini mais que le backend Redis n'est pas utilisable
+    (paquet manquant, serveur injoignable, URL erronée), on bascule
+    automatiquement en mémoire plutôt que de faire planter l'application.
+    """
     global _limiter
     try:
         from flask_limiter import Limiter
         from flask_limiter.util import get_remote_address
-        import os
-        storage_uri = os.environ.get("REDIS_URL") or "memory://"
-        _limiter = Limiter(
-            get_remote_address,
-            app=app,
-            storage_uri=storage_uri,
-            default_limits=[],
-            headers_enabled=True,
-        )
-        logger.info(f"[LIMITER] Rate limiter activé (storage: {storage_uri[:20]}…)")
     except ImportError:
         logger.warning("[LIMITER] flask-limiter non installé. Rate limiting désactivé.")
         _limiter = None
+        return _limiter
+
+    import os
+    storage_uri = os.environ.get("REDIS_URL") or "memory://"
+
+    def _build(uri):
+        lim = Limiter(
+            get_remote_address, app=app, storage_uri=uri,
+            default_limits=[], headers_enabled=True,
+        )
+        # Force la résolution du backend de stockage pour détecter tout de suite
+        # une indisponibilité (sinon l'erreur ne surgirait qu'à la 1re requête).
+        try:
+            lim.storage.check()
+        except AttributeError:
+            _ = lim.storage
+        return lim
+
+    try:
+        _limiter = _build(storage_uri)
+        logger.info(f"[LIMITER] Rate limiter activé (storage: {storage_uri[:20]}…)")
+    except Exception as e:
+        if storage_uri != "memory://":
+            logger.warning(
+                f"[LIMITER] Backend '{storage_uri[:20]}…' indisponible ({e}). "
+                f"Repli en mémoire — pensez à vérifier REDIS_URL / le service Redis."
+            )
+            try:
+                _limiter = _build("memory://")
+                logger.info("[LIMITER] Rate limiter activé (storage: memory://).")
+            except Exception as e2:
+                logger.warning(f"[LIMITER] Échec d'initialisation ({e2}). Rate limiting désactivé.")
+                _limiter = None
+        else:
+            logger.warning(f"[LIMITER] Échec d'initialisation ({e}). Rate limiting désactivé.")
+            _limiter = None
     return _limiter
 
 
