@@ -304,7 +304,7 @@ def migrer():
                 bul.acompte               = n(row[82])
                 bul.net_a_payer           = n(row[83]) if len(row) > 83 else 0
                 bul.statut                = "VALIDÉ"
-                bul.date_validation       = datetime.utcnow()
+                bul.date_validation       = utcnow()
                 nb_bul += 1
 
             print(f"   📊 {nb_bul} bulletins importés · {nb_skip} ignorés")

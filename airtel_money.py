@@ -25,6 +25,7 @@ import hashlib
 import logging
 import requests
 from datetime import datetime, timedelta
+from models import utcnow
 
 logger = logging.getLogger("paiegalon.airtel")
 
@@ -45,7 +46,7 @@ COUNTRY_CODE = "GA"
 CURRENCY     = "XAF"
 
 # ── Cache token OAuth (évite de redemander un token à chaque appel) ────────────
-_token_cache = {"token": None, "expires_at": datetime.utcnow()}
+_token_cache = {"token": None, "expires_at": utcnow()}
 
 
 def _get_access_token() -> str:
@@ -54,7 +55,7 @@ def _get_access_token() -> str:
     Le token est mis en cache jusqu'à son expiration.
     """
     global _token_cache
-    now = datetime.utcnow()
+    now = utcnow()
     if _token_cache["token"] and now < _token_cache["expires_at"]:
         return _token_cache["token"]
 

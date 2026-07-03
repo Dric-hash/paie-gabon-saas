@@ -17,7 +17,7 @@ from flask_login import login_required, current_user
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
-from models import (db, Prestataire, ContratPrestation, FacturePrestataire,
+from models import (db, utcnow, Prestataire, ContratPrestation, FacturePrestataire,
                     PaiementPrestataire, AvancePrestataire, LigneFacturePrestataire,
                     Site)
 from audit import log_action
@@ -578,7 +578,7 @@ def facture_valider(fid):
     f.statut = "VALIDEE"
     f.valide_par_nom = (request.form.get("valide_par_nom", "").strip() or None)
     f.valide_par_user_id = current_user.id
-    f.date_validation = datetime.utcnow()
+    f.date_validation = utcnow()
     db.session.commit()
     log_action("VALIDATE", "facture_prestataire", f.id, f"Facture {f.numero} validée",
                user_id=current_user.id, tenant_id=t.id)
@@ -783,7 +783,7 @@ def avance_valider(aid):
     a.statut = "VALIDEE"
     a.valide_par_nom = chef
     a.valide_par_user_id = current_user.id
-    a.date_validation = datetime.utcnow()
+    a.date_validation = utcnow()
     db.session.commit()
     log_action("VALIDATE", "avance_prestataire", a.id,
                f"Avance validée par {chef}", user_id=current_user.id, tenant_id=t.id)

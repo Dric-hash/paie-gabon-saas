@@ -35,6 +35,7 @@ Actions standardisées :
 import json
 import logging
 from datetime import datetime
+from models import utcnow
 
 logger = logging.getLogger("paiegalon.audit")
 
@@ -120,7 +121,7 @@ def log_action(
             apres       = apres_json,
             ip_address  = ip_address,
             user_agent  = user_agent,
-            date_action = datetime.utcnow(),
+            date_action = utcnow(),
         )
         db.session.add(log)
         # Ne pas committer ici — sera commis avec la transaction principale

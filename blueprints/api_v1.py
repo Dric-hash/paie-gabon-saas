@@ -10,7 +10,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 
-from models import (db, Tenant, Utilisateur, Salarie, CategorieEmploi,
+from models import (db, utcnow, Tenant, Utilisateur, Salarie, CategorieEmploi,
                     PeriodePaie, BulletinPaie, OAuthClient, AuditLog)
 from calculs_paie import calculer_bulletin
 from audit import log_action
@@ -55,7 +55,7 @@ def api_oauth_token():
     import secrets as _sec
     access_token = _sec.token_hex(32)
     oauth_token_store(access_token, tenant.id, client_id, OAUTH_TOKEN_TTL)
-    client.derniere_utilisation = datetime.utcnow()
+    client.derniere_utilisation = utcnow()
     db.session.commit()
 
     logger.info(f"[API OAuth] Token émis — client={client_id} tenant={tenant.id}")
@@ -394,7 +394,7 @@ def api_bulletin_valider(tenant, bul_id):
         return jsonify(_err("INVALID_STATE", f"Le bulletin est déjà en statut '{b.statut}'.")), 400
 
     b.statut          = "VALIDÉ"
-    b.date_validation = datetime.utcnow()
+    b.date_validation = utcnow()
     db.session.commit()
     return _ok(_bulletin_dict(b, detail=True))
 

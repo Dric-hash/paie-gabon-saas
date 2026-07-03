@@ -3,6 +3,7 @@ core.py — Utilitaires partagés : cache Redis, décorateurs, helpers, email
 """
 import os, threading, logging, json as _json
 from datetime import datetime, date, timedelta
+from models import utcnow
 from functools import wraps
 from flask import redirect, url_for, abort, flash, request, session
 from flask_login import current_user, logout_user
@@ -90,7 +91,7 @@ def oauth_token_store(token: str, tenant_id: int, client_id: str, ttl_seconds: i
         except Exception:
             pass
     _oauth_mem[token] = {**payload,
-                         "expires_at": datetime.utcnow() + timedelta(seconds=ttl_seconds)}
+                         "expires_at": utcnow() + timedelta(seconds=ttl_seconds)}
 
 
 def oauth_token_get(token: str):
@@ -104,7 +105,7 @@ def oauth_token_get(token: str):
     entry = _oauth_mem.get(token)
     if not entry:
         return None
-    if datetime.utcnow() >= entry["expires_at"]:
+    if utcnow() >= entry["expires_at"]:
         _oauth_mem.pop(token, None)
         return None
     return {"tenant_id": entry["tenant_id"], "client_id": entry["client_id"]}

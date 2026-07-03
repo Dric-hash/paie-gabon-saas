@@ -4,12 +4,19 @@ models.py — Modèles multi-tenant SaaS Paie Gabon
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 import secrets
 import hashlib
 import hmac as _hmac
 
 db = SQLAlchemy()
+
+
+def utcnow():
+    """Horodatage UTC *naïf*, équivalent exact de l'ancien utcnow()
+    mais sans la dépréciation de Python 3.12. Conserve le même type (naïf) que
+    celui stocké dans les colonnes DateTime, donc aucune comparaison ne change."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def hash_secret(raw: str) -> str:
@@ -63,7 +70,7 @@ class Tenant(db.Model):
     pays             = db.Column(db.String(100), default="Gabon")
     plan_id          = db.Column(db.Integer, db.ForeignKey("plans.id"))
     statut           = db.Column(db.String(20), default="ACTIF")
-    date_inscription = db.Column(db.DateTime, default=datetime.utcnow)
+    date_inscription = db.Column(db.DateTime, default=utcnow)
     date_expiration  = db.Column(db.DateTime)
     token_api        = db.Column(db.String(64), unique=True)
     # Hash SHA-256 du token API (le secret n'est plus stocké en clair ; `token_api`
@@ -169,7 +176,7 @@ class Utilisateur(db.Model, UserMixin):
     tenant_id          = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
     actif              = db.Column(db.Boolean, default=True)
     derniere_connexion = db.Column(db.DateTime)
-    date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation      = db.Column(db.DateTime, default=utcnow)
     # ✅ Reset mot de passe
     reset_token              = db.Column(db.String(200))
     reset_token_expiry       = db.Column(db.DateTime)
@@ -212,14 +219,14 @@ class Utilisateur(db.Model, UserMixin):
     def set_otp(self, code):
         """Enregistre le code 2FA (haché) avec une validité de 10 minutes."""
         self.otp_code_hash = generate_password_hash(code)
-        self.otp_expiry    = datetime.utcnow() + timedelta(minutes=10)
+        self.otp_expiry    = utcnow() + timedelta(minutes=10)
         self.otp_tentatives = 0
 
     def check_otp(self, code):
         """Vérifie le code 2FA : non expiré et correspondant."""
         if not self.otp_code_hash or not self.otp_expiry:
             return False
-        if datetime.utcnow() > self.otp_expiry:
+        if utcnow() > self.otp_expiry:
             return False
         return check_password_hash(self.otp_code_hash, code)
 
@@ -372,7 +379,7 @@ class Site(db.Model):
     telephone   = db.Column(db.String(30))
     description = db.Column(db.Text)
     actif       = db.Column(db.Boolean, default=True)
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
 
     tenant       = db.relationship("Tenant", backref="sites")
     affectations = db.relationship("AffectationSite", backref="site", lazy=True,
@@ -401,7 +408,7 @@ class AffectationSite(db.Model):
     date_fin        = db.Column(db.Date, nullable=True)   # None = affectation en cours
     actif           = db.Column(db.Boolean, default=True) # False = transféré ou sorti
     motif           = db.Column(db.String(300))           # Motif de la permutation
-    date_creation   = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation   = db.Column(db.DateTime, default=utcnow)
     cree_par        = db.Column(db.String(200))           # Email de l'utilisateur qui a fait l'action
 
     # Relations
@@ -451,8 +458,8 @@ class Salarie(db.Model):
     assujetti_cnamgs       = db.Column(db.Boolean, default=True)
     type_rupture           = db.Column(db.String(100))
     statut                 = db.Column(db.String(20), default="ACTIF")
-    date_creation          = db.Column(db.DateTime, default=datetime.utcnow)
-    date_modification      = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    date_creation          = db.Column(db.DateTime, default=utcnow)
+    date_modification      = db.Column(db.DateTime, onupdate=utcnow)
 
     bulletins = db.relationship("BulletinPaie", backref="salarie", lazy=True)
     contrats  = db.relationship("Contrat", backref="salarie", lazy=True)
@@ -636,7 +643,7 @@ class BulletinPaie(db.Model):
     base_indem_licenciement             = db.Column(db.Numeric(15,2), default=0)
     taux_indem_licenciement             = db.Column(db.String(20), default='')
     statut                = db.Column(db.String(20), default="BROUILLON")
-    date_creation         = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation         = db.Column(db.DateTime, default=utcnow)
     date_validation       = db.Column(db.DateTime)
     __table_args__ = (
         db.UniqueConstraint("tenant_id","salarie_id","periode_id"),
@@ -692,7 +699,7 @@ class ComposantPaie(db.Model):
     soumis_irpp   = db.Column(db.Boolean, default=True)
     actif         = db.Column(db.Boolean, default=True)
     ordre         = db.Column(db.Integer, default=0)
-    cree_le       = db.Column(db.DateTime, default=datetime.utcnow)
+    cree_le       = db.Column(db.DateTime, default=utcnow)
     __table_args__ = (db.Index("idx_composants_tenant", "tenant_id", "actif"),)
 
     @property
@@ -760,7 +767,7 @@ class Acompte(db.Model):
     annee         = db.Column(db.Integer, nullable=False)
     motif         = db.Column(db.String(200))
     statut        = db.Column(db.String(20), default="EN_ATTENTE")
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
     salarie = db.relationship("Salarie", backref="acomptes")
     def to_dict(self):
         d = {c.name: getattr(self, c.name) for c in self.__table__.columns}
@@ -785,7 +792,7 @@ class Journalier(db.Model):
     date_debut    = db.Column(db.Date)           # début de mission (libre)
     date_fin      = db.Column(db.Date)           # fin de mission (optionnel)
     nationalite   = db.Column(db.String(60))
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
     pointages = db.relationship("Pointage", backref="journalier", lazy=True,
                 foreign_keys="Pointage.journalier_id")
     @property
@@ -868,7 +875,7 @@ class FeuillePaieJournalier(db.Model):
     avance_deduite = db.Column(db.Numeric(15,2), default=0)  # avances déduites (figé au paiement)
     statut        = db.Column(db.String(20), default="EN_ATTENTE")
     observation   = db.Column(db.String(200))
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
     journalier = db.relationship("Journalier", backref="feuilles_paie")
 
     @property
@@ -911,11 +918,11 @@ class AvanceJournalier(db.Model):
     montant       = db.Column(db.Numeric(15,2), nullable=False)
     montant_regularise = db.Column(db.Numeric(15,2), default=0)
     statut        = db.Column(db.String(20), default="EN_ATTENTE")  # EN_ATTENTE | VALIDEE
-    date_avance   = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    date_avance   = db.Column(db.Date, nullable=False, default=utcnow)
     mode_paiement = db.Column(db.String(30), default="ESPECES")
     reference     = db.Column(db.String(80))
     motif         = db.Column(db.String(200))
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
 
     journalier = db.relationship("Journalier", backref="avances")
     site       = db.relationship("Site")
@@ -988,7 +995,7 @@ class Paiement(db.Model):
     # EN_ATTENTE | SUCCES | ECHEC | EXPIRE | REMBOURSE
 
     # Dates
-    date_creation    = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation    = db.Column(db.DateTime, default=utcnow)
     date_confirmation = db.Column(db.DateTime)
 
     # Données brutes de la réponse opérateur (JSON)
@@ -1032,7 +1039,7 @@ class OAuthClient(db.Model):
     client_secret = db.Column(db.String(128), nullable=False)
     description   = db.Column(db.String(300))
     actif         = db.Column(db.Boolean, default=True)
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
     derniere_utilisation = db.Column(db.DateTime)
 
     tenant = db.relationship("Tenant", backref="oauth_clients")
@@ -1075,7 +1082,7 @@ class AuditLog(db.Model):
     # Contexte technique
     ip_address   = db.Column(db.String(45))
     user_agent   = db.Column(db.String(300))
-    date_action  = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    date_action  = db.Column(db.DateTime, default=utcnow, nullable=False)
 
     # Relations
     tenant = db.relationship("Tenant",      foreign_keys=[tenant_id])
@@ -1153,8 +1160,8 @@ class Prestataire(db.Model):
 
     statut        = db.Column(db.String(20), default="ACTIF")  # ACTIF | INACTIF
     notes         = db.Column(db.Text)
-    date_creation     = db.Column(db.DateTime, default=datetime.utcnow)
-    date_modification = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    date_creation     = db.Column(db.DateTime, default=utcnow)
+    date_modification = db.Column(db.DateTime, onupdate=utcnow)
 
     contrats = db.relationship("ContratPrestation", backref="prestataire", lazy=True)
     factures = db.relationship("FacturePrestataire", backref="prestataire", lazy=True)
@@ -1206,7 +1213,7 @@ class ContratPrestation(db.Model):
 
     statut         = db.Column(db.String(20), default="EN_COURS")  # EN_COURS | TERMINE | SUSPENDU | ANNULE
     conditions     = db.Column(db.Text)
-    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation  = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (
         db.Index("idx_contrats_prest_tenant", "tenant_id", "prestataire_id"),
@@ -1265,7 +1272,7 @@ class FacturePrestataire(db.Model):
     valide_par_nom     = db.Column(db.String(150))
     valide_par_user_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
     date_validation    = db.Column(db.DateTime)
-    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation  = db.Column(db.DateTime, default=utcnow)
 
     paiements = db.relationship("PaiementPrestataire", backref="facture", lazy=True)
     lignes    = db.relationship("LigneFacturePrestataire", backref="facture",
@@ -1391,7 +1398,7 @@ class PaiementPrestataire(db.Model):
     pourcentage_realisation = db.Column(db.Numeric(5,2), default=0)  # % d'avancement payé (BTP)
     reference      = db.Column(db.String(100))   # n° de transaction / chèque
     notes          = db.Column(db.String(300))
-    date_creation  = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation  = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (
         db.Index("idx_paiements_prest_tenant", "tenant_id", "facture_id"),
@@ -1417,7 +1424,7 @@ class TauxDevise(db.Model):
     devise    = db.Column(db.String(5), nullable=False)
     taux_xaf  = db.Column(db.Numeric(14, 6), nullable=False)
     source    = db.Column(db.String(30), default="API")   # API | PEG | FALLBACK | MANUEL
-    date_creation = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation = db.Column(db.DateTime, default=utcnow)
 
     __table_args__ = (
         db.UniqueConstraint("date_taux", "devise"),
@@ -1459,7 +1466,7 @@ class AvancePrestataire(db.Model):
     valide_par_user_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
     date_validation    = db.Column(db.DateTime)
 
-    date_creation      = db.Column(db.DateTime, default=datetime.utcnow)
+    date_creation      = db.Column(db.DateTime, default=utcnow)
 
     prestataire = db.relationship("Prestataire", backref="avances")
     site        = db.relationship("Site")

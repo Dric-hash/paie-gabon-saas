@@ -15,7 +15,7 @@ from flask_mail import Message
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 
-from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
+from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement, OAuthClient, AuditLog,
@@ -1103,7 +1103,7 @@ def salarie_modifier(id):
             ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
             ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
             ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
-            ("statut",request.form.get("statut","ACTIF")),("date_modification",datetime.utcnow())]:
+            ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
         db.session.commit()
         # ── Affectation site ──────────────────────────────────────────────
@@ -1459,7 +1459,7 @@ def bulletins_valider_lot():
         for b in buls:
             if b.statut != "BROUILLON": continue
             b.statut          = "VALIDÉ"
-            b.date_validation = datetime.utcnow()
+            b.date_validation = utcnow()
             attribuer_numero_bulletin(b)
             for a in Acompte.query.filter_by(
                 tenant_id=t.id, salarie_id=b.salarie_id,
@@ -1522,7 +1522,7 @@ def attribuer_numero_bulletin(b):
     """
     if b.numero:
         return
-    annee = b.periode.annee if b.periode else datetime.utcnow().year
+    annee = b.periode.annee if b.periode else utcnow().year
     dernier = (db.session.query(db.func.max(BulletinPaie.numero_seq))
                .filter(BulletinPaie.tenant_id == b.tenant_id).scalar()) or 0
     b.numero_seq = dernier + 1
@@ -1646,7 +1646,7 @@ def bulletin_saisie():
                 setattr(b, f"taux_{r}", taux_val.strip()[:20] if taux_val else "")
         action=request.form.get("action","brouillon")
         if action=="valider":
-            b.statut="VALIDÉ"; b.date_validation=datetime.utcnow()
+            b.statut="VALIDÉ"; b.date_validation=utcnow()
             attribuer_numero_bulletin(b)
             for a in acomptes_en_attente: a.statut = "DEDUIT"
         else:
@@ -1703,7 +1703,7 @@ def bulletin_valider(id):
         tenant_id=t.id, salarie_id=b.salarie_id,
         mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
     for a in acomptes: a.statut = "DEDUIT"
-    b.statut = "VALIDÉ"; b.date_validation = datetime.utcnow()
+    b.statut = "VALIDÉ"; b.date_validation = utcnow()
     attribuer_numero_bulletin(b)
     db.session.commit()
     log_action("VALIDATE", "bulletin", b.id,
@@ -1843,6 +1843,7 @@ def _recap_sites_salarie_periode(t, salarie_id, annee, mois):
            .filter_by(tenant_id=t.id, salarie_id=salarie_id)
            .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
                    Pointage.present == True, Pointage.absent == False)
+           .options(joinedload(Pointage.site))
            .all())
     agg = {}
     for p in pts:
@@ -1893,7 +1894,7 @@ def _bulletin_imprimer_impl(id):
     composants = BulletinComposant.query.filter_by(bulletin_id=b.id).all()
     # Répartition par site (multi-chantiers) — affichée seulement si > 1 site.
     from models import PeriodePaie
-    per = PeriodePaie.query.get(b.periode_id)
+    per = db.session.get(PeriodePaie, b.periode_id)
     recap_sites, multi_sites = ([], False)
     if per is not None:
         recap_sites, multi_sites = _recap_sites_salarie_periode(t, b.salarie_id, per.annee, per.mois)
@@ -2001,7 +2002,7 @@ def periode_nouvelle():
     if PeriodePaie.query.filter_by(tenant_id=t.id,annee=annee,mois=mois).first(): flash("Période existante.","warning")
     else:
         db.session.add(PeriodePaie(tenant_id=t.id,annee=annee,mois=mois,libelle_mois=noms[mois],
-            trimestre=f"T{(mois-1)//3+1}",statut="OUVERT",date_ouverture=datetime.utcnow()))
+            trimestre=f"T{(mois-1)//3+1}",statut="OUVERT",date_ouverture=utcnow()))
         db.session.commit(); flash(f"Période {noms[mois]} {annee} créée.","success")
     return redirect(url_for("tenant.periodes"))
 
@@ -2010,7 +2011,7 @@ def periode_nouvelle():
 @can_edit
 def periode_cloturer(id):
     t=get_tenant(); p=PeriodePaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    p.statut="CLÔTURÉ"; p.date_cloture=datetime.utcnow(); db.session.commit()
+    p.statut="CLÔTURÉ"; p.date_cloture=utcnow(); db.session.commit()
     flash("Période clôturée.","success"); return redirect(url_for("tenant.periodes"))
 
 # ── Paiement abonnement ───────────────────────────────────────────────────────
@@ -2043,7 +2044,7 @@ def paiement_airtel_initier():
     duree      = int(request.form.get("duree", 1) or 1)
     plan_id    = request.form.get("plan_id", type=int) or (t.plan_id)
 
-    plan = Plan.query.get(plan_id) if plan_id else t.plan
+    plan = db.session.get(Plan, plan_id) if plan_id else t.plan
     if not plan:
         flash("Plan introuvable.", "error")
         return redirect(url_for("tenant.paiement"))
@@ -2252,10 +2253,10 @@ def _activer_abonnement(paiement: "Paiement"):
     from datetime import timezone
     p = paiement
     p.statut           = "SUCCES"
-    p.date_confirmation = datetime.utcnow()
+    p.date_confirmation = utcnow()
 
     t = p.tenant
-    now = datetime.utcnow()
+    now = utcnow()
 
     # Prolonger depuis aujourd'hui ou depuis la date d'expiration si future
     base = t.date_expiration if (t.date_expiration and t.date_expiration > now) else now
@@ -2339,7 +2340,7 @@ def paiement_cinetpay_initier():
 
     duree   = int(request.form.get("duree", 1) or 1)
     plan_id = request.form.get("plan_id", type=int) or t.plan_id
-    plan    = Plan.query.get(plan_id) if plan_id else t.plan
+    plan    = db.session.get(Plan, plan_id) if plan_id else t.plan
 
     if not plan:
         flash("Plan introuvable.", "error")
@@ -2918,7 +2919,7 @@ def demande_changement_plan():
     if not current_user.is_tenant_admin: abort(403)
     plan_souhaite_id = request.form.get("plan_id", type=int)
     motif = request.form.get("motif", "").strip()
-    plan_souhaite = Plan.query.get(plan_souhaite_id) if plan_souhaite_id else None
+    plan_souhaite = db.session.get(Plan, plan_souhaite_id) if plan_souhaite_id else None
     if not plan_souhaite:
         flash("Plan invalide.", "error")
         return redirect(url_for("tenant.parametres"))
@@ -5273,6 +5274,7 @@ def salarie_pointages_imprimer(id):
     pts = (Pointage.query
            .filter_by(tenant_id=t.id, salarie_id=id)
            .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin)
+           .options(joinedload(Pointage.site))
            .order_by(Pointage.date_pointage).all())
     ctx = _pointages_mois_contexte(t, pts, t.convention)
     return render_template("tenant/pointages_print.html",
@@ -5300,6 +5302,7 @@ def journalier_pointages_imprimer(id):
     pts = (Pointage.query
            .filter_by(tenant_id=t.id, journalier_id=id)
            .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin)
+           .options(joinedload(Pointage.site))
            .order_by(Pointage.date_pointage).all())
     # Les journaliers ne relèvent pas de la ventilation conventionnelle BTP :
     # on cumule directement les colonnes pointées.

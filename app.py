@@ -15,7 +15,7 @@ from flask_login import LoginManager, logout_user, current_user
 from flask_mail import Mail
 from flask_wtf.csrf import CSRFProtect
 
-from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi,
+from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi,
                     RubriquePaie)
 from i18n import get_translations, detect_language, is_rtl
 
@@ -136,7 +136,7 @@ def load_user(uid):
     if "." in suid:
         sid, tok = suid.split(".", 1)
         try:
-            u = Utilisateur.query.get(int(sid))
+            u = db.session.get(Utilisateur, int(sid))
         except (ValueError, TypeError):
             return None
         if u and (u.session_token or "") == tok:
@@ -145,7 +145,7 @@ def load_user(uid):
     # Sessions héritées (créées avant l'ajout du jeton) : chargement par id.
     # Elles expireront via le timeout d'inactivité.
     try:
-        return Utilisateur.query.get(int(suid))
+        return db.session.get(Utilisateur, int(suid))
     except (ValueError, TypeError):
         return None
 
@@ -169,7 +169,7 @@ def gerer_session_inactivite():
     if any(request.path.startswith(p) for p in excluded):
         return
     if current_user.is_authenticated:
-        now     = datetime.utcnow()
+        now     = utcnow()
         timeout = int(os.environ.get("SESSION_TIMEOUT_MINUTES", "60"))
         derniere = session.get("derniere_activite")
         if derniere:

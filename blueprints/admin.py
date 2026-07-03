@@ -11,7 +11,7 @@ from flask_login import login_user, login_required, logout_user, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func
 
-from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
+from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement)
@@ -27,7 +27,7 @@ bp = Blueprint("admin", __name__)
 @super_admin_required
 def admin_dashboard():
     from datetime import timedelta
-    now     = datetime.utcnow()
+    now     = utcnow()
     MOIS_FR = ["","Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"]
 
     # ── Tous les tenants (base de tout) ─────────────────────────────────────
@@ -243,7 +243,7 @@ def admin_tenant_nouveau():
             ville=request.form.get("ville", "Libreville").strip() or "Libreville",
             pays="Gabon", plan_id=plan.id if plan else None,
             statut=statut,
-            date_expiration=datetime.utcnow() + timedelta(days=30),
+            date_expiration=utcnow() + timedelta(days=30),
         )
         t.generate_token()
         db.session.add(t)
@@ -284,7 +284,7 @@ def admin_tenant_detail(id):
         plans=Plan.query.all(),
         periodes_recentes=periodes_recentes,
         nb_journaliers=nb_journaliers,
-        now=datetime.utcnow())
+        now=utcnow())
 
 @bp.route("/admin/tenants/<int:id>/statut", methods=["POST"])
 @super_admin_required
@@ -452,7 +452,7 @@ def admin_stats():
         taux_conv=taux_conv,
         top8_labels=top8_labels,
         top8_data=top8_data,
-        now=datetime.utcnow())
+        now=utcnow())
 
 @bp.route("/admin/import", methods=["GET","POST"])
 @login_required
@@ -589,7 +589,7 @@ def admin_import_excel():
                     bul.salaire_net=nv(row[77]); bul.prime_panier=nv(row[78]); bul.indem_transport=nv(row[79])
                     bul.indem_representation=nv(row[80]); bul.prime_salisure=nv(row[81])
                     bul.acompte=nv(row[82]); bul.net_a_payer=nv(row[83]) if len(row)>83 else 0
-                    bul.statut="VALIDÉ"; bul.date_validation=datetime.utcnow(); nb_bul+=1
+                    bul.statut="VALIDÉ"; bul.date_validation=utcnow(); nb_bul+=1
             db.session.commit()
             resultats={"nb_salaries":nb_sal,"nb_bulletins":nb_bul,"nb_periodes":nb_per,"erreurs":nb_err}
             flash(f"Import réussi ! {nb_sal} salariés, {nb_bul} bulletins, {nb_per} périodes.","success")

@@ -9,7 +9,7 @@ from flask import (Blueprint, render_template, request, redirect,
 from flask_login import login_user, logout_user, login_required, current_user
 from flask_mail import Message
 
-from models import db, Plan, Tenant, Utilisateur, CategorieEmploi
+from models import db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi
 from audit import log_action
 from core import get_tenant, send_email_async, validate_password, get_limiter
 
@@ -68,7 +68,7 @@ def login():
             except Exception:
                 pass
 
-        now          = datetime.utcnow()
+        now          = utcnow()
         MAX_ECHECS   = int(os.environ.get("LOGIN_MAX_ECHECS",  "5"))
         BLOCAGE_MIN  = int(os.environ.get("LOGIN_BLOCAGE_MIN", "15"))
 
@@ -151,7 +151,7 @@ def verifier_2fa():
 
     if request.method == "POST":
         code = request.form.get("code", "").strip()
-        now  = datetime.utcnow()
+        now  = utcnow()
         MAX_OTP = 5
 
         # Code expiré ou inexistant
@@ -259,7 +259,7 @@ def inscription():
             ville=request.form.get("ville", "Libreville"),
             pays="Gabon", plan_id=plan.id if plan else None,
             statut="ESSAI",
-            date_expiration=datetime.utcnow() + timedelta(days=30),
+            date_expiration=utcnow() + timedelta(days=30),
         )
         t.generate_token()
         db.session.add(t)
@@ -278,7 +278,7 @@ def inscription():
 
         token_conf = sec.token_urlsafe(32)
         admin.token_confirmation        = token_conf
-        admin.token_confirmation_expiry = datetime.utcnow() + timedelta(hours=48)
+        admin.token_confirmation_expiry = utcnow() + timedelta(hours=48)
         admin.email_verifie             = False
         db.session.add(admin)
         db.session.commit()
@@ -342,7 +342,7 @@ def confirmer_email(token):
     if not u:
         flash("Lien de confirmation invalide ou déjà utilisé.", "error")
         return redirect(url_for("auth.login"))
-    if u.token_confirmation_expiry and datetime.utcnow() > u.token_confirmation_expiry:
+    if u.token_confirmation_expiry and utcnow() > u.token_confirmation_expiry:
         flash("Ce lien a expiré (48h). Reconnectez-vous pour en demander un nouveau.", "error")
         return redirect(url_for("auth.login"))
     u.email_verifie             = True
@@ -369,7 +369,7 @@ def renvoyer_confirmation():
         return redirect(url_for("tenant.dashboard"))
     token = sec.token_urlsafe(32)
     u.token_confirmation        = token
-    u.token_confirmation_expiry = datetime.utcnow() + timedelta(hours=48)
+    u.token_confirmation_expiry = utcnow() + timedelta(hours=48)
     db.session.commit()
     lien = url_for("auth.confirmer_email", token=token, _external=True)
     mail = current_app.extensions["mail"]
@@ -397,7 +397,7 @@ def mot_de_passe_oublie():
         if user and os.environ.get("MAIL_PASSWORD"):
             token = sec.token_urlsafe(32)
             user.reset_token        = token
-            user.reset_token_expiry = datetime.utcnow() + timedelta(hours=2)
+            user.reset_token_expiry = utcnow() + timedelta(hours=2)
             db.session.commit()
             lien = url_for("auth.reinitialiser_mdp", token=token, _external=True)
             mail = current_app.extensions["mail"]
@@ -438,7 +438,7 @@ def mot_de_passe_oublie():
 @bp.route("/reinitialiser-mdp/<token>", methods=["GET", "POST"])
 def reinitialiser_mdp(token):
     user = Utilisateur.query.filter_by(reset_token=token).first()
-    if not user or (user.reset_token_expiry and datetime.utcnow() > user.reset_token_expiry):
+    if not user or (user.reset_token_expiry and utcnow() > user.reset_token_expiry):
         flash("Lien invalide ou expiré. Refaites une demande.", "error")
         return redirect(url_for("auth.mot_de_passe_oublie"))
     if request.method == "POST":
@@ -479,7 +479,7 @@ def changer_email():
         token = sec.token_urlsafe(32)
         current_user.nouvel_email_en_attente = nouvel_email
         current_user.token_changement_email  = token
-        current_user.token_changement_expiry = datetime.utcnow() + timedelta(hours=24)
+        current_user.token_changement_expiry = utcnow() + timedelta(hours=24)
         db.session.commit()
         lien = url_for("auth.confirmer_changement_email", token=token, _external=True)
         if os.environ.get("MAIL_PASSWORD"):
@@ -517,7 +517,7 @@ def confirmer_changement_email(token):
     if not u:
         flash("Lien invalide ou déjà utilisé.", "error")
         return redirect(url_for("tenant.parametres"))
-    if u.token_changement_expiry and datetime.utcnow() > u.token_changement_expiry:
+    if u.token_changement_expiry and utcnow() > u.token_changement_expiry:
         flash("Ce lien a expiré (24h). Refaites la demande.", "error")
         return redirect(url_for("auth.changer_email"))
     ancien_email = u.email
