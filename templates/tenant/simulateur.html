@@ -354,7 +354,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const H_NORM  = 173.33;
 const H_STRUCT= 17.33;
 const C10=1.10, C30=1.30;
@@ -560,7 +560,7 @@ style.textContent = '@media print { .card:first-child, #panneau-resultats > .car
 document.head.appendChild(style);
 </script>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function switchTab(id) {
   document.querySelectorAll('.adv-tab').forEach(t => t.style.display = 'none');
   document.getElementById(id).style.display = 'block';

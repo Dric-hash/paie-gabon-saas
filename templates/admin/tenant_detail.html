@@ -405,7 +405,7 @@
 
 </main>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function confirmerSuppression() {
   const box = document.getElementById('confirm-box');
   if (box.style.display === 'none') {

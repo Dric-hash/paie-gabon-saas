@@ -169,7 +169,7 @@
   </main>
 </div>
 {% block scripts %}{% endblock %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Recherche rapide autocomplete ─────────────────────────────────────────────
 let _rTimeout = null;
 

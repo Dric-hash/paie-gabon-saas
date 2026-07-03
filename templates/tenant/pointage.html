@@ -329,7 +329,7 @@
   </div>
 </form>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Afficher/masquer motif absence ───────────────────────────────────────────
 function toggleAbsence(type, id, absent) {
   const hDiv = document.getElementById(`${type}_heures_div_${id}`);

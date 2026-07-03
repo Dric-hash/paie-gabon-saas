@@ -222,7 +222,7 @@
   {% endif %}
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleDetails(n) {
   const el = document.getElementById('details-' + n);
   el.style.display = el.style.display === 'none' ? 'block' : 'none';

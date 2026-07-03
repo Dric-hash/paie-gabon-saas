@@ -330,7 +330,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const now = new Date();
 </script>
 {% endblock %}

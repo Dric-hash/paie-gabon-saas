@@ -59,7 +59,7 @@
 @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 const REFERENCE  = "{{ paiement.reference_interne }}";
 const MAX_ESSAIS = 24;   // 24 × 5s = 2 minutes
 const INTERVALLE = 5000; // 5 secondes

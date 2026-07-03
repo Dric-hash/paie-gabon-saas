@@ -571,7 +571,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 const DATE = "{{ date_sel.strftime('%Y-%m-%d') }}";
 const TYPE_W = "{{ type_w }}";
 const WORKER_ID = {{ worker.id if worker else 'null' }};

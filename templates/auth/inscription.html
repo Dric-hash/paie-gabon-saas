@@ -60,7 +60,7 @@
     <p class="text-center text-xs text-gray-400">Déjà un compte ? <a href="/login" class="text-slate-700 font-bold hover:underline">Se connecter</a></p>
   </form>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.querySelectorAll('input[name="plan_choix"]').forEach(r=>{
   r.addEventListener('change',()=>document.getElementById('plan_id_field').value=r.value);
   if(r.checked) document.getElementById('plan_id_field').value=r.value;

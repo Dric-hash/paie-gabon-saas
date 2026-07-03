@@ -204,7 +204,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
   function imprimerSelectionAcomptes() {
     var coches = Array.from(document.querySelectorAll('.chk-acompte:checked'));
     if (coches.length === 0) {

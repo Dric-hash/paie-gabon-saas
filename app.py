@@ -213,6 +213,9 @@ def add_security_headers(response):
             "object-src 'none'; "          # bloque les plugins/embeds (Flash, etc.)
             "base-uri 'self'; "            # empêche le détournement via <base>
             "form-action 'self'; "         # les formulaires ne postent que vers le site
+            "frame-src 'none'; "           # aucune iframe (l'app n'en utilise pas)
+            "worker-src 'self'; "          # service worker same-origin uniquement
+            "manifest-src 'self'; "        # manifeste PWA same-origin
             "frame-ancestors 'none';"      # pas d'iframe tierce (anti-clickjacking)
         )
         # En production, force la mise à niveau des sous-ressources http → https.
@@ -231,10 +234,14 @@ def add_security_headers(response):
             strict = (
                 "default-src 'self'; "
                 f"script-src 'self' 'nonce-{nonce}' cdn.tailwindcss.com cdnjs.cloudflare.com cdn.jsdelivr.net; "
-                f"style-src 'self' 'nonce-{nonce}' fonts.googleapis.com cdnjs.cloudflare.com; "
+                # style-src reste en 'unsafe-inline' : les attributs style="…" inline
+                # ne peuvent pas porter de nonce, et le risque d'injection CSS est
+                # faible. On concentre l'observation sur script-src (le vrai vecteur).
+                "style-src 'self' 'unsafe-inline' fonts.googleapis.com cdnjs.cloudflare.com; "
                 "font-src 'self' data: fonts.gstatic.com cdnjs.cloudflare.com; "
                 "img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; "
-                "base-uri 'self'; form-action 'self'; frame-ancestors 'none'; "
+                "base-uri 'self'; form-action 'self'; frame-src 'none'; "
+                "worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'; "
                 "report-uri /csp-report;"
             )
             response.headers["Content-Security-Policy-Report-Only"] = strict

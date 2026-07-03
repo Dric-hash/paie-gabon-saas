@@ -484,7 +484,7 @@
   </div>
 </footer>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Révélation au défilement (désactivée si l'utilisateur préfère moins d'animations)
 (function(){
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;

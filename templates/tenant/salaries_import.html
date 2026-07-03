@@ -138,7 +138,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Sélection et drag & drop ──────────────────────────────────────────────
 function onFichierChange(input) {
   const fn = input.files[0]?.name;

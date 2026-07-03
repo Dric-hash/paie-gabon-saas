@@ -34,7 +34,7 @@
   <link rel="icon" href="/static/favicon.ico" sizes="any"/>
   <link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png"/>
   <link rel="icon" type="image/png" sizes="512x512" href="/static/icons/icon-512.png"/>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Anti-flash : appliquer dark mode avant rendu
     if (localStorage.getItem('paie_dark_mode') === '1') {
       document.documentElement.classList.add('dark');
@@ -397,7 +397,7 @@
   </main>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Sidebar : bouton ☰ pour replier/déplier le menu ─────────────────────────
 function toggleSidebar() {
   if (window.innerWidth >= 1024) {
@@ -456,7 +456,7 @@ document.addEventListener('click', function(e) {
 </script>
 {% block scripts %}{% endblock %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── PWA — Enregistrement Service Worker ──────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
@@ -584,7 +584,7 @@ if (window.MutationObserver) {
 }
 </script>
   <script src="/static/js/i18n.js"></script>
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Sauvegarder la langue dans localStorage pour persistance côté client
     localStorage.setItem('pg_lang', '{{ lang }}');
   </script>

@@ -521,7 +521,7 @@
 
 </main>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 const MOIS   = {{ mois_labels | tojson }};
 const REV    = {{ revenus_6mois | tojson }};
 const INSC   = {{ inscrits_6mois | tojson }};

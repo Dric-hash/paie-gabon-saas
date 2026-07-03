@@ -371,7 +371,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     document.addEventListener("click", function(e) {
       var wrap = document.getElementById("menu-sage-wrap");
       if (wrap && !wrap.contains(e.target))
@@ -453,7 +453,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 // ── Gestion des cases à cocher ────────────────────────────────────────────────
 function getChecked() {
   return [...document.querySelectorAll('.cb-bulletin:checked')];

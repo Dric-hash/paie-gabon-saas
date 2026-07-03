@@ -50,7 +50,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
     // Vérifier la connexion et rediriger si rétablie
     function verifierConnexion() {
       fetch('/dashboard', { method: 'HEAD', cache: 'no-store' })

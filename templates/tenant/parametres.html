@@ -90,7 +90,7 @@
       </form>
     </div>
 
-    <script>
+    <script nonce="{{ csp_nonce }}">
     function selectLang(lang) {
       ['fr','en','ar'].forEach(l => {
         document.getElementById('lang-' + l).checked = (l === lang);
@@ -440,7 +440,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce }}">
   function selectModele(nom) {
     ['classique','moderne','minimaliste'].forEach(function(m) {
       var c = document.getElementById('card-modele-' + m);
@@ -889,7 +889,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function highlightPlan(radio) {
   // Retirer la sélection de toutes les cartes
   document.querySelectorAll('.plan-radio').forEach(r => {
@@ -913,7 +913,7 @@ function highlightPlan(radio) {
 
 
 <!-- JavaScript pour les onglets -->
-<script>
+<script nonce="{{ csp_nonce }}">
 function showTab(id) {
   // Masquer tous les contenus
   document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');

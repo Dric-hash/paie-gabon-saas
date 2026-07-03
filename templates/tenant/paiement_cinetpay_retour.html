@@ -42,7 +42,7 @@
 @keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.08)} }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 const REFERENCE  = "{{ (paiement.reference_interne if paiement else transaction_id)|default('') }}";
 const MAX_ESSAIS = 18;   // 18 × 5s = 90 secondes
 const INTERVALLE = 5000;

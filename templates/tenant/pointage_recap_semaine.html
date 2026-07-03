@@ -389,7 +389,7 @@
 
 {% endblock %}
 {% block scripts %}
-<script></script>
+<script nonce="{{ csp_nonce }}"></script>
 <style>
 @media print {
   .no-print, nav, .sidebar { display: none !important; }

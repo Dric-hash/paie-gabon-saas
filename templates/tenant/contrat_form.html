@@ -137,7 +137,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 // Sélecteur de type de contrat visuel
 document.querySelectorAll('.radio-contrat').forEach(radio => {
   radio.addEventListener('change', () => updateBadges());

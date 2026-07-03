@@ -266,7 +266,7 @@
 
 {% block scripts %}
 <!-- Autocomplétion : script indépendant, s'exécute même si Chart.js échoue -->
-<script>
+<script nonce="{{ csp_nonce }}">
 (function() {
   const input = document.getElementById('dashSearch');
   const box   = document.getElementById('dashSearchResults');
@@ -322,7 +322,7 @@
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+<script nonce="{{ csp_nonce }}">
 const evo = {{ evolution | tojson }};
 const cats = {{ cats_stats | tojson if cats_stats else '[]' }};
 const BRAND = '#0f3d36', ACCENT = '#b8862f', CLAY = '#c08552';
