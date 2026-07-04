@@ -84,6 +84,9 @@ class Tenant(db.Model):
     langue           = db.Column(db.String(5), default="fr")  # "fr" | "en"
     # Convention collective applicable : "AUCUNE" | "BTP" | "COMMERCE"
     convention       = db.Column(db.String(20), default="AUCUNE")
+    # Grille de salaires conventionnelle (JSON) : {"EI": {"1": 101526, ...}, ...}.
+    # Éditée et VÉRIFIÉE par le tenant ; sert au pré-remplissage du salaire de base.
+    grille_salaires  = db.Column(db.Text)
     # Taux d'acquisition des congés (jours ouvrables / mois travaillé, Art. 222).
     # Minimum légal adulte = 2.0 ; défaut historique de l'app = 2.5 (avantage).
     jours_conge_par_mois = db.Column(db.Numeric(3, 1), default=2.5)

@@ -74,9 +74,23 @@
     </div>
 
     {% if action == 'nouveau' %}
+    {% if grille_salaires %}
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Grille conventionnelle <span class="text-gray-400 font-normal">(optionnel)</span></label>
+      <div class="flex gap-2">
+        <select id="grille-cat" class="w-1/3 border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="">Catégorie…</option>
+        </select>
+        <select id="grille-ech" class="flex-1 border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="">Échelon…</option>
+        </select>
+      </div>
+      <p class="text-xs text-gray-400 mt-1">Remplit automatiquement le salaire de base ci-dessous (modifiable).</p>
+    </div>
+    {% endif %}
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">Salaire de base (FCFA) *</label>
-      <input type="number" name="salaire_base" required min="0"
+      <input type="number" name="salaire_base" id="salaire_base" required min="0"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-right font-mono"/>
     </div>
     <div>
@@ -220,5 +234,34 @@
   </div>
 
 </form>
+
+{% if action == 'nouveau' and grille_salaires %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var GRILLE = {{ grille_salaires | tojson }};
+  var cat = document.getElementById('grille-cat');
+  var ech = document.getElementById('grille-ech');
+  var sal = document.getElementById('salaire_base');
+  if (!cat || !ech || !sal) return;
+  Object.keys(GRILLE).forEach(function(code){
+    var o = document.createElement('option'); o.value = code; o.textContent = code;
+    cat.appendChild(o);
+  });
+  cat.addEventListener('change', function(){
+    ech.innerHTML = '<option value="">Échelon…</option>';
+    var m = GRILLE[cat.value] || {};
+    Object.keys(m).sort(function(a,b){ return Number(a) - Number(b); }).forEach(function(e){
+      var o = document.createElement('option'); o.value = e;
+      o.textContent = 'Échelon ' + e + ' — ' + Number(m[e]).toLocaleString('fr-FR') + ' FCFA';
+      ech.appendChild(o);
+    });
+  });
+  ech.addEventListener('change', function(){
+    var m = GRILLE[cat.value] || {};
+    if (m[ech.value] != null) sal.value = Math.round(m[ech.value]);
+  });
+})();
+</script>
+{% endif %}
 
 {% endblock %}

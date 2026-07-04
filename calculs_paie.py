@@ -1857,3 +1857,51 @@ def distribuer_heures_semaine(convention, heures_par_jour: list, types_par_jour:
     if c == "COMMERCE":
         return distribuer_heures_semaine_commerce(heures_par_jour, types_par_jour)
     return distribuer_heures_semaine_btp(heures_par_jour, types_par_jour, seuil_normales=seuil_normales)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# GRILLE DE SALAIRES — Convention Transports Aériens (Annexe I / "nouvelle grille")
+# Catégories du personnel au sol (11) et montants mensuels par échelon.
+#
+# ⚠️  Les MONTANTS ci-dessous sont une TRANSCRIPTION d'un document scanné dégradé
+#     (1987) et doivent être VÉRIFIÉS par l'utilisateur avant tout usage en paie.
+#     Ils ne servent qu'à PRÉ-REMPLIR l'écran d'édition de la grille ; le calcul
+#     de paie n'utilise que la grille enregistrée (donc validée) par le tenant.
+# ──────────────────────────────────────────────────────────────────────────────
+GRILLE_CATEGORIES_AERIEN = [
+    ("EI",   "Manœuvres"),
+    ("EII",  "Employés et Ouvriers"),
+    ("EIII", "Employés et Ouvriers spécialisés"),
+    ("EIV",  "Employés et Ouvriers professionnels"),
+    ("EV",   "Employés qualifiés"),
+    ("EVI",  "Employés très qualifiés I"),
+    ("EVII", "Employés hautement qualifiés"),
+    ("MI",   "Maîtrise / Techniciens"),
+    ("MII",  "Haute maîtrise"),
+    ("CI",   "Cadres"),
+    ("CII",  "Cadres supérieurs"),
+]
+
+# code → liste des montants mensuels par échelon (échelon 1 … n). À VÉRIFIER.
+GRILLE_AERIEN_SEED = {
+    "EI":   [101526, 110970, 120414, 129859, 139303, 151108, 162914, 174719, 186525, 198330],
+    "EII":  [113331, 125137, 127672, 151108, 160552, 174719, 188886, 203052, 217219, 231382],
+    "EIII": [146387, 157022, 167636, 181802, 195969, 212496, 231382, 253815, 271523, 295132],
+    "EIV":  [181802, 203052, 224302, 247913, 269160, 285687, 311659, 337631, 363602, 389575],
+    "EV":   [242008, 253815, 283326, 319923, 345895, 375408, 404922, 434434, 463947, 493463],
+    "EVI":  [312840, 341173, 369505, 397839, 424990, 458045, 509447, 524156, 557210, 590128],
+    "EVII": [394296, 426172, 458045, 489920, 509447, 557210, 592626, 628043, 663457, 698874],
+    "MI":   [512601, 559815, 586794, 647496, 741923, 782391, 843094, 917286, 977989, 1052181],
+    "MII":  [809370, 843094, 876818, 917286, 964500, 1011713, 1058926, 1075539, 1180332, 1281503],
+    "CI":   [1103425, 1167308, 1238998, 1306688, 1405415, 1440260, 1538988, 1672560, 0, 0],
+    "CII":  [1335725, 1469298, 1602870, 1736443, 1870015, 0, 0, 0, 0, 0],
+}
+
+
+def grille_salaire_aerien_seed():
+    """Renvoie la grille aérienne pré-remplie sous forme {code: {"1": montant, …}}
+    (montants non nuls uniquement). Sert à initialiser l'écran d'édition."""
+    out = {}
+    for code, montants in GRILLE_AERIEN_SEED.items():
+        out[code] = {str(i + 1): m for i, m in enumerate(montants) if m}
+    return out

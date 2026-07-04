@@ -1,0 +1,72 @@
+{% extends "tenant/base.html" %}
+{% block title %}Grille de salaires — Paie Gabon{% endblock %}
+{% block content %}
+
+<div class="flex items-center gap-3 mb-4">
+  <a href="{{ url_for('tenant.parametres') }}" class="text-gray-400 hover:text-gray-700">← Paramètres</a>
+  <h1 class="text-2xl font-black text-gray-900">Grille de salaires</h1>
+</div>
+
+<p class="text-sm text-gray-500 mb-4" style="max-width:70ch">
+  Renseignez le salaire mensuel de base par catégorie et échelon.
+  Une fois enregistrée, cette grille pré-remplit automatiquement le salaire de base
+  lors de la création d'un salarié (choix catégorie + échelon). Laissez une case vide
+  si l'échelon n'existe pas.
+</p>
+
+{% if est_seed %}
+<div class="card p-4 mb-5" style="background:#fef3c7;border:1px solid #d97706">
+  <div class="text-sm" style="color:#92400e">
+    <b>⚠️ Grille pré-remplie à partir de la convention Transports Aériens</b> —
+    ces montants sont issus d'un <b>document scanné ancien</b> et peuvent comporter
+    des erreurs de lecture. <b>Vérifiez et corrigez chaque valeur</b> d'après votre
+    grille officielle, puis enregistrez. Tant que vous n'enregistrez pas, aucun
+    montant n'est utilisé en paie.
+  </div>
+</div>
+{% endif %}
+
+<form method="POST" action="{{ url_for('tenant.grille_salaires') }}">
+  <div class="card p-4 overflow-x-auto">
+    <table class="w-full text-sm" style="border-collapse:collapse">
+      <thead>
+        <tr>
+          <th class="text-left px-2 py-2" style="position:sticky;left:0;background:#fff">Catégorie</th>
+          {% for e in range(1, nb_echelons + 1) %}
+          <th class="px-1 py-2 text-center text-gray-500" style="font-weight:700">Éch. {{ e }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for code, libelle in categories %}
+        <tr style="border-top:1px solid #f0f0ee">
+          <td class="px-2 py-1.5" style="position:sticky;left:0;background:#fff">
+            <span class="font-mono font-bold" style="color:#0f3d36">{{ code }}</span>
+            <div class="text-gray-400" style="font-size:.7rem">{{ libelle }}</div>
+          </td>
+          {% for e in range(1, nb_echelons + 1) %}
+          {% set val = grille.get(code, {}).get(e|string, '') %}
+          <td class="px-1 py-1">
+            <input type="number" min="0" step="1"
+                   name="montant_{{ code }}_{{ e }}"
+                   value="{{ '%g'|format(val) if val else '' }}"
+                   class="w-24 border border-gray-200 rounded-lg px-2 py-1.5 text-right font-mono"
+                   style="font-size:.8rem" placeholder="—">
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="flex gap-3 mt-4">
+    <a href="{{ url_for('tenant.parametres') }}"
+       class="bg-gray-100 text-gray-700 rounded-xl px-5 py-3 text-sm font-bold">Annuler</a>
+    <button type="submit" class="btn-primary" style="font-weight:700">
+      Enregistrer la grille
+    </button>
+  </div>
+</form>
+
+{% endblock %}

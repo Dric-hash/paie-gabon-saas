@@ -934,7 +934,8 @@ def salarie_nouveau():
         return redirect(url_for("tenant.salarie_detail",id=s.id))
     sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
     return render_template("tenant/salarie_form.html", salarie=None, categories=cats,
-        action="nouveau", tenant=t, sites=sites, aff_actuelle=None)
+        action="nouveau", tenant=t, sites=sites, aff_actuelle=None,
+        grille_salaires=_grille_tenant(t))
 
 @bp.route("/journaliers/<int:id>/convertir", methods=["GET", "POST"])
 @login_required
@@ -1138,7 +1139,8 @@ def salarie_modifier(id):
         salarie_id=id, tenant_id=t.id, actif=True).first()
     sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats,
-        action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle)
+        action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle,
+        grille_salaires=_grille_tenant(t))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -2583,6 +2585,64 @@ def parametres():
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
         users=Utilisateur.query.filter_by(tenant_id=t.id).all(),
         plans_dispo=plans_dispo)
+
+@bp.route("/parametres/grille-salaires", methods=["GET", "POST"])
+@tenant_required
+def grille_salaires():
+    """Édition/vérification de la grille de salaires conventionnelle.
+    L'auto-remplissage du salaire de base (fiche salarié) n'utilise QUE la grille
+    enregistrée ici — jamais la graine brute — pour garantir des montants validés."""
+    import json as _json
+    from calculs_paie import GRILLE_CATEGORIES_AERIEN, grille_salaire_aerien_seed
+    t = get_tenant()
+    if not current_user.can_edit:
+        abort(403)
+
+    if request.method == "POST":
+        grille = {}
+        for key, val in request.form.items():
+            if not key.startswith("montant_") or not (val or "").strip():
+                continue
+            try:
+                _, code, ech = key.split("_", 2)
+                montant = float(val.replace(" ", "").replace("\u202f", "").replace(",", "."))
+            except (ValueError, IndexError):
+                continue
+            if montant > 0:
+                grille.setdefault(code, {})[ech] = round(montant, 2)
+        t.grille_salaires = _json.dumps(grille, ensure_ascii=False)
+        db.session.commit()
+        log_action("UPDATE", "tenant", t.id, "Grille de salaires mise à jour")
+        flash("Grille de salaires enregistrée. Elle est désormais utilisée pour "
+              "pré-remplir le salaire de base des salariés.", "success")
+        return redirect(url_for("tenant.grille_salaires"))
+
+    # GET : grille sauvegardée, sinon graine aérienne (à vérifier) si convention AERIEN.
+    grille, est_seed = {}, False
+    if t.grille_salaires:
+        try:
+            grille = _json.loads(t.grille_salaires)
+        except (ValueError, TypeError):
+            grille = {}
+    if not grille and (t.convention or "").upper() == "AERIEN":
+        grille = grille_salaire_aerien_seed()
+        est_seed = True
+    return render_template("tenant/grille_salaires.html", tenant=t,
+        categories=GRILLE_CATEGORIES_AERIEN, grille=grille,
+        est_seed=est_seed, nb_echelons=10)
+
+
+def _grille_tenant(t):
+    """Grille de salaires ENREGISTRÉE du tenant → dict {code: {echelon: montant}}.
+    Vide si non renseignée. Utilisée pour le pré-remplissage du salaire de base."""
+    import json as _json
+    if not t or not t.grille_salaires:
+        return {}
+    try:
+        return _json.loads(t.grille_salaires)
+    except (ValueError, TypeError):
+        return {}
+
 
 @bp.route("/parametres/logo", methods=["POST"])
 @login_required
