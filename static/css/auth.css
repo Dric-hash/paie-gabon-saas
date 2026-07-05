@@ -40,9 +40,10 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;color:var(--ink);
 .brand-copy{color:rgba(255,255,255,.45);font-size:.78rem}
 
 /* ── Panneau formulaire (droite) ── */
-.formside{flex:1 1 54%;display:flex;align-items:center;justify-content:center;padding:2.5rem 1.5rem;
+.formside{flex:1 1 54%;display:flex;flex-direction:column;align-items:center;padding:2.5rem 1.5rem;
   max-height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
-.formwrap{width:100%;max-width:400px;margin:auto} /* margin:auto = centre si ça tient, défile si trop haut (pas de rognage) */
+/* colonne + margin:auto (haut/bas) = centré si ça tient, aligné en haut et défilable si trop haut : jamais rogné */
+.formwrap{width:100%;max-width:400px;margin:auto}
 .formwrap.wide{max-width:520px}
 .mobile-brand{display:none}
 h1.title{font-family:'Plus Jakarta Sans';font-weight:800;font-size:1.6rem;margin:0 0 .3rem;color:var(--ink)}
