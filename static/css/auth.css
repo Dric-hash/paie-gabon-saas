@@ -40,8 +40,9 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;color:var(--ink);
 .brand-copy{color:rgba(255,255,255,.45);font-size:.78rem}
 
 /* ── Panneau formulaire (droite) ── */
-.formside{flex:1 1 54%;display:flex;align-items:center;justify-content:center;padding:2.5rem 1.5rem}
-.formwrap{width:100%;max-width:400px}
+.formside{flex:1 1 54%;display:flex;align-items:center;justify-content:center;padding:2.5rem 1.5rem;
+  max-height:100vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.formwrap{width:100%;max-width:400px;margin:auto} /* margin:auto = centre si ça tient, défile si trop haut (pas de rognage) */
 .formwrap.wide{max-width:520px}
 .mobile-brand{display:none}
 h1.title{font-family:'Plus Jakarta Sans';font-weight:800;font-size:1.6rem;margin:0 0 .3rem;color:var(--ink)}
@@ -157,8 +158,8 @@ input.invalid{border-color:#c0392b;box-shadow:0 0 0 3px rgba(192,57,43,.12)}
   .mobile-brand{display:flex;align-items:center;gap:.6rem;justify-content:center;margin-bottom:1.6rem}
   .mobile-brand .name{font-family:'Plus Jakarta Sans';font-weight:800;font-size:1.2rem}
   .mobile-brand .name span{color:var(--accent-d)}
-  .formside{padding:2.2rem 1.3rem;align-items:flex-start;min-height:100vh}
-  .formwrap{margin-top:1rem}
+  .formside{padding:2.2rem 1.3rem;align-items:flex-start;min-height:100vh;max-height:none;overflow:visible}
+  .formwrap{margin:1rem auto 0}
   .grid2{grid-template-columns:1fr}
 }
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.btn-primary:hover{transform:none}}
