@@ -1,0 +1,36 @@
+{# ============================================================================
+   PaieGabon — Macros partagées des écrans d'authentification
+   Import :  {% import "auth/_auth.html" as ui %}
+   Usage  :  {{ ui.logo(40) }}   {{ ui.brandside() }}
+   ============================================================================ #}
+
+{# Logo « jeton » PaieGabon (SVG) #}
+{% macro logo(size=40) -%}
+<svg width="{{ size }}" height="{{ size }}" viewBox="0 0 124 124" aria-label="PaieGabon">
+  <defs><linearGradient id="pg-lg" x1="14" y1="14" x2="110" y2="110" gradientUnits="userSpaceOnUse">
+    <stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs>
+  <circle cx="62" cy="62" r="60" fill="url(#pg-lg)"/>
+  <circle cx="62" cy="62" r="52.5" fill="none" stroke="#E9B043" stroke-width="2.6" opacity="0.9"/>
+  <rect x="46" y="33" width="11.5" height="58" rx="5.7" fill="#fff"/>
+  <circle cx="62" cy="51" r="15" fill="#fff"/><circle cx="62" cy="51" r="6.4" fill="url(#pg-lg)"/>
+  <circle cx="62" cy="51" r="2.7" fill="#E9B043"/>
+</svg>
+{%- endmacro %}
+
+{# Panneau de marque gauche (identique à login.html) #}
+{% macro brandside() -%}
+<aside class="brandside">
+  <div class="logo-row">{{ logo(40) }}<div class="name">Paie<span>Gabon</span></div></div>
+  <div class="pitch">
+    <h2 class="display">La paie gabonaise,<br>au franc près.</h2>
+    <p>Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et conventions collectives — calculés automatiquement.</p>
+    <div class="accent-line"></div>
+    <div class="trust">
+      <div><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>Conforme au Code du travail 2021</div>
+      <div><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></svg></span>5 conventions collectives gabonaises</div>
+      <div><span class="ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>Données chiffrées &amp; sauvegardées</div>
+    </div>
+  </div>
+  <div class="brand-copy">© 2026 Ameriack I.T. Solutions</div>
+</aside>
+{%- endmacro %}

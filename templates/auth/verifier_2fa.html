@@ -4,70 +4,151 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Vérification en deux étapes — PaieGabon</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <meta name="robots" content="noindex"/>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
-<div class="w-full max-w-md">
+<body>
+  {% import "auth/_auth.html" as ui %}
+  {{ ui.brandside() }}
 
-  <div class="text-center mb-8">
-    <div class="flex justify-center mb-3"><svg width="72" height="72" viewBox="0 0 124 124" aria-label="PaieGabon"><defs><linearGradient id="lg" x1="14" y1="14" x2="110" y2="110" gradientUnits="userSpaceOnUse"><stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs><circle cx="62" cy="62" r="60" fill="url(#lg)"/><circle cx="62" cy="62" r="52.5" fill="none" stroke="#E9B043" stroke-width="2.2" opacity="0.9"/><rect x="46" y="33" width="11.5" height="58" rx="5.7" fill="#ffffff"/><circle cx="62" cy="51" r="15" fill="#ffffff"/><circle cx="62" cy="51" r="6.4" fill="url(#lg)"/><circle cx="62" cy="51" r="2.7" fill="#E9B043"/></svg></div>
-    <h1 class="text-3xl font-black tracking-tight"><span class="text-white">Paie</span><span class="text-amber-400">Gabon</span></h1>
-    <p class="text-amber-400 font-semibold mt-1">Logiciel de paie multi-entreprises · Gabon</p>
-    <div class="w-12 h-1 bg-amber-400 mx-auto mt-2 rounded-full"></div>
-  </div>
+  <main class="formside">
+    <div class="formwrap">
+      <div class="mobile-brand">{{ ui.logo(34) }}<div class="name">Paie<span>Gabon</span></div></div>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-  <div class="mb-4 space-y-2">{% for cat, msg in messages %}
-  <div class="px-4 py-3 rounded-xl text-sm font-semibold
-    {{ 'bg-emerald-50 text-emerald-800' if cat=='success'
-    else 'bg-red-50 text-red-800' if cat=='error'
-    else 'bg-amber-50 text-amber-800' }}">
-    {{ msg }}
-  </div>{% endfor %}</div>
-  {% endif %}{% endwith %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash">{% for cat, msg in messages %}
+        <div class="{{ 'ok' if cat=='success' else 'err' if cat=='error' else 'info' }}">{{ msg }}</div>
+      {% endfor %}</div>
+      {% endif %}{% endwith %}
 
-  <div class="bg-white rounded-2xl shadow-2xl p-8">
-    <h2 class="text-xl font-black text-gray-900 mb-2">🔐 Vérification en deux étapes</h2>
-    <p class="text-sm text-gray-600 mb-6">
-      Un code à 6 chiffres a été envoyé à
-      <span class="font-semibold text-gray-900">{{ email }}</span>.
-      Saisissez-le ci-dessous pour finaliser la connexion.
-    </p>
+      <h1 class="title display">Vérification en deux étapes</h1>
+      {% set _local = email.split('@')[0] %}{% set _domain = email.split('@')[1] %}
+      <p class="subtitle">Un code à 6 chiffres a été envoyé à
+        <strong>{{ _local[0] }}****{{ _local[-2:] }}@{{ _domain }}</strong>.
+        Saisissez-le ci-dessous pour finaliser la connexion.</p>
 
-    <form method="POST" action="{{ url_for('auth.verifier_2fa') }}" class="space-y-4">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Code de connexion</label>
-        <input type="text" name="code" inputmode="numeric" autocomplete="one-time-code"
-               maxlength="6" pattern="[0-9]{6}" required autofocus
-               class="w-full text-center text-2xl tracking-[0.5em] font-bold border border-gray-300 rounded-xl px-4 py-3 focus:ring-2 focus:ring-amber-400 focus:border-amber-400"
-               placeholder="000000"/>
-      </div>
-      <button type="submit"
-        class="w-full bg-slate-900 hover:bg-slate-800 text-white font-black px-6 py-3 rounded-xl text-sm transition-colors">
-        Valider et se connecter
-      </button>
-    </form>
-
-    <div class="mt-5 flex items-center justify-between text-sm">
-      <form method="POST" action="{{ url_for('auth.renvoyer_2fa') }}">
+      <form method="POST" action="{{ url_for('auth.verifier_2fa') }}" id="otp-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <button type="submit" class="text-amber-600 hover:text-amber-700 font-semibold">
-          Renvoyer un code
+
+        <div class="otp-label-row">
+          <label for="code">Code de connexion</label>
+          <span class="timer" id="timer"><span class="dot"></span><span id="timer-text">10:00</span></span>
+        </div>
+
+        {# Champ réel : fonctionne SANS JavaScript. Le JS l'enrichit en 6 cases. #}
+        <input class="otp-fallback" type="text" name="code" id="code" inputmode="numeric"
+               autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required autofocus
+               placeholder="000000" aria-label="Code à 6 chiffres">
+
+        {# Cases OTP (affichées par JS uniquement) #}
+        <div class="otp" id="otp-boxes" hidden aria-hidden="true">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 1">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 2">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 3">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 4">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 5">
+          <input type="text" inputmode="numeric" maxlength="1" aria-label="Chiffre 6">
+        </div>
+
+        <button type="submit" class="btn btn-primary" id="submit" style="margin-top:1.1rem">
+          <span class="spin" aria-hidden="true"></span>
+          <span class="btn-text">Valider et se connecter</span>
         </button>
       </form>
-      <a href="{{ url_for('auth.login') }}" class="text-gray-500 hover:text-gray-700 font-semibold">
-        ← Annuler
-      </a>
+
+      <div class="row-actions">
+        <form method="POST" action="{{ url_for('auth.renvoyer_2fa') }}" id="resend-form" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button type="submit" class="linkbtn" id="resend">Renvoyer un code</button>
+        </form>
+        <a href="{{ url_for('auth.login') }}" class="back">← Annuler</a>
+      </div>
+
+      <div class="secnote">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 4v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V7l7-4z"/></svg>
+        <span>Le code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette connexion,
+        <a href="{{ url_for('auth.mot_de_passe_oublie') }}">changez votre mot de passe</a> immédiatement.</span>
+      </div>
+
+      <p class="foot">© 2026 Ameriack I.T. Solutions</p>
     </div>
+  </main>
 
-    <p class="mt-6 text-xs text-gray-400 text-center">
-      Le code expire dans 10 minutes. Si vous n'êtes pas à l'origine de cette connexion,
-      changez votre mot de passe immédiatement.
-    </p>
-  </div>
+  <script nonce="{{ csp_nonce }}">
+  (function(){
+    var real = document.getElementById('code');
+    var wrap = document.getElementById('otp-boxes');
+    var submit = document.getElementById('submit');
+    if (!real || !wrap) return;
 
-</div>
+    // ── Amélioration progressive : on remplace le champ unique par 6 cases ──
+    var cells = Array.prototype.slice.call(wrap.querySelectorAll('input'));
+    real.style.display = 'none';
+    real.removeAttribute('required');
+    real.removeAttribute('autofocus');
+    wrap.hidden = false; wrap.removeAttribute('aria-hidden');
+    if (cells[0]) cells[0].focus();
+
+    function val(){ return cells.map(function(c){return c.value;}).join(''); }
+    function sync(){
+      cells.forEach(function(c){ c.classList.toggle('filled', c.value!==''); });
+      real.value = val();
+      submit.disabled = (val().length !== 6) || expired;
+      wrap.classList.remove('error');
+    }
+    cells.forEach(function(cell, i){
+      cell.addEventListener('input', function(){
+        cell.value = cell.value.replace(/\D/g,'').slice(0,1);
+        if (cell.value && i < cells.length-1) cells[i+1].focus();
+        sync(); if (val().length === 6) submit.focus();
+      });
+      cell.addEventListener('keydown', function(e){
+        if (e.key === 'Backspace' && !cell.value && i > 0){ cells[i-1].focus(); cells[i-1].value=''; sync(); e.preventDefault(); }
+        if (e.key === 'ArrowLeft'  && i > 0) cells[i-1].focus();
+        if (e.key === 'ArrowRight' && i < cells.length-1) cells[i+1].focus();
+      });
+      cell.addEventListener('paste', function(e){
+        e.preventDefault();
+        var d = (e.clipboardData.getData('text')||'').replace(/\D/g,'').slice(0,6).split('');
+        d.forEach(function(x,k){ if(cells[k]) cells[k].value = x; });
+        sync(); (cells[Math.min(d.length, cells.length)-1] || cells[0]).focus();
+      });
+    });
+    submit.disabled = true;
+
+    // ── Minuteur d'expiration (affichage seulement ; l'expiration réelle est serveur) ──
+    var remaining = 600, expired = false;
+    var tText = document.getElementById('timer-text'), tBox = document.getElementById('timer');
+    function tick(){
+      var m = String(Math.floor(remaining/60)); if(m.length<2) m='0'+m;
+      var s = String(remaining%60); if(s.length<2) s='0'+s;
+      tText.textContent = m + ':' + s;
+      if (remaining <= 60) tBox.classList.add('warn');
+      if (remaining <= 0){ expired = true; submit.disabled = true; tText.textContent = 'Expiré'; clearInterval(iv); }
+      remaining--;
+    }
+    tick(); var iv = setInterval(tick, 1000);
+
+    // ── Renvoi : soumet le vrai formulaire, avec cooldown visuel de 30 s ──
+    var resend = document.getElementById('resend');
+    var resendForm = document.getElementById('resend-form');
+    resendForm.addEventListener('submit', function(){
+      // le POST part normalement (recharge la page) ; le cooldown évite le double-clic
+      resend.disabled = true;
+    });
+
+    // ── État de chargement à la validation ──
+    document.getElementById('otp-form').addEventListener('submit', function(){
+      if (submit.disabled) return;
+      submit.classList.add('loading');
+      submit.querySelector('.btn-text').textContent = 'Vérification…';
+    });
+  })();
+  </script>
 </body>
 </html>

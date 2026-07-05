@@ -1,69 +1,138 @@
-<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Inscription — Ameriack I.T. Solutions</title><script src="https://cdn.tailwindcss.com"></script></head>
-<body class="min-h-screen bg-gradient-to-br from-slate-800 to-slate-950 p-6">
-<div class="max-w-2xl mx-auto">
-  <div class="text-center mb-8">
-    <div class="flex justify-center mb-3"><svg width="72" height="72" viewBox="0 0 124 124" aria-label="PaieGabon"><defs><linearGradient id="lg" x1="14" y1="14" x2="110" y2="110" gradientUnits="userSpaceOnUse"><stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs><circle cx="62" cy="62" r="60" fill="url(#lg)"/><circle cx="62" cy="62" r="52.5" fill="none" stroke="#E9B043" stroke-width="2.2" opacity="0.9"/><rect x="46" y="33" width="11.5" height="58" rx="5.7" fill="#ffffff"/><circle cx="62" cy="51" r="15" fill="#ffffff"/><circle cx="62" cy="51" r="6.4" fill="url(#lg)"/><circle cx="62" cy="51" r="2.7" fill="#E9B043"/></svg></div>
-    <h1 class="text-3xl font-black tracking-tight"><span class="text-white">Paie</span><span class="text-amber-400">Gabon</span></h1>
-    <p class="text-amber-400 font-semibold text-sm mt-1">Logiciel de paie multi-entreprises · Gabon</p>
-    <div class="w-16 h-1 bg-amber-400 rounded-full mx-auto mt-3 mb-2"></div>
-    <p class="text-white/60 text-sm">Créez votre espace entreprise — Essai gratuit 30 jours</p>
-  </div>
-  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for cat,msg in messages %}
-  <div class="mb-4 px-4 py-3 rounded-xl text-sm font-semibold bg-red-50 text-red-700">⚠️ {{msg}}</div>
-  {% endfor %}{% endif %}{% endwith %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Créer mon espace — PaieGabon</title>
+  <meta name="robots" content="noindex"/>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
+</head>
+<body>
+  {% import "auth/_auth.html" as ui %}
+  {{ ui.brandside() }}
 
-  <!-- Plans -->
-  <div class="grid grid-cols-3 gap-4 mb-6">
-    {% for p in plans %}
-    <label class="cursor-pointer">
-      <input type="radio" name="plan_choix" value="{{p.id}}" class="hidden peer" {% if loop.index==2 %}checked{% endif %}>
-      <div class="bg-white/10 peer-checked:bg-white peer-checked:text-slate-900 text-white rounded-2xl p-4 text-center transition-all border-2 border-transparent peer-checked:border-amber-400">
-        <div class="font-black text-lg">{{p.nom}}</div>
-        <div class="text-2xl font-black my-2">{{p.prix_mensuel|int|string|replace(",","")}} <span class="text-xs font-normal">FCFA/mois</span></div>
-        <div class="text-xs opacity-70">{{p.description}}</div>
-      </div>
-    </label>
-    {% endfor %}
-  </div>
+  <main class="formside">
+    <div class="formwrap wide">
+      <div class="mobile-brand">{{ ui.logo(34) }}<div class="name">Paie<span>Gabon</span></div></div>
 
-  <form method="POST" class="bg-white rounded-3xl shadow-2xl p-8 space-y-5">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-    <input type="hidden" name="plan_id" id="plan_id_field"/>
-    <h2 class="text-xl font-black text-gray-900 mb-2">Informations entreprise</h2>
-    <div class="grid grid-cols-2 gap-4">
-      {% macro f(label,name,ph="",required=False) %}
-      <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">{{label}}{% if required %} *{% endif %}</label>
-      <input type="text" name="{{name}}" placeholder="{{ph}}" {% if required %}required{% endif %}
-        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
-      {% endmacro %}
-      {{f("Dénomination sociale","denomination","SOCIETE XYZ",True)}}
-      {{f("Sigle","sigle","XYZ")}}
-      {{f("Activité","activite","Génie civil")}}
-      {{f("NIF","nif","202XXXXXXXXX M")}}
-      {{f("Téléphone","telephone","+241 XX XX XX XX")}}
-      {{f("Ville","ville","Libreville")}}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash">{% for cat, msg in messages %}
+        <div class="{{ 'ok' if cat=='success' else 'err' if cat=='error' else 'info' }}">{{ msg }}</div>
+      {% endfor %}</div>
+      {% endif %}{% endwith %}
+
+      <h1 class="title display">Créer mon espace entreprise</h1>
+      <p class="subtitle">Essai gratuit de 30 jours. Aucune carte requise.</p>
+
+      <form method="POST" action="{{ url_for('auth.inscription') }}" id="signup-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+        {# ── Entreprise ── #}
+        <div class="field">
+          <label for="denomination">Dénomination de l'entreprise</label>
+          <input type="text" name="denomination" id="denomination" required autofocus placeholder="Ex. Ameriack I.T. Solutions">
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="sigle">Sigle</label>
+            <input type="text" name="sigle" id="sigle" placeholder="Ex. AITS">
+          </div>
+          <div class="field">
+            <label for="activite">Activité</label>
+            <input type="text" name="activite" id="activite" placeholder="Ex. Services informatiques">
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <label for="nif">NIF</label>
+            <input type="text" name="nif" id="nif" placeholder="Numéro d'identification fiscale">
+          </div>
+          <div class="field">
+            <label for="ville">Ville</label>
+            <input type="text" name="ville" id="ville" value="Libreville" placeholder="Ville">
+          </div>
+        </div>
+        <div class="field">
+          <label for="telephone">Téléphone</label>
+          <input type="tel" name="telephone" id="telephone" placeholder="+241 …">
+        </div>
+
+        {# ── Administrateur ── #}
+        <div class="divider">votre compte administrateur</div>
+        <div class="grid2">
+          <div class="field">
+            <label for="prenom">Prénom</label>
+            <input type="text" name="prenom" id="prenom" required placeholder="Prénom">
+          </div>
+          <div class="field">
+            <label for="nom">Nom</label>
+            <input type="text" name="nom" id="nom" required placeholder="Nom">
+          </div>
+        </div>
+        <div class="field">
+          <label for="email">Adresse email</label>
+          <input type="email" name="email" id="email" required placeholder="vous@entreprise.ga" autocomplete="email">
+        </div>
+        <div class="field">
+          <label for="password">Mot de passe</label>
+          <div class="pw-wrap">
+            <input type="password" name="password" id="password" required placeholder="••••••••"
+                   autocomplete="new-password" data-pw-strength="pw-meter">
+            <button type="button" class="pw-toggle" data-toggle="password" aria-label="Afficher le mot de passe">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="pw-meter" id="pw-meter" data-score="0"><span></span><span></span><span></span><span></span></div>
+          <div class="pw-label"></div>
+          <div class="hint">Au moins 8 caractères, une majuscule et un chiffre.</div>
+        </div>
+
+        {# ── Formule ── #}
+        {% if plans %}
+        <div class="divider">choisissez votre formule</div>
+        <div class="plan-list">
+          {% for p in plans %}
+          <label class="plan">
+            <input type="radio" name="plan_id" value="{{ p.id }}" {{ 'checked' if p.code == 'STARTER' or loop.first else '' }}>
+            <div>
+              <div class="p-name">{{ p.nom }}</div>
+              {% if p.description %}<div class="p-desc">{{ p.description }}</div>{% endif %}
+            </div>
+            <div class="p-price">{{ '{:,.0f}'.format(p.prix_mensuel|float).replace(',', ' ') }} <small>FCFA/mois</small></div>
+          </label>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <button type="submit" class="btn btn-primary" style="margin-top:.6rem">
+          <span class="spin" aria-hidden="true"></span>
+          <span class="btn-text">Créer mon espace entreprise</span>
+        </button>
+      </form>
+
+      <div class="divider">déjà inscrit ?</div>
+      <a href="{{ url_for('auth.login') }}" class="register">Se connecter →</a>
+
+      <p class="foot">
+        En créant un compte, vous acceptez nos
+        <a href="{{ url_for('auth.cgu') }}">CGU</a> et notre
+        <a href="{{ url_for('auth.politique_confidentialite') }}">politique de confidentialité</a>.<br>
+        © 2026 Ameriack I.T. Solutions.
+      </p>
     </div>
-    <h2 class="text-xl font-black text-gray-900 pt-2">Votre compte administrateur</h2>
-    <div class="grid grid-cols-2 gap-4">
-      {{f("Nom","nom","DUPONT",True)}}
-      {{f("Prénom","prenom","Jean",True)}}
-    </div>
-    <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Email *</label>
-    <input type="email" name="email" required placeholder="vous@entreprise.ga"
-      class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
-    <div><label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1.5">Mot de passe *</label>
-    <input type="password" name="password" required minlength="8" placeholder="Minimum 8 caractères"
-      class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-slate-800"/></div>
-    <button type="submit" class="w-full bg-slate-900 text-white rounded-xl py-3.5 font-black text-sm hover:bg-slate-700 transition-all">
-      🚀 Créer mon espace — Essai 30 jours GRATUIT</button>
-    <p class="text-center text-xs text-gray-400">Déjà un compte ? <a href="/login" class="text-slate-700 font-bold hover:underline">Se connecter</a></p>
-  </form>
-</div>
-<script nonce="{{ csp_nonce }}">
-document.querySelectorAll('input[name="plan_choix"]').forEach(r=>{
-  r.addEventListener('change',()=>document.getElementById('plan_id_field').value=r.value);
-  if(r.checked) document.getElementById('plan_id_field').value=r.value;
-});
-</script>
-</body></html>
+  </main>
+
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/auth-forms.js') }}"></script>
+  <script nonce="{{ csp_nonce }}">
+  document.getElementById('signup-form').addEventListener('submit', function(e){
+    var b = e.target.querySelector('.btn'); b.classList.add('loading'); b.disabled = true;
+    b.querySelector('.btn-text').textContent = 'Création…';
+  });
+  </script>
+</body>
+</html>

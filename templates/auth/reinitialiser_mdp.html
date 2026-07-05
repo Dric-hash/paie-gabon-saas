@@ -3,98 +3,88 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Nouveau mot de passe — PaieGabon</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Réinitialiser le mot de passe — PaieGabon</title>
+  <meta name="robots" content="noindex"/>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css') }}">
 </head>
-<body class="bg-slate-900 min-h-screen flex items-center justify-center p-4">
-<div class="w-full max-w-md">
+<body>
+  {% import "auth/_auth.html" as ui %}
+  {{ ui.brandside() }}
 
-  <div class="text-center mb-8">
-    <div class="flex justify-center mb-3"><svg width="72" height="72" viewBox="0 0 124 124" aria-label="PaieGabon"><defs><linearGradient id="lg" x1="14" y1="14" x2="110" y2="110" gradientUnits="userSpaceOnUse"><stop stop-color="#16544C"/><stop offset="1" stop-color="#0F3D36"/></linearGradient></defs><circle cx="62" cy="62" r="60" fill="url(#lg)"/><circle cx="62" cy="62" r="52.5" fill="none" stroke="#E9B043" stroke-width="2.2" opacity="0.9"/><rect x="46" y="33" width="11.5" height="58" rx="5.7" fill="#ffffff"/><circle cx="62" cy="51" r="15" fill="#ffffff"/><circle cx="62" cy="51" r="6.4" fill="url(#lg)"/><circle cx="62" cy="51" r="2.7" fill="#E9B043"/></svg></div>
-    <h1 class="text-3xl font-black tracking-tight"><span class="text-white">Paie</span><span class="text-amber-400">Gabon</span></h1>
-    <p class="text-amber-400 font-semibold mt-1">Logiciel de paie multi-entreprises · Gabon</p>
-    <div class="w-12 h-1 bg-amber-400 mx-auto mt-2 rounded-full"></div>
-  </div>
+  <main class="formside">
+    <div class="formwrap">
+      <div class="mobile-brand">{{ ui.logo(34) }}<div class="name">Paie<span>Gabon</span></div></div>
 
-  {% with messages = get_flashed_messages(with_categories=true) %}
-  {% if messages %}
-  <div class="mb-4 space-y-2">{% for cat, msg in messages %}
-  <div class="px-4 py-3 rounded-xl text-sm font-semibold
-    {{ 'bg-emerald-50 text-emerald-800' if cat=='success' else 'bg-red-50 text-red-800' }}">
-    {{ msg }}
-  </div>{% endfor %}</div>
-  {% endif %}{% endwith %}
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash">{% for cat, msg in messages %}
+        <div class="{{ 'ok' if cat=='success' else 'err' if cat=='error' else 'info' }}">{{ msg }}</div>
+      {% endfor %}</div>
+      {% endif %}{% endwith %}
 
-  <div class="bg-white rounded-2xl shadow-2xl p-8">
-    <div class="text-center mb-6">
-      <div class="text-4xl mb-2">🔒</div>
-      <h2 class="text-xl font-black text-gray-900">Nouveau mot de passe</h2>
-      <p class="text-gray-500 text-sm mt-1">Choisissez un nouveau mot de passe sécurisé</p>
+      <h1 class="title display">Nouveau mot de passe</h1>
+      <p class="subtitle">Choisissez un mot de passe robuste pour sécuriser votre espace.</p>
+
+      <form method="POST" action="{{ url_for('auth.reinitialiser_mdp', token=token) }}" id="reset-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+        <div class="field">
+          <label for="nouveau_mdp">Nouveau mot de passe</label>
+          <div class="pw-wrap">
+            <input type="password" name="nouveau_mdp" id="nouveau_mdp" required autofocus
+                   placeholder="••••••••" autocomplete="new-password"
+                   data-pw-strength="pw-meter">
+            <button type="button" class="pw-toggle" data-toggle="nouveau_mdp" aria-label="Afficher le mot de passe">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="pw-meter" id="pw-meter" data-score="0"><span></span><span></span><span></span><span></span></div>
+          <div class="pw-label"></div>
+          <div class="hint">Au moins 8 caractères, une majuscule et un chiffre.</div>
+        </div>
+
+        <div class="field">
+          <label for="confirm">Confirmer le mot de passe</label>
+          <div class="pw-wrap">
+            <input type="password" id="confirm" required placeholder="Retapez le mot de passe" autocomplete="new-password">
+            <button type="button" class="pw-toggle" data-toggle="confirm" aria-label="Afficher le mot de passe">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="err-text" id="match-error">Les mots de passe ne correspondent pas.</div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">
+          <span class="spin" aria-hidden="true"></span>
+          <span class="btn-text">Réinitialiser mon mot de passe</span>
+        </button>
+      </form>
+
+      <div style="margin-top:1.4rem">
+        <a href="{{ url_for('auth.login') }}" class="back">← Retour à la connexion</a>
+      </div>
+
+      <p class="foot">© 2026 Ameriack I.T. Solutions</p>
     </div>
+  </main>
 
-    <form method="POST" class="space-y-4">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <input type="hidden" name="token" value="{{ token }}">
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Nouveau mot de passe</label>
-        <input type="password" name="password" required minlength="6" autofocus
-          placeholder="Minimum 6 caractères"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
-      </div>
-      <div>
-        <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Confirmer le mot de passe</label>
-        <input type="password" name="password2" required minlength="6"
-          placeholder="Répétez le mot de passe"
-          class="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
-      </div>
-
-      <!-- Indicateur force mot de passe -->
-      <div id="strength-bar" class="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-        <div id="strength-fill" class="h-full rounded-full transition-all duration-300 w-0"></div>
-      </div>
-      <p id="strength-text" class="text-xs text-gray-400"></p>
-
-      <button type="submit"
-        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3 rounded-xl text-sm transition-colors">
-        ✅ Enregistrer le nouveau mot de passe
-      </button>
-    </form>
-
-    <div class="mt-5 text-center text-sm">
-      <a href="/login" class="text-blue-600 font-bold hover:underline">← Retour à la connexion</a>
-    </div>
-  </div>
-
-  <p class="text-center text-slate-400 text-xs mt-6">
-    © 2026 Ameriack I.T. Solutions — PaieGabon
-  </p>
-</div>
-
-<script nonce="{{ csp_nonce }}">
-const pwInput = document.querySelector('input[name="password"]');
-const bar = document.getElementById('strength-fill');
-const txt = document.getElementById('strength-text');
-pwInput.addEventListener('input', () => {
-  const v = pwInput.value;
-  let score = 0;
-  if (v.length >= 6) score++;
-  if (v.length >= 10) score++;
-  if (/[A-Z]/.test(v)) score++;
-  if (/[0-9]/.test(v)) score++;
-  if (/[^A-Za-z0-9]/.test(v)) score++;
-  const levels = [
-    {w:'0%', c:'bg-gray-200', t:''},
-    {w:'25%', c:'bg-red-400', t:'Faible'},
-    {w:'50%', c:'bg-amber-400', t:'Moyen'},
-    {w:'75%', c:'bg-blue-400', t:'Bon'},
-    {w:'100%', c:'bg-emerald-500', t:'Excellent'},
-  ];
-  const l = levels[Math.min(score, 4)];
-  bar.className = `h-full rounded-full transition-all duration-300 ${l.c}`;
-  bar.style.width = l.w;
-  txt.textContent = l.t;
-  txt.className = `text-xs font-semibold ${l.c.replace('bg-','text-')}`;
-});
-</script>
+  <script nonce="{{ csp_nonce }}" src="{{ url_for('static', filename='js/auth-forms.js') }}"></script>
+  <script nonce="{{ csp_nonce }}">
+  (function(){
+    var f = document.getElementById('reset-form');
+    var p1 = document.getElementById('nouveau_mdp'), p2 = document.getElementById('confirm');
+    var mErr = document.getElementById('match-error');
+    f.addEventListener('submit', function(e){
+      if (p1.value !== p2.value){ e.preventDefault(); mErr.classList.add('show'); p2.classList.add('invalid'); p2.focus(); return; }
+      var b = f.querySelector('.btn'); b.classList.add('loading'); b.disabled = true;
+      b.querySelector('.btn-text').textContent = 'Réinitialisation…';
+    });
+    p2.addEventListener('input', function(){ mErr.classList.remove('show'); p2.classList.remove('invalid'); });
+  })();
+  </script>
 </body>
 </html>
