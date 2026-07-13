@@ -4155,6 +4155,17 @@ def journaliers_paie_imprimer_sites():
         q = q.filter(FeuillePaieJournalier.date_debut <= date_fin)
     feuilles = q.options(joinedload(FeuillePaieJournalier.journalier)).order_by(
         FeuillePaieJournalier.date_fin.desc()).all()
+    # ── Sélection optionnelle des journaliers à imprimer ──────────────
+    # Le front peut transmettre ?ids=3,7,12 pour ne sortir qu'une partie des
+    # journaliers. Absent ou vide → comportement historique : tout le monde.
+    ids_param = request.args.get("ids", "").strip()
+    if ids_param:
+        try:
+            ids_voulus = {int(x) for x in ids_param.split(",") if x.strip().isdigit()}
+        except ValueError:
+            ids_voulus = set()
+        if ids_voulus:
+            feuilles = [f for f in feuilles if f.journalier_id in ids_voulus]
 
     # Site de chaque journalier : on prend TOUTES les affectations, en préférant
     # l'affectation active, puis la plus récente. Ainsi un journalier dont
