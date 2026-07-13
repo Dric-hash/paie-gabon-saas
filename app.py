@@ -338,6 +338,11 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(tenant_bp)
 app.register_blueprint(api_v1_bp)
 app.register_blueprint(prestataires_bp)
+import models_sso
+from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
+app.register_blueprint(sso_bp)
+app.register_blueprint(sso_api_bp)
+csrf.exempt(sso_api_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
 
 # ── Rate limiting de l'API REST ───────────────────────────────────────────────

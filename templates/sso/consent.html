@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Autoriser {{ app.nom }} — PaieGabon{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto px-4 py-10">
+  <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+    <div class="flex items-center gap-2 mb-4">
+      <div style="background:#d99e0b" class="h-8 w-8 rounded-lg flex items-center justify-center font-bold text-black">A</div>
+      <div class="font-semibold">Connexion à la suite Ameriack</div>
+    </div>
+
+    <h2 class="text-lg font-semibold mb-2">Autoriser {{ app.nom }} ?</h2>
+    <p class="text-sm text-gray-600 mb-1">
+      L'application <b>{{ app.nom }}</b> demande à utiliser votre compte PaieGabon
+      pour vous connecter et accéder à votre identité :
+    </p>
+    <ul class="text-sm text-gray-600 list-disc pl-5 mb-4">
+      <li>votre nom et votre email</li>
+      <li>votre entreprise</li>
+    </ul>
+    <p class="text-sm text-gray-500 mb-5">Connecté en tant que <b>{{ current_user.email }}</b>.</p>
+
+    <form method="post" action="{{ url_for('sso_provider.authorize_post') }}" class="flex gap-2">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="client_id" value="{{ client_id }}">
+      <input type="hidden" name="redirect_uri" value="{{ redirect_uri }}">
+      <input type="hidden" name="state" value="{{ state }}">
+      <button name="decision" value="allow" class="flex-1 py-2.5 rounded-lg text-white font-semibold" style="background:#0f3d36">Autoriser</button>
+      <button name="decision" value="deny" class="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-600">Refuser</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

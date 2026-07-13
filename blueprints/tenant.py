@@ -2800,6 +2800,41 @@ def importer_grille_commerce():
     return redirect(url_for("tenant.parametres"))
 
 
+@bp.route("/parametres/importer-grille-hydrocarbures", methods=["POST"])
+@tenant_required
+@can_edit
+def importer_grille_hydrocarbures():
+    """Crée/complète les catégories A→M à partir de la grille Hydrocarbures."""
+    if not current_user.can_manage_parametres:
+        flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
+        return redirect(url_for("tenant.parametres"))
+    t = get_tenant()
+    from convention_hydrocarbures import GRILLE_HYDROCARBURES
+    existantes = {c.code for c in CategorieEmploi.query.filter_by(tenant_id=t.id).all()}
+    ajout = 0
+    maj = 0
+    for code, libelle, mensuel, _horaire in GRILLE_HYDROCARBURES:
+        if code in existantes:
+            cat = CategorieEmploi.query.filter_by(tenant_id=t.id, code=code).first()
+            if cat and (cat.salaire_minimum is None or float(cat.salaire_minimum or 0) == 0):
+                cat.salaire_minimum = mensuel
+                maj += 1
+        else:
+            db.session.add(CategorieEmploi(
+                tenant_id=t.id, code=code, libelle=libelle, salaire_minimum=mensuel,
+                description="Grille Convention Hydrocarbures (Recherche & Exploitation)"))
+            ajout += 1
+    # Bascule la convention du tenant sur HYDROCARBURES
+    if t.convention != "HYDROCARBURES":
+        t.convention = "HYDROCARBURES"
+    # Congés de base : 2,5 jours ouvrables / mois (Art. 42)
+    if hasattr(t, "jours_conge_par_mois"):
+        t.jours_conge_par_mois = 2.5
+    db.session.commit()
+    flash(f"Grille Hydrocarbures importée : {ajout} catégorie(s) ajoutée(s), {maj} mise(s) à jour.", "success")
+    return redirect(url_for("tenant.parametres"))
+
+
 @bp.route("/parametres/importer-grille-petrole", methods=["POST"])
 @tenant_required
 @can_edit
@@ -4848,7 +4883,7 @@ def api_jours_acquis(sal_id):
     s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
 
     from conges_avance import calculer_jours_acquis
-    result = calculer_jours_acquis(s.date_embauche)
+    result = calculer_jours_acquis(s.date_embauche, convention=getattr(s.tenant, "convention", None))
     # Sérialiser les dates
     for k in ["periode_debut","periode_fin"]:
         if result.get(k):

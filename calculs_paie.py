@@ -64,6 +64,7 @@ COEFFS_HEURES_SUP_DEFAUT = {
 }
 COEFFS_HEURES_SUP_CONVENTION = {
     "PETROLE": {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00},
+    "HYDROCARBURES": {"10": 1.15, "30": 1.30, "30b": 1.35, "40": 1.60, "70": 2.20},
     # Entreprises Industrielles — Art. A.38 :
     #   40→48 h ouvrable .......... +16 %  → case 10
     #   au-delà de 48 h ouvrable .. +35 %  → case 30
@@ -1703,6 +1704,9 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
     c = _conv(convention)
     if c == "PETROLE":
         return calculer_prime_anciennete_petrole(salaire_base, anciennete_annees)
+    if c == "HYDROCARBURES":
+        from convention_hydrocarbures import calculer_prime_anciennete_hydrocarbures
+        return calculer_prime_anciennete_hydrocarbures(salaire_base, anciennete_annees)
     if c == "COMMERCE":
         return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
     if c in ("BTP", "INDUSTRIE", "AERIEN"):
@@ -1760,6 +1764,9 @@ def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> in
         return max(calculer_preavis_industrie(anciennete_annees), legal)
     if c == "AERIEN":
         return max(calculer_preavis_aerien(anciennete_annees, cadre=cadre), legal)
+    if c == "HYDROCARBURES":
+        # Art. 30.5/30.6 : barème identique au Code du travail.
+        return calculer_preavis_code(anciennete_annees)
     # PÉTROLE (Art. 30.3 : renvoi au Code du travail) et AUCUNE : barème légal.
     return legal
 

@@ -117,7 +117,7 @@ def _bonus_conge_enfants(salarie) -> int:
 
 
 def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None,
-                          salarie=None, taux_mensuel=None) -> dict:
+                          salarie=None, taux_mensuel=None, convention=None) -> dict:
     """
     Calcule les jours de congé acquis par un salarié.
 
@@ -187,11 +187,16 @@ def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None,
     anciennete_annees_calcul = round(anciennete_annees + mois_fraction / 12.0, 3)
 
     # Bonus ancienneté (jours supplémentaires)
-    bonus = 0
-    if anciennete_annees >= JOURS_ANCIENNETE_PALIER1:
-        bonus += min(anciennete_annees - JOURS_ANCIENNETE_PALIER1 + 1, 5)
-    if anciennete_annees >= JOURS_ANCIENNETE_PALIER2:
-        bonus += min(anciennete_annees - JOURS_ANCIENNETE_PALIER2 + 1, 5)
+    if (convention or "").upper() == "HYDROCARBURES":
+        # Art. 42 : paliers +2/+4/+6/+8 (5/10/15/20 ans)
+        from convention_hydrocarbures import bonus_conge_anciennete_hydrocarbures
+        bonus = bonus_conge_anciennete_hydrocarbures(anciennete_annees)
+    else:
+        bonus = 0
+        if anciennete_annees >= JOURS_ANCIENNETE_PALIER1:
+            bonus += min(anciennete_annees - JOURS_ANCIENNETE_PALIER1 + 1, 5)
+        if anciennete_annees >= JOURS_ANCIENNETE_PALIER2:
+            bonus += min(anciennete_annees - JOURS_ANCIENNETE_PALIER2 + 1, 5)
 
     jours_total = min(jours_periode + bonus, JOURS_MAX_PAR_AN + bonus)
 
@@ -257,7 +262,8 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     # Jours acquis non pris
     acquis_calc = calculer_jours_acquis(
         salarie.date_embauche, date_cessation,
-        salarie=salarie, taux_mensuel=jours_conge_par_mois
+        salarie=salarie, taux_mensuel=jours_conge_par_mois,
+        convention=getattr(salarie.tenant, "convention", None)
     )
     jours_acquis = acquis_calc["jours_acquis_total"]
 
@@ -337,7 +343,7 @@ def bilan_conges_tenant(salaries, annee=None) -> list:
         if s.statut != "ACTIF" or not s.date_embauche:
             continue
 
-        calc    = calculer_jours_acquis(s.date_embauche)
+        calc    = calculer_jours_acquis(s.date_embauche, convention=getattr(s.tenant, "convention", None))
         acquis  = calc["jours_acquis_total"]
 
         # Jours pris cette année

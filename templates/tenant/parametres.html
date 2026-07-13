@@ -244,6 +244,17 @@
             Les catégories existantes ne sont pas écrasées.
           </p>
         </form>
+        <form method="POST" action="/parametres/importer-grille-hydrocarbures"
+              onsubmit="return confirm('Importer la grille de salaires de la Convention Hydrocarbures (catégories A à M) ? La convention de l\'entreprise sera réglée sur HYDROCARBURES.');">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8125rem;border:none;cursor:pointer;margin-top:.5rem">
+            📥 Importer la grille de salaires Hydrocarbures
+          </button>
+          <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+            Recherche & Exploitation des Hydrocarbures — crée les catégories A→M
+            avec leurs salaires minima. Les catégories existantes ne sont pas écrasées.
+          </p>
+        </form>
         <div style="border-top:1px solid #f3f4f6;margin:1rem 0 .75rem"></div>
         <form method="POST" action="/parametres/importer-grille-petrole"
               onsubmit="return confirm('Importer la grille de la Convention Pétrole (catégories A-I, AMI-AMS, CP0-HC) ? Les montants de 1983 étant obsolètes, ils seront plancher\u00e9s au SMIG l\\'egal et devront \u00eatre actualis\u00e9s. La convention de l\\'entreprise sera r\u00e9gl\u00e9e sur PETROLE.');">
