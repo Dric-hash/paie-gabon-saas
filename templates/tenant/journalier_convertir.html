@@ -17,6 +17,7 @@
 </div>
 
 <form method="POST" action="{{ url_for('tenant.journalier_convertir', id=journalier.id) }}" class="grid grid-cols-2 gap-6">
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 
   <!-- Identité -->
   <div class="card p-6 space-y-4">
