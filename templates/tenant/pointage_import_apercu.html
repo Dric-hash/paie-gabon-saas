@@ -1,0 +1,90 @@
+{% extends "tenant/base.html" %}
+{% block title %}Aperçu import pointages — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+<div style="max-width:1000px;margin:0 auto">
+
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.25rem">
+    <a href="/pointage" style="font-size:.8rem;font-weight:700;color:#6b7280;text-decoration:none;background:#f3f4f6;padding:.5rem .875rem;border-radius:.75rem">← Retour</a>
+    <h1 class="text-2xl font-black" style="margin:0">Aperçu de l'import</h1>
+  </div>
+
+  <!-- Récap chiffré -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:.875rem;margin-bottom:1.25rem">
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:.875rem;padding:1rem;text-align:center">
+      <div style="font-size:1.75rem;font-weight:900;color:#059669">{{ nb_creer }}</div>
+      <div style="font-size:.75rem;color:#065f46;font-weight:700">Pointage(s) à créer</div>
+    </div>
+    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.875rem;padding:1rem;text-align:center">
+      <div style="font-size:1.75rem;font-weight:900;color:#2563eb">{{ nb_maj }}</div>
+      <div style="font-size:.75rem;color:#1e40af;font-weight:700">À mettre à jour</div>
+    </div>
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.875rem;padding:1rem;text-align:center">
+      <div style="font-size:1.75rem;font-weight:900;color:#374151">{{ nb_total }}</div>
+      <div style="font-size:.75rem;color:#6b7280;font-weight:700">Total lignes</div>
+    </div>
+  </div>
+
+  {% if erreurs %}
+  <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:.875rem;padding:1rem;margin-bottom:1.25rem">
+    <div style="font-weight:800;color:#b91c1c;font-size:.85rem;margin-bottom:.5rem">
+      ⚠️ {{ erreurs|length }} avertissement(s) — ces lignes seront ignorées :
+    </div>
+    <ul style="font-size:.78rem;color:#7f1d1d;margin:0;padding-left:1.25rem">
+      {% for e in erreurs %}<li>{{ e }}</li>{% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+
+  <!-- Tableau détaillé -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.875rem;overflow:hidden;margin-bottom:1.25rem">
+    <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+      <thead>
+        <tr style="background:#0f3d36;color:#fff">
+          <th style="padding:.6rem .75rem;text-align:left">Journalier</th>
+          <th style="padding:.6rem .5rem;text-align:center">Date</th>
+          <th style="padding:.6rem .5rem;text-align:center">Type jour</th>
+          <th style="padding:.6rem .5rem;text-align:center">Présence</th>
+          <th style="padding:.6rem .5rem;text-align:center">H. normales</th>
+          <th style="padding:.6rem .5rem;text-align:center">H. sup</th>
+          <th style="padding:.6rem .5rem;text-align:center">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lignes %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:.5rem .75rem;font-weight:600">{{ l.nom }}</td>
+          <td style="padding:.5rem .5rem;text-align:center">{{ l.date }}</td>
+          <td style="padding:.5rem .5rem;text-align:center">
+            {% if l.type_jour == 'DIMANCHE' %}<span style="color:#b91c1c;font-weight:700">Dimanche</span>
+            {% elif l.type_jour == 'FERIE' %}<span style="color:#b91c1c;font-weight:700">Férié</span>
+            {% else %}Normal{% endif %}
+          </td>
+          <td style="padding:.5rem .5rem;text-align:center">
+            {% if l.present %}<span style="color:#059669">Présent</span>
+            {% else %}<span style="color:#dc2626">Absent</span>{% endif %}
+          </td>
+          <td style="padding:.5rem .5rem;text-align:center">{{ l.hn }}</td>
+          <td style="padding:.5rem .5rem;text-align:center;font-weight:700;{% if l.hs > 0 %}color:#7c3aed{% endif %}">{{ l.hs }}</td>
+          <td style="padding:.5rem .5rem;text-align:center">
+            {% if l.action == 'creer' %}<span style="background:#d1fae5;color:#065f46;padding:.15rem .5rem;border-radius:.5rem;font-size:.7rem;font-weight:700">Créer</span>
+            {% else %}<span style="background:#dbeafe;color:#1e40af;padding:.15rem .5rem;border-radius:.5rem;font-size:.7rem;font-weight:700">Mettre à jour</span>{% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Confirmation : renvoie le JSON validé -->
+  <form method="POST" action="/journaliers/pointage/importer/confirmer"
+        style="display:flex;gap:.75rem;justify-content:flex-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="payload" value='{{ payload }}'>
+    <a href="/pointage" style="background:#f3f4f6;color:#374151;padding:.7rem 1.25rem;border-radius:.7rem;font-weight:700;font-size:.85rem;text-decoration:none">Annuler</a>
+    <button type="submit" style="background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border-radius:.7rem;font-weight:800;font-size:.85rem;border:none;cursor:pointer">
+      ✅ Confirmer l'enregistrement
+    </button>
+  </form>
+
+</div>
+{% endblock %}

@@ -4127,6 +4127,356 @@ def journalier_feuille_supprimer(id):
     flash("Feuille supprimée.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
 
+@bp.route("/journaliers/pointage/modele")
+@login_required
+def journaliers_pointage_modele():
+    """Génère un modèle Excel (grille mensuelle) pré-rempli pour l'import de
+    pointages journaliers. Une ligne par journalier du site choisi, une colonne
+    par jour du mois. Dimanches et fériés grisés. L'utilisateur saisit les
+    heures travaillées ; il téléverse ensuite le fichier via /importer.
+    Params : site_id (optionnel), mois (YYYY-MM, défaut = mois en cours).
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    import calendar as _cal
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from io import BytesIO
+
+    # ── Période demandée ───────────────────────────────────────────────
+    mois_str = request.args.get("mois", "")  # "2026-07"
+    try:
+        annee, mois = (int(x) for x in mois_str.split("-"))
+        date(annee, mois, 1)  # validation
+    except (ValueError, TypeError):
+        today = datetime.now()
+        annee, mois = today.year, today.month
+    nb_jours = _cal.monthrange(annee, mois)[1]
+
+    MOIS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
+               "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+    mois_nom = f"{MOIS_FR[mois]} {annee}"
+
+    # ── Journaliers du site (ou tous les actifs si aucun site) ─────────
+    site_id = request.args.get("site_id", type=int)
+    site_obj = None
+    if site_id:
+        site_obj = Site.query.filter_by(id=site_id, tenant_id=t.id).first()
+        ids_site = [a.journalier_id for a in AffectationSite.query.filter_by(
+            tenant_id=t.id, site_id=site_id, actif=True
+        ).filter(AffectationSite.journalier_id.isnot(None)).all()]
+        journaliers = Journalier.query.filter(
+            Journalier.tenant_id == t.id, Journalier.statut == "ACTIF",
+            Journalier.id.in_(ids_site)
+        ).order_by(Journalier.nom).all() if ids_site else []
+    else:
+        journaliers = Journalier.query.filter_by(
+            tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
+
+    # ── Styles ─────────────────────────────────────────────────────────
+    VERT, BLANC, GRIS_WE = "0F3D36", "FFFFFF", "F3F4F6"
+    thin = Side(style="thin", color="D1D5DB")
+    bord = Border(left=thin, right=thin, top=thin, bottom=thin)
+    f_titre  = Font(name="Arial", size=12, bold=True, color=BLANC)
+    f_entete = Font(name="Arial", size=9,  bold=True, color=BLANC)
+    f_normal = Font(name="Arial", size=10)
+    fill_vert = PatternFill("solid", fgColor=VERT)
+    fill_we   = PatternFill("solid", fgColor=GRIS_WE)
+    center = Alignment(horizontal="center", vertical="center")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Pointage {MOIS_FR[mois][:3]} {annee}"
+    ws.sheet_view.showGridLines = False
+
+    n_cols = 2 + nb_jours  # ID + Nom + jours
+    # Titre
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=n_cols)
+    tc = ws.cell(row=1, column=1,
+                 value=f"POINTAGE JOURNALIERS — {mois_nom}"
+                       + (f"  ·  {site_obj.nom}" if site_obj else "  ·  Tous sites"))
+    tc.font = f_titre; tc.fill = fill_vert
+    tc.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+    ws.row_dimensions[1].height = 24
+
+    # Légende
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=n_cols)
+    lc = ws.cell(row=2, column=1,
+        value="Saisissez le nombre d'HEURES travaillées par jour. "
+              "Vide = jour ignoré (non modifié). 0 = absent. "
+              "Au-delà de 8h : le surplus compte en heures supplémentaires. "
+              "Ne modifiez PAS la colonne ID.")
+    lc.font = Font(name="Arial", size=9, italic=True, color="6B7280")
+    lc.alignment = Alignment(wrap_text=True, vertical="center")
+    ws.row_dimensions[2].height = 40
+
+    # En-têtes (ligne 3)
+    for col, lbl in ((1, "ID"), (2, "Nom journalier")):
+        c = ws.cell(row=3, column=col, value=lbl)
+        c.font = f_entete; c.fill = fill_vert; c.alignment = center; c.border = bord
+    for j in range(1, nb_jours + 1):
+        d = date(annee, mois, j)
+        c = ws.cell(row=3, column=2 + j, value=j)
+        c.font = f_entete; c.fill = fill_vert; c.alignment = center; c.border = bord
+        # Dimanche ou férié → en-tête rouge (repère visuel)
+        if type_jour_auto(d) in ("DIMANCHE", "FERIE"):
+            c.fill = PatternFill("solid", fgColor="B91C1C")
+    ws.row_dimensions[3].height = 18
+
+    # Lignes journaliers
+    for r, j in enumerate(journaliers, start=4):
+        cid = ws.cell(row=r, column=1, value=j.id)
+        cid.font = f_normal; cid.alignment = center; cid.border = bord
+        cnom = ws.cell(row=r, column=2, value=j.nom_complet)
+        cnom.font = f_normal; cnom.border = bord
+        cnom.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+        for jour in range(1, nb_jours + 1):
+            d = date(annee, mois, jour)
+            c = ws.cell(row=r, column=2 + jour)
+            c.font = f_normal; c.alignment = center; c.border = bord
+            if type_jour_auto(d) in ("DIMANCHE", "FERIE"):
+                c.fill = fill_we  # grisé : repère (mais saisissable, ex. dimanche travaillé)
+
+    # Largeurs + gel des volets
+    ws.column_dimensions["A"].width = 6
+    ws.column_dimensions["B"].width = 24
+    for j in range(1, nb_jours + 1):
+        ws.column_dimensions[get_column_letter(2 + j)].width = 4.5
+    ws.freeze_panes = "C4"
+
+    # ── Sortie fichier ─────────────────────────────────────────────────
+    buf = BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    fname = f"pointage_{annee}-{mois:02d}"
+    if site_obj:
+        nom_propre = "".join(c if c.isalnum() else "_" for c in site_obj.nom)
+        fname += "_" + nom_propre
+    return send_file(
+        buf, as_attachment=True, download_name=f"{fname}.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+@bp.route("/journaliers/pointage/importer", methods=["POST"])
+@login_required
+def journaliers_pointage_importer():
+    """Étape 1/2 — APERÇU. Lit la grille mensuelle téléversée, applique la règle
+    journalier (≤8h normal / surplus en sup / dimanche-férié → tout en sup),
+    et affiche ce qui SERA créé/modifié. N'écrit RIEN en base. Les données
+    validées repartent dans un champ caché vers /confirmer.
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    import openpyxl, json
+    import calendar as _cal
+
+    fichier = request.files.get("fichier")
+    if not fichier or not fichier.filename.endswith((".xlsx", ".xls")):
+        flash("❌ Fichier invalide. Utilisez le modèle Excel fourni (.xlsx).", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    # Garde anti-DoS : 5 Mo max (même règle que l'import salariés).
+    fichier.seek(0, 2); _taille = fichier.tell(); fichier.seek(0)
+    if _taille > 5_000_000:
+        flash("❌ Fichier trop volumineux (max 5 Mo).", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    try:
+        wb = openpyxl.load_workbook(fichier, data_only=True)
+        ws = wb.active
+    except Exception as e:
+        flash(f"❌ Erreur lecture fichier : {e}", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    # ── Retrouver l'en-tête : la ligne qui contient "ID" en col.1 ──────
+    header_row = None
+    for r in range(1, 8):
+        v = str(ws.cell(r, 1).value or "").upper().strip()
+        if v == "ID":
+            header_row = r
+            break
+    if not header_row:
+        flash("❌ En-tête introuvable. Utilisez le modèle téléchargé (colonne ID).", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    # ── Déduire l'année/mois à partir des colonnes de jours ────────────
+    # Les colonnes 3..N portent les numéros de jour. On récupère aussi le
+    # mois/année depuis le TITRE (ligne 1) si présent, sinon mois courant.
+    titre = str(ws.cell(1, 1).value or "")
+    annee = mois = None
+    import re
+    MOIS_MAP = {"JANVIER":1,"FÉVRIER":2,"FEVRIER":2,"MARS":3,"AVRIL":4,"MAI":5,
+                "JUIN":6,"JUILLET":7,"AOÛT":8,"AOUT":8,"SEPTEMBRE":9,
+                "OCTOBRE":10,"NOVEMBRE":11,"DÉCEMBRE":12,"DECEMBRE":12}
+    for nom_m, num in MOIS_MAP.items():
+        if nom_m in titre.upper():
+            mois = num
+            break
+    m_an = re.search(r"(20\d{2})", titre)
+    if m_an:
+        annee = int(m_an.group(1))
+    if not (annee and mois):
+        now = datetime.now(); annee, mois = now.year, now.month
+    nb_jours_mois = _cal.monthrange(annee, mois)[1]
+
+    # ── Mapper les colonnes-jours : {col: numéro_de_jour} ──────────────
+    col_jour = {}
+    for c in range(3, ws.max_column + 1):
+        val = ws.cell(header_row, c).value
+        try:
+            j = int(val)
+            if 1 <= j <= nb_jours_mois:
+                col_jour[c] = j
+        except (TypeError, ValueError):
+            continue
+    if not col_jour:
+        flash("❌ Aucune colonne de jour détectée. Utilisez le modèle téléchargé.", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    # ── IDs de journaliers valides pour ce tenant (sécurité) ───────────
+    ids_valides = {j.id: j for j in Journalier.query.filter_by(
+        tenant_id=t.id).all()}
+
+    # ── Parcours des lignes → construction de l'aperçu ─────────────────
+    a_appliquer = []   # [{jid, nom, date, heures, hn, hs, present, type_jour, action}]
+    lignes_ignorees = 0
+    erreurs = []
+
+    for r in range(header_row + 1, ws.max_row + 1):
+        id_val = ws.cell(r, 1).value
+        if id_val in (None, ""):
+            continue
+        try:
+            jid = int(id_val)
+        except (TypeError, ValueError):
+            erreurs.append(f"Ligne {r} : ID « {id_val} » invalide.")
+            continue
+        j_obj = ids_valides.get(jid)
+        if not j_obj:
+            erreurs.append(f"Ligne {r} : journalier ID {jid} inconnu (ignoré).")
+            continue
+
+        for c, jour in col_jour.items():
+            case = ws.cell(r, c).value
+            # Case VIDE → on ignore ce jour (ne touche à rien).
+            if case in (None, ""):
+                continue
+            try:
+                heures = float(str(case).replace(",", "."))
+            except (TypeError, ValueError):
+                erreurs.append(f"Ligne {r}, jour {jour} : valeur « {case} » non numérique.")
+                continue
+            if heures < 0:
+                erreurs.append(f"Ligne {r}, jour {jour} : heures négatives.")
+                continue
+
+            d = date(annee, mois, jour)
+            tj = type_jour_auto(d)  # NORMAL | DIMANCHE | FERIE
+
+            # ── Règle journalier ──────────────────────────────────────
+            if heures == 0:
+                present = False; hn = 0.0; hs = 0.0
+            else:
+                present = True
+                if tj in ("DIMANCHE", "FERIE"):
+                    hn = 0.0; hs = round(heures, 2)         # tout majoré
+                elif heures > 8:
+                    hn = 8.0; hs = round(heures - 8, 2)     # surplus en sup
+                else:
+                    hn = round(heures, 2); hs = 0.0
+
+            # Existe déjà ? (pour l'étiquette créé / mis à jour)
+            existe = Pointage.query.filter_by(
+                tenant_id=t.id, date_pointage=d, journalier_id=jid).first() is not None
+
+            a_appliquer.append({
+                "jid": jid, "nom": j_obj.nom_complet,
+                "date": d.strftime("%Y-%m-%d"), "jour": jour,
+                "heures": heures, "hn": hn, "hs": hs,
+                "present": present, "type_jour": tj,
+                "action": "maj" if existe else "creer",
+            })
+
+    if not a_appliquer:
+        flash("Aucune donnée exploitable dans le fichier (toutes les cases sont vides ?).", "warning")
+        return redirect(url_for("tenant.pointage"))
+
+    nb_creer = sum(1 for x in a_appliquer if x["action"] == "creer")
+    nb_maj   = sum(1 for x in a_appliquer if x["action"] == "maj")
+
+    return render_template("tenant/pointage_import_apercu.html",
+        tenant=t, lignes=a_appliquer, nb_creer=nb_creer, nb_maj=nb_maj,
+        nb_total=len(a_appliquer), erreurs=erreurs,
+        annee=annee, mois=mois,
+        payload=json.dumps(a_appliquer))
+
+@bp.route("/journaliers/pointage/importer/confirmer", methods=["POST"])
+@login_required
+def journaliers_pointage_importer_confirmer():
+    """Étape 2/2 — ENREGISTREMENT. Reçoit le JSON validé (champ caché de
+    l'aperçu) et applique update-or-create sur chaque Pointage.
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    import json
+    try:
+        lignes = json.loads(request.form.get("payload", "[]"))
+    except (ValueError, TypeError):
+        flash("❌ Données d'import illisibles. Recommencez le téléversement.", "error")
+        return redirect(url_for("tenant.pointage"))
+
+    if not lignes:
+        flash("Aucune donnée à enregistrer.", "warning")
+        return redirect(url_for("tenant.pointage"))
+
+    # IDs valides (re-vérif sécurité : on ne fait jamais confiance au client).
+    ids_valides = {j.id for j in Journalier.query.filter_by(tenant_id=t.id).all()}
+
+    nb_creer = nb_maj = 0
+    for x in lignes:
+        try:
+            jid = int(x["jid"])
+            d   = _parse_date(x["date"])
+            hn  = float(x["hn"]); hs = float(x["hs"])
+            present = bool(x["present"]); tj = str(x["type_jour"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        if jid not in ids_valides or not d:
+            continue
+
+        pt = Pointage.query.filter_by(
+            tenant_id=t.id, date_pointage=d, journalier_id=jid).first()
+        if pt:
+            nb_maj += 1
+        else:
+            pt = Pointage(tenant_id=t.id, date_pointage=d, journalier_id=jid)
+            db.session.add(pt)
+            nb_creer += 1
+
+        pt.present         = present
+        pt.absent          = not present
+        pt.heures_normales = hn
+        pt.heures_sup      = hs
+        pt.type_jour       = tj
+
+    db.session.commit()
+    log_action("IMPORT", "pointage", None,
+               f"Import pointages journaliers : {nb_creer} créé(s), {nb_maj} mis à jour")
+    flash(f"✅ Import terminé : {nb_creer} pointage(s) créé(s), {nb_maj} mis à jour.", "success")
+    return redirect(url_for("tenant.pointage"))
+
 @bp.route("/journaliers/paie/imprimer-sites")
 @login_required
 def journaliers_paie_imprimer_sites():

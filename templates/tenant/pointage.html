@@ -101,7 +101,42 @@
   </div>
 </div>
 
-<form method="POST" action="/pointage/sauvegarder" id="form_pointage">
+    <!-- ── Import Excel pointages journaliers ──────────────────────── -->
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.875rem;padding:1.1rem;margin:0 0 1rem">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+        <span style="font-size:1.1rem">📊</span>
+        <h3 style="margin:0;font-size:.95rem;font-weight:800;color:#0f3d36">Pointage par fichier Excel (journaliers)</h3>
+      </div>
+      <p style="font-size:.78rem;color:#6b7280;margin:0 0 .875rem">
+        Téléchargez la grille du mois, remplissez les heures, puis téléversez-la : un aperçu vous permet de vérifier avant d'enregistrer.
+      </p>
+      <div style="display:flex;flex-wrap:wrap;gap:.625rem;align-items:flex-end">
+        <div>
+          <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Mois</label>
+          <input type="month" id="imp_mois" value="{{ now.strftime('%Y-%m') if now else '' }}"
+            style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .625rem;font-size:.85rem">
+        </div>
+        <button type="button" id="btn-modele-pointage"
+          style="background:#0f3d36;color:#fff;padding:.55rem 1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+          ⬇️ Télécharger le modèle
+        </button>
+        <div style="width:1px;align-self:stretch;background:#e5e7eb;margin:0 .25rem"></div>
+        <form method="POST" action="/journaliers/pointage/importer"
+              enctype="multipart/form-data" style="display:flex;gap:.5rem;align-items:flex-end;margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div>
+            <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Fichier rempli</label>
+            <input type="file" name="fichier" accept=".xlsx,.xls" required style="font-size:.8rem;max-width:220px">
+          </div>
+          <button type="submit"
+            style="background:#7c3aed;color:#fff;padding:.55rem 1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
+            ⬆️ Téléverser
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <form method="POST" action="/pointage/sauvegarder" id="form_pointage">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
   <input type="hidden" name="date_pointage" value="{{ date_sel.strftime('%Y-%m-%d') }}"/>
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -330,6 +365,16 @@
 </form>
 
 <script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function () {
+  const btn = document.getElementById('btn-modele-pointage');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      const mois = document.getElementById('imp_mois').value;
+      if (!mois) { alert('Choisissez un mois.'); return; }
+      window.location.href = '/journaliers/pointage/modele?mois=' + encodeURIComponent(mois);
+    });
+  }
+});
 // ── Afficher/masquer motif absence ───────────────────────────────────────────
 function toggleAbsence(type, id, absent) {
   const hDiv = document.getElementById(`${type}_heures_div_${id}`);

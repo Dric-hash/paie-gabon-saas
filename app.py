@@ -387,6 +387,20 @@ def pwa_manifest():
 @app.route("/sw.js")
 def pwa_sw():
     from flask import send_from_directory
+    if not app.config.get("EST_PRODUCTION"):
+        js = (
+            "self.addEventListener('install', () => self.skipWaiting());\n"
+            "self.addEventListener('activate', (e) => {\n"
+            "  e.waitUntil((async () => {\n"
+            "    const keys = await caches.keys();\n"
+            "    await Promise.all(keys.map(k => caches.delete(k)));\n"
+            "    await self.registration.unregister();\n"
+            "    const cs = await self.clients.matchAll();\n"
+            "    cs.forEach(c => c.navigate(c.url));\n"
+            "  })());\n"
+            "});\n"
+        )
+        return app.response_class(js, mimetype="application/javascript")
     return send_from_directory(app.static_folder, "sw.js",
                                mimetype="application/javascript")
 
