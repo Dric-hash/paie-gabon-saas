@@ -15,7 +15,7 @@ from models_sso import SSOApp
 
 CLIENT_ID = "ameriack-ops"
 # URLs de retour autorisées (local + à compléter en production).
-REDIRECT_URIS = "http://localhost:5001/callback"
+REDIRECT_URIS = "https://ops.ameriack.com/callback http://localhost:5001/callback"
 
 with app.app_context():
     db.create_all()  # au cas où les tables sso_* n'existent pas encore

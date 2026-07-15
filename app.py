@@ -342,6 +342,7 @@ import models_sso
 from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
 app.register_blueprint(sso_bp)
 app.register_blueprint(sso_api_bp)
+csrf.exempt(sso_bp)      # flux SSO /authorize : POST cross-origin, protege par state + client_secret
 csrf.exempt(sso_api_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
 

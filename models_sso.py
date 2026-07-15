@@ -32,7 +32,8 @@ class SSOApp(db.Model):
         return verifier_secret(raw, self.client_secret_hash)
 
     def redirect_ok(self, uri):
-        return uri in (self.redirect_uris or "").split()
+        raw = (self.redirect_uris or "").replace(",", " ")
+        return (uri or "").strip() in raw.split()
 
 
 class SSOAuthCode(db.Model):

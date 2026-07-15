@@ -52,8 +52,13 @@ def index():
 @bp.route("/login", methods=["GET", "POST"])
 @_rate_limit("20/minute")
 def login():
+    # Destination post-login (flux SSO : /sso/authorize). On n'accepte qu'un
+    # chemin interne pour eviter les redirections ouvertes.
+    next_page = request.args.get("next", "") or request.form.get("next", "")
+    if next_page and not next_page.startswith("/"):
+        next_page = ""
     if current_user.is_authenticated:
-        return redirect(url_for("auth.index"))
+        return redirect(next_page or url_for("auth.index"))
     if request.method == "POST":
         email = request.form.get("email", "").strip().lower()
         pw    = request.form.get("password", "")
@@ -112,6 +117,7 @@ def login():
                     except Exception as e:
                         current_app.logger.error(f"[2FA EMAIL ERROR] {e}")
                     session["2fa_user_id"] = user.id
+                    session["post_login_next"] = next_page
                     return redirect(url_for("auth.verifier_2fa"))
 
                 # ── Connexion normale (non super-admin) ───────────────────────
@@ -122,7 +128,7 @@ def login():
                            user_id=user.id, tenant_id=user.tenant_id)
                 db.session.commit()
                 login_user(user)
-                return redirect(url_for("auth.index"))
+                return redirect(next_page or url_for("auth.index"))
             else:
                 user.nb_echecs_connexion = (user.nb_echecs_connexion or 0) + 1
                 if user.nb_echecs_connexion >= MAX_ECHECS:
@@ -171,7 +177,8 @@ def verifier_2fa():
             db.session.commit()
             session.pop("2fa_user_id", None)
             login_user(user)
-            return redirect(url_for("auth.index"))
+            _next = session.pop("post_login_next", "")
+            return redirect(_next or url_for("auth.index"))
         else:
             user.otp_tentatives = (user.otp_tentatives or 0) + 1
             if user.otp_tentatives >= MAX_OTP:
