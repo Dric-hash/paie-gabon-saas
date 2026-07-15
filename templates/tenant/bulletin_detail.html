@@ -191,16 +191,12 @@
       {% endif %}
       {% if bulletin.statut == 'VALIDÉ' %}
       <form method="POST" action="/bulletins/{{ bulletin.id }}/paye">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <form method="POST" action="/bulletins/{{ bulletin.id }}/paye">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Mode de paiement</label>
         <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem;font-size:.8rem;margin-bottom:.5rem">
           <option value="ESPECES" {% if bulletin.salarie and bulletin.salarie.mode_paiement == 'ESPECES' %}selected{% endif %}>Espèces</option>
           <option value="VIREMENT" {% if bulletin.salarie and bulletin.salarie.mode_paiement == 'VIREMENT' %}selected{% endif %}>Virement</option>
         </select>
-        <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">💳 Marquer comme payé</button>
-      </form>
         <button type="submit" style="width:100%;background:#0f3d36;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">💳 Marquer comme payé</button>
       </form>
       {% endif %}
