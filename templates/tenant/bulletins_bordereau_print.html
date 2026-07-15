@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Bordereau de paie — {{ periode.libelle_complet }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial, sans-serif; color:#111; padding:24px; font-size:13px; }
+  .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f3d36; padding-bottom:10px; margin-bottom:14px; }
+  .head h1 { font-size:18px; color:#0f3d36; }
+  .head .sub { font-size:12px; color:#555; margin-top:2px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th { background:#0f3d36; color:#fff; padding:7px 8px; text-align:left; font-size:12px; }
+  td { padding:6px 8px; border-bottom:1px solid #eee; font-size:12px; }
+  .num { text-align:right; font-family:monospace; }
+  .center { text-align:center; }
+  .tot-row td { font-weight:900; border-top:2px solid #0f3d36; background:#f0fdf4; }
+  .recap { margin-top:18px; max-width:360px; margin-left:auto; border:1px solid #d1d5db; border-radius:8px; overflow:hidden; }
+  .recap .rt { background:#0f3d36; color:#fff; padding:6px 12px; font-weight:700; }
+  .recap td { padding:6px 12px; }
+  .badge { padding:2px 8px; border-radius:9999px; font-size:11px; font-weight:700; }
+  .b-esp { background:#fef3c7; color:#92400e; }
+  .b-vir { background:#dbeafe; color:#1e40af; }
+  .footer { margin-top:30px; font-size:11px; color:#888; display:flex; justify-content:space-between; }
+  @media print { body { padding:0; } }
+</style>
+</head>
+<body>
+  <div class="head">
+    <div>
+      <h1>BORDEREAU DE PAIE</h1>
+      <div class="sub">{{ tenant.denomination }}</div>
+      <div class="sub">Période : <b>{{ periode.libelle_complet }}</b>{% if statut %} · Statut : {{ statut }}{% endif %}</div>
+    </div>
+    <div class="sub">Édité le {{ now.strftime('%d/%m/%Y') }}</div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Matricule</th>
+        <th>Salarié</th>
+        <th>Emploi</th>
+        <th>Mode</th>
+        <th class="num">Net à payer</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr>
+        <td>{{ l.matricule }}</td>
+        <td><b>{{ l.nom }}</b></td>
+        <td>{{ l.emploi }}</td>
+        <td>
+          {% if l.mode == 'VIREMENT' %}<span class="badge b-vir">Virement</span>
+          {% else %}<span class="badge b-esp">Espèces</span>{% endif %}
+        </td>
+        <td class="num">{{ l.net|int }} FCFA</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="center" style="padding:20px;color:#9ca3af">Aucun bulletin pour cette période.</td></tr>
+      {% endfor %}
+      {% if lignes %}
+      <tr class="tot-row">
+        <td colspan="4" class="num">TOTAL GÉNÉRAL ({{ nb_total }})</td>
+        <td class="num">{{ total_general|int }} FCFA</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  {% if lignes %}
+  <div class="recap">
+    <div class="rt">Récapitulatif des décaissements</div>
+    <table>
+      <tr>
+        <td>Espèces <span style="color:#6b7280">({{ recap_mode.ESPECES.nb }})</span></td>
+        <td class="num" style="font-weight:700">{{ recap_mode.ESPECES.total|int }} FCFA</td>
+      </tr>
+      <tr style="border-top:1px solid #f0f0f0">
+        <td>Virement <span style="color:#6b7280">({{ recap_mode.VIREMENT.nb }})</span></td>
+        <td class="num" style="font-weight:700">{{ recap_mode.VIREMENT.total|int }} FCFA</td>
+      </tr>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="footer">
+    <span>Visa Direction : ______________________</span>
+    <span>PaieGabon — Document généré automatiquement</span>
+  </div>
+</body>
+</html>

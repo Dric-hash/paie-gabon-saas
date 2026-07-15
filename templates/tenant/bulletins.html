@@ -141,6 +141,11 @@
          style="background:#059669;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
         📦 Tous les PDF (ZIP)
       </a>
+      <a href="/bulletins/bordereau?periode_id={{ periode_sel.id }}{% if statut_filtre %}&statut={{ statut_filtre }}{% endif %}"
+         target="_blank"
+         style="background:#7c3aed;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+        🧾 Bordereau de paie
+      </a>
       {% set nb_brouillons_total = bulletins|selectattr('statut','equalto','BROUILLON')|list|length %}
       {% set nb_valides_total = bulletins|selectattr('statut','in',['VALIDÉ','VALIDE'])|list|length %}
       {% if nb_brouillons_total > 0 %}

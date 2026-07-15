@@ -110,6 +110,22 @@
   </tbody>
 </table>
 
+{% if feuilles %}
+<div style="margin-top:16px;max-width:340px;margin-left:auto;border:1px solid #d1d5db;border-radius:8px;overflow:hidden">
+  <div style="background:#0f3d36;color:#fff;padding:6px 12px;font-weight:700;font-size:13px">Récapitulatif par mode de paiement</div>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr>
+      <td style="padding:6px 12px">Espèces <span style="color:#6b7280">({{ recap_mode.ESPECES.nb }})</span></td>
+      <td style="padding:6px 12px;text-align:right;font-weight:700">{{ recap_mode.ESPECES.total|int }} FCFA</td>
+    </tr>
+    <tr style="border-top:1px solid #f0f0f0">
+      <td style="padding:6px 12px">Virement <span style="color:#6b7280">({{ recap_mode.VIREMENT.nb }})</span></td>
+      <td style="padding:6px 12px;text-align:right;font-weight:700">{{ recap_mode.VIREMENT.total|int }} FCFA</td>
+    </tr>
+  </table>
+</div>
+{% endif %}
+
 <div class="footer">
   PaieGabon — Document généré automatiquement
 </div>

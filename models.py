@@ -462,6 +462,7 @@ class Salarie(db.Model):
     type_rupture           = db.Column(db.String(100))
     statut                 = db.Column(db.String(20), default="ACTIF")
     date_creation          = db.Column(db.DateTime, default=utcnow)
+    mode_paiement          = db.Column(db.String(30), default="ESPECES")  # ESPECES | VIREMENT
     date_modification      = db.Column(db.DateTime, onupdate=utcnow)
 
     bulletins = db.relationship("BulletinPaie", backref="salarie", lazy=True)
@@ -542,6 +543,7 @@ class BulletinPaie(db.Model):
     # Unique par tenant : un document de paie officiel ne change jamais de numéro.
     numero                = db.Column(db.String(30))
     numero_seq            = db.Column(db.Integer)
+    mode_paiement         = db.Column(db.String(30), default="ESPECES")  # figé au paiement
     nb_jours_travailles   = db.Column(db.Integer)
     salaire_base          = db.Column(db.Numeric(15,2), nullable=False)
     heures_sup_10         = db.Column(db.Numeric(15,2), default=0)
@@ -791,6 +793,7 @@ class Journalier(db.Model):
     taux_horaire  = db.Column(db.Numeric(12,2), nullable=False)
     type_paie     = db.Column(db.String(20), default="JOURNALIER")  # JOURNALIER | MENSUEL
     statut        = db.Column(db.String(20), default="ACTIF")
+    mode_paiement = db.Column(db.String(30), default="ESPECES")  # ESPECES | VIREMENT
     date_embauche = db.Column(db.Date)
     date_debut    = db.Column(db.Date)           # début de mission (libre)
     date_fin      = db.Column(db.Date)           # fin de mission (optionnel)
@@ -877,6 +880,7 @@ class FeuillePaieJournalier(db.Model):
     montant_brut  = db.Column(db.Numeric(15,2), default=0)
     avance_deduite = db.Column(db.Numeric(15,2), default=0)  # avances déduites (figé au paiement)
     statut        = db.Column(db.String(20), default="EN_ATTENTE")
+    mode_paiement = db.Column(db.String(30), default="ESPECES")  # figé au paiement
     observation   = db.Column(db.String(200))
     date_creation = db.Column(db.DateTime, default=utcnow)
     journalier = db.relationship("Journalier", backref="feuilles_paie")

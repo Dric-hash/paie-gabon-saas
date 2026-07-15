@@ -1104,6 +1104,7 @@ def salarie_modifier(id):
             ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
             ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
             ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
+            ("mode_paiement",(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
         db.session.commit()
@@ -1411,6 +1412,55 @@ def bulletins():
         pagination=pagination if pid else None,
         pagination_base=_base + _sep,
         tenant=t)
+
+@bp.route("/bulletins/bordereau")
+@login_required
+def bulletins_bordereau():
+    """Bordereau de paie imprimable d'une période : liste des salariés, net à
+    payer, mode de paiement, avec sous-totaux Espèces / Virement.
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    pid = request.args.get("periode_id", type=int)
+    if not pid:
+        flash("Choisissez une période pour générer le bordereau.", "error")
+        return redirect(url_for("tenant.bulletins"))
+    ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+
+    statut_f = request.args.get("statut", "")
+    q = BulletinPaie.query.options(joinedload(BulletinPaie.salarie)) \
+        .filter_by(tenant_id=t.id, periode_id=pid)
+    if statut_f:
+        q = q.filter_by(statut=statut_f)
+    bulletins = q.join(Salarie).order_by(Salarie.nom).all()
+
+    lignes = []
+    recap_mode = {"ESPECES": {"total": 0.0, "nb": 0}, "VIREMENT": {"total": 0.0, "nb": 0}}
+    total_general = 0.0
+    for b in bulletins:
+        net = float(b.net_a_payer or 0)
+        mode = (b.mode_paiement if b.statut == "PAYÉ" and b.mode_paiement
+                else (b.salarie.mode_paiement if b.salarie else "ESPECES")) or "ESPECES"
+        if mode not in ("ESPECES", "VIREMENT"):
+            mode = "ESPECES"
+        recap_mode[mode]["total"] += net
+        recap_mode[mode]["nb"]    += 1
+        total_general += net
+        lignes.append({
+            "matricule": b.salarie.matricule if b.salarie else "—",
+            "nom": b.salarie.nom_complet if b.salarie else "—",
+            "emploi": (b.salarie.emploi if b.salarie else "") or "—",
+            "net": net, "mode": mode, "statut": b.statut,
+        })
+
+    return render_template("tenant/bulletins_bordereau_print.html",
+        tenant=t, periode=ps, lignes=lignes, recap_mode=recap_mode,
+        total_general=total_general, nb_total=len(lignes),
+        statut=statut_f, now=datetime.now())
 
 @bp.route("/bulletins/valider-lot", methods=["POST"])
 @login_required
@@ -1722,6 +1772,10 @@ def bulletin_paye(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    mode = (request.form.get("mode_paiement") or "").strip()
+    if mode not in ("ESPECES", "VIREMENT"):
+        mode = (b.salarie.mode_paiement if b.salarie else "ESPECES") or "ESPECES"
+    b.mode_paiement = mode
     b.statut = "PAYÉ"; db.session.commit()
     log_action("PAY", "bulletin", b.id,
                f"Bulletin payé {b.salarie.nom_complet if b.salarie else ''}")
@@ -3271,6 +3325,7 @@ def journalier_nouveau():
             date_debut=   _parse_date(request.form.get("date_debut")),
             date_fin=     _parse_date(request.form.get("date_fin")),
             nationalite=  request.form.get("nationalite","").strip() or None,
+            mode_paiement=(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip(),
             statut="ACTIF")
         db.session.add(j); db.session.commit()
         log_action("CREATE", "journalier", j.id,
@@ -3351,6 +3406,7 @@ def journalier_modifier(id):
         j.date_debut=   _parse_date(request.form.get("date_debut"))
         j.date_fin=     _parse_date(request.form.get("date_fin"))
         j.nationalite=  request.form.get("nationalite","").strip() or None
+        j.mode_paiement=(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()
         j.statut=request.form.get("statut","ACTIF")
         # ── Affectation site ──────────────────────────────────────────────
         site_id = request.form.get("site_id", type=int)
@@ -4091,6 +4147,10 @@ def journalier_payer(id):
         pris = min(dispo, reste)
         a.montant_regularise = float(a.montant_regularise or 0) + pris
         reste = round(reste - pris, 2)
+    mode = (request.form.get("mode_paiement") or "").strip()
+    if mode not in ("ESPECES", "VIREMENT"):
+        mode = (f.journalier.mode_paiement if f.journalier else "ESPECES") or "ESPECES"
+    f.mode_paiement = mode
     f.statut = "PAYÉ"; f.date_paiement = datetime.now().date(); db.session.commit()
     net = float(f.montant_brut) - a_deduire
     log_action("PAY", "feuille_journalier", f.id,
@@ -4546,12 +4606,20 @@ def journaliers_paie_imprimer_sites():
         key = s.id if s else SANS_SITE
         if key not in groupes:
             groupes[key] = {"site": s, "feuilles": [], "total": 0.0,
-                            "total_brut": 0.0, "total_avance": 0.0}
+                            "total_brut": 0.0, "total_avance": 0.0,
+                            "recap_mode": {"ESPECES": {"total": 0.0, "nb": 0},
+                                           "VIREMENT": {"total": 0.0, "nb": 0}}}
         groupes[key]["feuilles"].append(f)
         net = imput_av.get(f.id, {}).get("net", float(f.montant_a_payer or 0))
         groupes[key]["total"]       += net
         groupes[key]["total_brut"]  += float(f.montant_a_payer or 0)
         groupes[key]["total_avance"]+= imput_av.get(f.id, {}).get("avance", 0.0)
+        mode = (f.mode_paiement if f.statut == "PAYÉ" and f.mode_paiement
+                else (f.journalier.mode_paiement if f.journalier else "ESPECES")) or "ESPECES"
+        if mode not in ("ESPECES", "VIREMENT"):
+            mode = "ESPECES"
+        groupes[key]["recap_mode"][mode]["total"] += net
+        groupes[key]["recap_mode"][mode]["nb"]    += 1
 
     # Ordonner : sites par nom (selon sites_list), puis "Sans site" à la fin
     groupes_ordonnes = []
@@ -4563,8 +4631,15 @@ def journaliers_paie_imprimer_sites():
 
     total_general = sum(g["total"] for g in groupes_ordonnes)
     nb_total = sum(len(g["feuilles"]) for g in groupes_ordonnes)
+    # Récap global par mode (somme des récaps de chaque site)
+    recap_global = {"ESPECES": {"total": 0.0, "nb": 0}, "VIREMENT": {"total": 0.0, "nb": 0}}
+    for g in groupes_ordonnes:
+        for m in ("ESPECES", "VIREMENT"):
+            recap_global[m]["total"] += g["recap_mode"][m]["total"]
+            recap_global[m]["nb"]    += g["recap_mode"][m]["nb"]
     return render_template("tenant/journaliers_paie_sites_print.html",
         tenant=t, groupes=groupes_ordonnes, total_general=total_general,
+        recap_global=recap_global,
         nb_total=nb_total, statut=statut_f, date_debut=date_debut, date_fin=date_fin,
         imput_av=imput_av, now=datetime.now())
 
@@ -4602,9 +4677,20 @@ def journaliers_paie_imprimer():
     imput_av = _imputer_avances_journalier(
         feuilles, _avances_par_journalier(t.id, {f.journalier_id for f in feuilles}))
     total = sum(imput_av.get(f.id, {}).get("net", float(f.montant_a_payer or 0)) for f in feuilles)
+    # ── Sous-totaux par mode de paiement (net réellement décaissé) ──────
+    recap_mode = {"ESPECES": {"total": 0.0, "nb": 0}, "VIREMENT": {"total": 0.0, "nb": 0}}
+    for f in feuilles:
+        mode = (f.mode_paiement if f.statut == "PAYÉ" and f.mode_paiement
+                else (f.journalier.mode_paiement if f.journalier else "ESPECES")) or "ESPECES"
+        if mode not in recap_mode:
+            mode = "ESPECES"
+        net = imput_av.get(f.id, {}).get("net", float(f.montant_a_payer or 0))
+        recap_mode[mode]["total"] += net
+        recap_mode[mode]["nb"]    += 1
     return render_template("tenant/journaliers_paie_print.html",
         tenant=t, feuilles=feuilles, site=site, statut=statut_f,
         date_debut=date_debut, date_fin=date_fin, total=total,
+        recap_mode=recap_mode,
         imput_av=imput_av, now=datetime.now())
 
 

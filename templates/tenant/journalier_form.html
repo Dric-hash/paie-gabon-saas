@@ -63,6 +63,13 @@
               value="{{ journalier.date_embauche.strftime('%Y-%m-%d') if journalier and journalier.date_embauche else '' }}"
               class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
           </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-500 uppercase mb-1">Mode de paiement</label>
+            <select name="mode_paiement" class="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-500">
+              <option value="ESPECES" {{ 'selected' if not journalier or journalier.mode_paiement=='ESPECES' }}>Espèces</option>
+              <option value="VIREMENT" {{ 'selected' if journalier and journalier.mode_paiement=='VIREMENT' }}>Virement</option>
+            </select>
+          </div>
           {% if journalier %}
           <div>
             <label class="block text-xs font-bold text-gray-500 uppercase mb-1" data-i18n="common.status">Statut</label>

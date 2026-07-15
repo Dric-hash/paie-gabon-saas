@@ -110,6 +110,11 @@
         <td class="num">{{ g.total|int }} FCFA</td>
         <td></td>
       </tr>
+      <tr>
+        <td colspan="6" class="num" style="font-size:11px;color:#374151">dont Espèces ({{ g.recap_mode.ESPECES.nb }}) / Virement ({{ g.recap_mode.VIREMENT.nb }})</td>
+        <td class="num" style="font-size:11px;color:#374151">{{ g.recap_mode.ESPECES.total|int }} / {{ g.recap_mode.VIREMENT.total|int }}</td>
+        <td></td>
+      </tr>
       {% endif %}
     </tbody>
   </table>
@@ -146,6 +151,16 @@
         <td class="num">{{ g.total|int }}</td>
       </tr>
       {% endfor %}
+      <tr>
+        <td class="num" style="color:#374151">dont Espèces ({{ recap_global.ESPECES.nb }})</td>
+        <td class="center"></td>
+        <td class="num" style="color:#374151">{{ recap_global.ESPECES.total|int }} FCFA</td>
+      </tr>
+      <tr>
+        <td class="num" style="color:#374151">dont Virement ({{ recap_global.VIREMENT.nb }})</td>
+        <td class="center"></td>
+        <td class="num" style="color:#374151">{{ recap_global.VIREMENT.total|int }} FCFA</td>
+      </tr>
       <tr class="tot-row">
         <td class="num">TOTAL GÉNÉRAL</td>
         <td class="center">{{ nb_total }}</td>

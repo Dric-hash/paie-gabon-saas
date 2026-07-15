@@ -533,6 +533,11 @@ def run_migrations():
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS twofa_active BOOLEAN DEFAULT FALSE",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS base NUMERIC(15,2)",
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS taux NUMERIC(8,4)",
+        # ── Mode de paiement (ESPECES / VIREMENT) sur personnes et paies ──
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
+        "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
         # ── Jeton de session (invalidation au changement de mot de passe) ────────
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS session_token VARCHAR(32)",
         "UPDATE utilisateurs SET session_token = substr(md5(random()::text), 1, 32) WHERE session_token IS NULL",
