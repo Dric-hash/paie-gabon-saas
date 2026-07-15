@@ -190,7 +190,7 @@
       </form>
       {% endif %}
       {% if bulletin.statut == 'VALIDÉ' %}
-      <form method="POST" action="/bulletins/{{ bulletin.id }}/paye">
+      <form method="POST" action="/bulletins/{{ bulletin.id }}/payer">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
         <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.25rem">Mode de paiement</label>
         <select name="mode_paiement" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem;font-size:.8rem;margin-bottom:.5rem">
