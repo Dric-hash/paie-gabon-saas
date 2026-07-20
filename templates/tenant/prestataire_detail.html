@@ -190,7 +190,15 @@
             <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer;margin-left:.4rem">Supprimer</button>
           </form>
           {% else %}
+          {% if current_user.is_tenant_admin %}
+          <span style="color:#9ca3af;font-size:.72rem;margin-right:.4rem">🔒 figée</span>
+          <form method="POST" action="/prestataires/avances/{{ a.id }}/supprimer" onsubmit="return confirm('⚠️ ATTENTION : cette avance est VALIDÉE. Sa suppression est définitive et irréversible.{% if a.montant_regularise and a.montant_regularise > 0 %} Elle a déjà été régularisée sur des factures — les comptes du prestataire seront affectés.{% endif %}\n\nConfirmer la suppression ?')" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;font-weight:700;cursor:pointer">Supprimer (admin)</button>
+          </form>
+          {% else %}
           <span style="color:#9ca3af;font-size:.72rem">— figée —</span>
+          {% endif %}
           {% endif %}
         </td>
       </tr>
