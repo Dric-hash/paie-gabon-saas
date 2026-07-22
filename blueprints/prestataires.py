@@ -801,20 +801,9 @@ def avance_supprimer(aid):
         return redir
     a = AvancePrestataire.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
     pid = a.prestataire_id
-
-    # Une avance validée ne peut être supprimée QUE par un administrateur du tenant.
-    if a.statut == "VALIDEE" and not current_user.is_tenant_admin:
-        flash("Cette avance est validée : seul un administrateur peut la supprimer.", "error")
-        return redirect(url_for("prestataires.prestataire_detail", id=pid))
-
-    # Journaliser spécialement la suppression d'une avance validée (et régularisée).
     if a.statut == "VALIDEE":
-        detail = "Suppression ADMIN d'une avance VALIDEE"
-        if (a.montant_regularise or 0) > 0:
-            detail += f" et REGULARISEE (montant regularise : {a.montant_regularise})"
-        log_action("DELETE", "avance_prestataire", aid, detail,
-                   user_id=current_user.id, tenant_id=t.id)
-
+        flash("Cette avance est validée : elle ne peut plus être supprimée.", "error")
+        return redirect(url_for("prestataires.prestataire_detail", id=pid))
     db.session.delete(a)
     db.session.commit()
     log_action("DELETE", "avance_prestataire", aid, "Suppression avance",

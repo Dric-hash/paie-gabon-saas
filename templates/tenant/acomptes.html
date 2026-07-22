@@ -79,7 +79,7 @@
           <th style="text-align:right" data-i18n="common.amount">Montant</th>
           <th>Motif</th>
           <th style="text-align:center" data-i18n="common.status">Statut</th>
-          <th style="text-align:center" data-i18n="common.actions">Actions</th>
+          <th style="text-align:center;min-width:180px" data-i18n="common.actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -106,21 +106,21 @@
             </span>
           </td>
           <td style="text-align:center">
-            <div style="display:flex;gap:.375rem;justify-content:center">
+            <div style="display:flex;gap:.375rem;justify-content:center;flex-wrap:wrap">
               {% if a.statut == 'EN_ATTENTE' %}
-              <form method="POST" action="/acomptes/{{ a.id }}/valider">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" style="font-size:.7rem;background:#059669;color:white;padding:.25rem .5rem;border-radius:.375rem;border:none;cursor:pointer" title="Marquer déduit">✅</button>
+              <form method="POST" action="/acomptes/{{ a.id }}/valider" style="margin:0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" style="font-size:.72rem;font-weight:600;background:#059669;color:white;padding:.3rem .6rem;border-radius:.375rem;border:none;cursor:pointer;white-space:nowrap" title="Marquer comme déduit">Déduire</button>
               </form>
-              <form method="POST" action="/acomptes/{{ a.id }}/annuler">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" style="font-size:.7rem;background:#dc2626;color:white;padding:.25rem .5rem;border-radius:.375rem;border:none;cursor:pointer" title="Annuler">❌</button>
+              <form method="POST" action="/acomptes/{{ a.id }}/annuler" style="margin:0">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" style="font-size:.72rem;font-weight:600;background:#dc2626;color:white;padding:.3rem .6rem;border-radius:.375rem;border:none;cursor:pointer;white-space:nowrap" title="Annuler l'acompte">Annuler</button>
               </form>
               {% endif %}
-              <form method="POST" action="/acomptes/{{ a.id }}/supprimer"
+              <form method="POST" action="/acomptes/{{ a.id }}/supprimer" style="margin:0"
                 onsubmit="return confirm('Supprimer cet acompte ?')">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-                <button type="submit" style="font-size:.7rem;background:#6b7280;color:white;padding:.25rem .5rem;border-radius:.375rem;border:none;cursor:pointer" title="Supprimer">🗑️</button>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                <button type="submit" style="font-size:.72rem;font-weight:600;background:#6b7280;color:white;padding:.3rem .6rem;border-radius:.375rem;border:none;cursor:pointer;white-space:nowrap" title="Supprimer">Suppr.</button>
               </form>
             </div>
           </td>
