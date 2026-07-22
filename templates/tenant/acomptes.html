@@ -68,7 +68,8 @@
       <div id="zone-ids-acomptes"></div>
     </form>
 
-    <table>
+    <div style="overflow-x:auto;width:100%;-webkit-overflow-scrolling:touch">
+    <table style="min-width:760px">
       <thead>
         <tr>
           <th style="text-align:center;width:36px">
@@ -79,7 +80,7 @@
           <th style="text-align:right" data-i18n="common.amount">Montant</th>
           <th>Motif</th>
           <th style="text-align:center" data-i18n="common.status">Statut</th>
-          <th style="text-align:center;min-width:180px" data-i18n="common.actions">Actions</th>
+          <th style="text-align:center;min-width:150px" data-i18n="common.actions">Actions</th>
         </tr>
       </thead>
       <tbody>
@@ -136,6 +137,7 @@
         {% endfor %}
       </tbody>
     </table>
+    </div>
   </div>
 
   <!-- Infos et règles -->
