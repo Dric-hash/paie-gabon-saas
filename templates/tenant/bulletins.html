@@ -132,6 +132,14 @@
         style="background:#fee2e2;color:#dc2626;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
         🗑️ Supprimer brouillons
       </button>
+      <!-- Génération en masse : crée un brouillon par salarié actif sans bulletin -->
+      {% if periode_sel.statut in ('OUVERT', 'OUVERTE') %}
+      <button type="submit" formaction="/bulletins/generer-lot"
+        onclick="return confirm('Générer un bulletin brouillon pour chaque salarié actif sans bulletin sur {{ periode_sel.libelle_mois }} {{ periode_sel.annee }} ?\n\nLes bulletins existants ne seront pas modifiés.')"
+        style="background:#d99e0b;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
+        ⚡ Générer les bulletins
+      </button>
+      {% endif %}
       <!-- Export Excel (dans le formulaire, simple lien) -->
       <a href="/bulletins/export/{{ periode_sel.id }}{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}"
          style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">

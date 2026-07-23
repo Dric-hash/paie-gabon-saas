@@ -1462,6 +1462,123 @@ def bulletins_bordereau():
         total_general=total_general, nb_total=len(lignes),
         statut=statut_f, now=datetime.now())
 
+@bp.route("/bulletins/generer-lot", methods=["POST"])
+@login_required
+def bulletins_generer_lot():
+    """Génère un bulletin BROUILLON pour chaque salarié actif d'une période.
+
+    Principes de sûreté :
+      - ne crée QUE des brouillons (jamais de bulletin validé) ;
+      - ne touche JAMAIS un bulletin existant (salarié ignoré, pas écrasé) ;
+      - refuse une période clôturée ;
+      - ignore les salariés sans contrat actif ou embauchés après la période.
+    Le salaire de base vient du contrat actif ; la prime d'ancienneté et les
+    acomptes en attente sont appliqués automatiquement. L'utilisateur ajuste
+    ensuite les cas particuliers avant de valider.
+    """
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+
+    pid = request.form.get("periode_id", type=int)
+    if not pid:
+        flash("Choisissez une période avant de générer les bulletins.", "error")
+        return redirect(url_for("tenant.bulletins"))
+    periode = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
+    retour = f"/bulletins?periode_id={pid}"
+
+    if periode.statut not in ("OUVERT", "OUVERTE"):
+        flash(f"La période {periode.libelle_mois} {periode.annee} est "
+              f"{periode.statut.lower()} : aucun bulletin ne peut y être généré.", "error")
+        return redirect(retour)
+
+    import calendar as _cal
+    fin_periode = date(periode.annee, periode.mois,
+                       _cal.monthrange(periode.annee, periode.mois)[1])
+
+    # Salariés déjà dotés d'un bulletin sur cette période : intouchables.
+    deja = {b.salarie_id for b in
+            BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=pid).all()}
+
+    salaries = (Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")
+                .order_by(Salarie.nom, Salarie.prenom).all())
+
+    crees = 0
+    ignores_existants = ignores_sans_contrat = ignores_non_embauches = 0
+    noms_sans_contrat = []
+
+    for s in salaries:
+        if s.id in deja:
+            ignores_existants += 1
+            continue
+        if s.date_embauche and s.date_embauche > fin_periode:
+            ignores_non_embauches += 1
+            continue
+        contrat = (Contrat.query
+                   .filter_by(salarie_id=s.id, tenant_id=t.id, actif=True)
+                   .order_by(Contrat.date_debut.desc()).first())
+        if not contrat or not contrat.salaire_base:
+            ignores_sans_contrat += 1
+            if len(noms_sans_contrat) < 8:
+                noms_sans_contrat.append(s.nom_complet)
+            continue
+
+        donnees = {"salaire_base": float(contrat.salaire_base)}
+        if s.date_embauche:
+            donnees["anciennete_annees"] = max(
+                0, (fin_periode - s.date_embauche).days // 365)
+
+        # Acomptes en attente du mois : déduits comme dans la saisie unitaire.
+        total_ac = float(db.session.query(db.func.sum(Acompte.montant))
+                         .filter_by(tenant_id=t.id, salarie_id=s.id,
+                                    mois=periode.mois, annee=periode.annee,
+                                    statut="EN_ATTENTE").scalar() or 0)
+        if total_ac > 0:
+            donnees["acompte"] = total_ac
+
+        res = calculer_bulletin(dict(donnees, convention=t.convention),
+                                nb_parts=float(s.nombre_parts or 1))
+        b = BulletinPaie(tenant_id=t.id, salarie_id=s.id, periode_id=pid)
+        for k, v in res.items():
+            if not k.startswith("_") and hasattr(b, k):
+                setattr(b, k, v)
+        b.statut = "BROUILLON"
+        b.mode_paiement = s.mode_paiement or "ESPECES"
+        db.session.add(b)
+        crees += 1
+
+    db.session.commit()
+    log_action("GENERATE_BATCH", "bulletin", pid,
+               f"Génération en lot {periode.libelle_mois} {periode.annee} : "
+               f"{crees} brouillon(s) créé(s)")
+
+    if crees:
+        flash(f"{crees} bulletin(s) brouillon créé(s) pour "
+              f"{periode.libelle_mois} {periode.annee}. Vérifiez-les avant validation.",
+              "success")
+    else:
+        flash("Aucun bulletin créé : tous les salariés actifs en ont déjà un "
+              "sur cette période, ou aucun n'a de contrat actif.", "warning")
+
+    details = []
+    if ignores_existants:
+        details.append(f"{ignores_existants} salarié(s) avaient déjà un bulletin (inchangés)")
+    if ignores_non_embauches:
+        details.append(f"{ignores_non_embauches} embauché(s) après la période")
+    if ignores_sans_contrat:
+        noms = ", ".join(noms_sans_contrat)
+        suite = "…" if ignores_sans_contrat > len(noms_sans_contrat) else ""
+        details.append(f"{ignores_sans_contrat} sans contrat actif ({noms}{suite})")
+    if details:
+        flash(" · ".join(details), "info")
+
+    return redirect(retour)
+
+
 @bp.route("/bulletins/valider-lot", methods=["POST"])
 @login_required
 def bulletins_valider_lot():
