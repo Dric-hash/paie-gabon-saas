@@ -89,6 +89,29 @@
   {% endfor %}
 </div>
 
+<!-- ── Génération en masse ─────────────────────────────────────────────────── -->
+{% if periode_sel.statut in ('OUVERT', 'OUVERTE') %}
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:1rem;padding:1rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+  <div>
+    <div style="font-weight:700;font-size:.875rem;color:#92400e">Génération automatique</div>
+    <div style="font-size:.78rem;color:#a16207;margin-top:.15rem">
+      Crée un bulletin brouillon pour chaque salarié actif n'en ayant pas encore sur
+      {{ periode_sel.libelle_mois }} {{ periode_sel.annee }} — salaire du contrat,
+      prime d'ancienneté et acomptes inclus. Les bulletins existants ne sont pas modifiés.
+    </div>
+  </div>
+  <form method="POST" action="/bulletins/generer-lot" style="margin:0"
+        onsubmit="return confirm('Générer les bulletins brouillons de {{ periode_sel.libelle_mois }} {{ periode_sel.annee }} ?\n\nLes bulletins existants ne seront pas modifiés.')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="periode_id" value="{{ periode_sel.id }}">
+    <button type="submit"
+      style="background:#d99e0b;color:white;padding:.55rem 1.1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;white-space:nowrap">
+      ⚡ Générer les bulletins
+    </button>
+  </form>
+</div>
+{% endif %}
+
 <!-- ── Formulaire avec cases à cocher ─────────────────────────────────────── -->
 {% if bulletins %}
 <form id="form-lot" method="POST" action="/bulletins/valider-lot">
@@ -132,14 +155,6 @@
         style="background:#fee2e2;color:#dc2626;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
         🗑️ Supprimer brouillons
       </button>
-      <!-- Génération en masse : crée un brouillon par salarié actif sans bulletin -->
-      {% if periode_sel.statut in ('OUVERT', 'OUVERTE') %}
-      <button type="submit" formaction="/bulletins/generer-lot"
-        onclick="return confirm('Générer un bulletin brouillon pour chaque salarié actif sans bulletin sur {{ periode_sel.libelle_mois }} {{ periode_sel.annee }} ?\n\nLes bulletins existants ne seront pas modifiés.')"
-        style="background:#d99e0b;color:white;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer">
-        ⚡ Générer les bulletins
-      </button>
-      {% endif %}
       <!-- Export Excel (dans le formulaire, simple lien) -->
       <a href="/bulletins/export/{{ periode_sel.id }}{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}"
          style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
