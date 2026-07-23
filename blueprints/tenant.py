@@ -2183,8 +2183,22 @@ def periodes():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t=get_tenant()
     if not t: return redirect(url_for("auth.login"))
+    periodes_liste = (PeriodePaie.query.filter_by(tenant_id=t.id)
+                      .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all())
+
+    # Masse brute et nombre de bulletins par période (une seule requête groupée)
+    stats = {}
+    for pid, nb, brut, net in (db.session.query(
+            BulletinPaie.periode_id,
+            db.func.count(BulletinPaie.id),
+            db.func.sum(BulletinPaie.salaire_brut),
+            db.func.sum(BulletinPaie.net_a_payer))
+            .filter_by(tenant_id=t.id)
+            .group_by(BulletinPaie.periode_id).all()):
+        stats[pid] = {"nb": nb or 0, "brut": float(brut or 0), "net": float(net or 0)}
+
     return render_template("tenant/periodes.html", tenant=t,
-        periodes=PeriodePaie.query.filter_by(tenant_id=t.id).order_by(PeriodePaie.annee.desc(),PeriodePaie.mois.desc()).all(),
+        periodes=periodes_liste, stats_periodes=stats,
         now=datetime.now())
 
 @bp.route("/periodes/nouvelle", methods=["POST"])
