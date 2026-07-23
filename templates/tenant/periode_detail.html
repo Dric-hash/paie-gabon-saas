@@ -1,0 +1,203 @@
+{% extends "tenant/base.html" %}
+{% block title %}{{ p.libelle_complet }} — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem">
+  <div>
+    <a href="/periodes" style="font-size:.75rem;color:#6b7280;text-decoration:none">← Périodes</a>
+    <h1 class="text-2xl font-black text-gray-900" style="margin-top:.15rem">{{ p.libelle_complet }}</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      <span class="badge-{{ p.statut|lower|replace('î','i')|replace('ô','o') }}">{{ p.statut }}</span>
+      · {{ stats.nb_bulletins }} bulletin(s)
+      {% if p.date_cloture %}· clôturée le {{ p.date_cloture|date_fr }}{% endif %}
+    </p>
+  </div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <a href="/bulletins?periode_id={{ p.id }}"
+       style="background:#0f3d36;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
+      Voir les bulletins
+    </a>
+    <a href="/bulletins/bordereau?periode_id={{ p.id }}" target="_blank"
+       style="background:#7c3aed;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
+      🧾 Bordereau
+    </a>
+    <a href="/declaration-cnss?periode_id={{ p.id }}"
+       style="background:#2563eb;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
+      📋 Déclarations
+    </a>
+  </div>
+</div>
+
+{% if stats.nb_bulletins == 0 %}
+<div class="card" style="padding:3rem;text-align:center;color:#9ca3af">
+  <div style="font-size:2rem;margin-bottom:.5rem">📄</div>
+  <div style="font-weight:700;color:#374151">Aucun bulletin sur cette période</div>
+  <p style="font-size:.85rem;margin-top:.35rem">
+    Rendez-vous sur la page des bulletins pour les générer automatiquement.
+  </p>
+  <a href="/bulletins?periode_id={{ p.id }}"
+     style="display:inline-block;margin-top:1rem;background:#d99e0b;color:white;padding:.5rem 1.1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
+    ⚡ Aller générer les bulletins
+  </a>
+</div>
+{% else %}
+
+<!-- ── Masse salariale ── -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.5rem">
+  {% for label, val, color in [
+    ("Masse brute",          stats.brut,           "#d97706"),
+    ("Net à payer",          stats.net_a_payer,    "#059669"),
+    ("Charges patronales",   patronales.total,     "#2563eb"),
+    ("Coût employeur total", stats.cout_employeur, "#0f3d36"),
+  ] %}
+  <div style="background:{{ color }};border-radius:1rem;padding:1.25rem;color:white">
+    <div style="font-size:1.25rem;font-weight:900;font-family:monospace">{{ val|int|fcfa }}</div>
+    <div style="font-size:.72rem;opacity:.8;margin-top:.25rem">{{ label }}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Avancement ── -->
+<div class="card" style="padding:1rem;margin-bottom:1.5rem">
+  <div style="font-weight:700;font-size:.875rem;margin-bottom:.75rem">Avancement des bulletins</div>
+  <div style="display:flex;gap:1.5rem;flex-wrap:wrap;font-size:.85rem">
+    {% for st, couleur in [('BROUILLON','#9ca3af'), ('VALIDÉ','#059669'), ('PAYÉ','#2563eb')] %}
+    <div>
+      <span style="display:inline-block;width:.6rem;height:.6rem;border-radius:50%;background:{{ couleur }};margin-right:.35rem"></span>
+      <strong>{{ stats.par_statut.get(st, 0) }}</strong>
+      <span style="color:#6b7280">{{ st|lower }}(s)</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem;margin-bottom:1.5rem">
+
+  <!-- ── Retenues salariales ── -->
+  <div class="card overflow-hidden">
+    <div style="padding:.875rem 1rem;border-bottom:1px solid #f3f4f6;font-weight:700;font-size:.875rem">
+      Retenues salariales
+      <span style="font-weight:400;color:#9ca3af;font-size:.75rem">— déduites du brut</span>
+    </div>
+    <table>
+      <tbody>
+        {% for label, val, base in [
+          ("CNSS salarié",   retenues.cnss,   stats.base_cnss),
+          ("CNAMGS salarié", retenues.cnamgs, stats.base_cnamgs),
+          ("TCS",            retenues.tcs,    stats.base_tcs),
+          ("IRPP",           retenues.irpp,   stats.base_irpp),
+        ] %}
+        <tr>
+          <td style="padding:.55rem 1rem;font-size:.82rem">
+            {{ label }}
+            {% if base %}<div style="font-size:.68rem;color:#9ca3af">base {{ base|int|fcfa }}</div>{% endif %}
+          </td>
+          <td style="padding:.55rem 1rem;text-align:right;font-family:monospace;font-size:.82rem">{{ val|int|fcfa }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f9fafb;font-weight:700">
+          <td style="padding:.6rem 1rem;font-size:.82rem">Total retenues</td>
+          <td style="padding:.6rem 1rem;text-align:right;font-family:monospace;font-size:.82rem">{{ retenues.total|int|fcfa }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- ── Charges patronales ── -->
+  <div class="card overflow-hidden">
+    <div style="padding:.875rem 1rem;border-bottom:1px solid #f3f4f6;font-weight:700;font-size:.875rem">
+      Charges patronales
+      <span style="font-weight:400;color:#9ca3af;font-size:.75rem">— à la charge de l'employeur</span>
+    </div>
+    <table>
+      <tbody>
+        {% for label, val in [
+          ("CNSS patronale",   patronales.cnss),
+          ("CNAMGS patronale", patronales.cnamgs),
+          ("FNH",              patronales.fnh),
+          ("CFP",              patronales.cfp),
+        ] %}
+        <tr>
+          <td style="padding:.55rem 1rem;font-size:.82rem">{{ label }}</td>
+          <td style="padding:.55rem 1rem;text-align:right;font-family:monospace;font-size:.82rem">{{ val|int|fcfa }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f9fafb;font-weight:700">
+          <td style="padding:.6rem 1rem;font-size:.82rem">Total charges</td>
+          <td style="padding:.6rem 1rem;text-align:right;font-family:monospace;font-size:.82rem">{{ patronales.total|int|fcfa }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+</div>
+
+<!-- ── Reversements par organisme ── -->
+<div class="card overflow-hidden" style="margin-bottom:1.5rem">
+  <div style="padding:.875rem 1rem;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem">
+    <div>
+      <span style="font-weight:700;font-size:.875rem">Reversements par organisme</span>
+      <span style="font-weight:400;color:#9ca3af;font-size:.75rem"> — parts salariale et patronale cumulées</span>
+    </div>
+    <a href="/declaration-cnss?periode_id={{ p.id }}"
+       style="font-size:.72rem;background:#eef4f2;color:#17564c;padding:.3rem .7rem;border-radius:.375rem;text-decoration:none;font-weight:700">
+      Générer les déclarations →
+    </a>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Organisme</th>
+        <th style="text-align:right">Part salariale</th>
+        <th style="text-align:right">Part patronale</th>
+        <th style="text-align:right">Total à reverser</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for o in organismes %}
+      <tr>
+        <td style="padding:.55rem 1rem;font-size:.82rem">
+          <strong>{{ o.nom }}</strong>
+          <div style="font-size:.68rem;color:#9ca3af">{{ o.note }}</div>
+        </td>
+        <td style="padding:.55rem 1rem;text-align:right;font-family:monospace;font-size:.82rem;color:#6b7280">
+          {% if o.salarial %}{{ o.salarial|int|fcfa }}{% else %}—{% endif %}
+        </td>
+        <td style="padding:.55rem 1rem;text-align:right;font-family:monospace;font-size:.82rem;color:#6b7280">
+          {% if o.patronal %}{{ o.patronal|int|fcfa }}{% else %}—{% endif %}
+        </td>
+        <td style="padding:.55rem 1rem;text-align:right;font-family:monospace;font-size:.82rem;font-weight:700">
+          {{ o.total|int|fcfa }}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="background:#f9fafb;font-weight:700">
+        <td style="padding:.6rem 1rem;font-size:.82rem">TOTAL DES REVERSEMENTS</td>
+        <td colspan="2"></td>
+        <td style="padding:.6rem 1rem;text-align:right;font-family:monospace;font-size:.85rem">{{ total_reversements|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+<!-- ── Contrôle d'équilibre ── -->
+<div class="card" style="padding:1rem;font-size:.8rem;color:#4b5563">
+  <div style="font-weight:700;margin-bottom:.5rem;color:#111827">Contrôle</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.5rem">
+    <div>Masse brute <strong style="font-family:monospace">{{ stats.brut|int|fcfa }}</strong></div>
+    <div>− Retenues salariales <strong style="font-family:monospace">{{ retenues.total|int|fcfa }}</strong></div>
+    <div>= Net à payer <strong style="font-family:monospace">{{ stats.net_a_payer|int|fcfa }}</strong></div>
+  </div>
+  <p style="margin-top:.6rem;color:#9ca3af;font-size:.74rem">
+    Un écart entre ces montants peut venir d'acomptes déduits ou de retenues
+    diverses saisies sur les bulletins : ouvrez le bordereau pour le détail salarié par salarié.
+  </p>
+</div>
+
+{% endif %}
+{% endblock %}

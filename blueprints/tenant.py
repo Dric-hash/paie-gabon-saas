@@ -2201,6 +2201,89 @@ def periodes():
         periodes=periodes_liste, stats_periodes=stats,
         now=datetime.now())
 
+@bp.route("/periodes/<int:id>")
+@login_required
+def periode_detail(id):
+    """Fiche récapitulative d'une période : masse salariale, retenues
+    salariales, charges patronales et accès aux déclarations."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    p = PeriodePaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    bulletins = (BulletinPaie.query.options(joinedload(BulletinPaie.salarie))
+                 .filter_by(tenant_id=t.id, periode_id=p.id).all())
+
+    def somme(champ, source=None):
+        return round(sum(float(getattr(b, champ) or 0) for b in (source or bulletins)), 2)
+
+    # Répartition par statut
+    par_statut = {"BROUILLON": 0, "VALIDÉ": 0, "PAYÉ": 0}
+    for b in bulletins:
+        st = "VALIDÉ" if b.statut in ("VALIDÉ", "VALIDE") else b.statut
+        par_statut[st] = par_statut.get(st, 0) + 1
+
+    # Masse salariale
+    brut = somme("salaire_brut")
+    net = somme("salaire_net")
+    net_a_payer = somme("net_a_payer")
+
+    # Retenues salariales
+    retenues = {
+        "cnss": somme("cnss_salarie"),
+        "cnamgs": somme("cnamgs_salarie"),
+        "tcs": somme("tcs"),
+        "irpp": somme("irpp"),
+    }
+    retenues["total"] = round(sum(retenues.values()), 2)
+
+    # Charges patronales
+    patronales = {
+        "cnss": somme("cnss_patronale"),
+        "cnamgs": somme("cnamgs_patronale"),
+        "fnh": somme("fnh"),
+        "cfp": somme("cfp"),
+    }
+    patronales["total"] = round(sum(patronales.values()), 2)
+
+    # Reversements par organisme (part salariale + part patronale)
+    organismes = [
+        {"nom": "CNSS", "salarial": retenues["cnss"], "patronal": patronales["cnss"],
+         "total": round(retenues["cnss"] + patronales["cnss"], 2),
+         "note": "Déclaration trimestrielle"},
+        {"nom": "CNAMGS", "salarial": retenues["cnamgs"], "patronal": patronales["cnamgs"],
+         "total": round(retenues["cnamgs"] + patronales["cnamgs"], 2),
+         "note": "Déclaration trimestrielle"},
+        {"nom": "TCS", "salarial": retenues["tcs"], "patronal": 0,
+         "total": retenues["tcs"], "note": "Taxe complémentaire sur les salaires"},
+        {"nom": "IRPP", "salarial": retenues["irpp"], "patronal": 0,
+         "total": retenues["irpp"], "note": "Retenue à la source, reversée à la DGI"},
+        {"nom": "FNH", "salarial": 0, "patronal": patronales["fnh"],
+         "total": patronales["fnh"], "note": "Fonds national de l'habitat"},
+        {"nom": "CFP", "salarial": 0, "patronal": patronales["cfp"],
+         "total": patronales["cfp"], "note": "Contribution à la formation professionnelle"},
+    ]
+    total_reversements = round(sum(o["total"] for o in organismes), 2)
+
+    stats = {
+        "nb_bulletins": len(bulletins),
+        "par_statut": par_statut,
+        "brut": brut, "net": net, "net_a_payer": net_a_payer,
+        "base_cnss": somme("base_cnss"),
+        "base_cnamgs": somme("base_cnamgs"),
+        "base_tcs": somme("base_tcs"),
+        "base_irpp": somme("base_irpp"),
+        "cout_employeur": round(brut + patronales["total"], 2),
+    }
+
+    return render_template("tenant/periode_detail.html", tenant=t, p=p,
+        bulletins=bulletins, stats=stats, retenues=retenues,
+        patronales=patronales, organismes=organismes,
+        total_reversements=total_reversements, now=datetime.now())
+
+
 @bp.route("/periodes/nouvelle", methods=["POST"])
 @tenant_required
 @can_edit
