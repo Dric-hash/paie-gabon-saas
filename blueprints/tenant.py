@@ -1629,6 +1629,27 @@ def bulletin_saisie():
                 })
         donnees["composants"] = composants_saisis
 
+        # ── Prime d'ancienneté automatique (selon convention collective) ───────
+        # L'ancienneté est calculée à la fin de la période de paie. Le calcul
+        # effectif se fait dans calculer_bulletin() et ne s'applique QUE si
+        # aucune prime n'a été saisie manuellement (l'override reste prioritaire).
+        if s.date_embauche:
+            import calendar as _cal2
+            _fin_periode = date(periode.annee, periode.mois,
+                                _cal2.monthrange(periode.annee, periode.mois)[1])
+            _anc = max(0, (_fin_periode - s.date_embauche).days // 365)
+            donnees["anciennete_annees"] = _anc
+            if _anc >= 2 and not donnees.get("prime_anciennete"):
+                from calculs_paie import prime_anciennete as _calc_pa
+                _pa = _calc_pa(t.convention, float(donnees.get("salaire_base") or 0), _anc)
+                if _pa > 0:
+                    flash(
+                        f"Prime d'ancienneté calculée automatiquement : "
+                        f"{int(_pa):,} FCFA ({_anc} ans d'ancienneté, "
+                        f"convention {t.convention}). Vous pouvez la modifier "
+                        f"manuellement.".replace(",", " "),
+                        "info")
+
         # ── L6 : Allocation de congé (Code du travail 2021, Art. 225) ──────────
         # Calcul automatique si un congé ANNUEL débute dans le mois de la période
         # et que l'utilisateur n'a pas saisi de valeur manuelle (l'override
@@ -6379,6 +6400,22 @@ def api_calculer():
             if s: nb_parts = float(s.nombre_parts or 1)
         mois  = data.pop("mois_periode", None)
         annee = data.pop("annee_periode", None)
+        # ── Ancienneté du salarié (pour la prime d'ancienneté automatique) ──
+        # Référence : fin de la période de paie si connue, sinon aujourd'hui.
+        if sid and t:
+            s_anc = Salarie.query.filter_by(id=sid, tenant_id=t.id).first()
+            if s_anc and s_anc.date_embauche:
+                from datetime import date as _date
+                try:
+                    if mois and annee:
+                        m, a = int(mois), int(annee)
+                        ref = (_date(a + 1, 1, 1) if m == 12 else _date(a, m + 1, 1))
+                        ref = ref - timedelta(days=1)      # dernier jour du mois
+                    else:
+                        ref = _date.today()
+                except (TypeError, ValueError):
+                    ref = _date.today()
+                data["anciennete_annees"] = max(0, (ref - s_anc.date_embauche).days // 365)
         total_acomptes = 0.0
         if sid and t and mois and annee:
             total_acomptes = float(db.session.query(db.func.sum(Acompte.montant))

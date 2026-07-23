@@ -256,7 +256,10 @@
             <td class="pf-cell"><input type="number" name="carburant" id="f_carburant" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">Prime d'ancienneté</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">
+              Prime d'ancienneté
+              <div id="info_anciennete" style="display:none;font-size:.68rem;font-weight:500;color:#059669;margin-top:.1rem"></div>
+            </td>
             <td class="pf-cell"><input type="number" step="any" name="base_prime_anciennete" id="base_prime_anciennete" step="any" min="0" placeholder="0" oninput="calcMontant('prime_anciennete')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_prime_anciennete" id="taux_prime_anciennete" placeholder="1" oninput="calcMontant('prime_anciennete')" class="pf-rate"/></td>
@@ -760,6 +763,27 @@ function recalculer() {
       document.getElementById("r_cnamgs_pat").textContent = fmt(res.cnamgs_patronale);
       document.getElementById("r_fnh").textContent        = fmt(res.fnh);
       document.getElementById("r_cfp").textContent        = fmt(res.cfp);
+
+      // Prime d'ancienneté calculée automatiquement selon la convention :
+      // on remplit le champ pour que l'aperçu et le bulletin enregistré
+      // affichent la même valeur, et que l'utilisateur puisse la corriger.
+      const champPA = document.getElementById("f_prime_anciennete");
+      const infoPA  = document.getElementById("info_anciennete");
+      if (champPA && res.prime_anciennete_est_auto && res.prime_anciennete > 0) {
+        champPA.value = res.prime_anciennete;
+      }
+      if (infoPA) {
+        if (res.anciennete_annees > 0 && res.prime_anciennete_auto > 0) {
+          infoPA.textContent = "Calcul auto : " + fmt(res.prime_anciennete_auto)
+                             + " (" + res.anciennete_annees + " ans)";
+          infoPA.style.display = "block";
+        } else if (res.anciennete_annees > 0) {
+          infoPA.textContent = res.anciennete_annees + " an(s) d'ancienneté";
+          infoPA.style.display = "block";
+        } else {
+          infoPA.style.display = "none";
+        }
+      }
       document.getElementById("spinner").style.display = "none";
     })
     .catch(() => document.getElementById("spinner").style.display = "none");

@@ -288,6 +288,19 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     prime_caisse      = g("prime_caisse")
     carburant         = g("carburant")
     prime_anciennete  = g("prime_anciennete")
+    # ── Prime d'ancienneté automatique ──────────────────────────────────────
+    # Si aucune prime n'est saisie manuellement, on la calcule d'après la
+    # convention collective du tenant et l'ancienneté du salarié (en années).
+    # Une valeur saisie à la main reste prioritaire : elle n'est jamais écrasée.
+    anciennete_annees = int(g("anciennete_annees"))
+    prime_anciennete_auto = 0.0
+    if anciennete_annees > 0 and salaire_base > 0:
+        prime_anciennete_auto = _prime_anciennete_convention(
+            donnees.get("convention"), salaire_base, anciennete_annees)
+    prime_anciennete_est_auto = False
+    if prime_anciennete <= 0 and prime_anciennete_auto > 0:
+        prime_anciennete = prime_anciennete_auto
+        prime_anciennete_est_auto = True
     prime_rendement   = g("prime_rendement")
     prime_assiduité   = g("prime_assiduité")
     prime_qualite     = g("prime_qualite")
@@ -446,6 +459,9 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "prime_caisse":                round(prime_caisse, 2),
         "carburant":                   round(carburant, 2),
         "prime_anciennete":            round(prime_anciennete, 2),
+        "prime_anciennete_auto":       round(prime_anciennete_auto, 2),
+        "prime_anciennete_est_auto":   prime_anciennete_est_auto,
+        "anciennete_annees":           anciennete_annees,
         "indem_logement":              round(indem_logement, 2),
         "indem_domesticite":           round(indem_domesticite, 2),
         "indem_eau_electricite":       round(indem_eau_electricite, 2),
@@ -1713,6 +1729,16 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
         # A.46/A.47 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
     return 0.0
+
+
+def _prime_anciennete_convention(convention, salaire_base: float,
+                                 anciennete_annees: int) -> float:
+    """Alias de prime_anciennete() utilisable depuis calculer_bulletin().
+
+    Nécessaire car, dans calculer_bulletin, la variable locale `prime_anciennete`
+    masque la fonction du même nom : l'appeler directement lèverait un TypeError.
+    """
+    return prime_anciennete(convention, salaire_base, anciennete_annees)
 
 
 def calculer_preavis_code(anciennete_annees: int) -> int:
