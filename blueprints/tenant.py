@@ -2195,7 +2195,16 @@ def periodes():
             db.func.sum(BulletinPaie.net_a_payer))
             .filter_by(tenant_id=t.id)
             .group_by(BulletinPaie.periode_id).all()):
-        stats[pid] = {"nb": nb or 0, "brut": float(brut or 0), "net": float(net or 0)}
+        stats[pid] = {"nb": nb or 0, "brut": float(brut or 0),
+                      "net": float(net or 0), "brouillons": 0}
+
+    # Brouillons restants : ce sont eux qui bloquent une clôture sereine
+    for pid, nb in (db.session.query(
+            BulletinPaie.periode_id, db.func.count(BulletinPaie.id))
+            .filter_by(tenant_id=t.id, statut="BROUILLON")
+            .group_by(BulletinPaie.periode_id).all()):
+        if pid in stats:
+            stats[pid]["brouillons"] = nb or 0
 
     return render_template("tenant/periodes.html", tenant=t,
         periodes=periodes_liste, stats_periodes=stats,
@@ -2270,6 +2279,7 @@ def periode_detail(id):
     stats = {
         "nb_bulletins": len(bulletins),
         "par_statut": par_statut,
+        "nb_brouillons": par_statut.get("BROUILLON", 0),
         "brut": brut, "net": net, "net_a_payer": net_a_payer,
         "base_cnss": somme("base_cnss"),
         "base_cnamgs": somme("base_cnamgs"),
@@ -2301,9 +2311,64 @@ def periode_nouvelle():
 @tenant_required
 @can_edit
 def periode_cloturer(id):
-    t=get_tenant(); p=PeriodePaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
-    p.statut="CLÔTURÉ"; p.date_cloture=utcnow(); db.session.commit()
-    flash("Période clôturée.","success"); return redirect(url_for("tenant.periodes"))
+    """Clôture une période, en refusant de le faire à l'aveugle s'il reste des
+    brouillons : ce sont des salariés potentiellement non payés. La clôture
+    reste possible, mais elle doit alors être confirmée explicitement."""
+    t = get_tenant()
+    p = PeriodePaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    if p.statut != "OUVERT":
+        flash("Cette période est déjà clôturée.", "warning")
+        return redirect(url_for("tenant.periodes"))
+
+    nb_brouillons = BulletinPaie.query.filter_by(
+        tenant_id=t.id, periode_id=p.id, statut="BROUILLON").count()
+
+    if nb_brouillons and request.form.get("confirmer") != "1":
+        flash(f"Clôture annulée : {nb_brouillons} bulletin(s) encore en brouillon "
+              f"sur {p.libelle_complet}. Validez-les d'abord, ou confirmez la "
+              f"clôture depuis la fiche de la période si c'est volontaire.", "error")
+        return redirect(url_for("tenant.periode_detail", id=p.id))
+
+    p.statut = "CLÔTURÉ"
+    p.date_cloture = utcnow()
+    db.session.commit()
+    log_action("CLOSE", "periode", p.id,
+               f"Clôture de {p.libelle_complet}"
+               + (f" avec {nb_brouillons} brouillon(s) restant(s)" if nb_brouillons else ""))
+
+    if nb_brouillons:
+        flash(f"Période {p.libelle_complet} clôturée avec {nb_brouillons} "
+              f"brouillon(s) non validé(s). Rouvrez-la si vous devez les traiter.",
+              "warning")
+    else:
+        flash(f"Période {p.libelle_complet} clôturée.", "success")
+    return redirect(url_for("tenant.periodes"))
+
+
+@bp.route("/periodes/<int:id>/rouvrir", methods=["POST"])
+@tenant_required
+@can_edit
+def periode_rouvrir(id):
+    """Rouvre une période clôturée. Une clôture par erreur reste ainsi
+    rattrapable ; l'opération est tracée dans le journal d'audit."""
+    t = get_tenant()
+    p = PeriodePaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+
+    if p.statut == "OUVERT":
+        flash("Cette période est déjà ouverte.", "info")
+        return redirect(url_for("tenant.periode_detail", id=p.id))
+
+    ancienne_cloture = p.date_cloture
+    p.statut = "OUVERT"
+    p.date_cloture = None
+    db.session.commit()
+    log_action("REOPEN", "periode", p.id,
+               f"Réouverture de {p.libelle_complet}"
+               + (f" (clôturée le {ancienne_cloture:%d/%m/%Y})" if ancienne_cloture else ""))
+    flash(f"Période {p.libelle_complet} rouverte. Vous pouvez de nouveau y "
+          f"générer et valider des bulletins.", "success")
+    return redirect(url_for("tenant.periode_detail", id=p.id))
 
 # ── Paiement abonnement ───────────────────────────────────────────────────────
 @bp.route("/paiement")

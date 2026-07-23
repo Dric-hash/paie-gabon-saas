@@ -25,6 +25,26 @@
        style="background:#2563eb;color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">
       📋 Déclarations
     </a>
+    {% if p.statut == 'OUVERT' %}
+    <form method="POST" action="/periodes/{{ p.id }}/cloturer" style="margin:0"
+          onsubmit="return confirm({% if stats.nb_brouillons %}'ATTENTION : {{ stats.nb_brouillons }} bulletin(s) encore en brouillon ne seront pas payés.\n\nClôturer {{ p.libelle_complet }} malgré tout ?'{% else %}'Clôturer {{ p.libelle_complet }} ?'{% endif %})">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      {% if stats.nb_brouillons %}<input type="hidden" name="confirmer" value="1">{% endif %}
+      <button type="submit"
+        style="background:{{ '#f59e0b' if stats.nb_brouillons else '#dc2626' }};color:white;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+        Clôturer{% if stats.nb_brouillons %} ({{ stats.nb_brouillons }} brouillon(s)){% endif %}
+      </button>
+    </form>
+    {% else %}
+    <form method="POST" action="/periodes/{{ p.id }}/rouvrir" style="margin:0"
+          onsubmit="return confirm('Rouvrir {{ p.libelle_complet }} ?\n\nVous pourrez de nouveau y générer et valider des bulletins. L\'opération est tracée.')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button type="submit"
+        style="background:#eef4f2;color:#17564c;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">
+        🔓 Rouvrir la période
+      </button>
+    </form>
+    {% endif %}
   </div>
 </div>
 
@@ -41,6 +61,32 @@
   </a>
 </div>
 {% else %}
+
+{% if stats.nb_brouillons and p.statut == 'OUVERT' %}
+<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:1rem;padding:1rem;margin-bottom:1.5rem;display:flex;align-items:center;gap:.75rem;flex-wrap:wrap">
+  <span style="font-size:1.25rem">⚠️</span>
+  <div style="flex:1;min-width:220px">
+    <div style="font-weight:700;font-size:.85rem;color:#92400e">
+      {{ stats.nb_brouillons }} bulletin(s) encore en brouillon
+    </div>
+    <div style="font-size:.78rem;color:#a16207;margin-top:.1rem">
+      Un brouillon n'est pas un bulletin de paie : ces salariés ne sont pas payés
+      et n'apparaissent pas dans les déclarations. Validez-les avant de clôturer.
+    </div>
+  </div>
+  <a href="/bulletins?periode_id={{ p.id }}&statut=BROUILLON"
+     style="background:#d99e0b;color:white;padding:.45rem 1rem;border-radius:.5rem;font-size:.78rem;font-weight:700;text-decoration:none;white-space:nowrap">
+    Voir les brouillons
+  </a>
+</div>
+{% endif %}
+
+{% if p.statut != 'OUVERT' %}
+<div style="background:#f3f4f6;border:1px solid #e5e7eb;border-radius:1rem;padding:.85rem 1rem;margin-bottom:1.5rem;font-size:.8rem;color:#4b5563">
+  Période clôturée{% if p.date_cloture %} le {{ p.date_cloture|date_fr }}{% endif %} :
+  aucun nouveau bulletin ne peut y être généré. Rouvrez-la si vous devez la corriger.
+</div>
+{% endif %}
 
 <!-- ── Masse salariale ── -->
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:1rem;margin-bottom:1.5rem">

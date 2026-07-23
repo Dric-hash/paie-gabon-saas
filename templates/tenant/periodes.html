@@ -73,14 +73,22 @@
             Bulletins
           </a>
           {% if p.statut == 'OUVERT' %}
-          <form method="POST" action="/periodes/{{ p.id }}/cloturer" style="display:inline">
+            {% if st.brouillons %}
+            <a href="/periodes/{{ p.id }}"
+               title="{{ st.brouillons }} brouillon(s) à traiter avant clôture"
+               style="font-size:.75rem;background:#fef3c7;color:#92400e;padding:.25rem .625rem;border-radius:.375rem;text-decoration:none;font-weight:700">
+              ⚠ {{ st.brouillons }} brouillon(s)
+            </a>
+            {% else %}
+            <form method="POST" action="/periodes/{{ p.id }}/cloturer" style="display:inline">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <button type="submit"
-              style="font-size:.75rem;background:#dc2626;color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer"
-              onclick="return confirm('Clôturer cette période ?')">
-              Clôturer
-            </button>
-          </form>
+              <button type="submit"
+                style="font-size:.75rem;background:#dc2626;color:white;padding:.25rem .625rem;border-radius:.375rem;border:none;cursor:pointer"
+                onclick="return confirm('Clôturer {{ p.libelle_complet }} ?')">
+                Clôturer
+              </button>
+            </form>
+            {% endif %}
           {% else %}
           <span style="font-size:.75rem;color:#9ca3af">Clôturée</span>
           {% endif %}
