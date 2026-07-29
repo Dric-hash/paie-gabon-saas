@@ -1876,8 +1876,10 @@ def bulletin_detail(id):
     if not t: return redirect(url_for("auth.login"))
     bulletin = BulletinPaie.query.filter_by(id=id,tenant_id=t.id).first_or_404()
     composants = BulletinComposant.query.filter_by(bulletin_id=bulletin.id).all()
+    from datetime import date as _date
     return render_template("tenant/bulletin_detail.html",
-        bulletin=bulletin, tenant=t, composants=composants)
+        bulletin=bulletin, tenant=t, composants=composants,
+        today=_date.today().isoformat())
 
 @bp.route("/bulletins/<int:id>/valider", methods=["POST"])
 @login_required
@@ -1914,6 +1916,16 @@ def bulletin_paye(id):
     if mode not in ("ESPECES", "VIREMENT"):
         mode = (b.salarie.mode_paiement if b.salarie else "ESPECES") or "ESPECES"
     b.mode_paiement = mode
+    # Date de paiement : celle choisie dans le formulaire, sinon aujourd'hui.
+    from datetime import date as _date, datetime as _dt
+    date_pmt = _date.today()
+    _df = (request.form.get("date_paiement") or "").strip()
+    if _df:
+        try:
+            date_pmt = _dt.strptime(_df, "%Y-%m-%d").date()
+        except ValueError:
+            date_pmt = _date.today()
+    b.date_paiement = date_pmt
     b.statut = "PAYÉ"; db.session.commit()
     log_action("PAY", "bulletin", b.id,
                f"Bulletin payé {b.salarie.nom_complet if b.salarie else ''}")
@@ -1921,14 +1933,13 @@ def bulletin_paye(id):
     # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
     try:
         from interco_caisse import proposer_ecriture
-        from datetime import date as _date
         nom = b.salarie.nom_complet if b.salarie else "salarié"
         periode = f"{b.periode.libelle_mois} {b.periode.annee}" if b.periode else ""
         proposer_ecriture(
             t, source_ref=f"bulletin-{b.id}",
             montant=float(b.net_a_payer or 0),
             motif=f"Salaire {nom} — {periode}".strip(" —"),
-            compte_suggere="6611", date_operation=_date.today())
+            compte_suggere="6611", date_operation=b.date_paiement)
     except Exception:
         pass
     flash("Bulletin marqué comme payé.", "success")
@@ -4160,7 +4171,7 @@ def journaliers_paie():
         total_en_attente=total_en_attente, total_paye=total_paye,
         nb_en_attente=nb_en_attente, aff_jour=aff_jour, imput_av=imput_av,
         pagination=pagination_f, pagination_base=_base + _sep,
-        now=datetime.now())
+        now=datetime.now(), today=date.today().isoformat())
 
 @bp.route("/journaliers/paie/generer", methods=["POST"])
 @login_required
@@ -4464,7 +4475,15 @@ def journalier_payer(id):
     if mode not in ("ESPECES", "VIREMENT"):
         mode = (f.journalier.mode_paiement if f.journalier else "ESPECES") or "ESPECES"
     f.mode_paiement = mode
-    f.statut = "PAYÉ"; f.date_paiement = datetime.now().date(); db.session.commit()
+    # Date de paiement : celle choisie dans le formulaire, sinon aujourd'hui.
+    date_pmt = date.today()
+    _df = (request.form.get("date_paiement") or "").strip()
+    if _df:
+        try:
+            date_pmt = datetime.strptime(_df, "%Y-%m-%d").date()
+        except ValueError:
+            date_pmt = date.today()
+    f.statut = "PAYÉ"; f.date_paiement = date_pmt; db.session.commit()
     net = float(f.montant_brut) - a_deduire
     log_action("PAY", "feuille_journalier", f.id,
                f"Paiement {f.journalier.nom_complet} — net {net:,.0f} F"

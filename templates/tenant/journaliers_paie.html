@@ -388,6 +388,9 @@
                 <option value="ESPECES" {% if f.journalier and f.journalier.mode_paiement == 'ESPECES' %}selected{% endif %}>Espèces</option>
                 <option value="VIREMENT" {% if f.journalier and f.journalier.mode_paiement == 'VIREMENT' %}selected{% endif %}>Virement</option>
               </select>
+              <input type="date" name="date_paiement" title="Date de paiement"
+                value="{{ f.date_paiement.isoformat() if f.date_paiement else today }}"
+                style="border:1px solid #e5e7eb;border-radius:.4rem;padding:.2rem;font-size:.68rem"/>
               <button type="submit" title="Marquer payé"
                 style="background:#d1fae5;color:#065f46;border:none;padding:.3rem .625rem;border-radius:.5rem;font-size:.75rem;font-weight:700;cursor:pointer">
                 💰 Payer
