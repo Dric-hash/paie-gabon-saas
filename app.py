@@ -99,6 +99,13 @@ app.config["MAIL_DEFAULT_SENDER"] = os.environ.get("MAIL_DEFAULT_SENDER", "onboa
 app.config["MAIL_SUPPRESS_SEND"]  = not bool(os.environ.get("MAIL_PASSWORD", ""))
 mail = Mail(app)
 
+# ── Interconnexion Caisse Ameriack ────────────────────────────────────────────
+# Quand un paiement est enregistré (bulletin ou journalier), PaieGabon propose
+# une sortie de caisse à l'application Caisse. Désactivable via CAISSE_INTERCO=0.
+app.config["CAISSE_INTERCO_ACTIF"] = os.environ.get("CAISSE_INTERCO", "1") == "1"
+app.config["CAISSE_URL"]           = os.environ.get("CAISSE_URL", "").rstrip("/")
+app.config["CAISSE_TOKEN"]         = os.environ.get("CAISSE_TOKEN", "")
+
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
 from core import init_limiter
 limiter = init_limiter(app)
@@ -516,6 +523,7 @@ def run_migrations():
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS grille_salaires TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS secteur VARCHAR(200)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS external_ref VARCHAR(64)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS langue VARCHAR(5) DEFAULT 'fr'",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS email_verifie BOOLEAN DEFAULT FALSE",
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS token_confirmation VARCHAR(200)",

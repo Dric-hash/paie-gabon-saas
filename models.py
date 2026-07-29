@@ -72,6 +72,10 @@ class Tenant(db.Model):
     statut           = db.Column(db.String(20), default="ACTIF")
     date_inscription = db.Column(db.DateTime, default=utcnow)
     date_expiration  = db.Column(db.DateTime)
+    # Référence d'interconnexion : identifiant partagé avec les autres apps
+    # (Caisse Ameriack, Ops) pour relier ce tenant à son équivalent. Défini une
+    # fois, il sert de clé d'accroche lors des appels d'API entre applications.
+    external_ref     = db.Column(db.String(64), unique=True)
     token_api        = db.Column(db.String(64), unique=True)
     # Hash SHA-256 du token API (le secret n'est plus stocké en clair ; `token_api`
     # ne conserve qu'un préfixe lisible pour identifier le token côté UI).

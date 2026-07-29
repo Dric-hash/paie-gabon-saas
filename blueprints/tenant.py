@@ -1918,6 +1918,18 @@ def bulletin_paye(id):
     log_action("PAY", "bulletin", b.id,
                f"Bulletin payé {b.salarie.nom_complet if b.salarie else ''}")
     db.session.commit()
+    # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
+    try:
+        from interco_caisse import proposer_ecriture
+        nom = b.salarie.nom_complet if b.salarie else "salarié"
+        periode = f"{b.periode.libelle_mois} {b.periode.annee}" if b.periode else ""
+        proposer_ecriture(
+            t, source_ref=f"bulletin-{b.id}",
+            montant=float(b.net_a_payer or 0),
+            motif=f"Salaire {nom} — {periode}".strip(" —"),
+            compte_suggere="6611")
+    except Exception:
+        pass
     flash("Bulletin marqué comme payé.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
 
@@ -4459,6 +4471,17 @@ def journalier_payer(id):
                apres={"montant_brut": float(f.montant_brut), "avance_deduite": a_deduire,
                       "net": net, "periode": f"{f.date_debut}→{f.date_fin}"})
     db.session.commit()
+    # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
+    try:
+        from interco_caisse import proposer_ecriture
+        nom = f.journalier.nom_complet if f.journalier else "journalier"
+        proposer_ecriture(
+            t, source_ref=f"journalier-{f.id}",
+            montant=float(net),
+            motif=f"Paie journalier {nom} — {f.date_debut}→{f.date_fin}",
+            compte_suggere="6611")
+    except Exception:
+        pass
     if a_deduire > 0:
         flash(f"Paiement de {f.journalier.nom_complet} enregistré "
               f"(net {net:,.0f} F après {a_deduire:,.0f} F d'avances).".replace(",", " "), "success")
