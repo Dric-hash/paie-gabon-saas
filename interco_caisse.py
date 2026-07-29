@@ -23,7 +23,7 @@ _TIMEOUT = 4
 
 
 def proposer_ecriture(tenant, *, source_ref, montant, motif,
-                      compte_suggere="6611", sens="SORTIE"):
+                      compte_suggere="6611", sens="SORTIE", date_operation=None):
     """Propose une sortie de caisse à l'app Caisse. Retourne True si l'appel a
     abouti (créé ou déjà reçu), False sinon. N'élève jamais d'exception.
 
@@ -34,6 +34,7 @@ def proposer_ecriture(tenant, *, source_ref, montant, motif,
       motif          : libellé lisible (nom + période)
       compte_suggere : numéro SYSCOHADA suggéré (661/6611 pour les salaires)
       sens           : "SORTIE" (défaut) ou "ENTREE"
+      date_operation : date du paiement (date ou "YYYY-MM-DD") ; défaut = aujourd'hui
     """
     try:
         if not current_app.config.get("CAISSE_INTERCO_ACTIF"):
@@ -67,6 +68,16 @@ def proposer_ecriture(tenant, *, source_ref, montant, motif,
             "compte_suggere": compte_suggere,
             "devise": "XAF",
         }
+        # Date de paiement (facultative) : la caisse la reprend telle quelle.
+        if date_operation is not None:
+            try:
+                # Accepte un objet date/datetime ou une chaîne "YYYY-MM-DD"
+                if hasattr(date_operation, "strftime"):
+                    payload["date_operation"] = date_operation.strftime("%Y-%m-%d")
+                else:
+                    payload["date_operation"] = str(date_operation)[:10]
+            except Exception:
+                pass
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url + "/api/interco/ecriture", data=data, method="POST",

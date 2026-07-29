@@ -1921,13 +1921,14 @@ def bulletin_paye(id):
     # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
     try:
         from interco_caisse import proposer_ecriture
+        from datetime import date as _date
         nom = b.salarie.nom_complet if b.salarie else "salarié"
         periode = f"{b.periode.libelle_mois} {b.periode.annee}" if b.periode else ""
         proposer_ecriture(
             t, source_ref=f"bulletin-{b.id}",
             montant=float(b.net_a_payer or 0),
             motif=f"Salaire {nom} — {periode}".strip(" —"),
-            compte_suggere="6611")
+            compte_suggere="6611", date_operation=_date.today())
     except Exception:
         pass
     flash("Bulletin marqué comme payé.", "success")
@@ -4479,7 +4480,7 @@ def journalier_payer(id):
             t, source_ref=f"journalier-{f.id}",
             montant=float(net),
             motif=f"Paie journalier {nom} — {f.date_debut}→{f.date_fin}",
-            compte_suggere="6611")
+            compte_suggere="6611", date_operation=f.date_paiement)
     except Exception:
         pass
     if a_deduire > 0:
