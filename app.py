@@ -37,6 +37,14 @@ init_sentry()
 
 app = Flask(__name__)
 
+# Import de pointage : la grille validée repart dans un unique champ caché JSON
+# (payload). Pour de gros pointages (beaucoup de journaliers × jours), ce champ
+# dépasse la limite Werkzeug par défaut (500 Ko) → erreur « Request Entity Too
+# Large ». On relève la limite de taille d'un champ de formulaire à 20 Mo.
+# MAX_CONTENT_LENGTH reste géré par nginx (client_max_body_size 25M).
+app.config["MAX_FORM_MEMORY_SIZE"] = 20 * 1024 * 1024   # 20 Mo par champ
+app.config["MAX_FORM_PARTS"] = 10000                     # marge sur le nb de champs
+
 # Indicateur de production unique et robuste (présence d'une variable, pas
 # égalité stricte sur un nom d'environnement Railway qui peut être renommé).
 EST_PRODUCTION = bool(
