@@ -322,7 +322,8 @@
   </div>
 
   {% if feuilles %}
-  <table>
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+  <table style="min-width:760px">
     <thead>
       <tr>
         <th>Journalier</th>
@@ -429,6 +430,7 @@
       </tr>
     </tfoot>
   </table>
+  </div>
 {% if pagination and pagination.pages > 1 %}
 <div style="display:flex;align-items:center;justify-content:space-between;padding:.75rem 1.25rem;border-top:1px solid #f3f4f6;background:#fafafa;flex-wrap:wrap;gap:.5rem">
   <span style="font-size:.75rem;color:#6b7280;font-weight:600">
