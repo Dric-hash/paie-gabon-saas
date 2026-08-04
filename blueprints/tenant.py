@@ -24,7 +24,7 @@ from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Sala
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
-                           calculer_indemnite_services_rendus_btp)
+                           calculer_indemnite_services_rendus_btp, ventiler_heures_mois)
 from audit import log_action, get_audit_logs
 from core import (get_tenant, tenant_required, can_edit, admin_only,
                   require_permission, calculer_parts_irpp, parse_date,
@@ -8877,3 +8877,383 @@ def api_recherche_rapide():
             "categorie": "Prestataires"})
 
     return jsonify(resultats[:15])
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  POINTAGE SALARIÉS — import mensuel (format LONG : 1 ligne / salarié / jour)
+#  Circuit : modèle Excel → remplir → téléverser (aperçu) → confirmer (brouillons)
+#  Le classement des heures (10/30/40/70) et la détection dimanche/férié sont
+#  délégués à ventiler_heures_mois() ; aucune règle de paie n'est réécrite ici.
+# ═══════════════════════════════════════════════════════════════════════════
+_MOIS_FR_SAL = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+                "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+_JOURS_FR_SAL = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+# Motifs d'absence reconnus (comptés, jamais déduits automatiquement)
+_MOTIFS_ABSENCE = ["CONGE", "MALADIE", "INJUSTIFIEE"]
+
+
+def _sal_periode_demandee():
+    """Lit le mois demandé (YYYY-MM) ou le mois courant. Retourne (annee, mois)."""
+    mois_str = request.args.get("mois", "") or request.form.get("mois", "")
+    try:
+        annee, mois = (int(x) for x in mois_str.split("-"))
+        date(annee, mois, 1)
+        return annee, mois
+    except (ValueError, TypeError):
+        today = datetime.now()
+        return today.year, today.month
+
+
+@bp.route("/salaries/pointage/modele")
+@login_required
+def salaries_pointage_modele():
+    """Génère le modèle Excel (format LONG) pré-rempli : une ligne par salarié
+    actif et par jour du mois, dimanches et fériés déjà marqués. L'utilisateur
+    saisit les heures travaillées, la nuit, et un éventuel motif d'absence."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    import calendar as _cal
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.worksheet.datavalidation import DataValidation
+    from io import BytesIO
+
+    annee, mois = _sal_periode_demandee()
+    nb_jours = _cal.monthrange(annee, mois)[1]
+    mois_nom = f"{_MOIS_FR_SAL[mois]} {annee}"
+    feries = {d: n for d, n in jours_feries_annee(annee).items() if d.month == mois}
+
+    salaries = (Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")
+                .order_by(Salarie.nom, Salarie.prenom).all())
+
+    VERT, BLANC = "0F3D36", "FFFFFF"
+    FERIE_FILL, DIM_FILL = "FCE4D6", "FFF2CC"
+    thin = Side(style="thin", color="D1D5DB")
+    bord = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"Pointage {_MOIS_FR_SAL[mois][:3]} {annee}"
+    ws.sheet_view.showGridLines = False
+
+    ws["A1"] = f"POINTAGE SALARIÉS — {mois_nom}"
+    ws["A1"].font = Font(name="Arial", size=13, bold=True, color=VERT)
+    ws["A2"] = ("Saisissez « Heures travaillées » (et « Dont nuit » si concerné) pour chaque jour. "
+                "Les dimanches et fériés sont pré-marqués. Pour une absence, indiquez le motif "
+                "(CONGE, MALADIE, INJUSTIFIEE) au lieu des heures.")
+    ws["A2"].font = Font(name="Arial", size=9, italic=True, color="666666")
+
+    entetes = ["Matricule", "Nom", "Date", "Jour", "Type",
+               "Heures travaillées", "Dont nuit", "Absence (motif)"]
+    for i, h in enumerate(entetes, 1):
+        c = ws.cell(row=4, column=i, value=h)
+        c.font = Font(name="Arial", size=10, bold=True, color=BLANC)
+        c.fill = PatternFill("solid", fgColor=VERT)
+        c.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        c.border = bord
+    ws.row_dimensions[4].height = 30
+
+    # Validation du motif d'absence (liste déroulante)
+    dv = DataValidation(type="list", formula1='"CONGE,MALADIE,INJUSTIFIEE"', allow_blank=True)
+    ws.add_data_validation(dv)
+
+    r = 5
+    for s in salaries:
+        nom_complet = f"{s.nom} {s.prenom or ''}".strip()
+        for d in range(1, nb_jours + 1):
+            dd = date(annee, mois, d)
+            if dd in feries:
+                tj = "FERIE"
+            elif dd.weekday() == 6:
+                tj = "DIMANCHE"
+            else:
+                tj = "NORMAL"
+            ws.cell(row=r, column=1, value=s.matricule)
+            ws.cell(row=r, column=2, value=nom_complet)
+            ws.cell(row=r, column=3, value=dd.strftime("%d/%m/%Y"))
+            ws.cell(row=r, column=4, value=_JOURS_FR_SAL[dd.weekday()])
+            ws.cell(row=r, column=5, value=tj)
+            for col in range(1, 9):
+                cell = ws.cell(row=r, column=col)
+                cell.border = bord
+                cell.font = Font(name="Arial", size=9)
+                if tj == "FERIE":
+                    cell.fill = PatternFill("solid", fgColor=FERIE_FILL)
+                elif tj == "DIMANCHE":
+                    cell.fill = PatternFill("solid", fgColor=DIM_FILL)
+            dv.add(ws.cell(row=r, column=8))
+            r += 1
+        r += 1  # ligne vide entre salariés (lisibilité)
+
+    for col, w in {"A": 12, "B": 24, "C": 13, "D": 7, "E": 11,
+                   "F": 18, "G": 11, "H": 18}.items():
+        ws.column_dimensions[col].width = w
+    ws.freeze_panes = "A5"
+
+    bio = BytesIO()
+    wb.save(bio)
+    bio.seek(0)
+    from flask import send_file
+    nom_fichier = f"pointage_salaries_{annee}_{mois:02d}.xlsx"
+    return send_file(bio, as_attachment=True, download_name=nom_fichier,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+def _lire_pointage_salaries(fichier):
+    """Lit le fichier Excel de pointage (format LONG) et regroupe les lignes par
+    salarié (matricule). Retourne (data, erreurs) où data est un dict
+    matricule -> {"nom":..., "jours":[...], "absences":{motif:count}}.
+    Chaque jour = {"date": date, "heures": float, "heures_nuit": float}."""
+    from openpyxl import load_workbook
+    erreurs = []
+    try:
+        wb = load_workbook(fichier, data_only=True, read_only=True)
+    except Exception:
+        return None, ["Fichier illisible : n'est pas un classeur Excel valide."]
+    ws = wb.active
+
+    # Repérer la ligne d'en-tête (celle qui contient "Matricule")
+    entete_row = None
+    for i, row in enumerate(ws.iter_rows(min_row=1, max_row=12, values_only=True), 1):
+        cells = [str(c).strip().lower() if c is not None else "" for c in row]
+        if "matricule" in cells:
+            entete_row = i
+            break
+    if entete_row is None:
+        return None, ["En-tête introuvable : le fichier doit contenir une colonne « Matricule »."]
+
+    data = {}
+    for row in ws.iter_rows(min_row=entete_row + 1, values_only=True):
+        if not row or all(c is None for c in row):
+            continue
+        mat = (str(row[0]).strip() if row[0] is not None else "")
+        if not mat:
+            continue
+        nom = (str(row[1]).strip() if len(row) > 1 and row[1] is not None else "")
+        date_str = (str(row[2]).strip() if len(row) > 2 and row[2] is not None else "")
+        heures = row[5] if len(row) > 5 else None
+        nuit = row[6] if len(row) > 6 else None
+        motif = (str(row[7]).strip().upper() if len(row) > 7 and row[7] is not None else "")
+
+        # Date : accepte "JJ/MM/AAAA" ou un vrai objet date Excel
+        d = None
+        if isinstance(date_str, str) and "/" in date_str:
+            try:
+                jj, mm, aa = (int(x) for x in date_str.split("/"))
+                d = date(aa, mm, jj)
+            except (ValueError, TypeError):
+                d = None
+        if d is None and hasattr(row[2], "year"):
+            d = row[2] if isinstance(row[2], date) else None
+        if d is None:
+            continue  # ligne sans date exploitable : ignorée silencieusement
+
+        entree = data.setdefault(mat, {"nom": nom, "jours": [], "absences": {}})
+        # Absence : on compte par motif, on ne pose PAS d'heures ce jour-là
+        if motif:
+            m = motif if motif in _MOTIFS_ABSENCE else "AUTRE"
+            entree["absences"][m] = entree["absences"].get(m, 0) + 1
+            continue
+        try:
+            h = float(heures) if heures not in (None, "") else 0.0
+        except (ValueError, TypeError):
+            h = 0.0
+        try:
+            hn = float(nuit) if nuit not in (None, "") else 0.0
+        except (ValueError, TypeError):
+            hn = 0.0
+        if h <= 0 and hn <= 0:
+            continue  # jour non travaillé, rien à ventiler
+        entree["jours"].append({"date": d, "heures": h, "heures_nuit": hn})
+
+    return data, erreurs
+
+
+@bp.route("/salaries/pointage/importer", methods=["POST"])
+@login_required
+def salaries_pointage_importer():
+    """Étape APERÇU : lit le fichier, ventile les heures par salarié via
+    ventiler_heures_mois(), compte les absences, et affiche un récapitulatif.
+    Rien n'est enregistré ici."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+
+    annee, mois = _sal_periode_demandee()
+    fichier = request.files.get("fichier")
+    if not fichier or not fichier.filename:
+        flash("Choisissez un fichier de pointage à téléverser.", "error")
+        return redirect(url_for("tenant.salaries_pointage"))
+
+    data, erreurs = _lire_pointage_salaries(fichier)
+    if erreurs:
+        for e in erreurs:
+            flash(e, "error")
+        return redirect(url_for("tenant.salaries_pointage"))
+    if not data:
+        flash("Aucune donnée de pointage trouvée dans le fichier.", "warning")
+        return redirect(url_for("tenant.salaries_pointage"))
+
+    feries = set(jours_feries_annee(annee).keys())
+    salaries = {s.matricule: s for s in
+                Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").all()}
+
+    apercu = []
+    inconnus = []
+    for mat, info in data.items():
+        s = salaries.get(mat)
+        if not s:
+            inconnus.append(mat)
+            continue
+        vent = ventiler_heures_mois(t.convention, info["jours"], feries=feries)
+        total_abs = sum(info["absences"].values())
+        apercu.append({
+            "matricule": mat,
+            "nom": info["nom"] or s.nom_complet,
+            "salarie_id": s.id,
+            "heures_sup_10": vent.get("heures_sup_10", 0),
+            "heures_sup_30": vent.get("heures_sup_30", 0),
+            "heures_sup_30b": vent.get("heures_sup_30b", 0),
+            "heures_sup_40": vent.get("heures_sup_40", 0),
+            "heures_sup_70": vent.get("heures_sup_70", 0),
+            "nb_jours_travailles": len(info["jours"]),
+            "absences": info["absences"],
+            "total_absences": total_abs,
+        })
+    apercu.sort(key=lambda x: x["nom"])
+
+    # Mémoriser en session pour l'étape de confirmation (données légères)
+    session["pointage_sal"] = {
+        "annee": annee, "mois": mois,
+        "lignes": [{k: v for k, v in a.items() if k != "absences"} for a in apercu],
+    }
+
+    return render_template("tenant/salaries_pointage_apercu.html",
+        apercu=apercu, annee=annee, mois=mois, tenant=t,
+        mois_nom=f"{_MOIS_FR_SAL[mois]} {annee}",
+        convention=t.convention, inconnus=inconnus)
+
+
+@bp.route("/salaries/pointage/confirmer", methods=["POST"])
+@login_required
+def salaries_pointage_confirmer():
+    """Étape CONFIRMATION : crée/complète les bulletins BROUILLON de la période
+    avec les heures ventilées. Ne touche jamais un bulletin existant ni une
+    période clôturée. Les absences sont affichées, jamais déduites d'office."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+
+    stock = session.get("pointage_sal")
+    if not stock or not stock.get("lignes"):
+        flash("Session d'import expirée. Recommencez le téléversement.", "error")
+        return redirect(url_for("tenant.salaries_pointage"))
+
+    annee, mois = stock["annee"], stock["mois"]
+    periode = PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee, mois=mois).first()
+    if not periode:
+        flash("Aucune période de paie ouverte pour ce mois. Créez-la d'abord.", "error")
+        return redirect(url_for("tenant.salaries_pointage"))
+    if periode.statut not in ("OUVERT", "OUVERTE"):
+        flash(f"La période {periode.libelle_mois} {periode.annee} est clôturée.", "error")
+        return redirect(url_for("tenant.salaries_pointage"))
+
+    import calendar as _cal
+    fin_periode = date(annee, mois, _cal.monthrange(annee, mois)[1])
+
+    deja = {b.salarie_id for b in
+            BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id).all()}
+
+    crees = maj = ignores = 0
+    for ligne in stock["lignes"]:
+        s = Salarie.query.filter_by(id=ligne["salarie_id"], tenant_id=t.id).first()
+        if not s:
+            continue
+        heures = {
+            "heures_sup_10": ligne.get("heures_sup_10", 0),
+            "heures_sup_30": ligne.get("heures_sup_30", 0),
+            "heures_sup_30b": ligne.get("heures_sup_30b", 0),
+            "heures_sup_40": ligne.get("heures_sup_40", 0),
+            "heures_sup_70": ligne.get("heures_sup_70", 0),
+        }
+        contrat = (Contrat.query
+                   .filter_by(salarie_id=s.id, tenant_id=t.id, actif=True)
+                   .order_by(Contrat.date_debut.desc()).first())
+        if not contrat or not contrat.salaire_base:
+            ignores += 1
+            continue
+
+        if s.id in deja:
+            # Bulletin existant : on met à jour SEULEMENT les heures sup, sans
+            # écraser les autres ajustements déjà faits.
+            b = BulletinPaie.query.filter_by(
+                tenant_id=t.id, periode_id=periode.id, salarie_id=s.id).first()
+            if b and b.statut == "BROUILLON":
+                donnees = {"salaire_base": float(contrat.salaire_base), **heures,
+                           "convention": t.convention}
+                if s.date_embauche:
+                    donnees["anciennete_annees"] = max(0, (fin_periode - s.date_embauche).days // 365)
+                res = calculer_bulletin(donnees, nb_parts=float(s.nombre_parts or 1))
+                for k, v in res.items():
+                    if not k.startswith("_") and hasattr(b, k):
+                        setattr(b, k, v)
+                maj += 1
+            else:
+                ignores += 1
+            continue
+
+        # Nouveau brouillon
+        donnees = {"salaire_base": float(contrat.salaire_base), **heures,
+                   "convention": t.convention}
+        if s.date_embauche:
+            donnees["anciennete_annees"] = max(0, (fin_periode - s.date_embauche).days // 365)
+        res = calculer_bulletin(donnees, nb_parts=float(s.nombre_parts or 1))
+        b = BulletinPaie(tenant_id=t.id, salarie_id=s.id, periode_id=periode.id)
+        for k, v in res.items():
+            if not k.startswith("_") and hasattr(b, k):
+                setattr(b, k, v)
+        b.statut = "BROUILLON"
+        b.mode_paiement = s.mode_paiement or "ESPECES"
+        db.session.add(b)
+        crees += 1
+
+    db.session.commit()
+    session.pop("pointage_sal", None)
+    log_action("IMPORT_POINTAGE_SAL", "bulletin", periode.id,
+               f"Import pointage salariés {periode.libelle_mois} {annee} : "
+               f"{crees} créé(s), {maj} mis à jour")
+    flash(f"Pointage importé : {crees} bulletin(s) créé(s), {maj} mis à jour. "
+          f"Vérifiez et complétez les absences avant validation.", "success")
+    if ignores:
+        flash(f"{ignores} salarié(s) ignoré(s) (sans contrat actif, ou bulletin déjà validé).", "info")
+    return redirect(url_for("tenant.bulletins", periode_id=periode.id))
+
+
+@bp.route("/salaries/pointage")
+@login_required
+def salaries_pointage():
+    """Page d'accueil de l'import : choix du mois, téléchargement du modèle,
+    téléversement du fichier rempli."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    annee, mois = _sal_periode_demandee()
+    return render_template("tenant/salaries_pointage.html",
+        annee=annee, mois=mois, tenant=t,
+        mois_nom=f"{_MOIS_FR_SAL[mois]} {annee}",
+        convention=t.convention)

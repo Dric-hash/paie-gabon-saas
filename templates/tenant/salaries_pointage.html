@@ -1,0 +1,90 @@
+{% extends "tenant/base.html" %}
+{% block title %}Pointage Salariés — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<!-- En-tête -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 class="text-2xl font-black">Pointage des Salariés</h1>
+    <p class="text-gray-500 text-sm mt-1">
+      Importez le pointage mensuel : téléchargez le modèle, remplissez-le, téléversez-le.
+      Le logiciel classe automatiquement les heures (jour, nuit, dimanche, férié).
+    </p>
+  </div>
+  <a href="/bulletins" style="font-size:.8rem;font-weight:700;color:#6b7280;text-decoration:none;background:#f3f4f6;padding:.5rem .875rem;border-radius:.75rem">← Bulletins</a>
+</div>
+
+<!-- Choix du mois -->
+<div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem;margin-bottom:1.25rem">
+  <form method="get" action="/salaries/pointage" style="display:flex;align-items:end;gap:1rem;flex-wrap:wrap">
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Mois de paie</label>
+      <input type="month" name="mois" value="{{ '%04d-%02d'|format(annee, mois) }}"
+        style="padding:.625rem .875rem;border:1px solid #d1d5db;border-radius:.625rem;font-size:.9rem"/>
+    </div>
+    <button type="submit"
+      style="padding:.625rem 1.25rem;background:#0f3d36;color:white;border:none;border-radius:.625rem;font-weight:700;font-size:.85rem;cursor:pointer">
+      Changer de mois
+    </button>
+    <div style="font-size:.85rem;color:#6b7280">
+      Convention appliquée : <strong style="color:#0f3d36">{{ convention or 'AUCUNE' }}</strong>
+    </div>
+  </form>
+</div>
+
+<!-- Les deux étapes -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem" class="pointage-grid">
+
+  <!-- Étape 1 : télécharger -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem">
+    <div style="display:flex;align-items:center;gap:.625rem;margin-bottom:.875rem">
+      <span style="background:#0f3d36;color:white;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem">1</span>
+      <h2 style="font-size:1.05rem;font-weight:800;margin:0">Télécharger le modèle</h2>
+    </div>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;line-height:1.5">
+      Un fichier Excel pré-rempli avec vos salariés actifs et tous les jours de
+      <strong>{{ mois_nom }}</strong>. Les dimanches et fériés sont déjà marqués.
+    </p>
+    <a href="/salaries/pointage/modele?mois={{ '%04d-%02d'|format(annee, mois) }}"
+      style="display:inline-block;padding:.75rem 1.25rem;background:#d99e0b;color:white;border-radius:.625rem;font-weight:700;font-size:.85rem;text-decoration:none">
+      ⬇ Télécharger le modèle {{ mois_nom }}
+    </a>
+  </div>
+
+  <!-- Étape 2 : téléverser -->
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem">
+    <div style="display:flex;align-items:center;gap:.625rem;margin-bottom:.875rem">
+      <span style="background:#0f3d36;color:white;width:28px;height:28px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:.85rem">2</span>
+      <h2 style="font-size:1.05rem;font-weight:800;margin:0">Téléverser le fichier rempli</h2>
+    </div>
+    <p style="font-size:.85rem;color:#6b7280;margin-bottom:1rem;line-height:1.5">
+      Vous verrez un <strong>aperçu</strong> des heures supplémentaires calculées
+      et des absences avant tout enregistrement.
+    </p>
+    <form method="post" action="/salaries/pointage/importer?mois={{ '%04d-%02d'|format(annee, mois) }}"
+      enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="file" name="fichier" accept=".xlsx" required
+        style="display:block;margin-bottom:1rem;font-size:.85rem"/>
+      <button type="submit"
+        style="padding:.75rem 1.25rem;background:#0f3d36;color:white;border:none;border-radius:.625rem;font-weight:700;font-size:.85rem;cursor:pointer">
+        Téléverser et prévisualiser
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Légende -->
+<div style="margin-top:1.25rem;padding:1rem 1.25rem;background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;font-size:.8rem;color:#6b7280;line-height:1.6">
+  <strong style="color:#374151">Comment remplir :</strong>
+  pour chaque jour, indiquez les <strong>heures travaillées</strong> et, s'il y en a,
+  les <strong>heures de nuit</strong>. Pour une absence, écrivez le motif
+  (<em>CONGE, MALADIE, INJUSTIFIEE</em>) dans la colonne « Absence » au lieu des heures.
+  Laissez vide un jour non travaillé. Le logiciel se charge de classer les heures
+  supplémentaires selon la convention et de repérer les dimanches et fériés.
+</div>
+
+<style>
+@media (max-width: 720px) { .pointage-grid { grid-template-columns: 1fr !important; } }
+</style>
+{% endblock %}
