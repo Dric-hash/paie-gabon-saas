@@ -726,3 +726,48 @@ def envoyer_annonce_bureau(destinataire, prenom, denomination):
     except Exception as e:
         current_app.logger.error(f"[ANNONCE] Échec envoi à {destinataire} : {e}")
         return False
+
+
+def envoyer_confirmation_paiement(tenant, paiement, date_expiration):
+    """Confirme au client que son paiement est validé et son abonnement actif."""
+    if not os.environ.get("MAIL_PASSWORD"):
+        return
+    admin = Utilisateur.query.filter_by(tenant_id=tenant.id, role="TENANT_ADMIN").first()
+    if not admin or not admin.email:
+        return
+    try:
+        from flask_mail import Message as Msg
+        mail = current_app.extensions["mail"]
+        html = f"""
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto">
+  <div style="background:#0f3d36;padding:28px;border-radius:14px 14px 0 0;text-align:center">
+    <h1 style="color:#ffffff;margin:0;font-size:20px">PaieGabon</h1>
+    <p style="color:#d99e0b;margin:6px 0 0;font-size:12px;letter-spacing:1px">AMERIACK I.T. SOLUTIONS</p>
+  </div>
+  <div style="background:#ffffff;padding:32px 28px;border:1px solid #e6e2d6;border-top:none;border-radius:0 0 14px 14px">
+    <div style="text-align:center;font-size:40px;margin-bottom:8px">✅</div>
+    <h2 style="color:#0f3d36;margin:0 0 14px;font-size:19px;text-align:center">Paiement confirmé</h2>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px">Bonjour {admin.prenom or ''},</p>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px">
+      Nous confirmons la réception de votre paiement pour <strong style="color:#0f3d36">{tenant.denomination}</strong>.
+      Votre abonnement est actif jusqu'au <strong>{date_expiration.strftime('%d/%m/%Y')}</strong>.
+    </p>
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;margin:20px 0">
+      <table style="width:100%;font-size:14px;color:#374151">
+        <tr><td style="padding:3px 0;color:#6b7280">Référence</td><td style="text-align:right;font-family:monospace">{paiement.reference_externe or paiement.reference_interne}</td></tr>
+        <tr><td style="padding:3px 0;color:#6b7280">Durée</td><td style="text-align:right">{paiement.duree_mois} mois</td></tr>
+        <tr><td style="padding:3px 0;color:#6b7280">Valable jusqu'au</td><td style="text-align:right;font-weight:bold">{date_expiration.strftime('%d/%m/%Y')}</td></tr>
+      </table>
+    </div>
+    <p style="color:#6b7280;line-height:1.6;font-size:13px;text-align:center">Merci de votre confiance.</p>
+  </div>
+</div>"""
+        msg = Msg(
+            subject="Paiement confirmé — votre abonnement PaieGabon est actif ✅",
+            recipients=[admin.email],
+            html=html,
+            sender=current_app.config["MAIL_DEFAULT_SENDER"],
+        )
+        send_email_async(mail, msg)
+    except Exception as e:
+        current_app.logger.error(f"[CONFIRM PAIEMENT] {e}")

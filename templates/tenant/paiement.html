@@ -8,205 +8,197 @@
 </div>
 
 <!-- Plan actuel -->
-<div style="background:linear-gradient(135deg,#0f3d36,#374151);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center">
+<div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:1.25rem;padding:1.5rem;color:white;margin-bottom:1.5rem;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem">
   <div>
     <div style="font-size:.75rem;opacity:.6;text-transform:uppercase;margin-bottom:.25rem">Plan actuel</div>
     <div style="font-size:1.5rem;font-weight:900">{{ tenant.plan.nom if tenant.plan else 'Aucun plan' }}</div>
     <div style="opacity:.7;margin-top:.25rem">{{ tenant.denomination }}</div>
   </div>
   <div style="text-align:right">
-    <div style="font-size:2rem;font-weight:900;color:#6ee7b7">
+    <div style="font-size:2rem;font-weight:900;color:#e9c46a">
       {{ (tenant.plan.prix_mensuel|float)|int|fcfa if tenant.plan else '—' }}<span style="font-size:.875rem;opacity:.7">/mois</span>
     </div>
     <div style="font-size:.75rem;opacity:.6;margin-top:.25rem">Statut : {{ tenant.statut }}</div>
   </div>
 </div>
 
-<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1.5rem">
+<!-- Comment ça marche -->
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.9rem;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.875rem;color:#1e40af;line-height:1.6">
+  <strong>Comment régler votre abonnement :</strong> effectuez le paiement via Airtel Money ou par virement (coordonnées ci-dessous),
+  puis remplissez le formulaire de confirmation avec la référence de votre transaction. Nous activons votre abonnement dès vérification, généralement sous 24-48h.
+</div>
 
-  <!-- Option 1 : Airtel Money (STK Push automatique) -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem" class="pay-grid">
+
+  <!-- Option 1 : Airtel Money manuel -->
   <div class="card p-5">
     <div style="text-align:center;margin-bottom:1rem">
       <div style="font-size:2.5rem;margin-bottom:.5rem">📱</div>
-      <h2 style="font-size:1rem;font-weight:900;color:#0f3d36">Airtel Money</h2>
-      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Paiement automatique sur votre téléphone</p>
+      <h2 style="font-size:1.05rem;font-weight:900;color:#0f3d36">Airtel Money</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Envoyez le paiement au numéro ci-dessous</p>
     </div>
-    <div style="background:#f0fdf4;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
-      <div style="font-size:.75rem;font-weight:700;color:#065f46;margin-bottom:.4rem">Comment ça marche :</div>
-      <div style="font-size:.78rem;color:#374151;line-height:1.7">
-        1. Entrez votre numéro Airtel Money<br/>
-        2. Cliquez "Payer maintenant"<br/>
-        3. Une notification arrive sur votre téléphone<br/>
-        4. Validez avec votre code PIN Airtel Money
-      </div>
+    <div style="background:#fef8e7;border:1px solid #f0d98a;border-radius:.75rem;padding:1rem;margin-bottom:1rem">
+      <div style="font-size:.72rem;font-weight:700;color:#92700a;margin-bottom:.5rem;text-transform:uppercase;letter-spacing:.04em">Payer à</div>
+      <div style="font-size:1.15rem;font-weight:900;color:#0f3d36;font-family:monospace;letter-spacing:.02em">{{ airtel.numero }}</div>
+      <div style="font-size:.82rem;color:#374151;margin-top:.35rem">Titulaire : <strong>{{ airtel.titulaire }}</strong></div>
     </div>
-    <form method="POST" action="/paiement/airtel/initier" class="space-y-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Numéro Airtel Money *</label>
-        <input type="tel" name="telephone" required placeholder="Ex: 07 12 34 56"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.9rem;box-sizing:border-box;font-weight:700"/>
-        <p style="font-size:.68rem;color:#9ca3af;margin-top:.25rem">Format : 07 XX XX XX (Gabon)</p>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Plan</label>
-        <select name="plan_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          {% for plan in plans %}
-          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
-            {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
-        <select name="duree" id="duree-airtel" onchange="majMontantAirtel()"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          <option value="1">1 mois</option>
-          <option value="3">3 mois</option>
-          <option value="6">6 mois</option>
-          <option value="12">12 mois</option>
-        </select>
-      </div>
-      <div style="background:#ecfdf5;border-radius:.5rem;padding:.6rem;text-align:center">
-        <span style="font-size:.75rem;color:#065f46">Montant à payer : </span>
-        <strong id="montant-airtel" style="color:#059669">
-          {{ (tenant.plan.prix_mensuel|float)|int|fcfa if tenant.plan else '—' }}
-        </strong>
-      </div>
-      <button type="submit"
-        style="width:100%;background:#059669;color:white;padding:.75rem;border-radius:.75rem;font-weight:900;font-size:.875rem;border:none;cursor:pointer;letter-spacing:.02em">
-        Payer maintenant via Airtel Money →
-      </button>
-    </form>
+    <div style="font-size:.78rem;color:#6b7280;line-height:1.7;margin-bottom:1rem">
+      1. Envoyez le montant à ce numéro Airtel Money<br/>
+      2. Notez la <strong>référence de transaction</strong> (SMS Airtel)<br/>
+      3. Renseignez-la dans le formulaire ci-dessous
+    </div>
   </div>
 
-  <!-- Option 2 : CinetPay (Mobile Money + Carte bancaire) -->
-  <div class="card p-5">
-    <div style="text-align:center;margin-bottom:1rem">
-      <div style="font-size:2.5rem;margin-bottom:.5rem">🌍</div>
-      <h2 style="font-size:1rem;font-weight:900;color:#0f3d36">CinetPay</h2>
-      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Airtel · Moov · Visa · Mastercard</p>
-    </div>
-    <div style="background:#eff6ff;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
-      <div style="font-size:.75rem;font-weight:700;color:#1e40af;margin-bottom:.4rem">Tous les modes de paiement :</div>
-      <div style="font-size:.78rem;color:#374151;line-height:1.7">
-        📱 Airtel Money Gabon<br/>
-        📱 Moov Money Gabon<br/>
-        💳 Carte Visa / Mastercard<br/>
-      </div>
-      <div style="font-size:.68rem;color:#6b7280;margin-top:.4rem">Vous choisissez sur la page de paiement sécurisée.</div>
-    </div>
-    <form method="POST" action="/paiement/cinetpay/initier" class="space-y-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Plan</label>
-        <select name="plan_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          {% for plan in plans %}
-          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
-            {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
-        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          <option value="1">1 mois</option>
-          <option value="3">3 mois</option>
-          <option value="6">6 mois</option>
-          <option value="12">12 mois</option>
-        </select>
-      </div>
-      <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Mode</label>
-        <select name="canaux" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
-          <option value="ALL">Tous (Mobile Money + Carte)</option>
-          <option value="MOBILE_MONEY">Mobile Money uniquement</option>
-          <option value="CREDIT_CARD">Carte bancaire uniquement</option>
-        </select>
-      </div>
-      <button type="submit"
-        style="width:100%;background:#2563eb;color:white;padding:.75rem;border-radius:.75rem;font-weight:900;font-size:.875rem;border:none;cursor:pointer">
-        Payer via CinetPay →
-      </button>
-    </form>
-  </div>
-
-  <!-- Option 3 : Virement bancaire -->
+  <!-- Option 2 : Virement bancaire -->
   <div class="card p-5">
     <div style="text-align:center;margin-bottom:1rem">
       <div style="font-size:2.5rem;margin-bottom:.5rem">🏦</div>
-      <h2 style="font-size:1rem;font-weight:900;color:#0f3d36">Virement bancaire</h2>
-      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">BGFI · UGB · Ecobank</p>
+      <h2 style="font-size:1.05rem;font-weight:900;color:#0f3d36">Virement bancaire</h2>
+      <p style="font-size:.8rem;color:#6b7280;margin-top:.25rem">Virez sur le compte ci-dessous</p>
     </div>
-    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:.75rem;margin-bottom:.75rem">
-      <div style="font-size:.7rem;font-weight:700;color:#374151;margin-bottom:.5rem">Coordonnées bancaires :</div>
-      <div style="font-size:.75rem;color:#374151;line-height:1.8">
-        <strong>Banque :</strong> BGFI Bank Gabon<br/>
-        <strong>Titulaire :</strong> PaieGabon SARL<br/>
-        <strong>IBAN :</strong> GA XX XXXX XXXX XXXX<br/>
-        <strong>BIC :</strong> BGFIGAXX<br/>
-        <strong>Réf. à indiquer :</strong> {{ tenant.slug|upper }}
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;margin-bottom:1rem">
+      <div style="font-size:.8rem;color:#374151;line-height:1.9">
+        <strong>Banque :</strong> {{ banque.nom }}<br/>
+        <strong>Titulaire :</strong> {{ banque.titulaire }}<br/>
+        <strong>IBAN :</strong> <span style="font-family:monospace">{{ banque.iban }}</span><br/>
+        <strong>BIC :</strong> <span style="font-family:monospace">{{ banque.bic }}</span><br/>
+        <strong>Référence à indiquer :</strong> {{ tenant.slug|upper }}
       </div>
     </div>
-    <div style="font-size:.75rem;color:#6b7280;margin-bottom:.75rem;line-height:1.6">
-      1. Effectuez le virement avec votre référence<br/>
-      2. Envoyez le justificatif par email<br/>
-      3. Activation sous 24-48h ouvrables
+    <div style="font-size:.78rem;color:#6b7280;line-height:1.7">
+      1. Effectuez le virement en indiquant votre référence<br/>
+      2. Notez le <strong>numéro / référence du virement</strong><br/>
+      3. Renseignez-le dans le formulaire ci-dessous
     </div>
-    <form method="POST" action="/paiement/confirmer" class="space-y-3">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-      <input type="hidden" name="mode" value="VIREMENT"/>
+  </div>
+
+</div>
+
+<!-- Formulaire de confirmation unique -->
+<div class="card p-5 mt-5" style="border:2px solid #0f3d36">
+  <h2 style="font-size:1.05rem;font-weight:900;color:#0f3d36;margin-bottom:.5rem">✅ Confirmer mon paiement</h2>
+  <p style="font-size:.82rem;color:#6b7280;margin-bottom:1.25rem">Après avoir payé, remplissez ce formulaire pour que nous activions votre abonnement.</p>
+  <form method="POST" action="/paiement/confirmer">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem" class="pay-form-grid">
       <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">N° de virement / référence *</label>
-        <input type="text" name="reference" required placeholder="Référence du virement"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem;box-sizing:border-box"/>
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Moyen de paiement utilisé *</label>
+        <select name="moyen" required style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
+          <option value="AIRTEL_MONEY">Airtel Money</option>
+          <option value="VIREMENT">Virement bancaire</option>
+        </select>
       </div>
       <div>
-        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;margin-bottom:.25rem">Durée</label>
-        <select name="duree" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem;font-size:.8rem">
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Référence de transaction *</label>
+        <input type="text" name="reference" required placeholder="Ex: TXN123456789 ou N° du virement"
+          style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem;box-sizing:border-box"/>
+      </div>
+      <div>
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Plan</label>
+        <select name="plan_id" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
+          {% for plan in plans %}
+          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
+            {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Durée payée</label>
+        <select name="duree" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
           <option value="1">1 mois</option>
           <option value="3">3 mois (−5%)</option>
           <option value="6">6 mois (−10%)</option>
           <option value="12">12 mois (−15%)</option>
         </select>
       </div>
-      <button type="submit" style="width:100%;background:#374151;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
-        📤 Soumettre le virement
-      </button>
-    </form>
-  </div>
-
+    </div>
+    <button type="submit"
+      style="width:100%;background:#0f3d36;color:white;padding:.85rem;border-radius:.75rem;font-weight:900;font-size:.9rem;border:none;cursor:pointer">
+      📤 J'ai payé — Confirmer ma transaction
+    </button>
+  </form>
+  <p style="font-size:.75rem;color:#9ca3af;margin-top:1rem;text-align:center;line-height:1.6">
+    Une question sur le paiement ? Écrivez-nous sur
+    <a href="https://wa.me/{{ contact.whatsapp }}" style="color:#0f3d36;font-weight:600">WhatsApp</a>
+    ou à <a href="mailto:{{ contact.email }}" style="color:#0f3d36;font-weight:600">{{ contact.email }}</a>
+  </p>
 </div>
 
-<!-- Tableau des tarifs -->
+<!-- Historique des paiements -->
+{% if historique %}
+<div class="card p-5 mt-5">
+  <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Mes derniers paiements</h2>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:520px">
+      <thead>
+        <tr style="border-bottom:2px solid #f3f4f6">
+          <th style="text-align:left;padding:.5rem;font-size:.72rem;color:#6b7280">Date</th>
+          <th style="text-align:left;padding:.5rem;font-size:.72rem;color:#6b7280">Moyen</th>
+          <th style="text-align:left;padding:.5rem;font-size:.72rem;color:#6b7280">Référence</th>
+          <th style="text-align:right;padding:.5rem;font-size:.72rem;color:#6b7280">Montant</th>
+          <th style="text-align:center;padding:.5rem;font-size:.72rem;color:#6b7280">Statut</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in historique %}
+        <tr style="border-bottom:1px solid #f9fafb">
+          <td style="padding:.5rem;font-size:.8rem">{{ p.date_creation.strftime('%d/%m/%Y') if p.date_creation else '—' }}</td>
+          <td style="padding:.5rem;font-size:.8rem">{{ p.moyen|replace('_',' ')|title }}</td>
+          <td style="padding:.5rem;font-size:.78rem;font-family:monospace;color:#6b7280">{{ p.reference_externe or p.reference_interne }}</td>
+          <td style="padding:.5rem;font-size:.8rem;text-align:right;font-family:monospace">{{ p.montant|int|fcfa }}</td>
+          <td style="padding:.5rem;text-align:center">
+            {% if p.statut == 'SUCCES' %}
+              <span style="background:#dcfce7;color:#166534;font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:.375rem">✓ Validé</span>
+            {% elif p.statut == 'EN_ATTENTE' %}
+              <span style="background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:.375rem">⏳ En attente</span>
+            {% else %}
+              <span style="background:#fee2e2;color:#991b1b;font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:.375rem">{{ p.statut }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Tarifs -->
 <div class="card p-5 mt-5">
   <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Tarifs</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Plan</th>
-        <th style="text-align:center">Salariés max</th>
-        <th style="text-align:right">Mensuel</th>
-        <th style="text-align:right">3 mois (−5%)</th>
-        <th style="text-align:right">6 mois (−10%)</th>
-        <th style="text-align:right">12 mois (−15%)</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for plan in plans %}
-      <tr {% if tenant.plan_id == plan.id %}style="background:#f0fdf4;font-weight:700"{% endif %}>
-        <td>{{ plan.nom }}{% if tenant.plan_id == plan.id %} ✓{% endif %}</td>
-        <td style="text-align:center">{{ plan.max_salaries }}</td>
-        <td style="text-align:right;font-family:monospace">{{ (plan.prix_mensuel|float)|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 3 * 0.95))|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 6 * 0.90))|int|fcfa }}</td>
-        <td style="text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 12 * 0.85))|int|fcfa }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;min-width:600px">
+      <thead>
+        <tr style="border-bottom:2px solid #f3f4f6">
+          <th style="text-align:left;padding:.5rem;font-size:.75rem">Plan</th>
+          <th style="text-align:center;padding:.5rem;font-size:.75rem">Salariés max</th>
+          <th style="text-align:right;padding:.5rem;font-size:.75rem">Mensuel</th>
+          <th style="text-align:right;padding:.5rem;font-size:.75rem">3 mois</th>
+          <th style="text-align:right;padding:.5rem;font-size:.75rem">6 mois</th>
+          <th style="text-align:right;padding:.5rem;font-size:.75rem">12 mois</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for plan in plans %}
+        <tr {% if tenant.plan_id == plan.id %}style="background:#f0fdf4;font-weight:700"{% endif %}>
+          <td style="padding:.5rem">{{ plan.nom }}{% if tenant.plan_id == plan.id %} ✓{% endif %}</td>
+          <td style="padding:.5rem;text-align:center">{{ plan.max_salaries }}</td>
+          <td style="padding:.5rem;text-align:right;font-family:monospace">{{ (plan.prix_mensuel|float)|int|fcfa }}</td>
+          <td style="padding:.5rem;text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 3 * 0.95))|int|fcfa }}</td>
+          <td style="padding:.5rem;text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 6 * 0.90))|int|fcfa }}</td>
+          <td style="padding:.5rem;text-align:right;font-family:monospace">{{ ((plan.prix_mensuel|float * 12 * 0.85))|int|fcfa }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 
+<style>
+@media (max-width: 720px) {
+  .pay-grid { grid-template-columns: 1fr !important; }
+  .pay-form-grid { grid-template-columns: 1fr !important; }
+}
+</style>
 {% endblock %}

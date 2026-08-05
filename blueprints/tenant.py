@@ -2404,8 +2404,10 @@ def paiement():
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
     historique = Paiement.query.filter_by(tenant_id=t.id)\
         .order_by(Paiement.date_creation.desc()).limit(10).all()
+    from coordonnees_paiement import AIRTEL_MONEY, BANQUE, CONTACT_PAIEMENT
     return render_template("tenant/paiement.html", tenant=t, plans=plans,
-                           historique=historique)
+                           historique=historique,
+                           airtel=AIRTEL_MONEY, banque=BANQUE, contact=CONTACT_PAIEMENT)
 
 
 # ── Airtel Money — Initiation ──────────────────────────────────────────────────
@@ -2677,29 +2679,44 @@ def _activer_abonnement(paiement: "Paiement"):
 @bp.route("/paiement/confirmer", methods=["POST"])
 @login_required
 def paiement_confirmer():
-    """Route de compatibilité — paiement manuel (admin valide manuellement)."""
+    """Paiement manuel : le client déclare avoir payé (Airtel Money ou virement).
+    Crée un Paiement EN_ATTENTE que le super-admin validera après vérification."""
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
-    mode      = request.form.get("mode", "MANUEL")
+    moyen     = request.form.get("moyen", "MANUEL").strip().upper()  # AIRTEL_MONEY | VIREMENT
     reference = request.form.get("reference", "").strip()
     duree     = int(request.form.get("duree", 1) or 1)
+    plan_id   = request.form.get("plan_id", type=int) or t.plan_id
     if not reference:
-        flash("Veuillez indiquer une référence de transaction.", "error")
+        flash("Veuillez indiquer la référence de la transaction.", "error")
         return redirect(url_for("tenant.paiement"))
+
+    plan = db.session.get(Plan, plan_id) if plan_id else t.plan
+    # Montant attendu avec remises par durée (3 mois -5%, 6 mois -10%, 12 mois -15%)
+    remises = {1: 1.0, 3: 0.95, 6: 0.90, 12: 0.85}
+    coef = remises.get(duree, 1.0)
+    montant = round(float(plan.prix_mensuel) * duree * coef) if plan else 0
+
     import uuid
     ref_interne = f"MAN-{t.id}-{uuid.uuid4().hex[:8].upper()}"
+    libelle_moyen = {"AIRTEL_MONEY": "Airtel Money", "VIREMENT": "Virement bancaire"}.get(moyen, moyen)
     p = Paiement(
-        tenant_id=t.id, moyen="MANUEL", montant=float(t.plan.prix_mensuel) * duree if t.plan else 0,
-        duree_mois=duree, plan_id=t.plan_id, reference_interne=ref_interne,
-        reference_externe=reference, statut="EN_ATTENTE",
-        notes=f"Paiement manuel déclaré par {current_user.email}",
+        tenant_id=t.id, moyen=moyen, montant=montant,
+        duree_mois=duree, plan_id=plan.id if plan else None,
+        reference_interne=ref_interne, reference_externe=reference,
+        statut="EN_ATTENTE",
+        notes=f"Paiement {libelle_moyen} déclaré par {current_user.email}",
     )
     db.session.add(p)
     t.statut = "PAIEMENT_EN_ATTENTE"
     db.session.commit()
-    flash(f"Paiement {mode} (réf. {reference}) enregistré. Activation sous 48h après vérification.", "success")
-    return redirect(url_for("tenant.parametres"))
+    log_action("CREATE", "paiement", p.id,
+               f"Déclaration paiement {libelle_moyen} — réf {reference}, {duree} mois",
+               user_id=current_user.id, tenant_id=t.id)
+    flash(f"Paiement déclaré (réf. {reference}). Votre abonnement sera activé "
+          f"après vérification, généralement sous 24-48h. Merci !", "success")
+    return redirect(url_for("tenant.paiement"))
 
 
 # ══════════════════════════════════════════════════════════════════════════════

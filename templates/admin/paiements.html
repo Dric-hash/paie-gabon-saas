@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Paiements — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
+    .nav-link { color:rgba(255,255,255,.6);text-decoration:none;font-size:.825rem;padding:.5rem .75rem;border-radius:.5rem; }
+    .nav-link.active, .nav-link:hover { color:white;background:#1e293b; }
+  </style>
+</head>
+<body>
+
+<nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:0 1.5rem;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:50">
+  <div style="display:flex;align-items:center;gap:.75rem;margin-right:2rem">
+    <div style="width:28px;height:28px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;color:white">A</div>
+    <span style="font-size:.875rem;font-weight:900;color:white">Ameriack I.T.</span>
+    <span style="background:#4c1d95;color:#c4b5fd;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">SUPER-ADMIN</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:.25rem">
+    <a href="/admin"           class="nav-link">🏠 Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
+    <a href="/admin/paiements" class="nav-link active">💳 Paiements</a>
+    <a href="/admin/plans"     class="nav-link">📋 Plans</a>
+    <a href="/admin/stats"     class="nav-link">📈 Stats</a>
+  </div>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:1rem">
+    <a href="/logout" style="background:#7c3aed;color:white;padding:.35rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">Déconnexion</a>
+  </div>
+</nav>
+
+<main style="max-width:1100px;margin:0 auto;padding:1.5rem">
+
+  {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}
+  <div style="margin-bottom:1rem">{% for cat, msg in messages %}
+    <div style="padding:.75rem 1rem;border-radius:.75rem;font-size:.875rem;font-weight:600;background:{% if cat=='success' %}#064e3b;color:#6ee7b7{% elif cat=='warning' %}#78350f;color:#fcd34d{% else %}#450a0a;color:#fca5a5{% endif %}">{{ msg }}</div>
+  {% endfor %}</div>{% endif %}{% endwith %}
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:.75rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:900;color:white;margin:0">💳 Paiements des abonnements</h1>
+      <p style="font-size:.8rem;color:#94a3b8;margin-top:.25rem">
+        {% if nb_attente %}<strong style="color:#fbbf24">{{ nb_attente }} paiement(s) en attente de validation</strong>{% else %}Aucun paiement en attente{% endif %}
+      </p>
+    </div>
+    <a href="/admin" style="background:#1e293b;border:1px solid #334155;color:#cbd5e1;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">← Tableau de bord</a>
+  </div>
+
+  <div style="display:flex;gap:.5rem;margin-bottom:1.25rem;flex-wrap:wrap">
+    {% for st, lib in [('EN_ATTENTE','⏳ En attente'),('SUCCES','✓ Validés'),('ECHEC','✗ Rejetés'),('TOUS','Tous')] %}
+    <a href="/admin/paiements?statut={{ st }}"
+       style="padding:.45rem .9rem;border-radius:.6rem;font-size:.8rem;font-weight:700;text-decoration:none;
+       {% if statut_filtre == st %}background:#7c3aed;color:white{% else %}background:#1e293b;color:#cbd5e1;border:1px solid #334155{% endif %}">
+      {{ lib }}
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if paiements %}
+  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table style="width:100%;border-collapse:collapse;min-width:800px">
+        <thead>
+          <tr style="background:#1e293b;color:#94a3b8">
+            <th style="padding:.75rem 1rem;text-align:left;font-size:.72rem">Date</th>
+            <th style="padding:.75rem 1rem;text-align:left;font-size:.72rem">Entreprise</th>
+            <th style="padding:.75rem 1rem;text-align:left;font-size:.72rem">Moyen</th>
+            <th style="padding:.75rem 1rem;text-align:left;font-size:.72rem">Référence</th>
+            <th style="padding:.75rem 1rem;text-align:right;font-size:.72rem">Montant</th>
+            <th style="padding:.75rem 1rem;text-align:center;font-size:.72rem">Durée</th>
+            <th style="padding:.75rem 1rem;text-align:center;font-size:.72rem">Statut / Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for p in paiements %}
+          <tr style="border-bottom:1px solid #1e293b;color:#e2e8f0">
+            <td style="padding:.75rem 1rem;font-size:.8rem;white-space:nowrap">{{ p.date_creation.strftime('%d/%m/%Y %H:%M') if p.date_creation else '—' }}</td>
+            <td style="padding:.75rem 1rem;font-size:.85rem;font-weight:600">
+              {{ p.tenant.denomination if p.tenant else '—' }}
+              <div style="font-size:.7rem;color:#64748b">{{ p.tenant.slug|upper if p.tenant else '' }}</div>
+            </td>
+            <td style="padding:.75rem 1rem;font-size:.8rem">{{ p.moyen|replace('_',' ')|title }}</td>
+            <td style="padding:.75rem 1rem;font-size:.78rem;font-family:monospace;color:#94a3b8">{{ p.reference_externe or '—' }}</td>
+            <td style="padding:.75rem 1rem;font-size:.85rem;text-align:right;font-family:monospace;font-weight:700">{{ p.montant|int }} F</td>
+            <td style="padding:.75rem 1rem;text-align:center;font-size:.8rem">{{ p.duree_mois }} mois</td>
+            <td style="padding:.75rem 1rem;text-align:center">
+              {% if p.statut == 'EN_ATTENTE' %}
+                <div style="display:flex;gap:.4rem;justify-content:center">
+                  <form method="POST" action="/admin/paiements/{{ p.id }}/valider" style="display:inline"
+                        onsubmit="return confirm('Confirmer que le paiement est bien reçu ? L\'abonnement sera activé pour {{ p.duree_mois }} mois.');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" style="background:#059669;color:white;border:none;padding:.4rem .8rem;border-radius:.5rem;font-size:.75rem;font-weight:700;cursor:pointer">✓ Valider</button>
+                  </form>
+                  <form method="POST" action="/admin/paiements/{{ p.id }}/rejeter" style="display:inline"
+                        onsubmit="return confirm('Rejeter ce paiement ?');">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <button type="submit" style="background:#334155;color:#f87171;border:1px solid #475569;padding:.4rem .7rem;border-radius:.5rem;font-size:.75rem;font-weight:700;cursor:pointer">✗</button>
+                  </form>
+                </div>
+              {% elif p.statut == 'SUCCES' %}
+                <span style="background:#064e3b;color:#6ee7b7;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:.4rem">✓ Validé</span>
+              {% else %}
+                <span style="background:#450a0a;color:#fca5a5;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:.4rem">{{ p.statut }}</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  {% else %}
+  <div style="background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:3rem;text-align:center;color:#64748b">
+    <div style="font-size:2rem;margin-bottom:.5rem">💳</div>
+    Aucun paiement {{ 'en attente' if statut_filtre == 'EN_ATTENTE' else '' }} pour le moment.
+  </div>
+  {% endif %}
+
+</main>
+</body>
+</html>

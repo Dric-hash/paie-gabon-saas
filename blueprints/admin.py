@@ -751,3 +751,92 @@ def admin_annonce_bureau_tous():
           + (f" {ignores} ignoré(s) (sans email ou envoi impossible)." if ignores else ""),
           "success" if envoyes else "warning")
     return redirect(url_for("admin.admin_dashboard"))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  VALIDATION DES PAIEMENTS MANUELS (Airtel Money / virement)
+#  Le client déclare son paiement → il apparaît ici → le super-admin vérifie
+#  que l'argent est bien arrivé, puis valide : l'abonnement est activé et
+#  la date d'expiration prolongée selon la durée payée.
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/admin/paiements")
+@super_admin_required
+def admin_paiements():
+    """Liste les paiements déclarés, en attente de validation en priorité."""
+    from models import Paiement
+    from sqlalchemy import case
+    statut_filtre = request.args.get("statut", "EN_ATTENTE")
+    q = Paiement.query
+    if statut_filtre and statut_filtre != "TOUS":
+        q = q.filter(Paiement.statut == statut_filtre)
+    paiements = q.order_by(Paiement.date_creation.desc()).limit(100).all()
+    nb_attente = Paiement.query.filter_by(statut="EN_ATTENTE").count()
+    return render_template("admin/paiements.html",
+        paiements=paiements, statut_filtre=statut_filtre, nb_attente=nb_attente)
+
+
+@bp.route("/admin/paiements/<int:id>/valider", methods=["POST"])
+@super_admin_required
+def admin_paiement_valider(id):
+    """Valide un paiement : active le tenant et prolonge son abonnement.
+    La date d'expiration part de la date actuelle d'expiration si elle est
+    encore dans le futur (on cumule), sinon d'aujourd'hui."""
+    from models import Paiement
+    from dateutil.relativedelta import relativedelta
+    p = Paiement.query.get_or_404(id)
+    if p.statut == "SUCCES":
+        flash("Ce paiement est déjà validé.", "info")
+        return redirect(url_for("admin.admin_paiements"))
+
+    t = p.tenant
+    # Point de départ de la prolongation : max(aujourd'hui, expiration actuelle)
+    base = utcnow()
+    if t.date_expiration and t.date_expiration > base:
+        base = t.date_expiration
+    nouvelle_expiration = base + relativedelta(months=p.duree_mois or 1)
+
+    # Appliquer
+    p.statut = "SUCCES"
+    p.date_confirmation = utcnow()
+    if p.plan_id:
+        t.plan_id = p.plan_id
+    t.date_expiration = nouvelle_expiration
+    t.statut = "ACTIF"
+    db.session.commit()
+
+    log_action("VALIDATE", "paiement", p.id,
+               f"Paiement validé ({p.moyen}, réf {p.reference_externe}) — "
+               f"{p.duree_mois} mois, abonnement actif jusqu'au "
+               f"{nouvelle_expiration.strftime('%d/%m/%Y')}",
+               user_id=current_user.id, tenant_id=t.id)
+
+    # Email de confirmation au client (silencieux si mail non configuré)
+    try:
+        from blueprints.auth import envoyer_confirmation_paiement
+        envoyer_confirmation_paiement(t, p, nouvelle_expiration)
+    except Exception as e:
+        current_app.logger.error(f"[PAIEMENT] Email confirmation échoué : {e}")
+
+    flash(f"Paiement validé. {t.denomination} est actif jusqu'au "
+          f"{nouvelle_expiration.strftime('%d/%m/%Y')}.", "success")
+    return redirect(url_for("admin.admin_paiements"))
+
+
+@bp.route("/admin/paiements/<int:id>/rejeter", methods=["POST"])
+@super_admin_required
+def admin_paiement_rejeter(id):
+    """Rejette un paiement déclaré (référence introuvable, montant incorrect…)."""
+    from models import Paiement
+    p = Paiement.query.get_or_404(id)
+    motif = request.form.get("motif", "").strip() or "Paiement non vérifié"
+    p.statut = "ECHEC"
+    p.notes = (p.notes or "") + f" | Rejeté : {motif}"
+    # Si le tenant était en attente à cause de ce paiement, on le repasse en attente
+    if p.tenant.statut == "PAIEMENT_EN_ATTENTE":
+        p.tenant.statut = "ESSAI" if not p.tenant.date_expiration else p.tenant.statut
+    db.session.commit()
+    log_action("CANCEL", "paiement", p.id,
+               f"Paiement rejeté ({p.moyen}, réf {p.reference_externe}) — {motif}",
+               user_id=current_user.id, tenant_id=p.tenant_id)
+    flash(f"Paiement rejeté. Le client en sera informé s'il vous contacte.", "warning")
+    return redirect(url_for("admin.admin_paiements"))
