@@ -10,16 +10,16 @@
 
 # ── Airtel Money ────────────────────────────────────────────────────────────
 AIRTEL_MONEY = {
-    "numero":    "À COMPLÉTER (ex: 074 58 47 72)",   # Votre numéro Airtel Money
-    "titulaire": "À COMPLÉTER (ex: NOM Prénom)",      # Nom du titulaire du compte
+    "numero":    "074 58 47 72",   # Votre numéro Airtel Money
+    "titulaire": "AFFOGNON CEDRIC KEVIN A.",      # Nom du titulaire du compte
 }
 
 # ── Virement bancaire (RIB) ─────────────────────────────────────────────────
 BANQUE = {
-    "nom":       "À COMPLÉTER (ex: BGFI Bank Gabon)",     # Nom de la banque
-    "titulaire": "À COMPLÉTER (ex: AMERIACK I.T. SOLUTIONS)",  # Titulaire du compte
-    "iban":      "À COMPLÉTER (ex: GA21 XXXX XXXX XXXX XXXX XXXX XXX)",  # IBAN / RIB
-    "bic":       "À COMPLÉTER (ex: BGFIGALIXXX)",         # Code BIC / SWIFT
+    "nom":       "ORABANK GABON",     # Nom de la banque
+    "titulaire": "AFFOGNON CEDRIC KEVIN A.",  # Titulaire du compte
+    "iban":      "GA2140021030012592290050185 / 85",  # IBAN / RIB
+    "bic":       "ORBKGALI",         # Code BIC / SWIFT
 }
 
 # ── Contact pour les questions de paiement ──────────────────────────────────
