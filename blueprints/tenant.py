@@ -3338,6 +3338,31 @@ def audit_trail():
     )
 
 
+@bp.route("/audit/support")
+@tenant_required
+def audit_support():
+    """Journal des interventions support de l'éditeur (Ameriack).
+    Présenté séparément du journal courant : transparence sur les accès
+    de support, sans parasiter le suivi quotidien du client."""
+    t = get_tenant()
+    if not current_user.is_tenant_admin:
+        flash("Accès réservé à l'administrateur.", "error")
+        return redirect(url_for("tenant.dashboard"))
+
+    from audit import get_audit_logs_support
+    page = request.args.get("page", 1, type=int)
+    per_page = 50
+    logs, total = get_audit_logs_support(
+        tenant_id=t.id, limit=per_page, offset=(page - 1) * per_page)
+
+    import math
+    nb_pages = math.ceil(total / per_page) if total else 1
+
+    return render_template("tenant/audit_support.html",
+        tenant=t, logs=logs, total=total,
+        page=page, nb_pages=nb_pages, per_page=per_page)
+
+
 @bp.route("/audit/export")
 @tenant_required
 def audit_export():

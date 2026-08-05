@@ -1,0 +1,66 @@
+{% extends "tenant/base.html" %}
+{% block title %}Interventions support — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🛟 Interventions support</h1>
+    <p style="color:#6b7280;font-size:.875rem;margin:.25rem 0 0">
+      {{ total }} accès de l'équipe support enregistré(s)
+    </p>
+  </div>
+  <a href="/audit"
+    style="background:#f3f4f6;color:#374151;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">← Journal d'audit</a>
+</div>
+
+<!-- Explication transparente -->
+<div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.75rem;padding:1rem 1.25rem;margin-bottom:1.25rem;font-size:.85rem;color:#1e40af;line-height:1.55">
+  Pour vous accompagner et résoudre d'éventuels problèmes, l'équipe Ameriack I.T. Solutions
+  peut être amenée à accéder à votre espace. Par souci de transparence, chacun de ces accès
+  est enregistré et listé ci-dessous, séparément de votre journal d'activité habituel.
+</div>
+
+{% if logs %}
+<div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;overflow:hidden">
+  <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;border-collapse:collapse;min-width:640px">
+      <thead>
+        <tr style="background:#0f3d36;color:white">
+          <th style="padding:.75rem 1rem;text-align:left;font-size:.75rem">Date &amp; heure</th>
+          <th style="padding:.75rem 1rem;text-align:left;font-size:.75rem">Intervention</th>
+          <th style="padding:.75rem 1rem;text-align:left;font-size:.75rem">Origine (IP)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr style="border-bottom:1px solid #f3f4f6">
+          <td style="padding:.75rem 1rem;font-size:.82rem;color:#374151;white-space:nowrap">
+            {{ log.date_action.strftime('%d/%m/%Y à %H:%M') if log.date_action else '—' }}
+          </td>
+          <td style="padding:.75rem 1rem;font-size:.85rem;color:#111827">
+            <span style="display:inline-block;background:#fef3c7;color:#92400e;font-size:.68rem;font-weight:700;padding:.125rem .5rem;border-radius:.375rem;margin-right:.5rem">SUPPORT</span>
+            {{ log.description or 'Accès support' }}
+          </td>
+          <td style="padding:.75rem 1rem;font-size:.8rem;color:#9ca3af">{{ log.ip_address or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% if nb_pages > 1 %}
+<div style="display:flex;gap:.5rem;justify-content:center;margin-top:1.25rem">
+  {% if page > 1 %}<a href="/audit/support?page={{ page-1 }}" style="padding:.5rem .875rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">← Précédent</a>{% endif %}
+  <span style="padding:.5rem .875rem;font-size:.8rem;color:#6b7280">Page {{ page }} / {{ nb_pages }}</span>
+  {% if page < nb_pages %}<a href="/audit/support?page={{ page+1 }}" style="padding:.5rem .875rem;border:1px solid #e5e7eb;border-radius:.5rem;font-size:.8rem;text-decoration:none;color:#374151">Suivant →</a>{% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:3rem;text-align:center;color:#9ca3af">
+  <div style="font-size:2rem;margin-bottom:.5rem">🛟</div>
+  Aucune intervention support enregistrée à ce jour.
+</div>
+{% endif %}
+{% endblock %}

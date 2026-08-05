@@ -328,6 +328,10 @@ def inscription():
             db.session.commit()
             flash("Bienvenue ! Essai gratuit de 30 jours activé.", "success")
 
+        # Email de bienvenue (chaleureux + téléchargement de l'app de bureau).
+        # Envoyé dans tous les cas, sans bloquer l'inscription si l'envoi échoue.
+        envoyer_email_bienvenue(email, admin.prenom, denom.upper())
+
         login_user(admin)
         return redirect(url_for("tenant.dashboard"))
     return render_template("auth/inscription.html", plans=plans)
@@ -559,3 +563,87 @@ def cgv():
 @bp.route("/mentions-legales")
 def mentions_legales():
     return render_template("mentions_legales.html")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  EMAIL DE BIENVENUE — envoyé à l'inscription, ton chaleureux et professionnel
+#  Présente PaieGabon et propose le téléchargement de l'application de bureau.
+# ═══════════════════════════════════════════════════════════════════════════
+# Lien de téléchargement de l'application de bureau (release GitHub Ameriack).
+PAIEGABON_EXE_URL = ("https://github.com/Dric-hash/ameriack-site/releases/"
+                     "download/v1.0.0/PaieGabon.Setup.1.0.0.exe")
+
+
+def _html_bienvenue_paiegabon(prenom, denomination, lien_connexion):
+    """Compose le corps HTML de l'email de bienvenue PaieGabon."""
+    return f"""
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto">
+  <div style="background:#0f3d36;padding:32px 28px;border-radius:14px 14px 0 0;text-align:center">
+    <div style="display:inline-block;width:44px;height:44px;background:#d99e0b;border-radius:11px;color:#0f3d36;font-size:22px;font-weight:bold;line-height:44px">P</div>
+    <h1 style="color:#ffffff;margin:14px 0 4px;font-size:22px">PaieGabon</h1>
+    <p style="color:#d99e0b;margin:0;font-size:12px;letter-spacing:1px">AMERIACK I.T. SOLUTIONS</p>
+  </div>
+  <div style="background:#ffffff;padding:34px 30px;border:1px solid #e6e2d6;border-top:none">
+    <h2 style="color:#0f3d36;margin:0 0 6px;font-size:21px">Bienvenue, {prenom} !</h2>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px;margin:0 0 8px">
+      Nous sommes ravis de vous accueillir, et vous remercions de la confiance que vous accordez à PaieGabon.
+    </p>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px;margin:0 0 20px">
+      Le compte <strong style="color:#0f3d36">{denomination}</strong> est bien créé. Vous êtes désormais prêt à gérer votre paie en toute sérénité, dans le respect du Code du travail gabonais.
+    </p>
+    <div style="background:#f6f4ec;border-radius:11px;padding:20px 22px;margin:0 0 24px">
+      <p style="color:#0f3d36;font-weight:bold;margin:0 0 12px;font-size:15px">Ce que PaieGabon vous permet :</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; Éditer des bulletins conformes (CNSS, IRPP, conventions collectives)</td></tr>
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; Gérer salariés et journaliers, importer le pointage du mois</td></tr>
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; Produire vos déclarations sociales et fiscales</td></tr>
+      </table>
+    </div>
+    <div style="text-align:center;margin:0 0 26px">
+      <a href="{lien_connexion}" style="background:#0f3d36;color:#ffffff;padding:14px 34px;border-radius:11px;font-weight:bold;text-decoration:none;font-size:15px;display:inline-block">
+        Accéder à PaieGabon &rarr;
+      </a>
+    </div>
+    <div style="border:1px solid #e6e2d6;border-radius:11px;padding:22px;margin:0">
+      <p style="color:#0f3d36;font-weight:bold;margin:0 0 6px;font-size:15px">Préférez-vous l'application sur votre ordinateur ?</p>
+      <p style="color:#6b7280;line-height:1.6;font-size:14px;margin:0 0 16px">
+        PaieGabon existe aussi en version Windows à installer : une icône sur votre bureau, l'application en plein écran. Idéale pour un usage quotidien.
+      </p>
+      <div style="text-align:center">
+        <a href="{PAIEGABON_EXE_URL}" style="background:#d99e0b;color:#0f3d36;padding:12px 28px;border-radius:10px;font-weight:bold;text-decoration:none;font-size:14px;display:inline-block">
+          &#8595; Télécharger pour Windows
+        </a>
+      </div>
+      <p style="color:#9ca3af;font-size:12px;text-align:center;margin:14px 0 0;line-height:1.5">
+        À l'installation, Windows peut afficher un message de sécurité. C'est normal : cliquez sur «&nbsp;Informations complémentaires&nbsp;» puis «&nbsp;Exécuter quand même&nbsp;». L'éditeur indiqué est Ameriack I.T. Solutions.
+      </p>
+    </div>
+  </div>
+  <div style="background:#12211d;padding:24px 30px;border-radius:0 0 14px 14px">
+    <p style="color:#ffffff;font-size:14px;margin:0 0 10px;font-weight:bold">Une question pour bien démarrer ?</p>
+    <p style="color:rgba(255,255,255,0.7);font-size:13px;line-height:1.6;margin:0">
+      Écrivez-nous à <a href="mailto:infospaiegabon@paiegabon.com" style="color:#d99e0b;text-decoration:none">infospaiegabon@paiegabon.com</a><br/>
+      ou sur WhatsApp au <a href="https://wa.me/24174584772" style="color:#d99e0b;text-decoration:none">+241 74 58 47 72</a>
+    </p>
+    <p style="color:rgba(255,255,255,0.4);font-size:11px;margin:18px 0 0">&copy; 2026 Ameriack I.T. Solutions — Libreville, Gabon</p>
+  </div>
+</div>"""
+
+
+def envoyer_email_bienvenue(destinataire, prenom, denomination):
+    """Envoie l'email de bienvenue PaieGabon (silencieux si mail non configuré)."""
+    if not os.environ.get("MAIL_PASSWORD"):
+        return
+    try:
+        from flask_mail import Message as Msg
+        mail = current_app.extensions["mail"]
+        lien_connexion = url_for("auth.login", _external=True)
+        msg = Msg(
+            subject="Bienvenue sur PaieGabon 🎉",
+            recipients=[destinataire],
+            html=_html_bienvenue_paiegabon(prenom, denomination, lien_connexion),
+            sender=current_app.config["MAIL_DEFAULT_SENDER"],
+        )
+        send_email_async(mail, msg)
+    except Exception as e:
+        current_app.logger.error(f"[BIENVENUE] Échec envoi à {destinataire} : {e}")

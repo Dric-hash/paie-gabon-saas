@@ -42,6 +42,11 @@ logger = logging.getLogger("paiegalon.audit")
 # Actions dont on veut capturer les données avant/après
 ACTIONS_AVEC_DIFF = {"UPDATE", "DELETE"}
 
+# Actions d'accès support par l'éditeur (Ameriack). Elles sont tracées
+# honnêtement mais présentées séparément du journal courant du client,
+# pour ne pas parasiter son suivi tout en garantissant la transparence.
+ACTIONS_SUPPORT = {"IMPERSONATE", "SUPPORT_ACCESS"}
+
 # Champs sensibles à masquer dans les logs (mots de passe, tokens)
 CHAMPS_SENSIBLES = {
     "mot_de_passe_hash", "reset_token", "token_confirmation",
@@ -156,9 +161,15 @@ def _serialize(data: dict) -> str:
 
 def get_audit_logs(tenant_id, limit=100, offset=0,
                    action=None, entite=None, user_id=None,
-                   date_debut=None, date_fin=None, recherche=None):
+                   date_debut=None, date_fin=None, recherche=None,
+                   inclure_support=False):
     """
     Récupère les logs d'audit d'un tenant avec filtres.
+
+    Par défaut, les actions d'accès support de l'éditeur (IMPERSONATE) sont
+    EXCLUES de la vue standard : le client voit son propre journal, propre.
+    Ces accès restent tracés et consultables séparément (inclure_support=True,
+    ou via get_audit_logs_support ci-dessous).
 
     Returns:
         (logs, total) — liste des AuditLog et nombre total
@@ -167,6 +178,10 @@ def get_audit_logs(tenant_id, limit=100, offset=0,
     from sqlalchemy import desc
 
     q = AuditLog.query.filter_by(tenant_id=tenant_id)
+
+    # Les accès support éditeur sont présentés à part, pas dans le journal courant.
+    if not inclure_support:
+        q = q.filter(AuditLog.action.notin_(ACTIONS_SUPPORT))
 
     if action:
         q = q.filter(AuditLog.action == action.upper())
@@ -185,6 +200,19 @@ def get_audit_logs(tenant_id, limit=100, offset=0,
     total = q.count()
     logs  = (q.order_by(desc(AuditLog.date_action))
               .offset(offset).limit(limit).all())
+    return logs, total
+
+
+def get_audit_logs_support(tenant_id, limit=100, offset=0):
+    """Récupère UNIQUEMENT les accès support éditeur d'un tenant (transparence).
+    Le client peut ainsi consulter, à part, quand l'éditeur est intervenu."""
+    from models import AuditLog
+    from sqlalchemy import desc
+    q = (AuditLog.query.filter_by(tenant_id=tenant_id)
+         .filter(AuditLog.action.in_(ACTIONS_SUPPORT)))
+    total = q.count()
+    logs = (q.order_by(desc(AuditLog.date_action))
+             .offset(offset).limit(limit).all())
     return logs, total
 
 
