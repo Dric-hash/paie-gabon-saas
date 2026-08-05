@@ -695,3 +695,59 @@ def admin_backup_run():
     else:
         flash(f"❌ Échec de la sauvegarde : {message}", "error")
     return redirect(url_for("admin.admin_backups"))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  ANNONCE "APPLICATION DE BUREAU" — pour les clients inscrits avant la
+#  disponibilité du .exe. Envoi à un client précis ou à tous, depuis le
+#  superadmin. Ton "nouveauté" (pas un mail de bienvenue décalé).
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/admin/tenant/<int:id>/annonce-bureau", methods=["POST"])
+@super_admin_required
+def admin_annonce_bureau(id):
+    """Envoie l'annonce 'application de bureau' à l'admin d'un tenant précis."""
+    from blueprints.auth import envoyer_annonce_bureau
+    t = Tenant.query.get_or_404(id)
+    u = Utilisateur.query.filter_by(tenant_id=id, role="TENANT_ADMIN").first()
+    if not u or not u.email:
+        flash(f"Aucun administrateur avec email pour {t.denomination}.", "error")
+        return redirect(url_for("admin.admin_tenant_detail", id=id))
+
+    ok = envoyer_annonce_bureau(u.email, u.prenom or "", t.denomination)
+    if ok:
+        log_action("SUPPORT_ACCESS", "tenant", id,
+                   f"Annonce 'application de bureau' envoyée à {u.email}",
+                   user_id=current_user.id, tenant_id=id)
+        db.session.commit()
+        flash(f"Annonce envoyée à {u.email}.", "success")
+    else:
+        flash("Email non configuré sur le serveur (clé Resend manquante).", "error")
+    return redirect(url_for("admin.admin_tenant_detail", id=id))
+
+
+@bp.route("/admin/annonce-bureau-tous", methods=["POST"])
+@super_admin_required
+def admin_annonce_bureau_tous():
+    """Envoie l'annonce 'application de bureau' à TOUS les clients existants
+    (un admin par tenant). Utile pour les clients inscrits avant le .exe."""
+    from blueprints.auth import envoyer_annonce_bureau
+    tenants = Tenant.query.all()
+    envoyes, ignores = 0, 0
+    for t in tenants:
+        u = Utilisateur.query.filter_by(tenant_id=t.id, role="TENANT_ADMIN").first()
+        if not u or not u.email:
+            ignores += 1
+            continue
+        if envoyer_annonce_bureau(u.email, u.prenom or "", t.denomination):
+            envoyes += 1
+        else:
+            ignores += 1
+    if envoyes:
+        log_action("SUPPORT_ACCESS", "tenant", None,
+                   f"Annonce 'application de bureau' envoyée à {envoyes} client(s)",
+                   user_id=current_user.id, tenant_id=None)
+        db.session.commit()
+    flash(f"Annonce envoyée à {envoyes} client(s)."
+          + (f" {ignores} ignoré(s) (sans email ou envoi impossible)." if ignores else ""),
+          "success" if envoyes else "warning")
+    return redirect(url_for("admin.admin_dashboard"))

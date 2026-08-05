@@ -59,6 +59,11 @@
       <p style="font-size:.8rem;color:#64748b;margin-top:.2rem">Vue consolidée en temps réel · {{ nb_tenants }} entreprise(s) enregistrée(s)</p>
     </div>
     <div style="display:flex;gap:.625rem">
+      <form method="POST" action="{{ url_for('admin.admin_annonce_bureau_tous') }}" style="display:inline"
+            onsubmit="return confirm('Envoyer l\'annonce « application de bureau » à TOUS les clients ?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" style="background:#0f3d36;border:1px solid #17564c;color:white;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;cursor:pointer">✉️ Annonce bureau à tous</button>
+      </form>
       <a href="/admin/tenants?statut=ESSAI" style="background:#1e293b;border:1px solid #334155;color:#c4b5fd;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">🧪 {{ nb_essai }} essai(s)</a>
       <a href="/admin/tenants/nouveau" style="background:linear-gradient(135deg,#7c3aed,#4c1d95);color:white;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;text-decoration:none">+ Nouvelle entreprise</a>
     </div>

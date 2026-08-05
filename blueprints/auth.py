@@ -647,3 +647,82 @@ def envoyer_email_bienvenue(destinataire, prenom, denomination):
         send_email_async(mail, msg)
     except Exception as e:
         current_app.logger.error(f"[BIENVENUE] Échec envoi à {destinataire} : {e}")
+
+
+def _html_annonce_bureau_paiegabon(prenom, denomination, lien_connexion):
+    """Variante 'nouveauté' pour les clients DÉJÀ inscrits : annonce que
+    PaieGabon est désormais disponible en application de bureau. Ton adapté
+    (pas de 'bienvenue' décalé pour quelqu'un qui utilise déjà l'app)."""
+    return f"""
+<div style="font-family:Arial,Helvetica,sans-serif;max-width:560px;margin:0 auto">
+  <div style="background:#0f3d36;padding:32px 28px;border-radius:14px 14px 0 0;text-align:center">
+    <div style="display:inline-block;width:44px;height:44px;background:#d99e0b;border-radius:11px;color:#0f3d36;font-size:22px;font-weight:bold;line-height:44px">P</div>
+    <h1 style="color:#ffffff;margin:14px 0 4px;font-size:22px">PaieGabon</h1>
+    <p style="color:#d99e0b;margin:0;font-size:12px;letter-spacing:1px">AMERIACK I.T. SOLUTIONS</p>
+  </div>
+  <div style="background:#ffffff;padding:34px 30px;border:1px solid #e6e2d6;border-top:none">
+    <p style="display:inline-block;background:#fef3c7;color:#92400e;font-size:12px;font-weight:bold;padding:4px 12px;border-radius:20px;margin:0 0 14px">NOUVEAUTÉ</p>
+    <h2 style="color:#0f3d36;margin:0 0 6px;font-size:21px">PaieGabon s'installe maintenant sur votre ordinateur</h2>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px;margin:0 0 8px">
+      Bonjour {prenom},
+    </p>
+    <p style="color:#4b5563;line-height:1.65;font-size:15px;margin:0 0 20px">
+      Bonne nouvelle pour <strong style="color:#0f3d36">{denomination}</strong> : en plus de la version web que vous utilisez déjà, PaieGabon est désormais disponible en <strong>application de bureau pour Windows</strong>. Une icône sur votre bureau, l'application en plein écran, sans passer par le navigateur.
+    </p>
+
+    <div style="background:#f6f4ec;border-radius:11px;padding:20px 22px;margin:0 0 24px">
+      <p style="color:#0f3d36;font-weight:bold;margin:0 0 12px;font-size:15px">Ce que ça change pour vous :</p>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; Un accès direct depuis le bureau, comme un vrai logiciel</td></tr>
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; L'application en plein écran, plus confortable au quotidien</td></tr>
+        <tr><td style="padding:5px 0;color:#4b5563;font-size:14px;line-height:1.5">&#10003;&nbsp; Vos données et vos accès restent identiques</td></tr>
+      </table>
+    </div>
+
+    <div style="border:1px solid #e6e2d6;border-radius:11px;padding:22px;margin:0 0 20px">
+      <p style="color:#0f3d36;font-weight:bold;margin:0 0 12px;font-size:15px;text-align:center">Télécharger l'application de bureau</p>
+      <div style="text-align:center">
+        <a href="{PAIEGABON_EXE_URL}" style="background:#d99e0b;color:#0f3d36;padding:13px 30px;border-radius:10px;font-weight:bold;text-decoration:none;font-size:15px;display:inline-block">
+          &#8595; Télécharger pour Windows
+        </a>
+      </div>
+      <p style="color:#9ca3af;font-size:12px;text-align:center;margin:14px 0 0;line-height:1.5">
+        À l'installation, Windows peut afficher un message de sécurité. C'est normal : cliquez sur «&nbsp;Informations complémentaires&nbsp;» puis «&nbsp;Exécuter quand même&nbsp;». L'éditeur indiqué est Ameriack I.T. Solutions.
+      </p>
+    </div>
+
+    <p style="color:#6b7280;line-height:1.6;font-size:14px;margin:0;text-align:center">
+      Vous préférez continuer sur le web ? <a href="{lien_connexion}" style="color:#0f3d36;font-weight:bold;text-decoration:none">Rien ne change</a>, la version en ligne reste disponible.
+    </p>
+  </div>
+  <div style="background:#12211d;padding:24px 30px;border-radius:0 0 14px 14px">
+    <p style="color:#ffffff;font-size:14px;margin:0 0 10px;font-weight:bold">Une question sur l'installation ?</p>
+    <p style="color:rgba(255,255,255,0.7);font-size:13px;line-height:1.6;margin:0">
+      Écrivez-nous à <a href="mailto:infospaiegabon@paiegabon.com" style="color:#d99e0b;text-decoration:none">infospaiegabon@paiegabon.com</a><br/>
+      ou sur WhatsApp au <a href="https://wa.me/24174584772" style="color:#d99e0b;text-decoration:none">+241 74 58 47 72</a>
+    </p>
+    <p style="color:rgba(255,255,255,0.4);font-size:11px;margin:18px 0 0">&copy; 2026 Ameriack I.T. Solutions — Libreville, Gabon</p>
+  </div>
+</div>"""
+
+
+def envoyer_annonce_bureau(destinataire, prenom, denomination):
+    """Envoie l'annonce 'application de bureau' à un client existant.
+    Retourne True si l'envoi a été lancé, False sinon (mail non configuré)."""
+    if not os.environ.get("MAIL_PASSWORD"):
+        return False
+    try:
+        from flask_mail import Message as Msg
+        mail = current_app.extensions["mail"]
+        lien_connexion = url_for("auth.login", _external=True)
+        msg = Msg(
+            subject="Nouveauté PaieGabon : l'application de bureau est disponible 💻",
+            recipients=[destinataire],
+            html=_html_annonce_bureau_paiegabon(prenom, denomination, lien_connexion),
+            sender=current_app.config["MAIL_DEFAULT_SENDER"],
+        )
+        send_email_async(mail, msg)
+        return True
+    except Exception as e:
+        current_app.logger.error(f"[ANNONCE] Échec envoi à {destinataire} : {e}")
+        return False
