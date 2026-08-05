@@ -95,24 +95,23 @@
       </div>
       <div>
         <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Plan</label>
-        <select name="plan_id" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
+        <select name="plan_id" id="planSelect" onchange="majDurees()" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
           {% for plan in plans %}
-          <option value="{{ plan.id }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
+          <option value="{{ plan.id }}" data-prix="{{ plan.prix_mensuel|float|int }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
             {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
           </option>
           {% endfor %}
         </select>
       </div>
-      <div>
-        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Durée payée</label>
-        <select name="duree" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
-          <option value="1">1 mois</option>
-          <option value="3">3 mois (−5%)</option>
-          <option value="6">6 mois (−10%)</option>
-          <option value="12">12 mois (−15%)</option>
-        </select>
-      </div>
     </div>
+
+    <!-- Cartes de durée avec prix total et économie -->
+    <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.5rem">Choisissez la durée</label>
+    <input type="hidden" name="duree" id="dureeInput" value="1"/>
+    <div id="dureeCards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;margin-bottom:1.25rem" class="duree-grid">
+      <!-- Rempli par JavaScript -->
+    </div>
+
     <button type="submit"
       style="width:100%;background:#0f3d36;color:white;padding:.85rem;border-radius:.75rem;font-weight:900;font-size:.9rem;border:none;cursor:pointer">
       📤 J'ai payé — Confirmer ma transaction
@@ -199,6 +198,67 @@
 @media (max-width: 720px) {
   .pay-grid { grid-template-columns: 1fr !important; }
   .pay-form-grid { grid-template-columns: 1fr !important; }
+  .duree-grid { grid-template-columns: 1fr 1fr !important; }
+}
+.duree-card {
+  border:2px solid #e5e7eb; border-radius:.85rem; padding:.9rem .75rem; cursor:pointer;
+  text-align:center; transition:all .15s; background:white; position:relative;
+}
+.duree-card:hover { border-color:#0f3d36; }
+.duree-card.active { border-color:#0f3d36; background:#f0fdf4; box-shadow:0 4px 12px -4px rgba(15,61,54,.3); }
+.duree-card .eco-badge {
+  position:absolute; top:-9px; left:50%; transform:translateX(-50%);
+  background:#d99e0b; color:white; font-size:.62rem; font-weight:700;
+  padding:.1rem .5rem; border-radius:9999px; white-space:nowrap;
 }
 </style>
+
+<script>
+  // Barème de remises (identique au serveur) : durée -> coefficient
+  var REMISES = { 1: 1.0, 3: 0.95, 6: 0.90, 12: 0.85 };
+  var LIBELLES = { 1: "1 mois", 3: "3 mois", 6: "6 mois", 12: "12 mois" };
+
+  function fcfa(n) {
+    return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ") + " F";
+  }
+
+  function choisirDuree(d) {
+    document.getElementById("dureeInput").value = d;
+    document.querySelectorAll(".duree-card").forEach(function(c) {
+      c.classList.toggle("active", parseInt(c.dataset.duree) === d);
+    });
+  }
+
+  function majDurees() {
+    var sel = document.getElementById("planSelect");
+    var prix = parseInt(sel.options[sel.selectedIndex].dataset.prix) || 0;
+    var cont = document.getElementById("dureeCards");
+    var actuelle = parseInt(document.getElementById("dureeInput").value) || 1;
+    cont.innerHTML = "";
+    [1, 3, 6, 12].forEach(function(d) {
+      var plein = prix * d;
+      var total = Math.round(prix * d * REMISES[d]);
+      var eco = plein - total;
+      var pct = Math.round((1 - REMISES[d]) * 100);
+      var card = document.createElement("div");
+      card.className = "duree-card" + (d === actuelle ? " active" : "");
+      card.dataset.duree = d;
+      card.onclick = function() { choisirDuree(d); };
+      var html = "";
+      if (eco > 0) html += '<div class="eco-badge">−' + pct + '% · éco. ' + fcfa(eco) + '</div>';
+      html += '<div style="font-weight:800;color:#0f3d36;font-size:.95rem;margin-top:' + (eco>0?'.3rem':'0') + '">' + LIBELLES[d] + '</div>';
+      html += '<div style="font-size:1.15rem;font-weight:900;color:#0f3d36;margin-top:.35rem">' + fcfa(total) + '</div>';
+      if (eco > 0) {
+        html += '<div style="font-size:.72rem;color:#9ca3af;text-decoration:line-through">' + fcfa(plein) + '</div>';
+      } else {
+        html += '<div style="font-size:.72rem;color:#9ca3af">par mois</div>';
+      }
+      card.innerHTML = html;
+      cont.appendChild(card);
+    });
+  }
+
+  // Initialisation au chargement
+  document.addEventListener("DOMContentLoaded", majDurees);
+</script>
 {% endblock %}
