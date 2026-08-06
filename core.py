@@ -215,10 +215,15 @@ def plan_required(*codes):
             if current_user.is_super_admin:
                 return f(*a, **k)
             t = getattr(current_user, "tenant", None)
+            # En mode cabinet, la fonctionnalité s'évalue sur l'entreprise
+            # courante (get_tenant), qui hérite du plan du cabinet.
+            tc = get_tenant()
+            if tc is not None:
+                t = tc
             plan_code = (t.plan.code.upper() if t and t.plan and t.plan.code else None)
             if plan_code not in codes_norm:
-                flash("Cette fonctionnalité est réservée à l'abonnement Cabinet "
-                      "(100 000 FCFA/mois). Mettez à niveau votre abonnement pour y accéder.",
+                flash("Cette fonctionnalité est réservée aux abonnements supérieurs. "
+                      "Mettez à niveau votre abonnement pour y accéder.",
                       "error")
                 return redirect(url_for("tenant.paiement"))
             return f(*a, **k)

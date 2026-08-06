@@ -8314,7 +8314,7 @@ def declaration_cnss():
 
 @bp.route("/declaration-das")
 @login_required
-@plan_required("CABINET")
+@plan_required("CABINET", "CABINET_COMPTABLE")
 def declaration_das():
     """Déclaration Annuelle des Salaires (DGI) — synthèse annuelle par exercice."""
     if current_user.is_super_admin:
@@ -8350,7 +8350,7 @@ def declaration_das():
 
 @bp.route("/declaration-das/excel")
 @login_required
-@plan_required("CABINET")
+@plan_required("CABINET", "CABINET_COMPTABLE")
 def declaration_das_excel():
     """Télécharge la DAS de l'exercice au format Excel."""
     if current_user.is_super_admin:

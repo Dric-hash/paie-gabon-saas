@@ -245,7 +245,7 @@
         class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_cnss' else 'text-white/80 hover:bg-white/10' }}">
         📋 <span>{{ "Décl. CNSS" if lang == "fr" else "CNSS Decl." }}</span>
       </a>
-      {% if current_user.tenant and current_user.tenant.plan and current_user.tenant.plan.code == 'CABINET' %}
+      {% if tenant and tenant.plan and tenant.plan.code in ['CABINET', 'CABINET_COMPTABLE'] %}
       <a href="/declaration-das"
         class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_das' else 'text-white/80 hover:bg-white/10' }}">
         🗂️ <span>{{ "Décl. annuelle (DAS)" if lang == "fr" else "Annual Decl. (DAS)" }}</span>
