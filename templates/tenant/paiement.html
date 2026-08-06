@@ -97,7 +97,7 @@
         <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.3rem">Plan</label>
         <select name="plan_id" id="planSelect" onchange="majDurees()" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.6rem;font-size:.85rem">
           {% for plan in plans %}
-          <option value="{{ plan.id }}" data-prix="{{ plan.prix_mensuel|float|int }}" {% if tenant.plan_id == plan.id %}selected{% endif %}>
+          <option value="{{ plan.id }}" data-prix="{{ plan.prix_mensuel|float|int }}" {% if (plan_choisi or tenant.plan_id) == plan.id %}selected{% endif %}>
             {{ plan.nom }} — {{ (plan.prix_mensuel|float)|int|fcfa }}/mois
           </option>
           {% endfor %}

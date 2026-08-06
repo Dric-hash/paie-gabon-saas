@@ -2395,6 +2395,20 @@ def periode_rouvrir(id):
     return redirect(url_for("tenant.periode_detail", id=p.id))
 
 # ── Paiement abonnement ───────────────────────────────────────────────────────
+@bp.route("/offres")
+@login_required
+def offres():
+    """Page 'Nos offres' : le client compare les plans et en choisit un,
+    ce qui le mène au paiement avec ce plan présélectionné."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
+    return render_template("tenant/offres.html", tenant=t, plans=plans)
+
+
 @bp.route("/paiement")
 @login_required
 def paiement():
@@ -2405,8 +2419,10 @@ def paiement():
     historique = Paiement.query.filter_by(tenant_id=t.id)\
         .order_by(Paiement.date_creation.desc()).limit(10).all()
     from coordonnees_paiement import AIRTEL_MONEY, BANQUE, CONTACT_PAIEMENT
+    # Plan présélectionné (?plan=<id>) depuis la page "Nos offres" ; sinon plan actuel
+    plan_choisi = request.args.get("plan", type=int) or t.plan_id
     return render_template("tenant/paiement.html", tenant=t, plans=plans,
-                           historique=historique,
+                           historique=historique, plan_choisi=plan_choisi,
                            airtel=AIRTEL_MONEY, banque=BANQUE, contact=CONTACT_PAIEMENT)
 
 

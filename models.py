@@ -100,10 +100,37 @@ class Tenant(db.Model):
     # payées au taux normal. Bornes admises : 40h (légal) → 48h (max contractuel).
     seuil_heures_sup_hebdo = db.Column(db.Numeric(4, 1), default=40.0)
 
+    # ── MODE CABINET (multi-entreprises) ──────────────────────────────────
+    # est_cabinet : ce tenant est un cabinet comptable qui gère plusieurs
+    #   entreprises clientes (au lieu d'être une entreprise unique).
+    # cabinet_id  : pour une entreprise gérée par un cabinet, référence le
+    #   tenant-cabinet parent. NULL pour un tenant normal ou pour un cabinet.
+    # Chaque entreprise reste un tenant à part entière (données cloisonnées) ;
+    # le cabinet ne fait que les regrouper et permettre d'y accéder.
+    est_cabinet = db.Column(db.Boolean, default=False, nullable=False)
+    cabinet_id  = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+
+    # Entreprises rattachées à ce cabinet (relation auto-référente).
+    entreprises_gerees = db.relationship(
+        "Tenant", backref=db.backref("cabinet", remote_side=[id]),
+        lazy=True, foreign_keys=[cabinet_id])
+
     utilisateurs = db.relationship("Utilisateur", backref="tenant", lazy=True, foreign_keys="Utilisateur.tenant_id")
     salaries     = db.relationship("Salarie", backref="tenant", lazy=True)
     periodes     = db.relationship("PeriodePaie", backref="tenant", lazy=True)
     categories   = db.relationship("CategorieEmploi", backref="tenant", lazy=True)
+
+    @property
+    def est_entreprise_geree(self):
+        """True si ce tenant est une entreprise rattachée à un cabinet."""
+        return self.cabinet_id is not None
+
+    @property
+    def nb_entreprises_gerees(self):
+        """Nombre d'entreprises gérées par ce cabinet (0 si non-cabinet)."""
+        if not self.est_cabinet:
+            return 0
+        return Tenant.query.filter_by(cabinet_id=self.id).count()
 
     def generate_token(self):
         """Génère un nouveau token API. Stocke uniquement son hash + un préfixe
