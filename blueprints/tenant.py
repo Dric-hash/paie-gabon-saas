@@ -159,12 +159,78 @@ def cabinet_entrer(entreprise_id):
     return redirect(url_for("tenant.cabinet_dashboard"))
 
 
-@bp.route("/cabinet/entreprise/nouvelle")
+@bp.route("/cabinet/entreprise/nouvelle", methods=["GET", "POST"])
 @login_required
 def cabinet_entreprise_nouvelle():
-    """[Étape 4 — à venir] Formulaire d'ajout d'une entreprise au cabinet."""
-    flash("L'ajout d'entreprises arrive très bientôt (étape suivante).", "info")
-    return redirect(url_for("tenant.cabinet_dashboard"))
+    """Le cabinet ajoute une nouvelle entreprise cliente à son portefeuille.
+    Crée un tenant rattaché (cabinet_id), avec ses catégories par défaut.
+    Pas de nouvel utilisateur : c'est le cabinet qui gère l'entreprise."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t or not t.est_cabinet:
+        flash("Réservé aux comptes cabinet.", "error")
+        return redirect(url_for("tenant.dashboard"))
+    if not current_user.is_tenant_admin:
+        flash("Seul l'administrateur du cabinet peut ajouter une entreprise.", "error")
+        return redirect(url_for("tenant.cabinet_dashboard"))
+
+    from calculs_paie import CONVENTIONS_DISPONIBLES
+
+    if request.method == "POST":
+        denom = request.form.get("denomination", "").strip()
+        if not denom:
+            flash("La dénomination de l'entreprise est obligatoire.", "error")
+            return render_template("tenant/cabinet_entreprise_form.html",
+                cabinet=t, conventions=CONVENTIONS_DISPONIBLES)
+
+        convention = request.form.get("convention", "AUCUNE").strip().upper()
+        if convention not in CONVENTIONS_DISPONIBLES:
+            convention = "AUCUNE"
+
+        # Slug unique
+        slug_base = denom.lower().replace(" ", "_")[:30]
+        slug = slug_base
+        i = 1
+        while Tenant.query.filter_by(slug=slug).first():
+            slug = f"{slug_base}_{i}"; i += 1
+
+        # Créer l'entreprise rattachée au cabinet.
+        # Elle hérite du plan du cabinet (forfait) et de son statut/expiration :
+        # tant que le cabinet est à jour, ses entreprises le sont aussi.
+        e = Tenant(
+            slug=slug, denomination=denom.upper(),
+            sigle=request.form.get("sigle", "").strip().upper(),
+            activite=request.form.get("activite", "").strip(),
+            nif=request.form.get("nif", "").strip(),
+            numero_cnss=request.form.get("numero_cnss", "").strip(),
+            telephone=request.form.get("telephone", "").strip(),
+            ville=request.form.get("ville", "Libreville").strip() or "Libreville",
+            pays="Gabon",
+            convention=convention,
+            cabinet_id=t.id,               # ← rattachement au cabinet
+            plan_id=t.plan_id,             # hérite du forfait cabinet
+            statut=t.statut,               # suit le statut du cabinet
+            date_expiration=t.date_expiration,
+        )
+        e.generate_token()
+        db.session.add(e)
+        db.session.flush()
+
+        # Catégories d'emploi par défaut (comme à l'inscription classique)
+        for code, lib in [("C1", "Ouvriers"), ("C2", "Techniciens"),
+                          ("C3", "Conducteurs de Travaux"), ("C4", "Cadres")]:
+            db.session.add(CategorieEmploi(tenant_id=e.id, code=code, libelle=lib))
+
+        db.session.commit()
+        log_action("CREATE", "tenant", e.id,
+                   f"Entreprise '{e.denomination}' ajoutée au cabinet {t.denomination}",
+                   user_id=current_user.id, tenant_id=t.id)
+        flash(f"Entreprise « {e.denomination} » ajoutée à votre portefeuille.", "success")
+        return redirect(url_for("tenant.cabinet_dashboard"))
+
+    return render_template("tenant/cabinet_entreprise_form.html",
+        cabinet=t, conventions=CONVENTIONS_DISPONIBLES)
 
 
 @bp.route("/dashboard")

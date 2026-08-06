@@ -282,6 +282,8 @@ def admin_tenant_detail(id):
         nb_bulletins=BulletinPaie.query.filter_by(tenant_id=id).count(),
         users=Utilisateur.query.filter_by(tenant_id=id).all(),
         plans=Plan.query.all(),
+        cabinets=Tenant.query.filter_by(est_cabinet=True).filter(Tenant.id != id).all(),
+        nb_entreprises_gerees=Tenant.query.filter_by(cabinet_id=id).count(),
         periodes_recentes=periodes_recentes,
         nb_journaliers=nb_journaliers,
         now=utcnow())
@@ -303,6 +305,44 @@ def admin_tenant_statut(id):
         t.date_expiration = None
     db.session.commit(); flash(f"{t.denomination} mis à jour.","success")
     return redirect(url_for("admin.admin_tenant_detail",id=id))
+
+
+@bp.route("/admin/tenants/<int:id>/cabinet", methods=["POST"])
+@super_admin_required
+def admin_tenant_cabinet(id):
+    """Gère le statut cabinet d'un tenant :
+    - le marquer/démarquer comme cabinet ;
+    - le rattacher à un cabinet (en faire une entreprise gérée) ou le détacher."""
+    t = Tenant.query.get_or_404(id)
+    action = request.form.get("action", "")
+
+    if action == "marquer_cabinet":
+        t.est_cabinet = True
+        t.cabinet_id = None  # un cabinet n'est pas lui-même géré par un cabinet
+        flash(f"{t.denomination} est maintenant un cabinet.", "success")
+    elif action == "demarquer_cabinet":
+        if Tenant.query.filter_by(cabinet_id=t.id).count() > 0:
+            flash("Impossible : ce cabinet gère encore des entreprises. "
+                  "Détachez-les d'abord.", "error")
+            return redirect(url_for("admin.admin_tenant_detail", id=id))
+        t.est_cabinet = False
+        flash(f"{t.denomination} n'est plus un cabinet.", "success")
+    elif action == "rattacher":
+        cabinet_id = request.form.get("cabinet_id", type=int)
+        cab = Tenant.query.get(cabinet_id) if cabinet_id else None
+        if not cab or not cab.est_cabinet:
+            flash("Cabinet cible invalide.", "error")
+            return redirect(url_for("admin.admin_tenant_detail", id=id))
+        t.cabinet_id = cab.id
+        flash(f"{t.denomination} est maintenant gérée par {cab.denomination}.", "success")
+    elif action == "detacher":
+        t.cabinet_id = None
+        flash(f"{t.denomination} n'est plus rattachée à un cabinet.", "success")
+
+    db.session.commit()
+    log_action("UPDATE", entite="tenant", entite_id=t.id,
+               description=f"Statut cabinet modifié : {action}")
+    return redirect(url_for("admin.admin_tenant_detail", id=id))
 
 @bp.route("/admin/tenants/<int:id>/notes", methods=["POST"])
 @super_admin_required

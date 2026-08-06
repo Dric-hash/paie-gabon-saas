@@ -326,6 +326,56 @@
         {% endif %}
       </div>
 
+      <!-- Gestion cabinet -->
+      <div class="card p-5" style="border-left:4px solid #0f3d36">
+        <h2 class="text-xs font-bold uppercase tracking-widest mb-1" style="color:#0f3d36">Mode cabinet</h2>
+        <p class="text-xs text-gray-400 mb-3">Gestion multi-entreprises</p>
+
+        {% if tenant.est_cabinet %}
+          <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.6rem;padding:.75rem;margin-bottom:.75rem">
+            <div style="font-size:.82rem;font-weight:700;color:#166534">✓ Ce tenant est un CABINET</div>
+            <div style="font-size:.75rem;color:#374151;margin-top:.25rem">Gère {{ nb_entreprises_gerees }} entreprise(s).</div>
+          </div>
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="demarquer_cabinet"/>
+            <button type="submit" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2 font-bold text-xs"
+              onclick="return confirm('Retirer le statut cabinet ?')">Retirer le statut cabinet</button>
+          </form>
+        {% elif tenant.cabinet_id %}
+          <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.6rem;padding:.75rem;margin-bottom:.75rem">
+            <div style="font-size:.82rem;font-weight:700;color:#1e40af">Entreprise gérée par un cabinet</div>
+            <div style="font-size:.75rem;color:#374151;margin-top:.25rem">{{ tenant.cabinet.denomination if tenant.cabinet else '—' }}</div>
+          </div>
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="detacher"/>
+            <button type="submit" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2 font-bold text-xs"
+              onclick="return confirm('Détacher cette entreprise du cabinet ?')">Détacher du cabinet</button>
+          </form>
+        {% else %}
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet" style="margin-bottom:.75rem">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="marquer_cabinet"/>
+            <button type="submit" class="w-full text-white rounded-xl py-2 font-bold text-xs" style="background:#0f3d36"
+              onclick="return confirm('Transformer ce tenant en cabinet ?')">Transformer en cabinet</button>
+          </form>
+          {% if cabinets %}
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="rattacher"/>
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem">Ou rattacher à un cabinet :</label>
+            <div style="display:flex;gap:.4rem">
+              <select name="cabinet_id" class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs">
+                {% for c in cabinets %}<option value="{{ c.id }}">{{ c.denomination }}</option>{% endfor %}
+              </select>
+              <button type="submit" class="bg-emerald-700 text-white rounded-lg px-3 py-1.5 font-bold text-xs">OK</button>
+            </div>
+          </form>
+          {% endif %}
+        {% endif %}
+      </div>
+
       <!-- Notes admin -->
       <div class="card p-5" style="border-left:4px solid #7c3aed">
         <h2 class="text-xs font-bold text-purple-600 uppercase tracking-widest mb-1">Notes admin</h2>

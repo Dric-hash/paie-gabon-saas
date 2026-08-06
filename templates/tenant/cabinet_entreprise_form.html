@@ -1,0 +1,93 @@
+{% extends "tenant/base.html" %}
+{% block title %}Ajouter une entreprise — {{ cabinet.denomination }}{% endblock %}
+{% block content %}
+
+<div style="max-width:640px;margin:0 auto">
+
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:1.5rem">
+    <a href="/cabinet" style="color:#9ca3af;font-size:.875rem;text-decoration:none">← Mes entreprises</a>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">Ajouter une entreprise</h1>
+  </div>
+
+  <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:.9rem;padding:1rem 1.25rem;margin-bottom:1.5rem;font-size:.85rem;color:#1e40af;line-height:1.55">
+    Cette entreprise sera ajoutée à votre portefeuille. Vous pourrez y accéder depuis votre tableau de bord et gérer sa paie de façon totalement indépendante.
+  </div>
+
+  <form method="POST" action="/cabinet/entreprise/nouvelle">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div class="card p-5" style="background:white;border:1px solid #e5e7eb;border-radius:1rem;margin-bottom:1.25rem">
+      <h2 style="font-size:.9rem;font-weight:800;color:#0f3d36;margin:0 0 1.25rem">Informations de l'entreprise</h2>
+
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Dénomination *</label>
+        <input type="text" name="denomination" required placeholder="Ex: BTP CONSTRUCTION SARL"
+          style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem" class="form-grid">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Sigle</label>
+          <input type="text" name="sigle" placeholder="Ex: BTPC"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Activité</label>
+          <input type="text" name="activite" placeholder="Ex: Construction"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+      </div>
+
+      <div style="margin-bottom:1rem">
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Convention collective applicable</label>
+        <select name="convention" style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem">
+          {% for code, libelle in conventions.items() %}
+          <option value="{{ code }}">{{ libelle }}</option>
+          {% endfor %}
+        </select>
+        <p style="font-size:.72rem;color:#9ca3af;margin-top:.35rem">Détermine les règles de paie (heures sup, primes, ancienneté). Modifiable ensuite.</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem" class="form-grid">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">NIF</label>
+          <input type="text" name="nif"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Numéro CNSS</label>
+          <input type="text" name="numero_cnss"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem" class="form-grid">
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Téléphone</label>
+          <input type="text" name="telephone"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Ville</label>
+          <input type="text" name="ville" value="Libreville"
+            style="width:100%;border:1px solid #d1d5db;border-radius:.5rem;padding:.65rem;font-size:.9rem;box-sizing:border-box"/>
+        </div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:.75rem;justify-content:flex-end">
+      <a href="/cabinet" style="padding:.75rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.9rem;text-decoration:none;color:#6b7280;border:1px solid #d1d5db">Annuler</a>
+      <button type="submit" style="background:#0f3d36;color:white;padding:.75rem 1.75rem;border-radius:.75rem;font-weight:800;font-size:.9rem;border:none;cursor:pointer">
+        Ajouter l'entreprise
+      </button>
+    </div>
+  </form>
+
+</div>
+
+<style>
+@media (max-width: 600px) {
+  .form-grid { grid-template-columns: 1fr !important; }
+}
+</style>
+{% endblock %}
