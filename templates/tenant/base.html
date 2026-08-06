@@ -168,6 +168,18 @@
     <!-- Navigation -->
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
       {% set ep = request.endpoint %}
+      {% set mode_cabinet = current_user.tenant and current_user.tenant.est_cabinet and not session.get('cabinet_entreprise_id') %}
+      {% if mode_cabinet %}
+      <a href="/cabinet" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='cabinet_dashboard' else 'text-white/80 hover:bg-white/10' }}">
+        🏢 <span>Mes entreprises</span>
+      </a>
+      <a href="/cabinet/entreprise/nouvelle" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-white/80 hover:bg-white/10">
+        ➕ <span>Ajouter une entreprise</span>
+      </a>
+      <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
+        ⚙️ <span>{{ T.nav.parametres }}</span>
+      </a>
+      {% else %}
       <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
         🏠 <span>{{ T.nav.dashboard }}</span>
       </a>
@@ -288,6 +300,7 @@
       <a href="/admin" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold text-purple-300 hover:bg-white/10 transition-all">
         🔑 <span>Retour admin</span>
       </a>
+      {% endif %}
       {% endif %}
     </nav>
 

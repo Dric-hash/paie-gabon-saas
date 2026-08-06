@@ -113,12 +113,71 @@ def basculer_2fa():
     return redirect(url_for("tenant.parametres") + "#securite")
 
 
+@bp.route("/cabinet")
+@login_required
+def cabinet_dashboard():
+    """Tableau de bord d'un cabinet : liste de ses entreprises clientes avec,
+    pour chacune, un aperçu (salariés, statut). Réservé aux comptes cabinet."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not t.est_cabinet:
+        # Un tenant normal n'a pas de tableau de bord cabinet.
+        return redirect(url_for("tenant.dashboard"))
+
+    from sqlalchemy import func
+    entreprises = (Tenant.query.filter_by(cabinet_id=t.id)
+                   .order_by(Tenant.denomination).all())
+
+    # Aperçu par entreprise : nombre de salariés actifs + dernière période
+    apercu = []
+    for e in entreprises:
+        nb_sal = Salarie.query.filter_by(tenant_id=e.id, statut="ACTIF").count()
+        derniere_periode = (PeriodePaie.query.filter_by(tenant_id=e.id)
+                            .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc())
+                            .first())
+        apercu.append({
+            "tenant": e,
+            "nb_salaries": nb_sal,
+            "derniere_periode": derniere_periode,
+        })
+
+    total_salaries = sum(a["nb_salaries"] for a in apercu)
+
+    return render_template("tenant/cabinet_dashboard.html",
+        cabinet=t, apercu=apercu,
+        nb_entreprises=len(entreprises), total_salaries=total_salaries)
+
+
+@bp.route("/cabinet/entrer/<int:entreprise_id>")
+@login_required
+def cabinet_entrer(entreprise_id):
+    """[Étape 3 — à venir] Bascule : le cabinet 'entre' dans une entreprise."""
+    flash("La bascule entre entreprises arrive très bientôt (étape suivante).", "info")
+    return redirect(url_for("tenant.cabinet_dashboard"))
+
+
+@bp.route("/cabinet/entreprise/nouvelle")
+@login_required
+def cabinet_entreprise_nouvelle():
+    """[Étape 4 — à venir] Formulaire d'ajout d'une entreprise au cabinet."""
+    flash("L'ajout d'entreprises arrive très bientôt (étape suivante).", "info")
+    return redirect(url_for("tenant.cabinet_dashboard"))
+
+
 @bp.route("/dashboard")
 @login_required
 def dashboard():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t=get_tenant()
     if not t: flash("Aucune entreprise associée.","error"); return redirect(url_for("auth.login"))
+    # Mode cabinet : un compte cabinet voit la liste de ses entreprises, pas un
+    # dashboard d'entreprise unique. (Sauf s'il est "entré" dans une entreprise
+    # via la bascule — étape 3 — auquel cas get_tenant() renverra l'entreprise.)
+    if t.est_cabinet:
+        return redirect(url_for("tenant.cabinet_dashboard"))
     now=datetime.now()
 
     # ── KPIs emploi (cache TTL=5min) ─────────────────────────────────────────
