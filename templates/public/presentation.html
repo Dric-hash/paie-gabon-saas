@@ -398,7 +398,7 @@
           <span class="accent" aria-hidden="true">✓</span> {{ "Jusqu'à " ~ plan.max_salaries ~ " salariés" if plan.max_salaries else "Salariés illimités" }}
         </li>
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
-          <span class="accent" aria-hidden="true">✓</span> {{ plan.max_utilisateurs }} utilisateur{{ "s" if plan.max_utilisateurs > 1 else "" }}
+          <span class="accent" aria-hidden="true">✓</span> {{ (plan.max_utilisateurs ~ " utilisateur" ~ ("s" if plan.max_utilisateurs > 1 else "")) if plan.max_utilisateurs else "Utilisateurs illimités" }}
         </li>
         <li style="display:flex;gap:.5rem;padding:.4rem 0;font-size:.92rem;color:var(--ink)">
           <span class="accent" aria-hidden="true">✓</span> Toutes les fonctions de paie
