@@ -339,6 +339,15 @@ def admin_tenant_cabinet(id):
         t.cabinet_id = None
         flash(f"{t.denomination} n'est plus rattachée à un cabinet.", "success")
 
+    elif action == "definir_limite":
+        limite = request.form.get("limite_entreprises", type=int)
+        if limite and limite > 0:
+            t.limite_entreprises = limite
+            flash(f"Limite fixée à {limite} entreprises pour {t.denomination}.", "success")
+        else:
+            t.limite_entreprises = None
+            flash("Limite réinitialisée au palier par défaut.", "success")
+
     db.session.commit()
     log_action("UPDATE", entite="tenant", entite_id=t.id,
                description=f"Statut cabinet modifié : {action}")

@@ -334,8 +334,19 @@
         {% if tenant.est_cabinet %}
           <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.6rem;padding:.75rem;margin-bottom:.75rem">
             <div style="font-size:.82rem;font-weight:700;color:#166534">✓ Ce tenant est un CABINET</div>
-            <div style="font-size:.75rem;color:#374151;margin-top:.25rem">Gère {{ nb_entreprises_gerees }} entreprise(s).</div>
+            <div style="font-size:.75rem;color:#374151;margin-top:.25rem">Gère {{ nb_entreprises_gerees }} entreprise(s) · Limite : {{ tenant.limite_entreprises_effective }}</div>
           </div>
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet" style="margin-bottom:.75rem">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="definir_limite"/>
+            <label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:.3rem">Limite d'entreprises (palier)</label>
+            <div style="display:flex;gap:.4rem">
+              <input type="number" name="limite_entreprises" min="1" value="{{ tenant.limite_entreprises or '' }}"
+                placeholder="{{ tenant.limite_entreprises_effective }}"
+                class="flex-1 border border-gray-200 rounded-lg px-2 py-1.5 text-xs"/>
+              <button type="submit" class="bg-emerald-700 text-white rounded-lg px-3 py-1.5 font-bold text-xs">OK</button>
+            </div>
+          </form>
           <form method="POST" action="/admin/tenants/{{ tenant.id }}/cabinet">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <input type="hidden" name="action" value="demarquer_cabinet"/>

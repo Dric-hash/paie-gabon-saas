@@ -202,6 +202,13 @@ def cabinet_entreprise_nouvelle():
         flash("Seul l'administrateur du cabinet peut ajouter une entreprise.", "error")
         return redirect(url_for("tenant.cabinet_dashboard"))
 
+    # Blocage strict : le cabinet ne peut pas dépasser la limite de son palier.
+    if not t.peut_ajouter_entreprise:
+        flash(f"Vous avez atteint la limite de votre forfait "
+              f"({t.limite_entreprises_effective} entreprises). "
+              f"Pour en gérer davantage, passez au palier supérieur.", "error")
+        return redirect(url_for("tenant.cabinet_dashboard"))
+
     from calculs_paie import CONVENTIONS_DISPONIBLES
 
     if request.method == "POST":
@@ -2558,7 +2565,9 @@ def offres():
     if not t:
         return redirect(url_for("auth.login"))
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
-    return render_template("tenant/offres.html", tenant=t, plans=plans)
+    from paliers_cabinet import PALIERS_CABINET, SUR_DEVIS
+    return render_template("tenant/offres.html", tenant=t, plans=plans,
+                           paliers_cabinet=PALIERS_CABINET, sur_devis=SUR_DEVIS)
 
 
 @bp.route("/paiement")

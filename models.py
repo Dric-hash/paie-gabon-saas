@@ -109,6 +109,9 @@ class Tenant(db.Model):
     # le cabinet ne fait que les regrouper et permettre d'y accéder.
     est_cabinet = db.Column(db.Boolean, default=False, nullable=False)
     cabinet_id  = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+    # Nombre maximum d'entreprises qu'un cabinet a le droit de gérer (palier
+    # tarifaire souscrit). NULL/0 = palier par défaut. Voir paliers_cabinet.py.
+    limite_entreprises = db.Column(db.Integer, nullable=True)
 
     # Entreprises rattachées à ce cabinet (relation auto-référente).
     entreprises_gerees = db.relationship(
@@ -131,6 +134,22 @@ class Tenant(db.Model):
         if not self.est_cabinet:
             return 0
         return Tenant.query.filter_by(cabinet_id=self.id).count()
+
+    @property
+    def limite_entreprises_effective(self):
+        """Limite d'entreprises applicable à ce cabinet (palier par défaut si
+        non définie explicitement)."""
+        if self.limite_entreprises and self.limite_entreprises > 0:
+            return self.limite_entreprises
+        from paliers_cabinet import limite_par_defaut
+        return limite_par_defaut()
+
+    @property
+    def peut_ajouter_entreprise(self):
+        """True si le cabinet peut encore ajouter une entreprise (sous sa limite)."""
+        if not self.est_cabinet:
+            return False
+        return self.nb_entreprises_gerees < self.limite_entreprises_effective
 
     def generate_token(self):
         """Génère un nouveau token API. Stocke uniquement son hash + un préfixe

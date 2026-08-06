@@ -81,28 +81,47 @@
 {% set est_actuel_cab = (tenant.plan_id == plan_cabinet.id) %}
 <div style="max-width:960px;margin:2.5rem auto 0">
   <h2 style="font-size:.85rem;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem;text-align:center">Vous êtes un cabinet comptable ?</h2>
-  <div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:1.25rem;padding:2rem;color:white;display:flex;align-items:center;gap:2rem;flex-wrap:wrap">
-    <div style="flex:1;min-width:260px">
-      <div style="display:inline-block;background:#e9c46a;color:#0f3d36;font-size:.65rem;font-weight:800;padding:.2rem .7rem;border-radius:9999px;margin-bottom:.75rem">CABINET COMPTABLE</div>
-      <div style="font-size:1.5rem;font-weight:900;margin-bottom:.5rem">{{ plan_cabinet.nom }}</div>
-      <p style="opacity:.85;font-size:.9rem;line-height:1.6;margin:0 0 1rem">Gérez la paie de <strong>plusieurs entreprises</strong> depuis un seul compte. Chaque entreprise a ses données cloisonnées ; vous basculez de l'une à l'autre en un clic.</p>
-      <div style="display:flex;gap:1.25rem;flex-wrap:wrap;font-size:.85rem;opacity:.9">
-        <div>✓ Entreprises illimitées</div>
-        <div>✓ Utilisateurs illimités</div>
-        <div>✓ Déclaration annuelle (DAS)</div>
+  <div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:1.25rem;padding:2rem;color:white">
+    <div style="display:flex;align-items:flex-start;gap:2rem;flex-wrap:wrap;margin-bottom:1.5rem">
+      <div style="flex:1;min-width:260px">
+        <div style="display:inline-block;background:#e9c46a;color:#0f3d36;font-size:.65rem;font-weight:800;padding:.2rem .7rem;border-radius:9999px;margin-bottom:.75rem">CABINET COMPTABLE</div>
+        <div style="font-size:1.5rem;font-weight:900;margin-bottom:.5rem">{{ plan_cabinet.nom }}</div>
+        <p style="opacity:.85;font-size:.9rem;line-height:1.6;margin:0 0 1rem">Gérez la paie de <strong>plusieurs entreprises</strong> depuis un seul compte. Chaque entreprise a ses données cloisonnées ; vous basculez de l'une à l'autre en un clic.</p>
+        <div style="display:flex;gap:1.25rem;flex-wrap:wrap;font-size:.85rem;opacity:.9">
+          <div>✓ Utilisateurs illimités</div>
+          <div>✓ Déclaration annuelle (DAS)</div>
+          <div>✓ Données cloisonnées</div>
+        </div>
+      </div>
+      <div style="text-align:center">
+        {% if est_actuel_cab %}
+        <div style="background:rgba(255,255,255,.15);padding:.75rem 1.5rem;border-radius:.75rem;font-weight:700;font-size:.9rem">Votre plan actuel</div>
+        {% else %}
+        <a href="/paiement?plan={{ plan_cabinet.id }}"
+           style="display:inline-block;background:#e9c46a;color:#0f3d36;padding:.85rem 2rem;border-radius:.75rem;font-weight:800;font-size:.9rem;text-decoration:none">
+          Passer au Cabinet →
+        </a>
+        {% endif %}
       </div>
     </div>
-    <div style="text-align:center">
-      <div style="font-size:2.25rem;font-weight:900;color:#e9c46a">{{ (plan_cabinet.prix_mensuel|float)|int|fcfa }}</div>
-      <div style="opacity:.7;font-size:.85rem;margin-bottom:1rem">par mois, tout compris</div>
-      {% if est_actuel_cab %}
-      <div style="background:rgba(255,255,255,.15);padding:.75rem 1.5rem;border-radius:.75rem;font-weight:700;font-size:.9rem">Votre plan actuel</div>
-      {% else %}
-      <a href="/paiement?plan={{ plan_cabinet.id }}"
-         style="display:inline-block;background:#e9c46a;color:#0f3d36;padding:.85rem 2rem;border-radius:.75rem;font-weight:800;font-size:.9rem;text-decoration:none">
-        Passer au Cabinet →
-      </a>
-      {% endif %}
+
+    <!-- Grille de paliers -->
+    <div style="border-top:1px solid rgba(255,255,255,.15);padding-top:1.5rem">
+      <div style="font-size:.72rem;font-weight:700;opacity:.7;text-transform:uppercase;letter-spacing:.05em;margin-bottom:1rem">Tarif selon le nombre d'entreprises gérées</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.85rem">
+        {% for palier in paliers_cabinet %}
+        <div style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);border-radius:.85rem;padding:1rem;text-align:center">
+          <div style="font-size:.8rem;opacity:.75;margin-bottom:.35rem">Jusqu'à {{ palier.max_entreprises }} entreprises</div>
+          <div style="font-size:1.35rem;font-weight:900;color:#e9c46a">{{ palier.prix_mensuel|int|fcfa }}</div>
+          <div style="font-size:.68rem;opacity:.6">/mois</div>
+        </div>
+        {% endfor %}
+        <div style="background:rgba(233,196,106,.12);border:1px dashed rgba(233,196,106,.5);border-radius:.85rem;padding:1rem;text-align:center;display:flex;flex-direction:column;justify-content:center">
+          <div style="font-size:.8rem;opacity:.85;margin-bottom:.35rem">Au-delà de {{ sur_devis.au_dela_de }}</div>
+          <div style="font-size:1.05rem;font-weight:800;color:#e9c46a">Sur devis</div>
+          <a href="https://wa.me/24174584772" style="font-size:.68rem;color:#e9c46a;text-decoration:underline">Nous contacter</a>
+        </div>
+      </div>
     </div>
   </div>
 </div>
