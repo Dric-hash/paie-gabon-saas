@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Usage & Activité — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
+    .nav-link { color:rgba(255,255,255,.6);text-decoration:none;font-size:.825rem;padding:.5rem .75rem;border-radius:.5rem; }
+    .nav-link.active, .nav-link:hover { color:white;background:#1e293b; }
+    .kpi { background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem; }
+    .kpi .n { font-size:1.9rem;font-weight:900;color:white;line-height:1; }
+    .kpi .l { font-size:.72rem;color:#94a3b8;margin-top:.4rem;text-transform:uppercase;letter-spacing:.04em; }
+    .panel { background:#0f172a;border:1px solid #1e293b;border-radius:1rem;padding:1.25rem; }
+    .panel h3 { font-size:.8rem;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin:0 0 1rem;font-weight:700; }
+    .bar-track { background:#1e293b;border-radius:9999px;height:8px;overflow:hidden; }
+    .bar-fill { background:linear-gradient(90deg,#7c3aed,#a78bfa);height:100%;border-radius:9999px; }
+  </style>
+</head>
+<body>
+
+<nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:0 1.5rem;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:50">
+  <div style="display:flex;align-items:center;gap:.75rem;margin-right:2rem">
+    <div style="width:28px;height:28px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;color:white">A</div>
+    <span style="font-size:.875rem;font-weight:900;color:white">Ameriack I.T.</span>
+    <span style="background:#4c1d95;color:#c4b5fd;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">SUPER-ADMIN</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:.25rem">
+    <a href="/admin"           class="nav-link">🏠 Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
+    <a href="/admin/usage"     class="nav-link active">📊 Usage</a>
+    <a href="/admin/paiements" class="nav-link">💳 Paiements</a>
+    <a href="/admin/stats"     class="nav-link">📈 Stats</a>
+  </div>
+  <div style="margin-left:auto"><a href="/logout" style="background:#7c3aed;color:white;padding:.35rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">Déconnexion</a></div>
+</nav>
+
+<main style="max-width:1150px;margin:0 auto;padding:1.5rem">
+
+  <div style="margin-bottom:1.5rem">
+    <h1 style="font-size:1.5rem;font-weight:900;color:white;margin:0">📊 Usage & Activité</h1>
+    <p style="font-size:.8rem;color:#94a3b8;margin-top:.25rem">Comment vos clients utilisent l'application — basé sur les 30 derniers jours</p>
+  </div>
+
+  <!-- KPIs connexions -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem" class="grid-kpi">
+    <div class="kpi"><div class="n" style="color:#6ee7b7">{{ actifs_7j }}</div><div class="l">Utilisateurs actifs (7j)</div></div>
+    <div class="kpi"><div class="n" style="color:#a78bfa">{{ actifs_30j }}</div><div class="l">Utilisateurs actifs (30j)</div></div>
+    <div class="kpi"><div class="n">{{ actions_30j }}</div><div class="l">Actions ce mois</div></div>
+    <div class="kpi"><div class="n" style="color:#fbbf24">{{ jamais }}</div><div class="l">Jamais connectés</div></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem" class="grid-2">
+
+    <!-- Fonctionnalités les plus utilisées -->
+    <div class="panel">
+      <h3>Fonctionnalités les plus utilisées (30j)</h3>
+      {% if top_actions %}
+      {% for label, n in top_actions %}
+      <div style="margin-bottom:.85rem">
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem">
+          <span style="color:#e2e8f0">{{ label }}</span><span style="color:#94a3b8;font-weight:700">{{ n }}</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:{{ (n / max_action * 100)|round|int }}%"></div></div>
+      </div>
+      {% endfor %}
+      {% else %}<p style="color:#64748b;font-size:.85rem">Aucune activité enregistrée sur la période.</p>{% endif %}
+    </div>
+
+    <!-- Répartition appareils -->
+    <div class="panel">
+      <h3>Comment ils se connectent (30j)</h3>
+      {% for nom, n in appareils.items() %}
+      {% if n > 0 %}
+      <div style="margin-bottom:.85rem">
+        <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:.3rem">
+          <span style="color:#e2e8f0">
+            {% if nom == 'Ordinateur' %}💻{% elif nom == 'Mobile' %}📱{% elif nom == 'Application bureau' %}🖥️{% else %}❓{% endif %}
+            {{ nom }}
+          </span>
+          <span style="color:#94a3b8;font-weight:700">{{ (n / total_ua * 100)|round|int }}%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:{{ (n / total_ua * 100)|round|int }}%;background:linear-gradient(90deg,#059669,#34d399)"></div></div>
+      </div>
+      {% endif %}
+      {% endfor %}
+      <p style="color:#64748b;font-size:.72rem;margin-top:1rem;line-height:1.5">Basé sur le type d'appareil détecté lors des actions. « Application bureau » = accès via le .exe installé.</p>
+    </div>
+
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem" class="grid-2">
+
+    <!-- Clients les plus actifs -->
+    <div class="panel">
+      <h3>Clients les plus actifs (30j)</h3>
+      {% if top_clients %}
+      <table style="width:100%;border-collapse:collapse">
+        {% for c in top_clients %}
+        <tr style="border-bottom:1px solid #1e293b">
+          <td style="padding:.5rem 0;font-size:.85rem;font-weight:600">{{ c.tenant.denomination }}</td>
+          <td style="padding:.5rem 0;text-align:right;font-size:.85rem;color:#a78bfa;font-weight:700">{{ c.actions }} actions</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p style="color:#64748b;font-size:.85rem">Aucune activité client sur la période.</p>{% endif %}
+    </div>
+
+    <!-- Dernières connexions -->
+    <div class="panel">
+      <h3>Dernières connexions</h3>
+      {% if derniers %}
+      <table style="width:100%;border-collapse:collapse">
+        {% for u in derniers %}
+        <tr style="border-bottom:1px solid #1e293b">
+          <td style="padding:.5rem 0;font-size:.82rem">
+            <div style="font-weight:600">{{ u.prenom }} {{ u.nom }}</div>
+            <div style="font-size:.68rem;color:#64748b">{{ tid_to_tenant[u.tenant_id].denomination if u.tenant_id in tid_to_tenant else '—' }}</div>
+          </td>
+          <td style="padding:.5rem 0;text-align:right;font-size:.75rem;color:#94a3b8;white-space:nowrap">
+            {{ u.derniere_connexion.strftime('%d/%m %H:%M') if u.derniere_connexion else '—' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p style="color:#64748b;font-size:.85rem">Aucune connexion enregistrée.</p>{% endif %}
+    </div>
+
+  </div>
+
+  <p style="color:#475569;font-size:.72rem;margin-top:1.5rem;text-align:center">
+    Ces données proviennent du journal d'audit interne. Pour mesurer les visiteurs du site vitrine (www.ameriack.com), un outil d'analytics web séparé serait nécessaire.
+  </p>
+
+</main>
+
+<style>
+@media (max-width: 820px) {
+  .grid-kpi { grid-template-columns: 1fr 1fr !important; }
+  .grid-2 { grid-template-columns: 1fr !important; }
+}
+</style>
+</body>
+</html>

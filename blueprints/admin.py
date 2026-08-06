@@ -840,3 +840,97 @@ def admin_paiement_rejeter(id):
                user_id=current_user.id, tenant_id=p.tenant_id)
     flash(f"Paiement rejeté. Le client en sera informé s'il vous contacte.", "warning")
     return redirect(url_for("admin.admin_paiements"))
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  TABLEAU DE BORD D'USAGE — comment les clients utilisent l'application
+#  Basé sur le journal d'audit (AuditLog) et les connexions (Utilisateur).
+#  Aucune donnée externe : tout vient de nos propres tables.
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/admin/usage")
+@super_admin_required
+def admin_usage():
+    from models import AuditLog
+    from sqlalchemy import func
+    from datetime import timedelta
+
+    now = utcnow()
+    j7  = now - timedelta(days=7)
+    j30 = now - timedelta(days=30)
+
+    # ── Connexions / clients actifs ────────────────────────────────────────
+    tenants = Tenant.query.all()
+    users   = Utilisateur.query.filter(Utilisateur.role != "SUPER_ADMIN").all()
+    actifs_7j  = sum(1 for u in users if u.derniere_connexion and u.derniere_connexion >= j7)
+    actifs_30j = sum(1 for u in users if u.derniere_connexion and u.derniere_connexion >= j30)
+    jamais     = sum(1 for u in users if not u.derniere_connexion)
+
+    # ── Volume d'activité (journal d'audit) ────────────────────────────────
+    actions_7j  = AuditLog.query.filter(AuditLog.date_action >= j7).count()
+    actions_30j = AuditLog.query.filter(AuditLog.date_action >= j30).count()
+    actions_total = AuditLog.query.count()
+
+    # ── Fonctionnalités les plus utilisées (30 derniers jours) ─────────────
+    top_actions = (db.session.query(AuditLog.action, func.count(AuditLog.id))
+                   .filter(AuditLog.date_action >= j30)
+                   .group_by(AuditLog.action)
+                   .order_by(func.count(AuditLog.id).desc())
+                   .limit(10).all())
+    # Libellés lisibles
+    LIBELLES = {
+        "CREATE": "Créations", "UPDATE": "Modifications", "DELETE": "Suppressions",
+        "VALIDATE": "Validations", "EXPORT": "Exports", "LOGIN": "Connexions",
+        "PAY": "Paiements", "GENERATE_BATCH": "Génération bulletins en lot",
+        "IMPORT_POINTAGE_SAL": "Import pointage salariés", "IMPORT": "Imports",
+        "CANCEL": "Annulations", "REOPEN": "Réouvertures", "SUPPORT_ACCESS": "Accès support",
+        "IMPERSONATE": "Accès support", "REGENERATE": "Régénération token",
+    }
+    top_actions_fmt = [(LIBELLES.get(a, a.title()), n) for a, n in top_actions]
+    max_action = top_actions_fmt[0][1] if top_actions_fmt else 1
+
+    # ── Clients les plus actifs (30 derniers jours) ────────────────────────
+    activite_tenant = (db.session.query(AuditLog.tenant_id, func.count(AuditLog.id))
+                       .filter(AuditLog.date_action >= j30, AuditLog.tenant_id.isnot(None))
+                       .group_by(AuditLog.tenant_id)
+                       .order_by(func.count(AuditLog.id).desc())
+                       .limit(10).all())
+    tid_to_tenant = {t.id: t for t in tenants}
+    top_clients = []
+    for tid, n in activite_tenant:
+        t = tid_to_tenant.get(tid)
+        if t:
+            top_clients.append({"tenant": t, "actions": n})
+
+    # ── Répartition des appareils/navigateurs (user_agent, 30j) ────────────
+    logs_ua = (AuditLog.query
+               .filter(AuditLog.date_action >= j30, AuditLog.user_agent.isnot(None))
+               .with_entities(AuditLog.user_agent).limit(2000).all())
+    appareils = {"Ordinateur": 0, "Mobile": 0, "Application bureau": 0, "Autre": 0}
+    for (ua,) in logs_ua:
+        if not ua:
+            appareils["Autre"] += 1; continue
+        ua_l = ua.lower()
+        if "electron" in ua_l or "paiegabon" in ua_l:
+            appareils["Application bureau"] += 1
+        elif any(k in ua_l for k in ["mobile", "android", "iphone", "ipad"]):
+            appareils["Mobile"] += 1
+        elif any(k in ua_l for k in ["mozilla", "chrome", "safari", "firefox", "edge"]):
+            appareils["Ordinateur"] += 1
+        else:
+            appareils["Autre"] += 1
+    total_ua = sum(appareils.values()) or 1
+
+    # ── Dernières connexions (activité récente réelle) ─────────────────────
+    derniers = sorted(
+        [u for u in users if u.derniere_connexion],
+        key=lambda u: u.derniere_connexion, reverse=True
+    )[:15]
+
+    return render_template("admin/usage.html",
+        nb_tenants=len(tenants), nb_users=len(users),
+        actifs_7j=actifs_7j, actifs_30j=actifs_30j, jamais=jamais,
+        actions_7j=actions_7j, actions_30j=actions_30j, actions_total=actions_total,
+        top_actions=top_actions_fmt, max_action=max_action,
+        top_clients=top_clients,
+        appareils=appareils, total_ua=total_ua,
+        derniers=derniers, tid_to_tenant=tid_to_tenant, now=now)
