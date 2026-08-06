@@ -183,6 +183,31 @@
         <button type="submit" style="width:100%;background:#059669;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">✅ Valider</button>
       </form>
       <a href="/bulletins/saisie?bulletin_id={{ bulletin.id }}" style="display:block;text-align:center;background:#f59e0b;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">✏️ Modifier</a>
+      {% if current_user.is_tenant_admin %}
+      <div style="background:#f6f4ec;border:1px solid #e6e2d6;border-radius:.75rem;padding:.75rem;margin-top:.25rem">
+        <label style="display:block;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.35rem">🔧 Arrondir le net à payer</label>
+        <form method="POST" action="/bulletins/{{ bulletin.id }}/arrondi">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <div style="display:flex;gap:.35rem">
+            <input type="number" name="net_souhaite" step="1" placeholder="Net rond souhaité"
+              value="{{ bulletin.net_a_payer|int }}"
+              style="flex:1;border:1px solid #d1d5db;border-radius:.5rem;padding:.4rem;font-size:.8rem;min-width:0"/>
+            <button type="submit" style="background:#0f3d36;color:white;padding:.4rem .7rem;border-radius:.5rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">OK</button>
+          </div>
+        </form>
+        {% if bulletin.ajustement_arrondi and bulletin.ajustement_arrondi != 0 %}
+        <div style="font-size:.72rem;color:#92700a;margin-top:.4rem">
+          Ajustement actuel : {{ "%+d"|format(bulletin.ajustement_arrondi|int) }} F
+          <form method="POST" action="/bulletins/{{ bulletin.id }}/arrondi" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input type="hidden" name="action" value="reinitialiser"/>
+            <button type="submit" style="background:none;border:none;color:#dc2626;font-size:.72rem;cursor:pointer;text-decoration:underline;padding:0;margin-left:.25rem">retirer</button>
+          </form>
+        </div>
+        {% endif %}
+        <p style="font-size:.68rem;color:#9ca3af;margin:.35rem 0 0;line-height:1.4">Une ligne « Ajustement d'arrondi » apparaîtra sur le bulletin (±1 000 F max).</p>
+      </div>
+      {% endif %}
       <form method="POST" action="/bulletins/{{ bulletin.id }}/supprimer"
         onsubmit="return confirm('Supprimer ce bulletin ?')">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

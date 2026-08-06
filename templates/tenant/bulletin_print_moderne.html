@@ -250,6 +250,9 @@
       {% if bulletin.acompte and bulletin.acompte > 0 %}
       <div style="font-size:8px;opacity:.7;margin-top:3px">Salaire net : {{ bulletin.salaire_net|int|fcfa }} — Acompte : {{ bulletin.acompte|int|fcfa }}</div>
       {% endif %}
+      {% if bulletin.ajustement_arrondi and bulletin.ajustement_arrondi|float != 0 %}
+      <div style="font-size:8px;opacity:.7;margin-top:3px">Dont ajustement d'arrondi : {{ "%+d"|format(bulletin.ajustement_arrondi|int) }} F</div>
+      {% endif %}
     </div>
     <div class="net-amount">{{ bulletin.net_a_payer|int|fcfa }}</div>
   </div>

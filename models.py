@@ -643,6 +643,10 @@ class BulletinPaie(db.Model):
     prime_salisure        = db.Column(db.Numeric(15,2), default=0)
     acompte               = db.Column(db.Numeric(15,2), default=0)
     net_a_payer           = db.Column(db.Numeric(15,2), nullable=False)
+    # Ajustement d'arrondi saisi par l'admin pour obtenir un net rond.
+    # Le net affiché = net calculé + ajustement_arrondi. Une ligne dédiée
+    # apparaît sur le bulletin pour la transparence (valeur probante conservée).
+    ajustement_arrondi    = db.Column(db.Numeric(15,2), default=0)
 
     # Base et Taux saisis manuellement pour chaque rubrique
     base_salaire_base                   = db.Column(db.Numeric(15,2), default=0)

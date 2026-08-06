@@ -406,6 +406,7 @@
       {% if bulletin.indem_representation and bulletin.indem_representation|float > 0 %}<tr><td>+ Indemnité de représentation</td><td class="tr gain">{{ bulletin.indem_representation|fcfa }}</td></tr>{% endif %}
       {% if bulletin.prime_salisure and bulletin.prime_salisure|float > 0 %}<tr><td>+ {{ T.payslip.prime_salisure }}</td><td class="tr gain">{{ bulletin.prime_salisure|fcfa }}</td></tr>{% endif %}
       {% if bulletin.acompte and bulletin.acompte|float > 0 %}<tr><td>— {{ T.payslip.advance }}</td><td class="tr retenue">{{ bulletin.acompte|fcfa }}</td></tr>{% endif %}
+      {% if bulletin.ajustement_arrondi and bulletin.ajustement_arrondi|float != 0 %}<tr><td>{{ "+" if bulletin.ajustement_arrondi|float > 0 else "—" }} Ajustement d'arrondi</td><td class="tr {{ 'gain' if bulletin.ajustement_arrondi|float > 0 else 'retenue' }}">{{ bulletin.ajustement_arrondi|float|abs|fcfa }}</td></tr>{% endif %}
     </tbody>
   </table>
 

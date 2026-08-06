@@ -2064,6 +2064,66 @@ def bulletin_valider(id):
     flash("Bulletin validé avec succès.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
 
+@bp.route("/bulletins/<int:id>/arrondi", methods=["POST"])
+@login_required
+def bulletin_arrondi(id):
+    """Le tenant admin saisit le net à payer arrondi souhaité. Le système
+    calcule l'écart et l'enregistre comme ligne d'ajustement d'arrondi, en
+    gardant le bulletin cohérent. Interdit sur un bulletin validé."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("Seul l'administrateur peut ajuster le net à payer.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+    b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    if b.statut == "VALIDÉ":
+        flash("Impossible d'ajuster un bulletin validé. Il faut d'abord le rouvrir.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+    # Net actuellement calculé, hors ajustement précédent
+    ajust_actuel = float(b.ajustement_arrondi or 0)
+    net_calcule = float(b.net_a_payer or 0) - ajust_actuel
+
+    action = request.form.get("action", "definir")
+    if action == "reinitialiser":
+        b.net_a_payer = round(net_calcule, 2)
+        b.ajustement_arrondi = 0
+        db.session.commit()
+        log_action("UPDATE", "bulletin", b.id, "Ajustement d'arrondi retiré")
+        flash("Ajustement d'arrondi retiré. Net rétabli au montant calculé.", "success")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+    # Net rond souhaité
+    net_souhaite_raw = request.form.get("net_souhaite", "").replace(" ", "").replace(",", ".")
+    try:
+        net_souhaite = round(float(net_souhaite_raw), 2)
+    except (ValueError, TypeError):
+        flash("Montant invalide.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+    ajustement = round(net_souhaite - net_calcule, 2)
+    # Garde-fou : limiter l'ajustement à un vrai arrondi (±1000 F max), pour
+    # éviter qu'on détourne cette fonction pour fausser un net librement.
+    if abs(ajustement) > 1000:
+        flash("L'ajustement d'arrondi est limité à ±1 000 F. "
+              f"Écart demandé : {ajustement:,.0f} F.".replace(",", " "), "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+
+    b.ajustement_arrondi = ajustement
+    b.net_a_payer = round(net_calcule + ajustement, 2)
+    db.session.commit()
+    log_action("UPDATE", "bulletin", b.id,
+               f"Ajustement d'arrondi : {ajustement:+,.0f} F "
+               f"(net {net_souhaite:,.0f} F)".replace(",", " "))
+    flash(f"Net à payer ajusté à {net_souhaite:,.0f} F "
+          f"(arrondi de {ajustement:+,.0f} F).".replace(",", " "), "success")
+    return redirect(url_for("tenant.bulletin_detail", id=id))
+
+
 @bp.route("/bulletins/<int:id>/payer", methods=["POST"])
 @login_required
 def bulletin_paye(id):
