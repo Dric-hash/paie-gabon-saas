@@ -233,7 +233,23 @@ def plan_required(*codes):
 def get_tenant():
     if current_user.is_super_admin:
         return None
-    return current_user.tenant
+    # Mode cabinet : si le cabinet est "entré" dans une entreprise de son
+    # portefeuille, on renvoie cette entreprise (contexte de travail courant).
+    # Sécurité : on revérifie systématiquement que l'entreprise appartient
+    # bien au cabinet connecté ; sinon on ignore le contexte.
+    t = current_user.tenant
+    if t and t.est_cabinet:
+        from flask import session
+        ent_id = session.get("cabinet_entreprise_id")
+        if ent_id:
+            from models import Tenant
+            ent = Tenant.query.get(ent_id)
+            if ent and ent.cabinet_id == t.id:
+                return ent
+            # Contexte invalide (entreprise inexistante ou pas au cabinet) :
+            # on le purge par prudence.
+            session.pop("cabinet_entreprise_id", None)
+    return t
 
 
 def parse_date(val):

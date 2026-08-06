@@ -154,8 +154,35 @@ def cabinet_dashboard():
 @bp.route("/cabinet/entrer/<int:entreprise_id>")
 @login_required
 def cabinet_entrer(entreprise_id):
-    """[Étape 3 — à venir] Bascule : le cabinet 'entre' dans une entreprise."""
-    flash("La bascule entre entreprises arrive très bientôt (étape suivante).", "info")
+    """Le cabinet 'entre' dans une de ses entreprises pour y travailler.
+    Sécurité : on vérifie que l'entreprise appartient bien à ce cabinet."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = current_user.tenant
+    if not t or not t.est_cabinet:
+        flash("Réservé aux comptes cabinet.", "error")
+        return redirect(url_for("tenant.dashboard"))
+
+    entreprise = Tenant.query.get_or_404(entreprise_id)
+    # GARDE-FOU : l'entreprise doit appartenir à CE cabinet.
+    if entreprise.cabinet_id != t.id:
+        flash("Cette entreprise ne fait pas partie de votre portefeuille.", "error")
+        return redirect(url_for("tenant.cabinet_dashboard"))
+
+    session["cabinet_entreprise_id"] = entreprise.id
+    log_action("SUPPORT_ACCESS", "tenant", entreprise.id,
+               f"Cabinet {t.denomination} accède à l'entreprise {entreprise.denomination}",
+               user_id=current_user.id, tenant_id=entreprise.id)
+    db.session.commit()
+    flash(f"Vous gérez maintenant : {entreprise.denomination}", "success")
+    return redirect(url_for("tenant.dashboard"))
+
+
+@bp.route("/cabinet/sortir")
+@login_required
+def cabinet_sortir():
+    """Le cabinet quitte l'entreprise courante et revient à son portefeuille."""
+    session.pop("cabinet_entreprise_id", None)
     return redirect(url_for("tenant.cabinet_dashboard"))
 
 

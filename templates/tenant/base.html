@@ -394,6 +394,15 @@
     </header>
 
     <div class="p-8">
+    {% if current_user.tenant and current_user.tenant.est_cabinet and session.get('cabinet_entreprise_id') and tenant %}
+    <div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:.9rem;padding:.85rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:.75rem;color:white">
+        <span style="background:#e9c46a;color:#0f3d36;font-size:.65rem;font-weight:800;padding:.2rem .6rem;border-radius:9999px;white-space:nowrap">MODE CABINET</span>
+        <span style="font-size:.9rem">Vous gérez : <strong>{{ tenant.denomination }}</strong></span>
+      </div>
+      <a href="/cabinet/sortir" style="background:rgba(255,255,255,.15);color:white;padding:.5rem 1rem;border-radius:.6rem;font-size:.8rem;font-weight:700;text-decoration:none;white-space:nowrap">← Revenir à mes entreprises</a>
+    </div>
+    {% endif %}
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
       <div class="mb-6 space-y-2">
