@@ -619,5 +619,37 @@ if (window.MutationObserver) {
     // Sauvegarder la langue dans localStorage pour persistance côté client
     localStorage.setItem('pg_lang', '{{ lang }}');
   </script>
+<!-- Overlay de chargement (évite les doubles-clics sur les actions longues) -->
+<div id="loading-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(15,61,54,.55);backdrop-filter:blur(2px);align-items:center;justify-content:center">
+  <div style="background:white;border-radius:1rem;padding:1.5rem 2rem;display:flex;align-items:center;gap:1rem;box-shadow:0 20px 60px -15px rgba(0,0,0,.4)">
+    <div style="width:26px;height:26px;border:3px solid #e5e7eb;border-top-color:#0f3d36;border-radius:50%;animation:spin .7s linear infinite"></div>
+    <span style="font-weight:600;color:#0f3d36;font-size:.92rem">Traitement en cours…</span>
+  </div>
+</div>
+<style>@keyframes spin { to { transform:rotate(360deg); } }</style>
+<script>
+(function() {
+  // Affiche l'overlay quand un formulaire est soumis (sauf ceux marqués data-no-loader),
+  // et se protège contre le double-clic. Masqué au retour arrière (pageshow bfcache).
+  document.addEventListener('submit', function(e) {
+    var f = e.target;
+    if (!f || f.tagName !== 'FORM') return;
+    if (f.hasAttribute('data-no-loader')) return;
+    // Ne pas afficher pour les formulaires de recherche/filtre (méthode GET)
+    var methode = (f.getAttribute('method') || 'get').toLowerCase();
+    if (methode !== 'post') return;
+    // petit délai pour ne pas flasher sur les soumissions instantanées
+    setTimeout(function() {
+      var ov = document.getElementById('loading-overlay');
+      if (ov) ov.style.display = 'flex';
+    }, 150);
+  }, true);
+  // Si l'utilisateur revient en arrière, masquer l'overlay (page restaurée du cache)
+  window.addEventListener('pageshow', function() {
+    var ov = document.getElementById('loading-overlay');
+    if (ov) ov.style.display = 'none';
+  });
+})();
+</script>
 </body>
 </html>
