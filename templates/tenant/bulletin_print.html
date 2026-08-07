@@ -59,7 +59,7 @@
 
 <div class="no-print">
   <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer / Enregistrer PDF</button>
-  <button class="btn btn-back" onclick="history.back()">← Retour</button>
+  <a class="btn btn-back" href="/bulletins/{{ bulletin.id }}" style="text-decoration:none;display:inline-flex;align-items:center">← Retour</a>
   <span style="color:white;font-size:12px;margin-left:8px">{{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet }}</span>
 </div>
 
