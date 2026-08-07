@@ -1,0 +1,44 @@
+{% extends "tenant/base.html" %}
+{% block title %}Support — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="max-width:720px;margin:0 auto">
+  <div style="margin-bottom:1.25rem">
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">💬 Support Ameriack</h1>
+    <p style="color:#6b7280;font-size:.88rem;margin-top:.25rem">Échangez directement avec l'équipe Ameriack I.T. pour toute question.</p>
+  </div>
+
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;min-height:340px;max-height:520px;overflow-y:auto;margin-bottom:1rem" id="fil">
+    {% if messages %}
+      {% for m in messages %}
+      <div style="display:flex;margin-bottom:.85rem;justify-content:{{ 'flex-end' if m.expediteur == 'TENANT' else 'flex-start' }}">
+        <div style="max-width:72%">
+          <div style="padding:.7rem 1rem;border-radius:1rem;font-size:.88rem;line-height:1.45;word-wrap:break-word;
+            {% if m.expediteur == 'TENANT' %}background:#0f3d36;color:white;border-bottom-right-radius:.25rem{% else %}background:#f3f4f6;color:#111827;border-bottom-left-radius:.25rem{% endif %}">{{ m.corps }}</div>
+          <div style="font-size:.65rem;color:#9ca3af;margin-top:.25rem;text-align:{{ 'right' if m.expediteur == 'TENANT' else 'left' }}">
+            {% if m.expediteur == 'SUPERADMIN' %}Support Ameriack · {% endif %}{{ m.date_creation.strftime('%d/%m/%Y %H:%M') }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center;padding:3rem 1rem;color:#9ca3af">
+        <div style="font-size:2.5rem;margin-bottom:.5rem">💬</div>
+        <p style="font-size:.9rem">Aucun message pour l'instant.<br>Écrivez-nous, nous vous répondrons rapidement.</p>
+      </div>
+    {% endif %}
+  </div>
+
+  <form method="POST" action="/messages" style="display:flex;gap:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="text" name="corps" placeholder="Écrire un message…" autocomplete="off" autofocus
+      style="flex:1;border:1px solid #d1d5db;border-radius:.75rem;padding:.75rem 1rem;font-size:.9rem"/>
+    <button type="submit" style="background:#0f3d36;color:white;padding:.75rem 1.5rem;border-radius:.75rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer">Envoyer</button>
+  </form>
+</div>
+
+<script>
+  var fil = document.getElementById('fil');
+  if (fil) fil.scrollTop = fil.scrollHeight;
+</script>
+{% endblock %}

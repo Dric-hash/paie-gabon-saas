@@ -1573,3 +1573,23 @@ class AvancePrestataire(db.Model):
         d["statut_label"] = self.statut_label
         d["montant_en_xaf"] = self.montant_en_xaf
         return d
+
+
+class MessageSupport(db.Model):
+    """Messagerie superadmin ↔ tenant (support intégré).
+    Une conversation = un tenant. Chaque message a un expéditeur
+    ('SUPERADMIN' ou 'TENANT'). Le champ 'lu' indique si le destinataire
+    a lu le message : un message envoyé par TENANT est non lu tant que le
+    superadmin ne l'a pas ouvert, et inversement."""
+    __tablename__ = "messages_support"
+
+    id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    expediteur   = db.Column(db.String(20), nullable=False)   # 'SUPERADMIN' | 'TENANT'
+    user_id      = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"), nullable=True)
+    corps        = db.Column(db.Text, nullable=False)
+    lu           = db.Column(db.Boolean, default=False, nullable=False)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+
+    tenant = db.relationship("Tenant", backref=db.backref("messages_support", lazy=True))
+    auteur = db.relationship("Utilisateur", foreign_keys=[user_id])

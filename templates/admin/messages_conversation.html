@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{{ tenant.denomination }} — Messages</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
+    .bulle { max-width:70%;padding:.7rem 1rem;border-radius:1rem;font-size:.88rem;line-height:1.45;word-wrap:break-word; }
+    .bulle.sa { background:linear-gradient(135deg,#7c3aed,#6d28d9);color:white;border-bottom-right-radius:.25rem; }
+    .bulle.te { background:#1e293b;color:#e2e8f0;border-bottom-left-radius:.25rem; }
+    .row { display:flex;margin-bottom:.85rem; }
+    .row.sa { justify-content:flex-end; }
+    .row.te { justify-content:flex-start; }
+    .meta { font-size:.62rem;opacity:.6;margin-top:.25rem; }
+  </style>
+</head>
+<body>
+
+<nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:0 1.5rem;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:50">
+  <a href="/admin/messages" style="color:#94a3b8;text-decoration:none;font-size:.85rem;margin-right:1rem">← Messages</a>
+  <div style="display:flex;align-items:center;gap:.6rem">
+    <div style="width:30px;height:30px;border-radius:.5rem;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:900;color:#a78bfa;font-size:.75rem">{{ tenant.denomination[:2]|upper }}</div>
+    <span style="font-weight:800;color:white;font-size:.9rem">{{ tenant.denomination }}</span>
+    {% if tenant.est_cabinet %}<span style="background:#0f3d36;color:#e9c46a;font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:9999px">CABINET</span>{% endif %}
+  </div>
+  <a href="/admin/tenants/{{ tenant.id }}" style="margin-left:auto;color:#94a3b8;text-decoration:none;font-size:.78rem">Voir la fiche →</a>
+</nav>
+
+<main style="max-width:720px;margin:0 auto;padding:1.5rem 1.5rem 7rem">
+  {% if messages %}
+    {% for m in messages %}
+    <div class="row {{ 'sa' if m.expediteur == 'SUPERADMIN' else 'te' }}">
+      <div>
+        <div class="bulle {{ 'sa' if m.expediteur == 'SUPERADMIN' else 'te' }}">{{ m.corps }}</div>
+        <div class="meta" style="text-align:{{ 'right' if m.expediteur == 'SUPERADMIN' else 'left' }}">
+          {% if m.expediteur == 'TENANT' and m.auteur %}{{ m.auteur.prenom }} · {% endif %}{{ m.date_creation.strftime('%d/%m/%Y %H:%M') }}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div style="text-align:center;padding:3rem 1rem;color:#64748b">
+      <div style="font-size:2.5rem;margin-bottom:.5rem">💬</div>
+      <p style="font-size:.9rem">Aucun message pour l'instant. Écrivez le premier ci-dessous.</p>
+    </div>
+  {% endif %}
+</main>
+
+<div style="position:fixed;bottom:0;left:0;right:0;background:#0f172a;border-top:1px solid #1e293b;padding:1rem 1.5rem">
+  <form method="POST" action="/admin/messages/{{ tenant.id }}" style="max-width:720px;margin:0 auto;display:flex;gap:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="text" name="corps" placeholder="Écrire un message…" autocomplete="off" autofocus
+      style="flex:1;background:#1e293b;border:1px solid #334155;border-radius:.75rem;padding:.7rem 1rem;color:white;font-size:.9rem"/>
+    <button type="submit" style="background:#7c3aed;color:white;padding:.7rem 1.5rem;border-radius:.75rem;font-weight:700;font-size:.9rem;border:none;cursor:pointer">Envoyer</button>
+  </form>
+</div>
+
+<script>
+  // Faire défiler jusqu'au dernier message
+  window.scrollTo(0, document.body.scrollHeight);
+</script>
+</body>
+</html>

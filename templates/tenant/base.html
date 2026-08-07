@@ -261,6 +261,12 @@
       </a>
       {% endif %}
       {% if current_user.has_permission('view_bulletins') or current_user.is_tenant_admin %}
+      {% if current_user.is_tenant_admin %}
+      <a href="/messages" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='messages_support' else 'text-white/80 hover:bg-white/10' }}">
+        💬 <span>Support</span>
+        {% if messages_non_lus and messages_non_lus > 0 %}<span style="margin-left:auto;background:#dc2626;color:white;font-size:.65rem;font-weight:800;padding:.1rem .45rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}
+      </a>
+      {% endif %}
       <a href="/offres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='offres' else 'text-white/80 hover:bg-white/10' }}">
         🏷️ <span>{{ "Nos offres" if lang == "fr" else "Plans" }}</span>
       </a>

@@ -20,7 +20,7 @@ from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Sala
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement, OAuthClient, AuditLog,
                     Prestataire, FacturePrestataire, ComposantPaie, BulletinComposant,
-                    AvanceJournalier)
+                    AvanceJournalier, MessageSupport)
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
@@ -2614,6 +2614,41 @@ def periode_rouvrir(id):
     return redirect(url_for("tenant.periode_detail", id=p.id))
 
 # ── Paiement abonnement ───────────────────────────────────────────────────────
+@bp.route("/messages", methods=["GET", "POST"])
+@login_required
+def messages_support():
+    """Messagerie du tenant avec le support (superadmin). Réservée à l'admin
+    du tenant. GET affiche et marque comme lus les messages du superadmin.
+    POST envoie un message du tenant."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_messages"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.is_tenant_admin:
+        flash("La messagerie support est réservée à l'administrateur.", "error")
+        return redirect(url_for("tenant.dashboard"))
+
+    if request.method == "POST":
+        corps = (request.form.get("corps") or "").strip()
+        if corps:
+            m = MessageSupport(tenant_id=t.id, expediteur="TENANT",
+                               user_id=current_user.id, corps=corps, lu=False)
+            db.session.add(m)
+            db.session.commit()
+        return redirect(url_for("tenant.messages_support"))
+
+    # Marquer comme lus les messages du superadmin
+    MessageSupport.query.filter_by(
+        tenant_id=t.id, expediteur="SUPERADMIN", lu=False
+    ).update({"lu": True})
+    db.session.commit()
+
+    messages = (MessageSupport.query.filter_by(tenant_id=t.id)
+                .order_by(MessageSupport.date_creation.asc()).all())
+    return render_template("tenant/messages_support.html", tenant=t, messages=messages)
+
+
 @bp.route("/offres")
 @login_required
 def offres():

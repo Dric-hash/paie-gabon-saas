@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Messages — Super Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family:'Segoe UI',system-ui,sans-serif; background:#0f172a; color:#e2e8f0; margin:0; }
+    .nav-link { color:rgba(255,255,255,.6);text-decoration:none;font-size:.825rem;padding:.5rem .75rem;border-radius:.5rem; }
+    .nav-link.active, .nav-link:hover { color:white;background:#1e293b; }
+    .conv { display:flex;align-items:center;gap:1rem;padding:1rem 1.25rem;border:1px solid #1e293b;border-radius:1rem;background:#0f172a;text-decoration:none;transition:.15s;margin-bottom:.65rem; }
+    .conv:hover { border-color:#7c3aed;background:#131c31; }
+  </style>
+</head>
+<body>
+
+<nav style="background:#0f172a;border-bottom:1px solid #1e293b;padding:0 1.5rem;height:52px;display:flex;align-items:center;position:sticky;top:0;z-index:50">
+  <div style="display:flex;align-items:center;gap:.75rem;margin-right:2rem">
+    <div style="width:28px;height:28px;background:linear-gradient(135deg,#7c3aed,#4c1d95);border-radius:.5rem;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:900;color:white">A</div>
+    <span style="font-size:.875rem;font-weight:900;color:white">Ameriack I.T.</span>
+    <span style="background:#4c1d95;color:#c4b5fd;font-size:.65rem;font-weight:700;padding:.15rem .5rem;border-radius:9999px">SUPER-ADMIN</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:.25rem">
+    <a href="/admin"           class="nav-link">🏠 Dashboard</a>
+    <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
+    <a href="/admin/messages"  class="nav-link active">💬 Messages</a>
+    <a href="/admin/usage"     class="nav-link">📊 Usage</a>
+    <a href="/admin/paiements" class="nav-link">💳 Paiements</a>
+  </div>
+  <div style="margin-left:auto"><a href="/logout" style="background:#7c3aed;color:white;padding:.35rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">Déconnexion</a></div>
+</nav>
+
+<main style="max-width:820px;margin:0 auto;padding:1.5rem">
+  <div style="margin-bottom:1.5rem">
+    <h1 style="font-size:1.5rem;font-weight:900;color:white;margin:0">💬 Messages</h1>
+    <p style="font-size:.8rem;color:#94a3b8;margin-top:.25rem">
+      Échangez avec vos clients{% if total_non_lus %} · <span style="color:#f87171;font-weight:700">{{ total_non_lus }} non lu(s)</span>{% endif %}
+    </p>
+  </div>
+
+  {% for c in conversations %}
+  <a href="/admin/messages/{{ c.tenant.id }}" class="conv">
+    <div style="width:44px;height:44px;border-radius:.65rem;background:#1e293b;display:flex;align-items:center;justify-content:center;font-weight:900;color:#a78bfa;flex-shrink:0">
+      {{ c.tenant.denomination[:2]|upper }}
+    </div>
+    <div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:.5rem">
+        <span style="font-weight:700;color:white;font-size:.9rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.tenant.denomination }}</span>
+        {% if c.tenant.est_cabinet %}<span style="background:#0f3d36;color:#e9c46a;font-size:.6rem;font-weight:700;padding:.1rem .4rem;border-radius:9999px">CABINET</span>{% endif %}
+      </div>
+      <div style="font-size:.78rem;color:#64748b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:.15rem">
+        {% if c.dernier %}{% if c.dernier.expediteur == 'SUPERADMIN' %}<span style="color:#94a3b8">Vous : </span>{% endif %}{{ c.dernier.corps }}{% else %}<span style="font-style:italic">Aucun message — cliquez pour démarrer</span>{% endif %}
+      </div>
+    </div>
+    <div style="text-align:right;flex-shrink:0">
+      {% if c.date %}<div style="font-size:.68rem;color:#64748b">{{ c.date.strftime('%d/%m %H:%M') }}</div>{% endif %}
+      {% if c.non_lus %}<div style="display:inline-block;background:#dc2626;color:white;font-size:.65rem;font-weight:800;padding:.15rem .45rem;border-radius:9999px;margin-top:.25rem">{{ c.non_lus }}</div>{% endif %}
+    </div>
+  </a>
+  {% endfor %}
+</main>
+</body>
+</html>

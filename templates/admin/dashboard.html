@@ -32,6 +32,7 @@
   <div style="display:flex;align-items:center;gap:.25rem">
     <a href="/admin"           class="nav-link active">🏠 Dashboard</a>
     <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
+    <a href="/admin/messages"  class="nav-link">💬 Messages{% if messages_non_lus and messages_non_lus > 0 %} <span style="background:#dc2626;color:white;font-size:.6rem;font-weight:800;padding:.05rem .35rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}</a>
     <a href="/admin/usage"     class="nav-link">📊 Usage</a>
     <a href="/admin/paiements" class="nav-link">💳 Paiements</a>
     <a href="/admin/plans"     class="nav-link">📋 Plans</a>

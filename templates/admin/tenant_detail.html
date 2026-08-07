@@ -86,6 +86,10 @@
        class="bg-amber-500 hover:bg-amber-600 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
       👁️ Accéder à l'espace
     </a>
+    <a href="/admin/messages/{{ tenant.id }}"
+       class="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm flex items-center gap-2">
+      💬 Message
+    </a>
     <form method="POST" action="{{ url_for('admin.admin_annonce_bureau', id=tenant.id) }}" style="display:inline"
           onsubmit="return confirm('Envoyer l\'annonce « application de bureau » à ce client ?');">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

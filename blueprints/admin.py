@@ -14,7 +14,7 @@ from sqlalchemy import func
 from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie,
                     Contrat, PeriodePaie, BulletinPaie, RubriquePaie, Conge,
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
-                    Site, AffectationSite, Paiement)
+                    Site, AffectationSite, Paiement, MessageSupport)
 from calculs_paie import calculer_bulletin, calculer_masse_salariale
 from audit import log_action
 from core import super_admin_required, get_tenant, cache_delete, _cache_delete
@@ -983,3 +983,67 @@ def admin_usage():
         top_clients=top_clients,
         appareils=appareils, total_ua=total_ua,
         derniers=derniers, tid_to_tenant=tid_to_tenant, now=now)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+#  MESSAGERIE SUPPORT — superadmin ↔ tenants
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/admin/messages")
+@super_admin_required
+def admin_messages():
+    """Liste des conversations (un fil par tenant), avec dernier message et
+    compteur de non-lus. Les tenants ayant déjà échangé apparaissent d'abord."""
+    from sqlalchemy import func
+
+    # Dernier message et non-lus par tenant
+    tenants = Tenant.query.filter_by(est_cabinet=False).order_by(Tenant.denomination).all()
+    # (on inclut aussi les cabinets)
+    cabinets = Tenant.query.filter_by(est_cabinet=True).all()
+    tous = {t.id: t for t in tenants}
+    for c in cabinets:
+        tous[c.id] = c
+
+    conversations = []
+    for tid, t in tous.items():
+        dernier = (MessageSupport.query.filter_by(tenant_id=tid)
+                   .order_by(MessageSupport.date_creation.desc()).first())
+        non_lus = MessageSupport.query.filter_by(
+            tenant_id=tid, expediteur="TENANT", lu=False).count()
+        conversations.append({
+            "tenant": t, "dernier": dernier, "non_lus": non_lus,
+            "date": dernier.date_creation if dernier else None,
+        })
+    # Tri : conversations avec messages d'abord (plus récentes en tête), puis le reste
+    conversations.sort(key=lambda c: (c["date"] is None, -(c["date"].timestamp() if c["date"] else 0)))
+
+    total_non_lus = sum(c["non_lus"] for c in conversations)
+    return render_template("admin/messages.html",
+        conversations=conversations, total_non_lus=total_non_lus)
+
+
+@bp.route("/admin/messages/<int:tenant_id>", methods=["GET", "POST"])
+@super_admin_required
+def admin_messages_conversation(tenant_id):
+    """Fil de discussion avec un tenant. GET affiche + marque comme lus les
+    messages du tenant. POST envoie un message du superadmin."""
+    t = Tenant.query.get_or_404(tenant_id)
+
+    if request.method == "POST":
+        corps = (request.form.get("corps") or "").strip()
+        if corps:
+            m = MessageSupport(tenant_id=t.id, expediteur="SUPERADMIN",
+                               user_id=current_user.id, corps=corps, lu=False)
+            db.session.add(m)
+            db.session.commit()
+        return redirect(url_for("admin.admin_messages_conversation", tenant_id=t.id))
+
+    # Marquer comme lus les messages envoyés par le tenant
+    MessageSupport.query.filter_by(
+        tenant_id=t.id, expediteur="TENANT", lu=False
+    ).update({"lu": True})
+    db.session.commit()
+
+    messages = (MessageSupport.query.filter_by(tenant_id=t.id)
+                .order_by(MessageSupport.date_creation.asc()).all())
+    return render_template("admin/messages_conversation.html",
+        tenant=t, messages=messages)

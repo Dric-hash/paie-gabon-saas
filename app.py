@@ -272,6 +272,27 @@ def inject_translations():
     T    = get_translations(lang)
     return {"T": T, "lang": lang, "rtl": is_rtl(lang)}
 
+
+@app.context_processor
+def inject_messages_non_lus():
+    """Nombre de messages support non lus, pour le badge de navigation.
+    Pour un superadmin : total des messages tenants non lus.
+    Pour un tenant admin : messages du superadmin non lus pour son tenant."""
+    try:
+        if not current_user.is_authenticated:
+            return {"messages_non_lus": 0}
+        from models import MessageSupport
+        if current_user.is_super_admin:
+            n = MessageSupport.query.filter_by(expediteur="TENANT", lu=False).count()
+        elif current_user.is_tenant_admin and current_user.tenant_id:
+            n = MessageSupport.query.filter_by(
+                tenant_id=current_user.tenant_id, expediteur="SUPERADMIN", lu=False).count()
+        else:
+            n = 0
+        return {"messages_non_lus": n}
+    except Exception:
+        return {"messages_non_lus": 0}
+
 # ── Template filters ──────────────────────────────────────────────────────────
 @app.template_filter("fcfa")
 def fcfa_filter(v):
