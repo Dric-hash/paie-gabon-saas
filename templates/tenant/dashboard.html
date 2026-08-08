@@ -31,6 +31,46 @@
   </div>
 </div>
 
+{% if not accueil_termine %}
+<!-- ── Parcours d'accueil (nouveaux clients) ── -->
+<div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:1.25rem;padding:1.5rem;margin-bottom:1.5rem;color:white">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+    <div>
+      <div style="display:inline-block;background:#e9c46a;color:#0f3d36;font-size:.65rem;font-weight:800;padding:.2rem .7rem;border-radius:9999px;margin-bottom:.5rem">PREMIERS PAS</div>
+      <h2 style="font-size:1.25rem;font-weight:900;margin:0">Bienvenue sur PaieGabon 👋</h2>
+      <p style="font-size:.88rem;opacity:.85;margin-top:.25rem">Quelques étapes pour préparer votre première paie. On vous guide.</p>
+    </div>
+    <div style="text-align:center">
+      <div style="font-size:1.75rem;font-weight:900;color:#e9c46a">{{ nb_faites }}/{{ etapes_accueil|length }}</div>
+      <div style="font-size:.7rem;opacity:.7">étapes faites</div>
+    </div>
+  </div>
+
+  <!-- Barre de progression -->
+  <div style="background:rgba(255,255,255,.15);border-radius:9999px;height:8px;overflow:hidden;margin-bottom:1.25rem">
+    <div style="background:#e9c46a;height:100%;border-radius:9999px;width:{{ (nb_faites / etapes_accueil|length * 100)|round|int }}%;transition:width .3s"></div>
+  </div>
+
+  <!-- Étapes -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.75rem">
+    {% for etape in etapes_accueil %}
+    <div style="background:rgba(255,255,255,{{ '.06' if etape.faite else '.12' }});border:1px solid rgba(255,255,255,{{ '.1' if etape.faite else '.2' }});border-radius:.85rem;padding:1rem;display:flex;flex-direction:column">
+      <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+        <span style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;{% if etape.faite %}background:#e9c46a;color:#0f3d36{% else %}background:rgba(255,255,255,.2);color:white{% endif %}">{{ '✓' if etape.faite else loop.index }}</span>
+        <span style="font-size:.85rem;font-weight:700;{{ 'opacity:.6;text-decoration:line-through' if etape.faite else '' }}">{{ etape.titre }}</span>
+      </div>
+      <p style="font-size:.72rem;opacity:.7;margin:0 0 .75rem;line-height:1.4;flex:1">{{ etape.desc }}</p>
+      {% if not etape.faite %}
+      <a href="{{ etape.lien }}" style="display:block;text-align:center;background:#e9c46a;color:#0f3d36;padding:.5rem;border-radius:.6rem;font-weight:700;font-size:.78rem;text-decoration:none">{{ etape.cta }} →</a>
+      {% else %}
+      <div style="text-align:center;font-size:.72rem;opacity:.6;padding:.5rem">Terminé</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <!-- ── Barre de recherche rapide (avec suggestions) ── -->
 <div class="mb-6" style="position:relative;max-width:560px">
   <span style="position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:1.05rem">⌕</span>

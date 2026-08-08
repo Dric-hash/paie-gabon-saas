@@ -524,6 +524,34 @@ def dashboard():
     nb_alertes_critiques = sum(1 for a in alertes if a["type"] == "danger")
     nb_alertes_warning   = sum(1 for a in alertes if a["type"] == "warning")
 
+    # ── Parcours d'accueil (nouveaux clients) ────────────────────────────────
+    # On calcule où en est le client dans sa mise en route. L'encadré d'accueil
+    # s'affiche tant que toutes les étapes ne sont pas franchies.
+    a_convention = bool(t.convention and t.convention != "AUCUNE")
+    a_cnss = bool(t.numero_cnss)
+    nb_salaries_total = Salarie.query.filter_by(tenant_id=t.id).count()
+    a_salarie = nb_salaries_total > 0
+    a_periode = PeriodePaie.query.filter_by(tenant_id=t.id).count() > 0
+    a_bulletin = BulletinPaie.query.filter_by(tenant_id=t.id).count() > 0
+    etapes_accueil = [
+        {"cle": "entreprise", "titre": "Configurer votre entreprise",
+         "desc": "Convention collective, CNSS, informations légales",
+         "faite": (a_convention and a_cnss), "lien": "/parametres", "cta": "Configurer"},
+        {"cle": "salarie", "titre": "Ajouter votre premier salarié",
+         "desc": "Créez la fiche d'un de vos employés",
+         "faite": a_salarie, "lien": "/salaries/nouveau", "cta": "Ajouter un salarié"},
+        {"cle": "periode", "titre": "Ouvrir une période de paie",
+         "desc": "Le mois pour lequel vous préparez les bulletins",
+         "faite": a_periode, "lien": "/periodes", "cta": "Ouvrir une période"},
+        {"cle": "bulletin", "titre": "Créer votre premier bulletin",
+         "desc": "Générez le bulletin de paie d'un salarié",
+         "faite": a_bulletin, "lien": "/bulletins/saisie", "cta": "Créer un bulletin"},
+    ]
+    nb_faites = sum(1 for e in etapes_accueil if e["faite"])
+    accueil_termine = nb_faites == len(etapes_accueil)
+    # Prochaine étape non faite (pour le bouton principal)
+    prochaine_etape = next((e for e in etapes_accueil if not e["faite"]), None)
+
     return render_template("tenant/dashboard.html", tenant=t,
         nb_actifs=nb_actifs, nb_inactifs=nb_inactifs, nb_total=nb_total,
         nb_journaliers=nb_journaliers, nb_total_employes=nb_total_employes,
@@ -532,7 +560,9 @@ def dashboard():
         evolution=evolution, top_salaries=top_salaries,
         cats_stats=cats_stats, derniers=derniers, alertes=alertes,
         nb_alertes_critiques=nb_alertes_critiques,
-        nb_alertes_warning=nb_alertes_warning, now=now)
+        nb_alertes_warning=nb_alertes_warning, now=now,
+        etapes_accueil=etapes_accueil, nb_faites=nb_faites,
+        accueil_termine=accueil_termine, prochaine_etape=prochaine_etape)
 
 # ── Salariés ──────────────────────────────────────────────────────────────────
 @bp.route("/salaries")
