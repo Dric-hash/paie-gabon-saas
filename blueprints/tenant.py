@@ -1110,7 +1110,7 @@ def salarie_nouveau():
             nb_enfants_moins_16ans=int(request.form.get("nb_enfants_moins_16ans") or 0),
             nombre_parts=float(request.form.get("nombre_parts") or 1),
             numero_cnss=request.form.get("numero_cnss"), numero_cnamgs=request.form.get("numero_cnamgs"),
-            emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", statut="ACTIF")
+            emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", travail_de_nuit=request.form.get("travail_de_nuit")=="OUI", statut="ACTIF")
         db.session.add(s)
         sb=float(request.form.get("salaire_base") or 0)
         if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
@@ -1409,6 +1409,7 @@ def contrat_nouveau(sal_id):
         )
         # Mettre à jour le salarié
         s.emploi = poste
+        s.travail_de_nuit = request.form.get("travail_de_nuit") == "OUI"
         if cat_id:
             s.categorie_id = cat_id
 
@@ -1717,6 +1718,8 @@ def bulletins_generer_lot():
             continue
 
         donnees = {"salaire_base": float(contrat.salaire_base)}
+        if getattr(s, "travail_de_nuit", False):
+            donnees["travail_de_nuit"] = True
         if s.date_embauche:
             donnees["anciennete_annees"] = max(
                 0, (fin_periode - s.date_embauche).days // 365)
@@ -1945,6 +1948,8 @@ def bulletin_saisie():
                                 _cal2.monthrange(periode.annee, periode.mois)[1])
             _anc = max(0, (_fin_periode - s.date_embauche).days // 365)
             donnees["anciennete_annees"] = _anc
+            if getattr(s, "travail_de_nuit", False) and not donnees.get("travail_de_nuit"):
+                donnees["travail_de_nuit"] = True
             if _anc >= 2 and not donnees.get("prime_anciennete"):
                 from calculs_paie import prime_anciennete as _calc_pa
                 _pa = _calc_pa(t.convention, float(donnees.get("salaire_base") or 0), _anc)
@@ -3323,6 +3328,10 @@ def grille_salaires():
             grille = {}
     if not grille and (t.convention or "").upper() == "AERIEN":
         grille = grille_salaire_aerien_seed()
+        est_seed = True
+    if not grille and (t.convention or "").upper() == "HOTELLERIE":
+        from convention_hotellerie import grille_salaire_hotellerie_seed
+        grille = grille_salaire_hotellerie_seed()
         est_seed = True
     return render_template("tenant/grille_salaires.html", tenant=t,
         categories=GRILLE_CATEGORIES_AERIEN, grille=grille,
@@ -9219,6 +9228,17 @@ def api_recherche_rapide():
         resultats.append({"icone": "🛠️", "titre": pr.raison_sociale,
             "sous_titre": pr.categorie_label or "Prestataire", "lien": f"/prestataires/{pr.id}",
             "categorie": "Prestataires"})
+
+    # Bulletins — recherchés par le salarié concerné (nom, prénom, matricule)
+    for b in (BulletinPaie.query.filter_by(tenant_id=t.id)
+              .join(Salarie, BulletinPaie.salarie_id == Salarie.id)
+              .filter(db.or_(Salarie.nom.ilike(like), Salarie.prenom.ilike(like),
+                             Salarie.matricule.ilike(like)))
+              .order_by(BulletinPaie.date_creation.desc())
+              .limit(5).all()):
+        resultats.append({"icone": "📄", "titre": b.salarie.nom_complet,
+            "sous_titre": f"Bulletin · {b.periode.libelle_complet}",
+            "lien": f"/bulletins/{b.id}", "categorie": "Bulletins"})
 
     return jsonify(resultats[:15])
 

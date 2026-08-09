@@ -222,6 +222,14 @@
         <td class="tr gain">{{ bulletin.prime_anciennete|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+      {% if bulletin.prime_nuit and bulletin.prime_nuit|float > 0 %}
+      <tr>
+        <td>Prime de nuit</td>
+        <td></td>
+        <td></td>
+        <td class="tr gain">{{ bulletin.prime_nuit|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
       {% if bulletin.indem_logement and bulletin.indem_logement|float > 0 %}
       <tr>
         <td>Indemnité de logement</td>

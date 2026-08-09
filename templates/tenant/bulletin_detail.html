@@ -53,6 +53,7 @@
     {{ ligne("Prime de caisse", bulletin.prime_caisse) }}
     {{ ligne("Carburant", bulletin.carburant) }}
     {{ ligne("Prime d'ancienneté", bulletin.prime_anciennete) }}
+    {% if bulletin.prime_nuit and bulletin.prime_nuit|float > 0 %}{{ ligne("Prime de nuit", bulletin.prime_nuit) }}{% endif %}
     {{ ligne("Indemnité logement", bulletin.indem_logement) }}
     {{ ligne("Indemnité domesticité", bulletin.indem_domesticite) }}
     {{ ligne("Indemnité eau & élec.", bulletin.indem_eau_electricite) }}

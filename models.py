@@ -508,6 +508,9 @@ class Salarie(db.Model):
     numero_cnss            = db.Column(db.String(30))
     numero_cnamgs          = db.Column(db.String(30))
     emploi                 = db.Column(db.String(200))
+    # Poste de nuit (21h-6h) : ouvre droit à la prime de nuit conventionnelle
+    # (ex. Hôtellerie Art. 39.2 : 20 % du salaire de base).
+    travail_de_nuit        = db.Column(db.Boolean, default=False)
     assujetti_cnamgs       = db.Column(db.Boolean, default=True)
     type_rupture           = db.Column(db.String(100))
     statut                 = db.Column(db.String(20), default="ACTIF")
@@ -606,6 +609,8 @@ class BulletinPaie(db.Model):
     prime_caisse          = db.Column(db.Numeric(15,2), default=0)
     carburant             = db.Column(db.Numeric(15,2), default=0)
     prime_anciennete      = db.Column(db.Numeric(15,2), default=0)
+    # Prime de nuit conventionnelle (ex. Hôtellerie Art. 39.2 : 20 % du base).
+    prime_nuit            = db.Column(db.Numeric(15,2), default=0)
     indem_logement        = db.Column(db.Numeric(15,2), default=0)
     indem_domesticite     = db.Column(db.Numeric(15,2), default=0)
     indem_eau_electricite = db.Column(db.Numeric(15,2), default=0)

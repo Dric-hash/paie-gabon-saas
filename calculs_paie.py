@@ -81,6 +81,13 @@ COEFFS_HEURES_SUP_CONVENTION = {
     # (Les taux « jour chômé récupérable » +40 % jour / +80 % nuit ne sont pas
     #  captés faute de bucket dédié ; ils sont rares en pratique.)
     "AERIEN": {"10": 1.15, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00},
+    # Hôtellerie – Restauration – Débits de Boissons — Art. 38 :
+    #   1 à 8 H.S. de jour (06h-21h) ...... +15 %  → case 10
+    #   au-delà de 8 H.S. de jour ......... +30 %  → case 30
+    #   repos hebdo / fériés de JOUR ...... +30 %  → case 30b
+    #   heures de NUIT (21h-6h), normal ... +55 %  → case 40
+    #   heures de NUIT, repos / fériés .... +110 % → case 70
+    "HOTELLERIE": {"10": 1.15, "30": 1.30, "30b": 1.30, "40": 1.55, "70": 2.10},
 }
 
 
@@ -322,6 +329,17 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     prime_salisure        = g("prime_salisure")
     acompte               = g("acompte")
 
+    # ── Prime de nuit automatique (convention Hôtellerie, Art. 39.2) ─────────
+    # 20 % du salaire de base pour un poste de nuit (21h-6h). Distincte des
+    # majorations d'heures sup de nuit. Une valeur manuelle reste prioritaire.
+    prime_nuit = g("prime_nuit")
+    prime_nuit_est_auto = False
+    if prime_nuit <= 0 and (donnees.get("convention") or "").upper() == "HOTELLERIE":
+        if donnees.get("travail_de_nuit") and salaire_base > 0:
+            from convention_hotellerie import calculer_prime_nuit_hotellerie
+            prime_nuit = calculer_prime_nuit_hotellerie(salaire_base, True)
+            prime_nuit_est_auto = True
+
     # Taux horaire et détails heures sup (pour le retour enrichi). Les
     # coefficients d'affichage suivent la convention transmise (clé "convention")
     # afin que les taux majorés du bulletin reflètent la grille applicable.
@@ -335,6 +353,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         - absences
         + sursalaire
         + prime_caisse + carburant + prime_anciennete
+        + prime_nuit
         + indem_logement + indem_domesticite + indem_eau_electricite + indem_nourriture
         + prime_rendement + prime_assiduité + prime_qualite + prime_performance
         + prime_transport + prime_responsabilite
@@ -461,6 +480,8 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "prime_anciennete":            round(prime_anciennete, 2),
         "prime_anciennete_auto":       round(prime_anciennete_auto, 2),
         "prime_anciennete_est_auto":   prime_anciennete_est_auto,
+        "prime_nuit":                  round(prime_nuit, 2),
+        "prime_nuit_est_auto":         prime_nuit_est_auto,
         "anciennete_annees":           anciennete_annees,
         "indem_logement":              round(indem_logement, 2),
         "indem_domesticite":           round(indem_domesticite, 2),
@@ -1706,6 +1727,7 @@ CONVENTIONS_DISPONIBLES = {
     "PETROLE":  "Convention Collective des professionnels du pétrole",
     "INDUSTRIE": "Convention Collective des Entreprises Industrielles",
     "AERIEN":    "Convention Collective des Compagnies de Transports Aériens",
+    "HOTELLERIE": "Convention Collective Hôtellerie – Restauration – Débits de Boissons",
 }
 
 
@@ -1725,6 +1747,9 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
         return calculer_prime_anciennete_hydrocarbures(salaire_base, anciennete_annees)
     if c == "COMMERCE":
         return calculer_prime_anciennete_commerce(salaire_base, anciennete_annees)
+    if c == "HOTELLERIE":
+        from convention_hotellerie import calculer_prime_anciennete_hotellerie
+        return calculer_prime_anciennete_hotellerie(salaire_base, anciennete_annees)
     if c in ("BTP", "INDUSTRIE", "AERIEN"):
         # A.46/A.47 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)

@@ -180,6 +180,13 @@
         <option value="NON" {% if salarie and not salarie.assujetti_cnamgs %}selected{% endif %}>NON</option>
       </select>
     </div>
+    <div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">Poste de nuit (21h-6h)</label>
+      <select name="travail_de_nuit" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+        <option value="NON" {% if not salarie or not salarie.travail_de_nuit %}selected{% endif %}>NON</option>
+        <option value="OUI" {% if salarie and salarie.travail_de_nuit %}selected{% endif %}>OUI — prime de nuit conventionnelle</option>
+      </select>
+    </div>
   </div>
 
   <!-- ── Affectation site — col-span-2 pour prendre toute la largeur ── -->
