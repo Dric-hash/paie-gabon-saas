@@ -6035,6 +6035,54 @@ def api_jours_acquis(sal_id):
 
 
 # ── Congés ────────────────────────────────────────────────────────────────────
+@bp.route("/prime-fin-annee")
+@login_required
+def prime_fin_annee():
+    """Calcul de la prime de fin d'année (convention Hôtellerie, Art. 50).
+    Pour chaque salarié : moyenne mensuelle des salaires de base de l'année ×
+    30 %, au prorata des mois de présence, si ≥ 6 mois de présence effective.
+    Page de consultation/aide au versement (aucune écriture automatique)."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    from datetime import datetime as _dt
+    from convention_hotellerie import calculer_prime_fin_annee_hotellerie
+    annee = request.args.get("annee", _dt.now().year, type=int)
+
+    bulletins = (BulletinPaie.query
+                 .join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
+                 .filter(BulletinPaie.tenant_id == t.id, PeriodePaie.annee == annee)
+                 .all())
+    par_salarie = {}
+    for b in bulletins:
+        par_salarie.setdefault(b.salarie_id, []).append(b)
+
+    lignes = []
+    total = 0.0
+    for sal_id, buls in par_salarie.items():
+        sal = db.session.get(Salarie, sal_id)
+        if not sal:
+            continue
+        mois_presence = len(buls)
+        bases = [float(x.salaire_base or 0) for x in buls if float(x.salaire_base or 0) > 0]
+        moyenne = round(sum(bases) / len(bases), 2) if bases else 0.0
+        prime = calculer_prime_fin_annee_hotellerie(moyenne, mois_presence)
+        eligible = mois_presence >= 6 and prime > 0
+        lignes.append({
+            "salarie": sal, "mois_presence": mois_presence,
+            "moyenne_base": moyenne, "prime": prime, "eligible": eligible,
+        })
+        total += prime
+    lignes.sort(key=lambda x: x["salarie"].nom or "")
+
+    return render_template("tenant/prime_fin_annee.html",
+        tenant=t, annee=annee, lignes=lignes, total=round(total, 2),
+        annees=list(range(_dt.now().year, _dt.now().year - 4, -1)))
+
+
 @bp.route("/conges")
 @login_required
 def conges():

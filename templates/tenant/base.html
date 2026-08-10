@@ -202,6 +202,11 @@
       <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
         🏖️ <span>{{ T.nav.conges }}</span>
       </a>
+      {% if (tenant.convention or '')|upper == 'HOTELLERIE' and current_user.is_tenant_admin %}
+      <a href="/prime-fin-annee" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='prime_fin_annee' else 'text-white/80 hover:bg-white/10' }}">
+        🎁 <span>Prime fin d'année</span>
+      </a>
+      {% endif %}
       {% if current_user.is_tenant_admin or current_user.has_permission('view_salaries') %}
       <a href="/conges/bilan" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='conges_bilan' else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
         📊 <span style="font-size:.8rem">{{ "Bilan congés" if lang == "fr" else "Leave balance" }}</span>

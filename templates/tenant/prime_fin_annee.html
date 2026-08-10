@@ -1,0 +1,63 @@
+{% extends "tenant/base.html" %}
+{% block title %}Prime de fin d'année — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+
+<div style="max-width:960px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
+    <div>
+      <h1 class="display text-2xl font-extrabold" style="color:#0f3d36">🎁 Prime de fin d'année</h1>
+      <p class="text-sm" style="color:var(--text-sub);margin-top:.25rem">
+        Convention Hôtellerie — Art. 50 · 30 % de la moyenne mensuelle du salaire de base, au prorata (≥ 6 mois de présence).
+      </p>
+    </div>
+    <form method="GET" action="/prime-fin-annee">
+      <select name="annee" onchange="this.form.submit()" style="border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.55rem .875rem;font-size:.9rem">
+        {% for y in annees %}<option value="{{ y }}" {{ 'selected' if y == annee }}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+
+  <div style="background:#f6f4ec;border:1px solid #e6e2d6;border-radius:.75rem;padding:.85rem 1.1rem;margin-bottom:1.25rem;font-size:.82rem;color:#6b5d3f">
+    ℹ️ Cette page vous <strong>aide au calcul</strong> : elle n'écrit rien automatiquement. La part variable (appréciation de la hiérarchie) n'est pas incluse — ajoutez-la manuellement si besoin.
+  </div>
+
+  {% if lignes %}
+  <div style="background:white;border:1px solid #e5e7eb;border-radius:1rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead>
+        <tr style="background:#0f3d36;color:white;text-align:left">
+          <th style="padding:.85rem 1rem">Salarié</th>
+          <th style="padding:.85rem 1rem;text-align:center">Mois de présence</th>
+          <th style="padding:.85rem 1rem;text-align:right">Moyenne base</th>
+          <th style="padding:.85rem 1rem;text-align:right">Prime (part fixe)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in lignes %}
+        <tr style="border-bottom:1px solid #f0f0f0;{{ 'opacity:.5' if not l.eligible }}">
+          <td style="padding:.75rem 1rem">
+            <strong>{{ l.salarie.nom_complet }}</strong>
+            {% if not l.eligible %}<span style="font-size:.7rem;color:#dc2626;margin-left:.4rem">non éligible (&lt; 6 mois)</span>{% endif %}
+          </td>
+          <td style="padding:.75rem 1rem;text-align:center">{{ l.mois_presence }}</td>
+          <td style="padding:.75rem 1rem;text-align:right">{{ l.moyenne_base|fcfa }}</td>
+          <td style="padding:.75rem 1rem;text-align:right;font-weight:700;color:#0f3d36">{{ l.prime|fcfa }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr style="background:#f6f4ec;font-weight:800">
+          <td style="padding:.85rem 1rem" colspan="3">TOTAL à verser</td>
+          <td style="padding:.85rem 1rem;text-align:right;color:#0f3d36">{{ total|fcfa }}</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:3rem 1rem;color:#9ca3af">
+    <div style="font-size:2.5rem;margin-bottom:.5rem">🎁</div>
+    <p>Aucun bulletin trouvé pour {{ annee }}. La prime se calcule à partir des bulletins de l'année.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

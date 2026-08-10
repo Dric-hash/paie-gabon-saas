@@ -310,6 +310,19 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         prime_anciennete_est_auto = True
     prime_rendement   = g("prime_rendement")
     prime_assiduité   = g("prime_assiduité")
+    # ── Prime d'assiduité automatique (convention Hôtellerie, Art. 49) ───────
+    # 9 % du salaire de base, amputée selon les absences injustifiées du mois
+    # (-50 % à 1 jour, supprimée dès 2 jours ; 8 h de retard = 1 jour).
+    # Une valeur manuelle reste prioritaire.
+    prime_assiduite_est_auto = False
+    if prime_assiduité <= 0 and (donnees.get("convention") or "").upper() == "HOTELLERIE" and salaire_base > 0:
+        from convention_hotellerie import calculer_prime_assiduite_hotellerie
+        prime_assiduité = calculer_prime_assiduite_hotellerie(
+            salaire_base,
+            jours_absence_injustifiee=int(g("jours_absence_injustifiee")),
+            heures_retard_cumulees=float(g("heures_retard_cumulees")),
+        )
+        prime_assiduite_est_auto = True
     prime_qualite     = g("prime_qualite")
     prime_performance = g("prime_performance")
     prime_transport   = g("prime_transport")
@@ -489,6 +502,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "indem_nourriture":            round(indem_nourriture, 2),
         "prime_rendement":             round(prime_rendement, 2),
         "prime_assiduité":             round(prime_assiduité, 2),
+        "prime_assiduite_est_auto":    prime_assiduite_est_auto,
         "prime_qualite":               round(prime_qualite, 2),
         "prime_performance":           round(prime_performance, 2),
         "prime_transport":             round(prime_transport, 2),
@@ -1815,6 +1829,9 @@ def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> in
         return max(calculer_preavis_industrie(anciennete_annees), legal)
     if c == "AERIEN":
         return max(calculer_preavis_aerien(anciennete_annees, cadre=cadre), legal)
+    if c == "HOTELLERIE":
+        from convention_hotellerie import calculer_preavis_hotellerie
+        return max(calculer_preavis_hotellerie(anciennete_annees), legal)
     if c == "HYDROCARBURES":
         # Art. 30.5/30.6 : barème identique au Code du travail.
         return calculer_preavis_code(anciennete_annees)
@@ -1835,6 +1852,9 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
         return calculer_indemnite_services_rendus_aerien(moyenne_12_mois, anciennete_annees)
     if c == "BTP":
         return calculer_indemnite_services_rendus_btp(moyenne_12_mois, anciennete_annees)
+    if c == "HOTELLERIE":
+        from convention_hotellerie import calculer_indemnite_licenciement_hotellerie
+        return calculer_indemnite_licenciement_hotellerie(moyenne_12_mois, anciennete_annees)
     return 0.0
 
 

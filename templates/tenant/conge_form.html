@@ -65,11 +65,27 @@
             ('MATERNITE','Congé maternité'),
             ('PATERNITE','Congé paternité'),
             ('EXCEPTIONNEL','Congé exceptionnel'),
+            ('PERMISSION','Permission événement familial'),
             ('SANS_SOLDE','Congé sans solde'),
           ] %}
           <option value="{{ t_c }}" {% if conge and conge.type_conge == t_c %}selected{% endif %}>{{ label }}</option>
           {% endfor %}
         </select>
+        <!-- Barème des permissions pour événements familiaux (Art. 41.1 Hôtellerie) -->
+        <div id="bloc-permission" style="display:none;margin-top:.75rem;background:#f6f4ec;border:1px solid #e6e2d6;border-radius:.75rem;padding:.75rem">
+          <label style="display:block;font-size:.72rem;font-weight:700;color:#6b7280;text-transform:uppercase;margin-bottom:.4rem">Événement familial</label>
+          <select id="sel_evenement" onchange="appliquerJoursPermission()" style="width:100%;border:1.5px solid #e5e7eb;border-radius:.75rem;padding:.55rem .875rem;font-size:.85rem">
+            <option value="">— Choisir l'événement —</option>
+            <option value="4">Mariage du travailleur (4 jours)</option>
+            <option value="2">Mariage d'un enfant (2 jours)</option>
+            <option value="1">Mariage d'un frère / d'une sœur (1 jour)</option>
+            <option value="5">Décès conjoint, père, mère, enfant (5 jours)</option>
+            <option value="2">Décès frère, sœur, beau-père, belle-mère (2 jours)</option>
+            <option value="3">Naissance d'un enfant (3 jours)</option>
+            <option value="1">Cérémonie religieuse directe (1 jour)</option>
+          </select>
+          <p style="font-size:.68rem;color:#9ca3af;margin:.4rem 0 0;line-height:1.4">Choisir un événement remplit la date de retour selon le barème (max 10 jours/an, non déductibles du congé annuel).</p>
+        </div>
       </div>
 
       <!-- Congé maternité : si renseigné, les 14 semaines légales (Art. 208) sont
@@ -155,6 +171,23 @@ function toggleMaternite() {
   var t = document.getElementById('sel_type');
   var b = document.getElementById('bloc_maternite');
   if (t && b) b.style.display = (t.value === 'MATERNITE') ? 'block' : 'none';
+  var bp = document.getElementById('bloc-permission');
+  if (t && bp) bp.style.display = (t.value === 'PERMISSION') ? 'block' : 'none';
+}
+function appliquerJoursPermission() {
+  var sel = document.getElementById('sel_evenement');
+  var jours = parseInt(sel && sel.value, 10);
+  if (!jours) return;
+  var dep = document.querySelector('[name=date_depart]');
+  if (dep && dep.value) {
+    // Date de retour = départ + (jours - 1), afin d'inclure le jour de départ.
+    var d = new Date(dep.value);
+    d.setDate(d.getDate() + (jours - 1));
+    var ret = document.querySelector('[name=date_retour]');
+    if (ret) { ret.value = d.toISOString().slice(0,10); if (typeof calculerDuree==='function') calculerDuree(); }
+  } else {
+    alert("Choisissez d'abord la date de départ, puis l'événement.");
+  }
 }
 calculerDuree();
 toggleMaternite();
