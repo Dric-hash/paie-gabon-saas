@@ -5,9 +5,9 @@
 <div style="max-width:960px;margin:0 auto">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem">
     <div>
-      <h1 class="display text-2xl font-extrabold" style="color:#0f3d36">🎁 Prime de fin d'année</h1>
+      <h1 class="display text-2xl font-extrabold" style="color:#0f3d36">🎁 {{ "Gratification de fin d'année" if conv == "BOIS" else "Prime de fin d'année" }}</h1>
       <p class="text-sm" style="color:var(--text-sub);margin-top:.25rem">
-        Convention Hôtellerie — Art. 50 · 30 % de la moyenne mensuelle du salaire de base, au prorata (≥ 6 mois de présence).
+        {% if conv == "BOIS" %}Convention Industries du Bois — Art. 52 · 25 % de la moyenne mensuelle du salaire de base, au prorata (≥ 1 an de présence).{% else %}Convention Hôtellerie — Art. 50 · 30 % de la moyenne mensuelle du salaire de base, au prorata (≥ 6 mois de présence).{% endif %}
       </p>
     </div>
     <form method="GET" action="/prime-fin-annee">

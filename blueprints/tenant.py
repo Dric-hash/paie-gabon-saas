@@ -3333,6 +3333,10 @@ def grille_salaires():
         from convention_hotellerie import grille_salaire_hotellerie_seed
         grille = grille_salaire_hotellerie_seed()
         est_seed = True
+    if not grille and (t.convention or "").upper() == "BOIS":
+        from convention_bois import grille_salaire_bois_seed
+        grille = grille_salaire_bois_seed()
+        est_seed = True
     return render_template("tenant/grille_salaires.html", tenant=t,
         categories=GRILLE_CATEGORIES_AERIEN, grille=grille,
         est_seed=est_seed, nb_echelons=10)
@@ -6048,9 +6052,11 @@ def prime_fin_annee():
     if not t:
         return redirect(url_for("auth.login"))
 
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, date as _date
     from convention_hotellerie import calculer_prime_fin_annee_hotellerie
+    from convention_bois import calculer_gratification_fin_annee_bois
     annee = request.args.get("annee", _dt.now().year, type=int)
+    conv = (t.convention or "").upper()
 
     bulletins = (BulletinPaie.query
                  .join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
@@ -6069,8 +6075,18 @@ def prime_fin_annee():
         mois_presence = len(buls)
         bases = [float(x.salaire_base or 0) for x in buls if float(x.salaire_base or 0) > 0]
         moyenne = round(sum(bases) / len(bases), 2) if bases else 0.0
-        prime = calculer_prime_fin_annee_hotellerie(moyenne, mois_presence)
-        eligible = mois_presence >= 6 and prime > 0
+        # Ancienneté (années) au 31/12 de l'année considérée
+        anc = 0.0
+        if sal.date_embauche:
+            anc = max(0, (_date(annee, 12, 31) - sal.date_embauche).days / 365.0)
+        if conv == "BOIS":
+            # Gratification Art. 52 : 25 %, requiert ≥ 1 an de présence continue
+            prime = calculer_gratification_fin_annee_bois(moyenne, mois_presence, anc)
+            eligible = anc >= 1 and prime > 0
+        else:
+            # Hôtellerie Art. 50 : 30 %, requiert ≥ 6 mois de présence
+            prime = calculer_prime_fin_annee_hotellerie(moyenne, mois_presence)
+            eligible = mois_presence >= 6 and prime > 0
         lignes.append({
             "salarie": sal, "mois_presence": mois_presence,
             "moyenne_base": moyenne, "prime": prime, "eligible": eligible,
@@ -6079,7 +6095,7 @@ def prime_fin_annee():
     lignes.sort(key=lambda x: x["salarie"].nom or "")
 
     return render_template("tenant/prime_fin_annee.html",
-        tenant=t, annee=annee, lignes=lignes, total=round(total, 2),
+        tenant=t, annee=annee, lignes=lignes, total=round(total, 2), conv=conv,
         annees=list(range(_dt.now().year, _dt.now().year - 4, -1)))
 
 
