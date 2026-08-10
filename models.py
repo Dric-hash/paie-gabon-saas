@@ -506,6 +506,10 @@ class Salarie(db.Model):
     nb_enfants_moins_16ans = db.Column(db.Integer, default=0)
     nombre_parts           = db.Column(db.Numeric(4,1), default=1)
     numero_cnss            = db.Column(db.String(30))
+    # ── Champs pour la Déclaration Annuelle des Salaires (DGI) ──────────────
+    nif                    = db.Column(db.String(30))   # NIF fiscal du salarié
+    niveau                 = db.Column(db.String(10))   # Niveau de classification (DAS)
+    code_emploi            = db.Column(db.String(10))   # Code emploi DGI (repli : code catégorie)
     numero_cnamgs          = db.Column(db.String(30))
     emploi                 = db.Column(db.String(200))
     # Poste de nuit (21h-6h) : ouvre droit à la prime de nuit conventionnelle

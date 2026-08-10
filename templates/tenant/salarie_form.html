@@ -167,6 +167,31 @@
         placeholder="001-XXXXXXX-X"
         class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
     </div>
+    <div style="border-top:1px dashed #e5e7eb;padding-top:1rem;margin-top:.25rem">
+      <div class="text-[0.7rem] font-bold text-gray-400 uppercase tracking-widest mb-2">Déclaration annuelle (DGI)</div>
+      <label class="block text-xs font-bold text-gray-500 mb-1.5">NIF du salarié</label>
+      <input type="text" name="nif"
+        value="{{ salarie.nif if salarie else '' }}"
+        placeholder="014-XXXXXXX-X"
+        class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+      <div class="grid grid-cols-2 gap-3 mt-3">
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">Code emploi DGI</label>
+          <input type="text" name="code_emploi"
+            value="{{ salarie.code_emploi if salarie else '' }}"
+            placeholder="ex. 302"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-gray-500 mb-1.5">Niveau</label>
+          <input type="text" name="niveau"
+            value="{{ salarie.niveau if salarie else '' }}"
+            placeholder="ex. 5"
+            class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+        </div>
+      </div>
+      <p class="text-[0.68rem] text-gray-400 mt-2 leading-relaxed">Utilisés pour la Déclaration Annuelle des Salaires. Le code emploi reprend le code catégorie s'il est laissé vide.</p>
+    </div>
     <div>
       <label class="block text-xs font-bold text-gray-500 mb-1.5">N° CNAMGS</label>
       <input type="text" name="numero_cnamgs"

@@ -1110,7 +1110,8 @@ def salarie_nouveau():
             nb_enfants_moins_16ans=int(request.form.get("nb_enfants_moins_16ans") or 0),
             nombre_parts=float(request.form.get("nombre_parts") or 1),
             numero_cnss=request.form.get("numero_cnss"), numero_cnamgs=request.form.get("numero_cnamgs"),
-            emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", travail_de_nuit=request.form.get("travail_de_nuit")=="OUI", statut="ACTIF")
+            emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", travail_de_nuit=request.form.get("travail_de_nuit")=="OUI",
+            nif=request.form.get("nif"), niveau=request.form.get("niveau"), code_emploi=request.form.get("code_emploi"), statut="ACTIF")
         db.session.add(s)
         sb=float(request.form.get("salaire_base") or 0)
         if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
@@ -1186,6 +1187,9 @@ def journalier_convertir(id):
             numero_cnamgs=request.form.get("numero_cnamgs"),
             emploi=request.form.get("emploi") or j.profession,
             assujetti_cnamgs=request.form.get("assujetti_cnamgs") == "OUI",
+            nif=request.form.get("nif"),
+            niveau=request.form.get("niveau"),
+            code_emploi=request.form.get("code_emploi"),
             statut="ACTIF",
         )
         db.session.add(s)
@@ -1410,6 +1414,9 @@ def contrat_nouveau(sal_id):
         # Mettre à jour le salarié
         s.emploi = poste
         s.travail_de_nuit = request.form.get("travail_de_nuit") == "OUI"
+        s.nif = request.form.get("nif")
+        s.niveau = request.form.get("niveau")
+        s.code_emploi = request.form.get("code_emploi")
         if cat_id:
             s.categorie_id = cat_id
 
@@ -4992,7 +4999,7 @@ def journaliers_pointage_modele():
     for r, j in enumerate(journaliers, start=4):
         cid = ws.cell(row=r, column=1, value=j.id)
         cid.font = f_normal; cid.alignment = center; cid.border = bord
-        cnom = ws.cell(row=r, column=2, value=csv_safe(j.nom_complet))
+        cnom = ws.cell(row=r, column=2, value=j.nom_complet)
         cnom.font = f_normal; cnom.border = bord
         cnom.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         for jour in range(1, nb_jours + 1):
@@ -8519,6 +8526,74 @@ def declaration_cnss():
 # DÉCLARATION ANNUELLE DES SALAIRES (DAS) — réservée à l'abonnement Cabinet
 # ══════════════════════════════════════════════════════════════════════════════
 
+@bp.route("/declaration-cnss/imprimer")
+@login_required
+def declaration_cnss_imprimer():
+    """Bordereaux officiels imprimables CNSS et CNAMGS pour un trimestre.
+    Page autonome (sans habillage de l'app) — deux bordereaux distincts,
+    un par caisse, prêts à imprimer ou enregistrer en PDF."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    pid = request.args.get("periode_id", type=int)
+    periode = (PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first() if pid
+               else PeriodePaie.query.filter_by(tenant_id=t.id)
+                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).first())
+    if not periode:
+        flash("Aucune période disponible pour la déclaration.", "warning")
+        return redirect(url_for("tenant.declaration_cnss"))
+
+    # Trimestre couvrant le mois sélectionné
+    mois = periode.mois
+    trim_debut = ((mois - 1) // 3) * 3 + 1
+    trim_fin   = trim_debut + 2
+    trim_num   = (mois - 1) // 3 + 1
+    libelles   = ["Jan-Mar", "Avr-Jun", "Jul-Sep", "Oct-Déc"]
+    trim_label = f"T{trim_num} {periode.annee} ({libelles[trim_num-1]})"
+
+    periodes_trim = (PeriodePaie.query.filter_by(tenant_id=t.id, annee=periode.annee)
+                     .filter(PeriodePaie.mois >= trim_debut, PeriodePaie.mois <= trim_fin).all())
+    ids_trim = [p.id for p in periodes_trim]
+
+    bulletins_trim = (BulletinPaie.query
+                      .filter(BulletinPaie.tenant_id == t.id, BulletinPaie.periode_id.in_(ids_trim))
+                      .options(joinedload(BulletinPaie.salarie)).all())
+
+    from collections import defaultdict
+    agg = defaultdict(lambda: {"salarie": None, "base_cnss": 0.0, "cnss_sal": 0.0,
+                               "cnss_pat": 0.0, "base_cnamgs": 0.0, "cnamgs_sal": 0.0,
+                               "cnamgs_pat": 0.0})
+    for b in bulletins_trim:
+        a = agg[b.salarie_id]
+        a["salarie"]     = b.salarie
+        a["base_cnss"]  += float(b.base_cnss or 0)
+        a["cnss_sal"]   += float(b.cnss_salarie or 0)
+        a["cnss_pat"]   += float(b.cnss_patronale or 0)
+        a["base_cnamgs"]+= float(b.base_cnamgs or 0)
+        a["cnamgs_sal"] += float(b.cnamgs_salarie or 0)
+        a["cnamgs_pat"] += float(b.cnamgs_patronale or 0)
+    lignes = sorted(agg.values(), key=lambda x: x["salarie"].nom if x["salarie"] else "")
+
+    def _tot(champ):
+        return round(sum(l[champ] for l in lignes), 2)
+    totaux = {c: _tot(c) for c in ("base_cnss", "cnss_sal", "cnss_pat",
+                                   "base_cnamgs", "cnamgs_sal", "cnamgs_pat")}
+    totaux["cnss_total"]   = round(totaux["cnss_sal"] + totaux["cnss_pat"], 2)
+    totaux["cnamgs_total"] = round(totaux["cnamgs_sal"] + totaux["cnamgs_pat"], 2)
+
+    log_action("EXPORT", "declaration", periode.id,
+               f"Impression bordereaux CNSS/CNAMGS — {trim_label}")
+    db.session.commit()
+
+    return render_template("tenant/declaration_cnss_print.html",
+        tenant=t, lignes=lignes, totaux=totaux, trim_label=trim_label,
+        trim_num=trim_num, annee=periode.annee, nb=len(lignes),
+        genere_le=datetime.now())
+
+
 @bp.route("/declaration-das")
 @login_required
 @plan_required("CABINET", "CABINET_COMPTABLE")
@@ -9401,8 +9476,8 @@ def salaries_pointage_modele():
                 tj = "DIMANCHE"
             else:
                 tj = "NORMAL"
-            ws.cell(row=r, column=1, value=csv_safe(s.matricule))
-            ws.cell(row=r, column=2, value=csv_safe(nom_complet))
+            ws.cell(row=r, column=1, value=s.matricule)
+            ws.cell(row=r, column=2, value=nom_complet)
             ws.cell(row=r, column=3, value=dd.strftime("%d/%m/%Y"))
             ws.cell(row=r, column=4, value=_JOURS_FR_SAL[dd.weekday()])
             ws.cell(row=r, column=5, value=tj)

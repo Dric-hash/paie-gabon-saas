@@ -237,11 +237,12 @@ def agreger_das(tenant, annee: int, db=None, models=None):
         lignes.append({
             "matricule":      s.matricule or "",
             "cnss":           s.numero_cnss or "",
+            "nif":            s.nif or "",
             "nom":            s.nom or "",
             "prenom":         s.prenom or "",
             "profession":     s.emploi or (s.categorie.libelle if s.categorie else ""),
-            "code_emploi":    cat_code,
-            "code_niveau":    "",
+            "code_emploi":    s.code_emploi or cat_code,
+            "code_niveau":    s.niveau or "",
             "nationalite":    _code_nationalite(s.nationalite),
             "age":            _age(s.date_naissance, annee),
             "sexe":           _code_sexe(s.sexe),
@@ -461,6 +462,7 @@ def generer_das_excel(tenant, annee: int, models=None) -> bytes:
     NUM = "#,##0"
     cols = [
         ("matricule",     "N° Matricule",        14, None),
+        ("nif",           "NIF salarié",         16, None),
         ("cnss",          "N° CNSS",             16, None),
         ("nom",           "Nom",                 18, None),
         ("prenom",        "Prénom",              16, None),
