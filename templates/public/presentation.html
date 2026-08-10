@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>PaieGabon — Le logiciel de paie conçu pour le Gabon</title>
-<meta name="description" content="Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et déclarations sociales calculés automatiquement selon la loi gabonaise. Conventions BTP, Commerce, Pétrole et Industrie intégrées. Essai gratuit, sans carte bancaire."/>
+<meta name="description" content="Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et déclarations sociales calculés automatiquement selon la loi gabonaise. 7 conventions collectives intégrées : BTP, Commerce, Pétrole, Industrie, Transports aériens, Hôtellerie et Industries du bois. Essai gratuit, sans carte bancaire."/>
 <link rel="canonical" href="https://www.paiegabon.com/"/>
 <meta name="theme-color" content="#0f3d36"/>
 
@@ -153,7 +153,10 @@
   "key": '<path d="M2.6 17.4A2 2 0 0 0 2 18.83V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.17a2 2 0 0 0 1.42-.59l.81-.81a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
   "lock": '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   "scroll": '<path d="M15 12h-5"/><path d="M15 8h-5"/><path d="M19 17V5a2 2 0 0 0-2-2H4"/><path d="M8 21h12a2 2 0 0 0 2-2v-1a1 1 0 0 0-1-1H11a1 1 0 0 0-1 1v1a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v2a1 1 0 0 0 1 1h3"/>',
-  "database": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>'
+  "database": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
+  "plane": '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
+  "hotel": '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/><circle cx="8" cy="12" r="1.5"/>',
+  "tree": '<path d="M12 22v-7"/><path d="M9 8a3 3 0 1 1 6 0"/><path d="M12 2a5 5 0 0 0-5 5c0 1 .3 2 .8 2.8A4 4 0 0 0 6 17h12a4 4 0 0 0-1.8-7.2c.5-.8.8-1.8.8-2.8a5 5 0 0 0-5-5z"/>'
 } %}
 {% macro icon(name, size=24, sw=1.85) -%}
 <svg width="{{ size }}" height="{{ size }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="{{ sw }}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{{ ICON_PATHS.get(name, '')|safe }}</svg>
@@ -243,7 +246,7 @@
     {% set gages = [
       ("scale","Conforme au Code du travail 2021"),
       ("landmark","CNSS · CNAMGS · IRPP à jour"),
-      ("book-open","4 conventions collectives"),
+      ("book-open","7 conventions collectives"),
       ("shield-check","Données chiffrées & sauvegardées")
     ] %}
     {% for ic, txt in gages %}
@@ -316,33 +319,41 @@
 
 <!-- ══════════════ CONVENTIONS COLLECTIVES ══════════════ -->
 <section id="conventions" class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem">
-  <div class="two-col">
-    <div>
-      <div class="eyebrow accent" style="margin-bottom:1rem">Votre secteur, vos règles</div>
-      <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
-        Les conventions collectives, déjà intégrées
-      </h2>
-      <p class="reveal" style="color:var(--sub);font-size:1.05rem;line-height:1.7;margin:0 0 1.5rem">
-        Heures supplémentaires, prime d'ancienneté, préavis, indemnités de services rendus :
-        chaque convention a ses propres barèmes. PaieGabon les applique pour vous, sans paramétrage complexe.
-      </p>
-      <a href="/inscription" class="btn-primary" style="font-size:1rem;background:var(--brand);color:#fff;box-shadow:none">Choisir ma convention →</a>
+  <div style="text-align:center;max-width:680px;margin:0 auto 2.5rem">
+    <div class="eyebrow accent" style="margin-bottom:1rem">Votre secteur, vos règles</div>
+    <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
+      7 conventions collectives, déjà intégrées
+    </h2>
+    <p class="reveal" style="color:var(--sub);font-size:1.05rem;line-height:1.7;margin:0">
+      Heures supplémentaires, prime d'ancienneté, préavis, indemnités de services rendus, primes de nuit
+      et d'assiduité : chaque convention a ses propres barèmes. PaieGabon les applique pour vous,
+      sans paramétrage complexe.
+    </p>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;max-width:960px;margin:0 auto">
+    {% set conv = [
+      ("building","BTP","Bâtiment & travaux publics"),
+      ("shopping-bag","Commerce","Entreprises commerciales"),
+      ("fuel","Pétrole","Professionnels du pétrole"),
+      ("factory","Industrie","Entreprises industrielles"),
+      ("plane","Transports aériens","Compagnies aériennes"),
+      ("hotel","Hôtellerie","Hôtellerie, restauration & débits de boissons"),
+      ("tree","Industries du bois","Sciages & placages")
+    ] %}
+    {% for ic, nom, desc in conv %}
+    <div class="reveal card" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
+      <span class="ico-chip" style="width:2.5rem;height:2.5rem;margin-bottom:.6rem">{{ icon(ic, 22) }}</span>
+      <div class="display" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
+      <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
-      {% set conv = [
-        ("building","BTP","Bâtiment & travaux publics"),
-        ("shopping-bag","Commerce","Entreprises commerciales"),
-        ("fuel","Pétrole","Professionnels du pétrole"),
-        ("factory","Industrie","Entreprises industrielles")
-      ] %}
-      {% for ic, nom, desc in conv %}
-      <div class="reveal card" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
-        <span class="ico-chip" style="width:2.5rem;height:2.5rem;margin-bottom:.6rem">{{ icon(ic, 22) }}</span>
-        <div class="display" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
-        <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
-      </div>
-      {% endfor %}
+    {% endfor %}
+    <div class="reveal" style="background:linear-gradient(150deg,var(--brand),#0c322c);color:#fff;border-radius:1rem;padding:1.35rem;display:flex;flex-direction:column;justify-content:center">
+      <div class="display" style="font-weight:800;font-size:1.05rem">Et la vôtre ?</div>
+      <div style="color:rgba(255,255,255,.8);font-size:.83rem;margin-top:.2rem;line-height:1.5">Nous intégrons régulièrement de nouvelles conventions. Dites-nous la vôtre.</div>
     </div>
+  </div>
+  <div style="text-align:center;margin-top:2.25rem">
+    <a href="/inscription" class="btn-primary" style="font-size:1rem;background:var(--brand);color:#fff;box-shadow:none">Choisir ma convention →</a>
   </div>
 </section>
 
