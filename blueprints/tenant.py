@@ -4992,7 +4992,7 @@ def journaliers_pointage_modele():
     for r, j in enumerate(journaliers, start=4):
         cid = ws.cell(row=r, column=1, value=j.id)
         cid.font = f_normal; cid.alignment = center; cid.border = bord
-        cnom = ws.cell(row=r, column=2, value=j.nom_complet)
+        cnom = ws.cell(row=r, column=2, value=csv_safe(j.nom_complet))
         cnom.font = f_normal; cnom.border = bord
         cnom.alignment = Alignment(horizontal="left", vertical="center", indent=1)
         for jour in range(1, nb_jours + 1):
@@ -9401,8 +9401,8 @@ def salaries_pointage_modele():
                 tj = "DIMANCHE"
             else:
                 tj = "NORMAL"
-            ws.cell(row=r, column=1, value=s.matricule)
-            ws.cell(row=r, column=2, value=nom_complet)
+            ws.cell(row=r, column=1, value=csv_safe(s.matricule))
+            ws.cell(row=r, column=2, value=csv_safe(nom_complet))
             ws.cell(row=r, column=3, value=dd.strftime("%d/%m/%Y"))
             ws.cell(row=r, column=4, value=_JOURS_FR_SAL[dd.weekday()])
             ws.cell(row=r, column=5, value=tj)
