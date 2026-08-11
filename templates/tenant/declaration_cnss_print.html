@@ -56,7 +56,9 @@
   .signature .case { width:45%; }
   .signature .case .lbl { color:#555; margin-bottom:4px; }
   .signature .case .box { border:1px dashed #bbb; height:70px; border-radius:6px; }
-  .pied { margin-top:18px; text-align:center; font-size:9px; color:#999; border-top:1px solid #eee; padding-top:6px; }
+  .pied { margin-top:8px; text-align:center; font-size:9px; color:#999; border-top:1px solid #eee; padding-top:6px; }
+  .avertissement { margin-top:18px; border:1.5px solid #d97706; background:#fffbeb; color:#7c2d12;
+    border-radius:6px; padding:8px 12px; font-size:9.5px; line-height:1.5; }
 
   @page { size:A4; margin:0; }
   @media print {
@@ -159,9 +161,13 @@
     </div>
   </div>
 
+  <div class="avertissement">
+    <strong>⚠️ DOCUMENT NON OFFICIEL</strong> — édité par PaieGabon à titre d'aide au calcul.
+    Les montants doivent être reportés sur le <strong>bordereau officiel de la {{ caisse_nom }} ({{ caisse_sigle }})</strong>.
+    PaieGabon ne remplace pas un comptable ou un expert-comptable. Vérifiez toutes les données avant validation ou dépôt.
+  </div>
   <div class="pied">
-    Document généré par PaieGabon le {{ genere_le.strftime('%d/%m/%Y à %H:%M') }} — {{ tenant.denomination }}.
-    Les montants doivent être vérifiés avant dépôt officiel.
+    Généré par PaieGabon le {{ genere_le.strftime('%d/%m/%Y à %H:%M') }} — {{ tenant.denomination }}.
   </div>
 </div>
 {% endmacro %}
