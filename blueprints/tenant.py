@@ -8526,6 +8526,41 @@ def declaration_cnss():
 # DÉCLARATION ANNUELLE DES SALAIRES (DAS) — réservée à l'abonnement Cabinet
 # ══════════════════════════════════════════════════════════════════════════════
 
+@bp.route("/declaration-das/id19")
+@login_required
+def declaration_das_id19():
+    """Bulletins individuels ID19 imprimables (un par salarié percevant plus de
+    80 000 F/mois), au format officiel DGI. Page autonome, prête à imprimer."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    from datetime import datetime as _dt
+    annee = request.args.get("annee", _dt.now().year - 1, type=int)
+
+    try:
+        from declaration_das import agreger_das, DASVide
+        import models as _models
+        lignes, totaux = agreger_das(t, annee, models=_models)
+    except Exception:
+        lignes, totaux = [], {}
+
+    # Seuil DGI : salariés percevant plus de 80 000 F/mois en moyenne sur
+    # leur période de présence. On approxime par le total imposable / 12.
+    SEUIL_MENSUEL = 80000
+    eligibles = [l for l in lignes if (l.get("total_1a5", 0) / 12.0) > SEUIL_MENSUEL]
+
+    log_action("EXPORT", "declaration", None,
+               f"Impression bulletins ID19 — exercice {annee} ({len(eligibles)} salariés)")
+    db.session.commit()
+
+    return render_template("tenant/declaration_das_id19_print.html",
+        tenant=t, lignes=eligibles, annee=annee, nb=len(eligibles),
+        genere_le=_dt.now(), seuil=SEUIL_MENSUEL)
+
+
 @bp.route("/declaration-cnss/imprimer")
 @login_required
 def declaration_cnss_imprimer():

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>Bulletins ID19 — {{ tenant.denomination }} — Exercice {{ annee }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Times New Roman",Georgia,serif; color:#000; background:#e5e7eb; font-size:11px; }
+  .barre { text-align:center; padding:14px; background:#0f3d36; font-family:Arial,sans-serif; }
+  .barre button { background:#e9c46a; color:#0f3d36; border:none; font-weight:700; font-size:14px;
+    padding:10px 24px; border-radius:8px; cursor:pointer; }
+  .barre a { color:#fff; text-decoration:none; font-size:13px; margin-left:12px; opacity:.85; }
+  .barre .info { color:#e9c46a; font-size:12px; margin-top:8px; font-family:Arial,sans-serif; }
+
+  .form { width:210mm; min-height:297mm; margin:16px auto; background:#fff; padding:12mm 14mm;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); page-break-after:always; position:relative; }
+  .form:last-of-type { page-break-after:auto; }
+
+  .ref { position:absolute; top:10mm; right:14mm; border:1.5px solid #000; padding:2px 10px; font-weight:700; font-size:13px; }
+
+  .entete { text-align:center; line-height:1.35; }
+  .entete .min { font-size:10px; }
+  .entete .rep { font-weight:700; font-size:12px; }
+  .entete .titre { font-weight:700; font-size:13px; margin-top:8px; text-decoration:underline; text-transform:uppercase; }
+  .entete .st { font-size:9px; font-style:italic; }
+
+  .exercice { text-align:right; margin:8px 0 4px; font-weight:700; }
+  .grille2 { display:grid; grid-template-columns:1fr 1fr; gap:0; border:1px solid #000; margin-top:4px; }
+  .grille2 > div { padding:5px 7px; }
+  .grille2 > div:first-child { border-right:1px solid #000; }
+  .sect-titre { font-weight:700; text-decoration:underline; margin-bottom:4px; font-size:11px; }
+  .lg { display:flex; gap:5px; margin-bottom:3px; line-height:1.5; }
+  .lg .lb { color:#000; }
+  .lg .vl { font-weight:700; border-bottom:1px dotted #999; flex:1; min-height:14px; }
+
+  table.mt { width:100%; border-collapse:collapse; margin-top:8px; }
+  table.mt td { border:1px solid #000; padding:4px 7px; vertical-align:top; }
+  table.mt td.montant { text-align:right; font-weight:700; width:30mm; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  table.mt td.lbl { font-size:10px; line-height:1.4; }
+  table.mt .fort { font-weight:700; }
+  table.mt .sous { background:#f2f2f2; }
+  .taux { color:#555; font-size:9px; }
+
+  .deux-col { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+
+  .pied-emp { border:1px solid #000; margin-top:10px; padding:7px 9px; font-size:10px; line-height:1.7; }
+  .pied-emp .t { font-weight:700; text-decoration:underline; margin-bottom:4px; }
+  .signature { text-align:right; margin-top:16px; font-size:10px; }
+  .sign-box { display:inline-block; width:60mm; border:1px dashed #999; height:22mm; margin-top:4px; }
+
+  @page { size:A4; margin:0; }
+  @media print {
+    body { background:#fff; }
+    .barre { display:none; }
+    .form { margin:0; box-shadow:none; width:auto; min-height:auto; padding:10mm 12mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barre">
+  <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+  <a href="/declaration-das">← Retour</a>
+  <div class="info">{{ nb }} bulletin(s) ID19 — exercice {{ annee }} — salariés percevant plus de {{ '{:,}'.format(seuil).replace(',',' ') }} F/mois</div>
+</div>
+
+{% if not lignes %}
+<div class="form">
+  <p style="text-align:center;margin-top:40mm;font-size:14px">
+    Aucun salarié éligible pour l'exercice {{ annee }}<br/><br/>
+    <span style="font-size:11px;color:#555">Le bulletin ID19 concerne les salariés percevant plus de {{ '{:,}'.format(seuil).replace(',',' ') }} FCFA par mois.
+    Vérifiez que les bulletins de paie de l'exercice {{ annee }} ont bien été générés.</span>
+  </p>
+</div>
+{% endif %}
+
+{% for l in lignes %}
+<div class="form">
+  <div class="ref">ID 19</div>
+  <div class="entete">
+    <div class="rep">RÉPUBLIQUE GABONAISE</div>
+    <div class="min">MINISTÈRE DE L'ÉCONOMIE, DU COMMERCE, DE L'INDUSTRIE ET DU TOURISME</div>
+    <div class="min">Direction Générale des Impôts — BP 37 / 45 · Libreville</div>
+    <div class="titre">Bulletin de justification des traitements, salaires, pensions et rentes viagères</div>
+    <div class="st">(Salariés percevant plus de 80 000 FCFA par mois)</div>
+  </div>
+
+  <div class="exercice">Exercice : {{ annee }}</div>
+
+  <!-- Personne rémunérée -->
+  <div class="grille2">
+    <div>
+      <div class="sect-titre">Personne rémunérée</div>
+      <div class="lg"><span class="lb">N° Stat / NIF :</span><span class="vl">{{ l.nif or '—' }}</span></div>
+      <div class="lg"><span class="lb">Nom et prénoms :</span><span class="vl">{{ l.nom }} {{ l.prenom }}</span></div>
+      <div class="lg"><span class="lb">Profession :</span><span class="vl">{{ l.profession or '—' }}</span>
+        <span class="lb">Âge :</span><span class="vl" style="max-width:18mm">{{ l.age or '' }}</span></div>
+      <div class="lg"><span class="lb">Situation de famille :</span><span class="vl">{{ l.situation or '—' }}</span>
+        <span class="lb">Enfants :</span><span class="vl" style="max-width:14mm">{{ l.nb_enfants }}</span></div>
+      <div class="lg"><span class="lb">Période :</span><span class="vl">du {{ '%02d/%02d'|format(l.presence_pj, l.presence_pm) }} au {{ '%02d/%02d'|format(l.presence_fj, l.presence_fm) }}/{{ annee }}</span></div>
+    </div>
+    <div>
+      <div class="sect-titre">Employeur</div>
+      <div class="lg"><span class="lb">Désignation :</span><span class="vl">{{ tenant.denomination }}</span></div>
+      <div class="lg"><span class="lb">N° Stat / NIF :</span><span class="vl">{{ tenant.nif or '—' }}</span></div>
+      <div class="lg"><span class="lb">Adresse :</span><span class="vl">{{ tenant.adresse or '—' }}</span></div>
+      <div class="lg"><span class="lb">Ville :</span><span class="vl">{{ tenant.ville or 'Libreville' }}</span></div>
+    </div>
+  </div>
+
+  <!-- 1. Montant payé -->
+  <table class="mt">
+    <tr>
+      <td class="lbl fort">1.- Montant payé en espèces ou crédité en compte<br/>
+        <span style="font-weight:400;font-size:9px">(après déduction des retenues pour logement, nourriture… ; incluant primes, indemnités, heures supplémentaires, gratifications)</span></td>
+      <td class="montant">{{ l.brut_presence|int|fcfa }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Salaire brut de congés</td>
+      <td class="montant">{{ l.brut_conge|int|fcfa }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">Indemnités imposables (rappels, divers)</td>
+      <td class="montant">{{ l.indem_imposables|int|fcfa }}</td>
+    </tr>
+    <tr class="sous">
+      <td class="lbl fort">Avantages en nature (art. 93 du CGI)</td>
+      <td class="montant">{{ (l.av_logement + l.av_eau + l.av_dom + l.av_nour)|int|fcfa }}</td>
+    </tr>
+    <tr><td class="lbl">&nbsp;&nbsp;— Logement <span class="taux">(6 %)</span></td><td class="montant">{{ l.av_logement|int|fcfa }}</td></tr>
+    <tr><td class="lbl">&nbsp;&nbsp;— Eau, électricité <span class="taux">(5 %)</span></td><td class="montant">{{ l.av_eau|int|fcfa }}</td></tr>
+    <tr><td class="lbl">&nbsp;&nbsp;— Domesticité <span class="taux">(5 %)</span></td><td class="montant">{{ l.av_dom|int|fcfa }}</td></tr>
+    <tr><td class="lbl">&nbsp;&nbsp;— Nourriture <span class="taux">(25 %)</span></td><td class="montant">{{ l.av_nour|int|fcfa }}</td></tr>
+    <tr class="sous">
+      <td class="lbl fort">TOTAL BRUT</td>
+      <td class="montant">{{ l.total_1a5|int|fcfa }}</td>
+    </tr>
+    <tr>
+      <td class="lbl">À déduire : Taxe complémentaire sur les salaires (TCS) retenue</td>
+      <td class="montant">{{ l.tcts|int|fcfa }}</td>
+    </tr>
+    <tr class="sous">
+      <td class="lbl fort">BRUT IMPOSABLE</td>
+      <td class="montant">{{ (l.total_1a5 - l.tcts)|int|fcfa }}</td>
+    </tr>
+    <tr>
+      <td class="lbl fort">I.R.P.P. (salariés) retenu</td>
+      <td class="montant">{{ l.irpp|int|fcfa }}</td>
+    </tr>
+  </table>
+  <div style="font-size:8.5px;font-style:italic;margin-top:3px">Les avantages en nature ne sont pas imposables à l'I.R.P.P. mais entrent dans l'assiette de la taxe complémentaire.</div>
+
+  <!-- 2. Indemnités non imposables -->
+  <table class="mt">
+    <tr class="sous"><td class="lbl fort" colspan="2">2.- Indemnités non imposables</td></tr>
+    <tr><td class="lbl">Transport</td><td class="montant">{{ l.ni_transport|int|fcfa }}</td></tr>
+    <tr><td class="lbl">Logement (non imposable)</td><td class="montant">{{ l.ni_logement|int|fcfa }}</td></tr>
+    <tr><td class="lbl">Autres indemnités non imposables</td><td class="montant">{{ (l.ni_dom + l.ni_autres)|int|fcfa }}</td></tr>
+    <tr class="sous"><td class="lbl fort">TOTAL non imposable</td><td class="montant">{{ l.ni_total|int|fcfa }}</td></tr>
+  </table>
+
+  <!-- Pied employeur -->
+  <div class="pied-emp">
+    <div class="t">Désignation de l'employeur</div>
+    <div>{{ tenant.denomination }} — N° Stat / NIF : {{ tenant.nif or '—' }}</div>
+    <div>{{ tenant.adresse or '' }}{% if tenant.ville %} · {{ tenant.ville }}{% else %} · Libreville{% endif %}{% if tenant.telephone %} · Tél. {{ tenant.telephone }}{% endif %}</div>
+  </div>
+
+  <div class="signature">
+    À {{ tenant.ville or 'Libreville' }}, le {{ genere_le.strftime('%d/%m/%Y') }}<br/>
+    <span style="font-size:9px">Signature et cachet de l'employeur</span>
+    <div class="sign-box"></div>
+  </div>
+
+  <div style="font-size:8px;color:#999;text-align:center;margin-top:8px">
+    Document généré par PaieGabon — à vérifier avant dépôt à la Direction Générale des Impôts.
+  </div>
+</div>
+{% endfor %}
+
+</body>
+</html>
