@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>Formulaires annexes DAS — {{ tenant.denomination }} — Exercice {{ annee }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,Helvetica,sans-serif; color:#000; background:#e5e7eb; font-size:10px; }
+  .barre { text-align:center; padding:14px; background:#0f3d36; }
+  .barre button { background:#e9c46a; color:#0f3d36; border:none; font-weight:700; font-size:14px;
+    padding:10px 24px; border-radius:8px; cursor:pointer; }
+  .barre a { color:#fff; text-decoration:none; font-size:13px; margin-left:12px; opacity:.85; }
+
+  .form { width:210mm; min-height:297mm; margin:16px auto; background:#fff; padding:14mm;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); page-break-after:always; position:relative; }
+  .form:last-of-type { page-break-after:auto; }
+  .ref { position:absolute; top:12mm; right:14mm; border:1.5px solid #000; padding:2px 10px; font-weight:700; font-size:13px; }
+
+  .entete { text-align:center; line-height:1.4; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:12px; }
+  .entete .rep { font-weight:700; font-size:12px; }
+  .entete .min { font-size:9px; }
+  .entete .titre { font-weight:700; font-size:13px; margin-top:8px; text-decoration:underline; text-transform:uppercase; }
+
+  .bloc-ent { display:flex; justify-content:space-between; margin-bottom:10px; font-size:10px; }
+  .bloc-ent .b { font-weight:700; }
+
+  table { width:100%; border-collapse:collapse; font-size:9.5px; margin-top:6px; }
+  th, td { border:1px solid #444; padding:5px 7px; }
+  th { background:#0f3d36; color:#fff; text-align:center; font-size:9px; line-height:1.2; }
+  th.num { background:#0c322c; }
+  td.r { text-align:right; font-variant-numeric:tabular-nums; }
+  td.c { text-align:center; }
+  td.l { text-align:left; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  tfoot td { background:#0f3d36; color:#fff; font-weight:700; }
+
+  .note { font-size:8.5px; font-style:italic; color:#555; margin-top:6px; }
+  .signature { text-align:right; margin-top:24px; font-size:10px; }
+  .sign-box { display:inline-block; width:60mm; border:1px dashed #999; height:20mm; margin-top:4px; }
+  .pied { font-size:8px; color:#999; text-align:center; margin-top:14px; }
+
+  @page { size:A4; margin:0; }
+  @media print {
+    body { background:#fff; }
+    .barre { display:none; }
+    .form { margin:0; box-shadow:none; width:auto; min-height:auto; padding:12mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barre">
+  <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+  <a href="/declaration-das">← Retour</a>
+</div>
+
+{% macro entete(titre) %}
+<div class="entete">
+  <div class="rep">RÉPUBLIQUE GABONAISE</div>
+  <div class="min">Ministère de l'Économie, du Commerce, de l'Industrie et du Tourisme</div>
+  <div class="min">Direction Générale des Impôts — BP 37 / 45 · Libreville</div>
+  <div class="titre">{{ titre }}</div>
+</div>
+<div class="bloc-ent">
+  <div>Entreprise : <span class="b">{{ tenant.denomination }}</span></div>
+  <div>NIF : <span class="b">{{ tenant.nif or '—' }}</span> &nbsp;·&nbsp; Exercice : <span class="b">{{ annee }}</span></div>
+</div>
+{% endmacro %}
+
+<!-- ═══════════ ID 20 — ÉTAT DE LA MASSE SALARIALE ═══════════ -->
+<div class="form">
+  <div class="ref">ID 20</div>
+  {{ entete("État de la masse salariale") }}
+  <table>
+    <thead>
+      <tr><th style="text-align:left">Rubrique</th><th>Nombre de salariés</th><th>Total des rémunérations payées (FCFA)</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="l">Employés percevant un salaire brut supérieur à {{ '{:,}'.format(id20.seuil).replace(',',' ') }} F/mois</td>
+        <td class="c">{{ id20.nb_sup }}</td>
+        <td class="r">{{ id20.tot_sup|int|fcfa }}</td>
+      </tr>
+      <tr>
+        <td class="l">Employés percevant un salaire brut inférieur ou égal à {{ '{:,}'.format(id20.seuil).replace(',',' ') }} F/mois</td>
+        <td class="c">{{ id20.nb_inf }}</td>
+        <td class="r">{{ id20.tot_inf|int|fcfa }}</td>
+      </tr>
+    </tbody>
+    <tfoot>
+      <tr><td class="l">TOTAL</td><td class="c">{{ id20.nb_total }}</td><td class="r">{{ id20.tot_total|int|fcfa }}</td></tr>
+    </tfoot>
+  </table>
+  <div class="note">NB : Prendre les salaires bruts versés au cours de l'exercice (total imposable 1 à 5).</div>
+  <div class="signature">À {{ tenant.ville or 'Libreville' }}, le {{ genere_le.strftime('%d/%m/%Y') }}<br/>
+    <span style="font-size:9px">Signature et cachet de l'employeur</span><div class="sign-box"></div></div>
+  <div class="pied">Document généré par PaieGabon — à vérifier avant dépôt à la DGI.</div>
+</div>
+
+<!-- ═══════════ ID 22 — BORDEREAU RÉCAPITULATIF DES SALAIRES ═══════════ -->
+<div class="form">
+  <div class="ref">ID 22</div>
+  {{ entete("Bordereau récapitulatif des salaires") }}
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2">Eff.</th>
+        <th rowspan="2">Salaire brut de présence</th>
+        <th rowspan="2">Logt · Eau · Élec · Dom.</th>
+        <th rowspan="2">Nourriture</th>
+        <th rowspan="2">Indemnités imposables</th>
+        <th rowspan="2">Salaire brut congés</th>
+        <th rowspan="2">Total (1+2+3+4+5)</th>
+        <th rowspan="2">T.C.S</th>
+        <th rowspan="2">I.R.P.P.</th>
+      </tr>
+      <tr></tr>
+      <tr>
+        <th class="num"></th><th class="num">(1)</th><th class="num">(2)</th><th class="num">(3)</th>
+        <th class="num">(4)</th><th class="num">(5)</th><th class="num">(6)</th><th class="num">(7)</th><th class="num">(8)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr>
+        <td class="c">{{ loop.index }}</td>
+        <td class="r">{{ l.brut_presence|int|fcfa }}</td>
+        <td class="r">{{ (l.av_logement + l.av_eau + l.av_dom)|int|fcfa }}</td>
+        <td class="r">{{ l.av_nour|int|fcfa }}</td>
+        <td class="r">{{ l.indem_imposables|int|fcfa }}</td>
+        <td class="r">{{ l.brut_conge|int|fcfa }}</td>
+        <td class="r" style="font-weight:700">{{ l.total_1a5|int|fcfa }}</td>
+        <td class="r">{{ l.tcts|int|fcfa }}</td>
+        <td class="r">{{ l.irpp|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="c">Σ</td>
+        <td class="r">{{ totaux.brut_presence|int|fcfa }}</td>
+        <td class="r">{{ (lignes|sum(attribute='av_logement') + lignes|sum(attribute='av_eau') + lignes|sum(attribute='av_dom'))|int|fcfa }}</td>
+        <td class="r">{{ lignes|sum(attribute='av_nour')|int|fcfa }}</td>
+        <td class="r">{{ lignes|sum(attribute='indem_imposables')|int|fcfa }}</td>
+        <td class="r">{{ totaux.brut_conge|int|fcfa }}</td>
+        <td class="r">{{ totaux.total_1a5|int|fcfa }}</td>
+        <td class="r">{{ totaux.tcts|int|fcfa }}</td>
+        <td class="r">{{ totaux.irpp|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="pied">Document généré par PaieGabon — à vérifier avant dépôt à la DGI.</div>
+</div>
+
+<!-- ═══════════ ID 26 — SOMMES VERSÉES AUX PRESTATAIRES ═══════════ -->
+<div class="form">
+  <div class="ref">ID 26</div>
+  {{ entete("Déclaration des sommes versées aux prestataires") }}
+  {% if lignes_hono %}
+  <table>
+    <thead>
+      <tr>
+        <th style="text-align:left">Nom / raison sociale du prestataire</th>
+        <th>NIF du prestataire</th>
+        <th>Montant versé</th>
+        <th>Retenue à la source</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for h in lignes_hono %}
+      <tr>
+        <td class="l">{{ h.raison_sociale }}{% if h.activite %} <span style="color:#777">— {{ h.activite }}</span>{% endif %}</td>
+        <td class="c" style="font-family:monospace">{{ h.nif }}</td>
+        <td class="r">{{ h.montant_ht|int|fcfa }}</td>
+        <td class="r">{{ h.retenue_total|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="l">TOTAL — {{ lignes_hono|length }} prestataire(s)</td>
+        <td></td>
+        <td class="r">{{ lignes_hono|sum(attribute='montant_ht')|int|fcfa }}</td>
+        <td class="r">{{ lignes_hono|sum(attribute='retenue_total')|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+  <div class="note">Le NIF « 99999 » est appliqué par défaut lorsqu'un prestataire n'a pas de NIF renseigné.</div>
+  {% else %}
+  <p style="text-align:center;margin-top:30mm;color:#555">Aucune somme versée à des prestataires pour l'exercice {{ annee }}.</p>
+  {% endif %}
+  <div class="signature">À {{ tenant.ville or 'Libreville' }}, le {{ genere_le.strftime('%d/%m/%Y') }}<br/>
+    <span style="font-size:9px">Signature et cachet de l'employeur</span><div class="sign-box"></div></div>
+  <div class="pied">Document généré par PaieGabon — à vérifier avant dépôt à la DGI.</div>
+</div>
+
+</body>
+</html>

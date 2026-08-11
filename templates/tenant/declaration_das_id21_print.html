@@ -102,7 +102,7 @@
   <table>
     <thead>
       <tr>
-        <th rowspan="2">Eff.</th><th rowspan="2">NIF</th><th rowspan="2" style="min-width:90px">Nom et prénom</th>
+        <th rowspan="2">Eff.</th><th rowspan="2">N° CNSS</th><th rowspan="2" style="min-width:90px">Nom et prénom</th>
         <th rowspan="2">Emploi</th><th rowspan="2">Niv.</th><th rowspan="2">Nat.</th><th rowspan="2">Âge</th>
         <th rowspan="2">Sexe</th><th rowspan="2">Sit.</th><th rowspan="2">Enf.</th>
         <th colspan="2">Début</th><th colspan="2">Fin</th>
@@ -123,7 +123,7 @@
       {% for l in lignes %}
       <tr>
         <td class="c">{{ loop.index }}</td>
-        <td class="c">{{ l.nif or '—' }}</td>
+        <td class="c">{{ l.id_das }}</td>
         <td class="l">{{ l.nom }} {{ l.prenom }}</td>
         <td class="c">{{ l.code_emploi or '' }}</td>
         <td class="c">{{ l.code_niveau or '' }}</td>

@@ -238,6 +238,9 @@ def agreger_das(tenant, annee: int, db=None, models=None):
             "matricule":      s.matricule or "",
             "cnss":           s.numero_cnss or "",
             "nif":            s.nif or "",
+            # Identifiant du salarié dans la DAS = numéro CNSS (défaut 99999 si absent).
+            # Le NIF proprement dit est réservé aux prestataires (voir honoraires/ID26).
+            "id_das":         (s.numero_cnss or s.nif or "99999"),
             "nom":            s.nom or "",
             "prenom":         s.prenom or "",
             "profession":     s.emploi or (s.categorie.libelle if s.categorie else ""),
@@ -349,7 +352,7 @@ def agreger_honoraires(tenant, annee: int, db=None, models=None):
             type_prestation = contrat.objet or ""
 
         lignes.append({
-            "nif":            p.nif or "",
+            "nif":            p.nif or "99999",
             "raison_sociale": p.raison_sociale or "",
             "prenom":         "",   # le modèle Prestataire ne stocke pas de prénom séparé
             "activite":       p.activite or "",
@@ -705,11 +708,11 @@ def controles_coherence_das(lignes, totaux):
              ", ".join(f"{l['nom']} {l['prenom']}" for l in plus65),
              niveau_ko="ATTENTION")
 
-    # 3. NIF manquant (indispensable pour l'ID19/ID21)
-    sans_nif = [l for l in lignes if not (l.get("nif") or "").strip()]
-    _ajouter("NIF renseigné pour tous les salariés", not sans_nif,
-             f"{len(sans_nif)} salarié(s) sans NIF"
-             + (" : " + ", ".join(f"{l['nom']} {l['prenom']}" for l in sans_nif[:5]) if sans_nif else ""))
+    # 3. Numéro CNSS manquant (identifiant du salarié dans la DAS)
+    sans_cnss = [l for l in lignes if not (l.get("cnss") or "").strip()]
+    _ajouter("N° CNSS renseigné pour tous les salariés", not sans_cnss,
+             f"{len(sans_cnss)} salarié(s) sans n° CNSS"
+             + (" : " + ", ".join(f"{l['nom']} {l['prenom']}" for l in sans_cnss[:5]) if sans_cnss else ""))
 
     # 4. Matricules en double (lignes mélangées)
     from collections import Counter

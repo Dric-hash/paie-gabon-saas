@@ -8526,6 +8526,52 @@ def declaration_cnss():
 # DÉCLARATION ANNUELLE DES SALAIRES (DAS) — réservée à l'abonnement Cabinet
 # ══════════════════════════════════════════════════════════════════════════════
 
+@bp.route("/declaration-das/annexes")
+@login_required
+def declaration_das_annexes():
+    """Formulaires annexes DGI : ID20 (masse salariale), ID22 (récap salaires),
+    ID26 (sommes versées aux prestataires). Page autonome imprimable."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    from datetime import datetime as _dt
+    annee = request.args.get("annee", _dt.now().year - 1, type=int)
+    try:
+        from declaration_das import agreger_das, agreger_honoraires
+        import models as _models
+        lignes, totaux = agreger_das(t, annee, models=_models)
+    except Exception:
+        lignes, totaux = [], {}
+    try:
+        from declaration_das import agreger_honoraires
+        import models as _models
+        lignes_hono, tot_hono = agreger_honoraires(t, annee, models=_models)
+    except Exception:
+        lignes_hono, tot_hono = [], {}
+
+    # ID20 : ventilation de la masse salariale selon le seuil de 80 000 F/mois
+    SEUIL = 80000
+    sup = [l for l in lignes if (l.get("total_1a5", 0) / 12.0) > SEUIL]
+    inf = [l for l in lignes if (l.get("total_1a5", 0) / 12.0) <= SEUIL]
+    id20 = {
+        "nb_sup": len(sup), "tot_sup": round(sum(l["total_1a5"] for l in sup), 0),
+        "nb_inf": len(inf), "tot_inf": round(sum(l["total_1a5"] for l in inf), 0),
+        "nb_total": len(lignes), "tot_total": round(sum(l["total_1a5"] for l in lignes), 0),
+        "seuil": SEUIL,
+    }
+
+    log_action("EXPORT", "declaration", None, f"Impression formulaires annexes DAS — exercice {annee}")
+    db.session.commit()
+
+    return render_template("tenant/declaration_das_annexes_print.html",
+        tenant=t, lignes=lignes, totaux=totaux, id20=id20,
+        lignes_hono=lignes_hono, tot_hono=tot_hono,
+        annee=annee, nb=len(lignes), genere_le=_dt.now())
+
+
 @bp.route("/declaration-das/id21")
 @login_required
 def declaration_das_id21():
