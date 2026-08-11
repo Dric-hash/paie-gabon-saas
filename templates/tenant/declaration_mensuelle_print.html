@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>Bordereau mensuel impôts &amp; taxes — {{ tenant.denomination }} — {{ periode.libelle_complet }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Segoe UI",Arial,sans-serif; color:#111; background:#e5e7eb; font-size:12px; }
+  .barre { text-align:center; padding:14px; background:#0f3d36; }
+  .barre button { background:#e9c46a; color:#0f3d36; border:none; font-weight:700; font-size:14px;
+    padding:10px 24px; border-radius:8px; cursor:pointer; }
+  .barre a { color:#fff; text-decoration:none; font-size:13px; margin-left:12px; opacity:.85; }
+
+  .bordereau { width:210mm; min-height:297mm; margin:16px auto; background:#fff; padding:16mm 14mm;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); }
+
+  .entete { display:flex; justify-content:space-between; align-items:flex-start;
+    border-bottom:2.5px solid #0f3d36; padding-bottom:10px; margin-bottom:6px; }
+  .rep { font-size:10px; line-height:1.5; color:#333; }
+  .rep .pays { font-weight:800; font-size:12px; color:#0f3d36; letter-spacing:.03em; }
+  .rep .devise { font-style:italic; color:#777; font-size:9px; }
+  .titre-b { text-align:right; }
+  .titre-b .t1 { font-weight:800; font-size:15px; color:#0f3d36; }
+  .titre-b .t2 { font-size:10px; color:#555; }
+
+  .titre-doc { text-align:center; margin:14px 0 4px; }
+  .titre-doc h1 { font-size:17px; font-weight:800; color:#0f3d36; text-transform:uppercase; }
+  .titre-doc .periode { font-size:12px; color:#444; margin-top:2px; }
+
+  .bloc-employeur { display:grid; grid-template-columns:1fr 1fr; gap:6px 24px;
+    background:#f6f4ec; border:1px solid #e6e2d6; border-radius:6px; padding:10px 14px; margin:12px 0; font-size:11px; }
+  .bloc-employeur .lg { display:flex; gap:6px; }
+  .bloc-employeur .lb { color:#777; min-width:110px; }
+  .bloc-employeur .vl { font-weight:700; }
+
+  table { width:100%; border-collapse:collapse; font-size:10px; margin-top:6px; }
+  thead th { background:#0f3d36; color:#fff; padding:6px 5px; text-align:right; font-weight:700; border:.5px solid #0c322c; white-space:nowrap; }
+  thead th.l { text-align:left; }
+  tbody td { padding:5px; border:.5px solid #e5e7eb; text-align:right; font-variant-numeric:tabular-nums; }
+  tbody td.l { text-align:left; }
+  tbody td.c { text-align:center; font-family:monospace; color:#555; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  tfoot td { padding:7px 5px; border:.5px solid #0c322c; background:#0f3d36; color:#fff; font-weight:800; text-align:right; font-variant-numeric:tabular-nums; }
+  tfoot td.l { text-align:left; }
+
+  .recap { display:flex; justify-content:flex-end; margin-top:12px; }
+  .recap-box { border:2px solid #0f3d36; border-radius:8px; overflow:hidden; min-width:300px; }
+  .recap-box .r { display:flex; justify-content:space-between; gap:16px; padding:7px 14px; font-size:12px; border-bottom:1px solid #e5e7eb; }
+  .recap-box .r span:last-child { white-space:nowrap; }
+  .recap-box .r.tot { background:#0f3d36; color:#fff; font-weight:800; font-size:14px; border-bottom:none; }
+
+  .signature { display:flex; justify-content:space-between; margin-top:30px; font-size:11px; }
+  .signature .case { width:45%; }
+  .signature .case .lbl { color:#555; margin-bottom:4px; }
+  .signature .case .box { border:1px dashed #bbb; height:66px; border-radius:6px; }
+
+  .avertissement { margin-top:18px; border:1.5px solid #d97706; background:#fffbeb; color:#7c2d12;
+    border-radius:6px; padding:8px 12px; font-size:9.5px; line-height:1.5; }
+  .pied { margin-top:8px; text-align:center; font-size:9px; color:#999; border-top:1px solid #eee; padding-top:6px; }
+
+  @page { size:A4; margin:0; }
+  @media print {
+    body { background:#fff; }
+    .barre { display:none; }
+    .bordereau { margin:0; box-shadow:none; width:auto; min-height:auto; padding:12mm; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barre">
+  <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF</button>
+  <a href="/declaration-cnss">← Retour aux déclarations</a>
+</div>
+
+<div class="bordereau">
+  <div class="entete">
+    <div class="rep">
+      <div class="pays">RÉPUBLIQUE GABONAISE</div>
+      <div class="devise">Union · Travail · Justice</div>
+      <div style="margin-top:4px">Impôts et taxes assis sur les salaires</div>
+    </div>
+    <div class="titre-b">
+      <div class="t1">Déclaration mensuelle</div>
+      <div class="t2">CFP · FNH · TCS · IRPP</div>
+    </div>
+  </div>
+
+  <div class="titre-doc">
+    <h1>Bordereau mensuel des impôts et taxes sur salaires</h1>
+    <div class="periode">Période : <strong>{{ periode.libelle_complet }}</strong></div>
+  </div>
+
+  <div class="bloc-employeur">
+    <div class="lg"><span class="lb">Employeur</span><span class="vl">{{ tenant.denomination }}</span></div>
+    <div class="lg"><span class="lb">NIF</span><span class="vl">{{ tenant.nif or '—' }}</span></div>
+    <div class="lg"><span class="lb">Effectif</span><span class="vl">{{ nb }} salarié(s)</span></div>
+    <div class="lg"><span class="lb">N° CNSS employeur</span><span class="vl">{{ tenant.numero_cnss or '—' }}</span></div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="l">N°</th>
+        <th class="l">Nom &amp; prénoms</th>
+        <th>Matricule</th>
+        <th>Salaire brut</th>
+        <th>CFP</th>
+        <th>FNH</th>
+        <th>TCS</th>
+        <th>IRPP</th>
+        <th>Total retenu</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr>
+        <td class="c">{{ loop.index }}</td>
+        <td class="l">{{ l.salarie.nom_complet if l.salarie else '—' }}</td>
+        <td class="c">{{ l.salarie.matricule if l.salarie else '' }}</td>
+        <td>{{ l.brut|int|fcfa }}</td>
+        <td>{{ l.cfp|int|fcfa }}</td>
+        <td>{{ l.fnh|int|fcfa }}</td>
+        <td>{{ l.tcs|int|fcfa }}</td>
+        <td>{{ l.irpp|int|fcfa }}</td>
+        <td style="font-weight:700">{{ l.total|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="l" colspan="3">TOTAUX — {{ nb }} salarié(s)</td>
+        <td>{{ totaux.brut|int|fcfa }}</td>
+        <td>{{ totaux.cfp|int|fcfa }}</td>
+        <td>{{ totaux.fnh|int|fcfa }}</td>
+        <td>{{ totaux.tcs|int|fcfa }}</td>
+        <td>{{ totaux.irpp|int|fcfa }}</td>
+        <td>{{ totaux.total|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="recap">
+    <div class="recap-box">
+      <div class="r"><span>C.F.P. — Contribution à la formation professionnelle&nbsp;&nbsp;</span><span>{{ totaux.cfp|int|fcfa }}</span></div>
+      <div class="r"><span>F.N.H. — Fonds national de l'habitat</span><span>{{ totaux.fnh|int|fcfa }}</span></div>
+      <div class="r"><span>T.C.S. — Taxe complémentaire sur les salaires</span><span>{{ totaux.tcs|int|fcfa }}</span></div>
+      <div class="r"><span>I.R.P.P. — Impôt sur le revenu</span><span>{{ totaux.irpp|int|fcfa }}</span></div>
+      <div class="r tot"><span>TOTAL À VERSER&nbsp;</span><span>{{ totaux.total|int|fcfa }}</span></div>
+    </div>
+  </div>
+
+  <div class="signature">
+    <div class="case"><div class="lbl">Date et cachet de l'employeur</div><div class="box"></div></div>
+    <div class="case"><div class="lbl">Réservé à l'administration</div><div class="box"></div></div>
+  </div>
+
+  <div class="avertissement">
+    <strong>⚠️ DOCUMENT NON OFFICIEL</strong> — édité par PaieGabon à titre d'aide au calcul.
+    Les montants doivent être reportés sur les <strong>formulaires officiels des administrations concernées (DGI, etc.)</strong>.
+    PaieGabon ne remplace pas un comptable ou un expert-comptable. Vérifiez toutes les données avant validation ou dépôt.
+  </div>
+  <div class="pied">Généré par PaieGabon le {{ genere_le.strftime('%d/%m/%Y à %H:%M') }} — {{ tenant.denomination }}.</div>
+</div>
+</body>
+</html>

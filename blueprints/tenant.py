@@ -8637,6 +8637,52 @@ def declaration_das_id19():
         genere_le=_dt.now(), seuil=SEUIL_MENSUEL)
 
 
+@bp.route("/declaration-cnss/imprimer-mensuel")
+@login_required
+def declaration_mensuelle_imprimer():
+    """Bordereau mensuel imprimable des impôts et taxes sur salaires
+    (CFP, FNH, TCS, IRPP), détaillé par salarié. Page autonome, prête à imprimer."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    pid = request.args.get("periode_id", type=int)
+    periode = (PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first() if pid
+               else PeriodePaie.query.filter_by(tenant_id=t.id)
+                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).first())
+    if not periode:
+        flash("Aucune période disponible pour la déclaration.", "warning")
+        return redirect(url_for("tenant.declaration_cnss"))
+
+    bulletins = (BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)
+                 .options(joinedload(BulletinPaie.salarie)).all())
+
+    lignes = []
+    for b in bulletins:
+        cfp  = float(b.cfp or 0);  fnh = float(b.fnh or 0)
+        tcs  = float(b.tcs or 0);  irpp = float(b.irpp or 0)
+        lignes.append({
+            "salarie": b.salarie,
+            "brut": float(b.salaire_brut or 0),
+            "cfp": cfp, "fnh": fnh, "tcs": tcs, "irpp": irpp,
+            "total": round(cfp + fnh + tcs + irpp, 2),
+        })
+    lignes.sort(key=lambda x: x["salarie"].nom if x["salarie"] else "")
+
+    def _t(champ): return round(sum(l[champ] for l in lignes), 2)
+    totaux = {c: _t(c) for c in ("brut", "cfp", "fnh", "tcs", "irpp", "total")}
+
+    log_action("EXPORT", "declaration", periode.id,
+               f"Impression bordereau mensuel impôts/taxes — {periode.libelle_complet}")
+    db.session.commit()
+
+    return render_template("tenant/declaration_mensuelle_print.html",
+        tenant=t, lignes=lignes, totaux=totaux, periode=periode,
+        nb=len(lignes), genere_le=datetime.now())
+
+
 @bp.route("/declaration-cnss/imprimer")
 @login_required
 def declaration_cnss_imprimer():
