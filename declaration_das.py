@@ -678,3 +678,64 @@ def generer_das_excel(tenant, annee: int, models=None) -> bytes:
     bio = BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CONTRÔLES DE COHÉRENCE (reproduits de la feuille SOCIETE du modèle officiel)
+# ══════════════════════════════════════════════════════════════════════════════
+def controles_coherence_das(lignes, totaux):
+    """Vérifie la cohérence de la DAS avant dépôt, comme le modèle officiel DGI.
+    Retourne une liste de dicts : {libelle, statut ('OK'|'ERREUR'|'ATTENTION'), detail}.
+    Ne bloque rien : aide au contrôle."""
+    res = []
+
+    def _ajouter(libelle, ok, detail="", niveau_ko="ERREUR"):
+        res.append({"libelle": libelle,
+                    "statut": "OK" if ok else niveau_ko,
+                    "detail": detail})
+
+    # 1. Salariés de moins de 15 ans (âge invalide)
+    moins15 = [l for l in lignes if isinstance(l.get("age"), int) and 0 < l["age"] < 15]
+    _ajouter("Salariés de moins de 15 ans", not moins15,
+             ", ".join(f"{l['nom']} {l['prenom']}" for l in moins15))
+
+    # 2. Salariés de plus de 65 ans
+    plus65 = [l for l in lignes if isinstance(l.get("age"), int) and l["age"] > 65]
+    _ajouter("Salariés de plus de 65 ans", not plus65,
+             ", ".join(f"{l['nom']} {l['prenom']}" for l in plus65),
+             niveau_ko="ATTENTION")
+
+    # 3. NIF manquant (indispensable pour l'ID19/ID21)
+    sans_nif = [l for l in lignes if not (l.get("nif") or "").strip()]
+    _ajouter("NIF renseigné pour tous les salariés", not sans_nif,
+             f"{len(sans_nif)} salarié(s) sans NIF"
+             + (" : " + ", ".join(f"{l['nom']} {l['prenom']}" for l in sans_nif[:5]) if sans_nif else ""))
+
+    # 4. Matricules en double (lignes mélangées)
+    from collections import Counter
+    mats = Counter((l.get("matricule") or "").strip() for l in lignes if (l.get("matricule") or "").strip())
+    doublons = [m for m, n in mats.items() if n > 1]
+    _ajouter("Aucun matricule en double", not doublons,
+             "Matricules dupliqués : " + ", ".join(doublons) if doublons else "")
+
+    # 5. Cohérence du total imposable (somme des lignes = total déclaré)
+    somme_total = round(sum(l.get("total_1a5", 0) for l in lignes), 0)
+    tot_declare = round(totaux.get("total_1a5", 0), 0)
+    _ajouter("Cohérence du total imposable (1 à 5)", abs(somme_total - tot_declare) < 1,
+             f"Somme lignes {int(somme_total):,} ≠ total {int(tot_declare):,}".replace(",", " ")
+             if abs(somme_total - tot_declare) >= 1 else "")
+
+    # 6. Cohérence des totaux d'impôts (TCS + IRPP + FNH)
+    somme_tcts = round(sum(l.get("tcts", 0) for l in lignes), 0)
+    _ajouter("Cohérence du total TCS", abs(somme_tcts - round(totaux.get("tcts", 0), 0)) < 1)
+    somme_irpp = round(sum(l.get("irpp", 0) for l in lignes), 0)
+    _ajouter("Cohérence du total IRPP", abs(somme_irpp - round(totaux.get("irpp", 0), 0)) < 1)
+    somme_fnh = round(sum(l.get("fnh", 0) for l in lignes), 0)
+    _ajouter("Cohérence du total FNH", abs(somme_fnh - round(totaux.get("fnh", 0), 0)) < 1)
+
+    # 7. Âge non renseigné (contrôle de complétude)
+    sans_age = [l for l in lignes if not isinstance(l.get("age"), int) or l["age"] <= 0]
+    _ajouter("Date de naissance renseignée (âge calculable)", not sans_age,
+             f"{len(sans_age)} salarié(s) sans âge", niveau_ko="ATTENTION")
+
+    return res

@@ -8526,6 +8526,36 @@ def declaration_cnss():
 # DÉCLARATION ANNUELLE DES SALAIRES (DAS) — réservée à l'abonnement Cabinet
 # ══════════════════════════════════════════════════════════════════════════════
 
+@bp.route("/declaration-das/id21")
+@login_required
+def declaration_das_id21():
+    """Listing détaillé ID21 (bordereau détaillé DGI), au format officiel.
+    Page autonome imprimable en paysage, avec la numérotation officielle des
+    colonnes (1 à 10) et les contrôles de cohérence."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+
+    from datetime import datetime as _dt
+    annee = request.args.get("annee", _dt.now().year - 1, type=int)
+    try:
+        from declaration_das import agreger_das, controles_coherence_das
+        import models as _models
+        lignes, totaux = agreger_das(t, annee, models=_models)
+        controles = controles_coherence_das(lignes, totaux)
+    except Exception:
+        lignes, totaux, controles = [], {}, []
+
+    log_action("EXPORT", "declaration", None, f"Impression listing ID21 — exercice {annee}")
+    db.session.commit()
+
+    return render_template("tenant/declaration_das_id21_print.html",
+        tenant=t, lignes=lignes, totaux=totaux, controles=controles,
+        annee=annee, nb=len(lignes), genere_le=_dt.now())
+
+
 @bp.route("/declaration-das/id19")
 @login_required
 def declaration_das_id19():
@@ -8659,9 +8689,15 @@ def declaration_das():
     except Exception:
         lignes_hono, tot_hono = [], {}
 
+    # Contrôles de cohérence (aide au contrôle avant dépôt)
+    controles = []
+    if lignes:
+        from declaration_das import controles_coherence_das
+        controles = controles_coherence_das(lignes, totaux)
+
     return render_template("tenant/declaration_das.html",
         tenant=t, annees=annees, annee=annee,
-        lignes=lignes, totaux=totaux, erreur=erreur,
+        lignes=lignes, totaux=totaux, erreur=erreur, controles=controles,
         lignes_hono=lignes_hono, tot_hono=tot_hono)
 
 

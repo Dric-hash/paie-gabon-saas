@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<title>Listing ID21 — {{ tenant.denomination }} — Exercice {{ annee }}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,Helvetica,sans-serif; color:#000; background:#e5e7eb; font-size:9px; }
+  .barre { text-align:center; padding:14px; background:#0f3d36; }
+  .barre button { background:#e9c46a; color:#0f3d36; border:none; font-weight:700; font-size:14px;
+    padding:10px 24px; border-radius:8px; cursor:pointer; }
+  .barre a { color:#fff; text-decoration:none; font-size:13px; margin-left:12px; opacity:.85; }
+
+  .page { width:420mm; margin:16px auto; background:#fff; padding:8mm 8mm;
+    box-shadow:0 2px 12px rgba(0,0,0,.15); }
+
+  /* ── Contrôles de cohérence ── */
+  .controles { border:2px solid #0f3d36; border-radius:6px; margin-bottom:10px; overflow:hidden; }
+  .controles .ct { background:#0f3d36; color:#fff; font-weight:700; padding:6px 12px; font-size:12px; }
+  .controles .grid { display:grid; grid-template-columns:1fr 1fr; }
+  .controles .c { display:flex; align-items:center; gap:8px; padding:5px 12px; border-bottom:1px solid #eee; font-size:11px; }
+  .badge { font-weight:700; padding:1px 8px; border-radius:4px; font-size:10px; white-space:nowrap; }
+  .b-ok { background:#dcfce7; color:#166534; }
+  .b-err { background:#fee2e2; color:#991b1b; }
+  .b-att { background:#fef9c3; color:#854d0e; }
+  .ct-detail { color:#991b1b; font-size:10px; }
+
+  /* ── En-tête ID21 ── */
+  .entete { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:6px; }
+  .entete .g { font-size:9px; line-height:1.4; }
+  .entete .g .b { font-weight:700; }
+  .entete .c { text-align:center; }
+  .entete .c .t1 { font-weight:700; font-size:12px; }
+  .entete .c .t2 { font-weight:700; font-size:11px; text-decoration:underline; }
+  .entete .d { text-align:right; font-size:9px; }
+  .entete .d .ref { border:1.5px solid #000; padding:2px 10px; font-weight:700; font-size:12px; display:inline-block; }
+
+  table { width:100%; border-collapse:collapse; font-size:8px; }
+  th, td { border:.5px solid #444; padding:2px 3px; text-align:right; white-space:nowrap; }
+  th { background:#0f3d36; color:#fff; font-size:7.5px; text-align:center; line-height:1.2; }
+  th.num { background:#0c322c; font-size:8px; }
+  td.l { text-align:left; }
+  td.c { text-align:center; }
+  tbody tr:nth-child(even) { background:#fafafa; }
+  tfoot td { background:#0f3d36; color:#fff; font-weight:700; }
+  .money { font-variant-numeric:tabular-nums; }
+
+  @page { size:A4 landscape; margin:6mm; }
+  @media print {
+    body { background:#fff; }
+    .barre { display:none; }
+    .page { margin:0; box-shadow:none; width:auto; padding:0; }
+    table { font-size:7px; }
+    th { font-size:6.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="barre">
+  <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF (paysage)</button>
+  <a href="/declaration-das">← Retour</a>
+</div>
+
+<div class="page">
+
+  {% if controles %}
+  <div class="controles">
+    <div class="ct">CONTRÔLES DE COHÉRENCE — à vérifier avant dépôt</div>
+    <div class="grid">
+      {% for c in controles %}
+      <div class="c">
+        {% if c.statut == 'OK' %}<span class="badge b-ok">OK</span>
+        {% elif c.statut == 'ATTENTION' %}<span class="badge b-att">À VÉRIFIER</span>
+        {% else %}<span class="badge b-err">ERREUR</span>{% endif %}
+        <span>{{ c.libelle }}</span>
+        {% if c.detail %}<span class="ct-detail">— {{ c.detail }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="entete">
+    <div class="g">
+      <div class="b">RÉPUBLIQUE GABONAISE</div>
+      <div>Ministère de l'Économie, du Commerce, de l'Industrie et du Tourisme</div>
+      <div>Direction Générale des Impôts — BP 37 / 45 · Libreville</div>
+      <div style="margin-top:3px">Feuillet n° 01</div>
+    </div>
+    <div class="c">
+      <div class="t1">DÉCLARATION DES TRAITEMENTS ET SALAIRES</div>
+      <div class="t2">BORDEREAU DÉTAILLÉ</div>
+      <div style="margin-top:3px">Entreprise : <span style="font-weight:700">{{ tenant.denomination }}</span> — NIF : {{ tenant.nif or '—' }}</div>
+    </div>
+    <div class="d">
+      <div class="ref">ID 21</div>
+      <div style="margin-top:4px">Exercice : <span style="font-weight:700">{{ annee }}</span></div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th rowspan="2">Eff.</th><th rowspan="2">NIF</th><th rowspan="2" style="min-width:90px">Nom et prénom</th>
+        <th rowspan="2">Emploi</th><th rowspan="2">Niv.</th><th rowspan="2">Nat.</th><th rowspan="2">Âge</th>
+        <th rowspan="2">Sexe</th><th rowspan="2">Sit.</th><th rowspan="2">Enf.</th>
+        <th colspan="2">Début</th><th colspan="2">Fin</th>
+        <th rowspan="2">Salaire brut présence</th><th rowspan="2">Logt Eau Élec</th><th rowspan="2">Nourriture</th>
+        <th rowspan="2">Indem. impos.</th><th rowspan="2">Brut congés</th><th rowspan="2">TOTAL (1à5)</th>
+        <th rowspan="2">TCS</th><th rowspan="2">IRPP</th><th rowspan="2">FNH</th><th rowspan="2">TOTAL impôts</th>
+        <th rowspan="2">Indem. non impos.</th>
+      </tr>
+      <tr><th>J</th><th>M</th><th>J</th><th>M</th></tr>
+      <tr>
+        <th class="num" colspan="14"></th>
+        <th class="num">(1)</th><th class="num">(2)</th><th class="num">(3)</th><th class="num">(4)</th>
+        <th class="num">(5)</th><th class="num">(6)</th><th class="num">(7)</th><th class="num">(8)</th>
+        <th class="num">(9)</th><th class="num">(10)</th><th class="num"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr>
+        <td class="c">{{ loop.index }}</td>
+        <td class="c">{{ l.nif or '—' }}</td>
+        <td class="l">{{ l.nom }} {{ l.prenom }}</td>
+        <td class="c">{{ l.code_emploi or '' }}</td>
+        <td class="c">{{ l.code_niveau or '' }}</td>
+        <td class="c">{{ l.nationalite }}</td>
+        <td class="c">{{ l.age or '' }}</td>
+        <td class="c">{{ l.sexe }}</td>
+        <td class="c">{{ l.situation }}</td>
+        <td class="c">{{ l.nb_enfants }}</td>
+        <td class="c">{{ l.presence_pj }}</td><td class="c">{{ l.presence_pm }}</td>
+        <td class="c">{{ l.presence_fj }}</td><td class="c">{{ l.presence_fm }}</td>
+        <td class="money">{{ l.brut_presence|int|fcfa }}</td>
+        <td class="money">{{ (l.av_logement + l.av_eau + l.av_dom)|int|fcfa }}</td>
+        <td class="money">{{ l.av_nour|int|fcfa }}</td>
+        <td class="money">{{ l.indem_imposables|int|fcfa }}</td>
+        <td class="money">{{ l.brut_conge|int|fcfa }}</td>
+        <td class="money" style="font-weight:700">{{ l.total_1a5|int|fcfa }}</td>
+        <td class="money">{{ l.tcts|int|fcfa }}</td>
+        <td class="money">{{ l.irpp|int|fcfa }}</td>
+        <td class="money">{{ l.fnh|int|fcfa }}</td>
+        <td class="money" style="font-weight:700">{{ (l.tcts + l.irpp + l.fnh)|int|fcfa }}</td>
+        <td class="money">{{ l.ni_total|int|fcfa }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td class="l" colspan="14">TOTAUX — {{ nb }} salarié(s)</td>
+        <td class="money">{{ totaux.brut_presence|int|fcfa }}</td>
+        <td class="money">{{ (lignes|sum(attribute='av_logement') + lignes|sum(attribute='av_eau') + lignes|sum(attribute='av_dom'))|int|fcfa }}</td>
+        <td class="money">{{ lignes|sum(attribute='av_nour')|int|fcfa }}</td>
+        <td class="money">{{ lignes|sum(attribute='indem_imposables')|int|fcfa }}</td>
+        <td class="money">{{ totaux.brut_conge|int|fcfa }}</td>
+        <td class="money">{{ totaux.total_1a5|int|fcfa }}</td>
+        <td class="money">{{ totaux.tcts|int|fcfa }}</td>
+        <td class="money">{{ totaux.irpp|int|fcfa }}</td>
+        <td class="money">{{ totaux.fnh|int|fcfa }}</td>
+        <td class="money">{{ (totaux.tcts + totaux.irpp + totaux.fnh)|int|fcfa }}</td>
+        <td class="money">{{ totaux.ni_total|int|fcfa }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div style="font-size:8px;color:#999;text-align:center;margin-top:8px">
+    Document généré par PaieGabon le {{ genere_le.strftime('%d/%m/%Y à %H:%M') }} — à vérifier avant dépôt à la Direction Générale des Impôts.
+  </div>
+</div>
+</body>
+</html>
