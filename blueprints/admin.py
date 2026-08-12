@@ -851,6 +851,7 @@ def admin_paiement_valider(id):
         t.plan_id = p.plan_id
     t.date_expiration = nouvelle_expiration
     t.statut = "ACTIF"
+    t.alerte_expiration_envoyee = None  # nouveau cycle → l'alerte 72h pourra repartir
     db.session.commit()
 
     log_action("VALIDATE", "paiement", p.id,

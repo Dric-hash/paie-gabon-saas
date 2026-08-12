@@ -72,6 +72,9 @@ class Tenant(db.Model):
     statut           = db.Column(db.String(20), default="ACTIF")
     date_inscription = db.Column(db.DateTime, default=utcnow)
     date_expiration  = db.Column(db.DateTime)
+    # Horodatage de l'envoi de l'alerte « expiration dans 72 h » pour le cycle
+    # d'abonnement en cours. Remis à NULL à chaque renouvellement.
+    alerte_expiration_envoyee = db.Column(db.DateTime)
     # Référence d'interconnexion : identifiant partagé avec les autres apps
     # (Caisse Ameriack, Ops) pour relier ce tenant à son équivalent. Défini une
     # fois, il sert de clé d'accroche lors des appels d'API entre applications.
@@ -127,6 +130,29 @@ class Tenant(db.Model):
     def est_entreprise_geree(self):
         """True si ce tenant est une entreprise rattachée à un cabinet."""
         return self.cabinet_id is not None
+
+    @property
+    def est_expire(self):
+        """True si l'essai ou l'abonnement est arrivé à échéance.
+        Un tenant sans date d'expiration n'expire jamais. En mode cabinet,
+        une entreprise gérée hérite de l'échéance de son cabinet."""
+        cible = self.cabinet if self.est_entreprise_geree and self.cabinet else self
+        return bool(cible.date_expiration and cible.date_expiration < utcnow())
+
+    @property
+    def heures_avant_expiration(self):
+        """Nombre d'heures avant l'échéance (None si pas de date, 0 si dépassée)."""
+        cible = self.cabinet if self.est_entreprise_geree and self.cabinet else self
+        if not cible.date_expiration:
+            return None
+        delta = (cible.date_expiration - utcnow()).total_seconds() / 3600.0
+        return max(0.0, delta)
+
+    @property
+    def expire_dans_72h(self):
+        """True si l'échéance est dans les 72 h à venir (pas encore expiré)."""
+        h = self.heures_avant_expiration
+        return h is not None and 0 < h <= 72
 
     @property
     def nb_entreprises_gerees(self):

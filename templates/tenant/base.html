@@ -428,6 +428,16 @@
       </div>
       {% endif %}
     {% endwith %}
+    {% if current_user.tenant and current_user.tenant.expire_dans_72h %}
+    {% set h = current_user.tenant.heures_avant_expiration %}
+    <div style="background:#fffbeb;border:1.5px solid #d97706;border-radius:.9rem;padding:.85rem 1.15rem;margin-bottom:1.25rem;display:flex;align-items:center;gap:.85rem;flex-wrap:wrap">
+      <span style="font-size:1.3rem">⏳</span>
+      <div style="flex:1;min-width:220px;color:#7c2d12;font-size:.88rem;line-height:1.5">
+        <strong>Votre {{ 'essai' if current_user.tenant.statut == 'ESSAI' else 'abonnement' }} expire {{ 'dans moins de 24 h' if h <= 24 else 'dans %d h environ'|format(h|int) }}.</strong> Passé ce délai, l'accès sera suspendu jusqu'au règlement. Renouvelez dès maintenant pour éviter toute interruption.
+      </div>
+      <a href="/paiement" style="background:#d97706;color:white;padding:.5rem 1.1rem;border-radius:.7rem;font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap">Renouveler maintenant →</a>
+    </div>
+    {% endif %}
     {% block content %}{% endblock %}
     </div>
   </main>

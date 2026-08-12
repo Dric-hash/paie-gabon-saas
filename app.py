@@ -697,5 +697,15 @@ if not os.environ.get("SKIP_BOOTSTRAP"):
         except Exception as e:
             logger.error(f"Erreur au démarrage : {e}")
 
+@app.cli.command("alertes-expiration")
+def _cmd_alertes_expiration():
+    """Envoie les alertes « abonnement expire dans 72 h ». À planifier via cron."""
+    import models as _models
+    from core import send_email_async
+    from alertes_expiration import alerter_expirations_proches
+    n = alerter_expirations_proches(db, mail, _models, utcnow, send_email_async, logger)
+    print(f"{n} alerte(s) 72 h envoyée(s).")
+
+
 if __name__ == "__main__":
     app.run(debug=False, port=5000)

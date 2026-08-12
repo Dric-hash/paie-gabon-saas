@@ -77,6 +77,33 @@ def _exiger_email_confirme():
         return
     return render_template("auth/email_non_confirme.html", email=current_user.email), 403
 
+
+# Quand l'abonnement a expiré, seule la section paiement reste accessible
+# (blocage sec). Le tenant a été averti 72 h avant l'échéance.
+_PAIEMENT_PREFIXE = "/paiement"
+
+
+@bp.before_request
+def _bloquer_si_expire():
+    """Blocage sec à l'expiration : tout est redirigé vers la page de paiement.
+    Le tenant a reçu un avertissement 72 h avant l'échéance. Seule la section
+    paiement reste ouverte, pour qu'il puisse régler (Airtel Money / virement)."""
+    if not current_user.is_authenticated or current_user.is_super_admin:
+        return
+    t = getattr(current_user, "tenant", None)
+    if not t or not t.est_expire:
+        return
+    if request.path.startswith(_PAIEMENT_PREFIXE):
+        return
+    if request.is_json or "/api/" in request.path \
+       or "application/json" in (request.headers.get("Accept", "")):
+        return jsonify({
+            "error": "Abonnement expiré. Veuillez renouveler pour continuer.",
+            "renouveler": url_for("tenant.paiement"),
+        }), 402
+    flash("Votre abonnement a expiré. Veuillez le renouveler pour continuer à utiliser PaieGabon.", "error")
+    return redirect(url_for("tenant.paiement"))
+
 @bp.route("/parametres/api/regenerer-token", methods=["POST"])
 @tenant_required
 @admin_only
