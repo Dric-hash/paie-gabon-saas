@@ -1300,6 +1300,35 @@ def salarie_modifier(id):
             ("mode_paiement",(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
+
+        # ── Salaire de base : mise à jour du contrat actif ────────────────
+        sb_raw = request.form.get("salaire_base")
+        if sb_raw:
+            try:
+                nouveau_sb = float(str(sb_raw).replace(" ", "").replace(",", "."))
+            except (ValueError, TypeError):
+                nouveau_sb = None
+            if nouveau_sb and nouveau_sb > 0:
+                contrat = Contrat.query.filter_by(
+                    salarie_id=s.id, tenant_id=t.id, actif=True).first()
+                if contrat:
+                    ancien_sb = float(contrat.salaire_base or 0)
+                    if abs(nouveau_sb - ancien_sb) >= 0.01:
+                        contrat.salaire_base = nouveau_sb
+                        log_action("UPDATE", "contrat", contrat.id,
+                            "Salaire de base {} : {} → {} FCFA".format(
+                                s.nom_complet, f"{int(ancien_sb):,}".replace(",", " "),
+                                f"{int(nouveau_sb):,}".replace(",", " ")))
+                else:
+                    # Aucun contrat actif : on en crée un pour porter le salaire
+                    db.session.add(Contrat(
+                        tenant_id=t.id, salarie_id=s.id, type_contrat="CDI",
+                        date_debut=s.date_embauche or date.today(),
+                        salaire_base=nouveau_sb, poste=s.emploi, actif=True))
+                    log_action("CREATE", "contrat", None,
+                        f"Contrat créé pour {s.nom_complet} — salaire "
+                        + f"{int(nouveau_sb):,}".replace(",", " ") + " FCFA")
+
         db.session.commit()
         # ── Affectation site ──────────────────────────────────────────────
         site_id = request.form.get("site_id", type=int)
@@ -1332,9 +1361,12 @@ def salarie_modifier(id):
     aff_actuelle = AffectationSite.query.filter_by(
         salarie_id=id, tenant_id=t.id, actif=True).first()
     sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    contrat_actif = Contrat.query.filter_by(
+        salarie_id=id, tenant_id=t.id, actif=True).first()
+    salaire_actuel = int(float(contrat_actif.salaire_base)) if contrat_actif and contrat_actif.salaire_base else ""
     return render_template("tenant/salarie_form.html", salarie=s, categories=cats,
         action="modifier", tenant=t, sites=sites, aff_actuelle=aff_actuelle,
-        grille_salaires=_grille_tenant(t))
+        salaire_actuel=salaire_actuel, grille_salaires=_grille_tenant(t))
 
 
 # ══════════════════════════════════════════════════════════════════════════════
