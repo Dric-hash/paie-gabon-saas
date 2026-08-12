@@ -34,7 +34,7 @@
     <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
     <a href="/admin/messages"  class="nav-link">💬 Messages{% if messages_non_lus and messages_non_lus > 0 %} <span style="background:#dc2626;color:white;font-size:.6rem;font-weight:800;padding:.05rem .35rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}</a>
     <a href="/admin/usage"     class="nav-link">📊 Usage</a>
-    <a href="/admin/paiements" class="nav-link">💳 Paiements</a>
+    <a href="/admin/paiements" class="nav-link">💳 Paiements{% if nb_paiements_attente %}<span style="background:#ef4444;color:#fff;border-radius:100px;padding:1px 8px;font-size:.7rem;font-weight:800;margin-left:6px">{{ nb_paiements_attente }}</span>{% endif %}</a>
     <a href="/admin/plans"     class="nav-link">📋 Plans</a>
     <a href="/admin/rubriques" class="nav-link">⚙️ Rubriques</a>
     <a href="/admin/import"    class="nav-link">📊 Import</a>

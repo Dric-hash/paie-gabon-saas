@@ -3049,6 +3049,51 @@ def _activer_abonnement(paiement: "Paiement"):
         logger.warning(f"[Abonnement] Email de confirmation non envoyé : {e}")
 
 
+def _notifier_admin_nouveau_paiement(tenant, paiement):
+    """Prévient par e-mail le(s) super-admin(s) qu'un paiement vient d'être
+    déclaré et attend validation. Silencieux en cas d'échec (ne bloque jamais
+    la déclaration du client)."""
+    try:
+        admins = Utilisateur.query.filter(
+            db.func.upper(Utilisateur.role) == "SUPER_ADMIN").all()
+        destinataires = [a.email for a in admins if a.email]
+        if not destinataires:
+            return
+        libelle_moyen = {"AIRTEL_MONEY": "Airtel Money",
+                         "VIREMENT": "Virement bancaire"}.get(paiement.moyen, paiement.moyen)
+        plan_nom = paiement.plan.nom if getattr(paiement, "plan", None) else "—"
+        html = f"""
+        <div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#12211d">
+          <div style="background:#0f3d36;color:#fff;padding:22px 26px;border-radius:12px 12px 0 0">
+            <h2 style="margin:0;font-size:20px">💳 Nouveau paiement à valider</h2>
+          </div>
+          <div style="border:1px solid #e6e2d6;border-top:none;padding:24px 26px;border-radius:0 0 12px 12px">
+            <p><strong>{tenant.denomination}</strong> vient de déclarer un paiement.</p>
+            <table style="width:100%;border-collapse:collapse;font-size:14px;margin:14px 0">
+              <tr><td style="padding:6px 0;color:#6b7280">Moyen</td><td style="padding:6px 0;font-weight:700;text-align:right">{libelle_moyen}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280">Référence transaction</td><td style="padding:6px 0;font-weight:700;text-align:right">{paiement.reference_externe or '—'}</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280">Montant déclaré</td><td style="padding:6px 0;font-weight:700;text-align:right">{int(paiement.montant or 0):,} FCFA</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280">Durée</td><td style="padding:6px 0;font-weight:700;text-align:right">{paiement.duree_mois or 1} mois</td></tr>
+              <tr><td style="padding:6px 0;color:#6b7280">Formule</td><td style="padding:6px 0;font-weight:700;text-align:right">{plan_nom}</td></tr>
+            </table>
+            <p style="text-align:center;margin:24px 0">
+              <a href="https://paiegabon.com/admin/paiements"
+                 style="background:#d99e0b;color:#0f3d36;font-weight:bold;text-decoration:none;padding:12px 28px;border-radius:8px;display:inline-block">
+                Vérifier et valider le paiement
+              </a>
+            </p>
+            <p style="color:#6b7280;font-size:13px">Vérifiez la transaction ({libelle_moyen}) puis validez pour réactiver l'accès du client.</p>
+          </div>
+        </div>
+        """
+        msg = Message(
+            subject=f"💳 Paiement à valider — {tenant.denomination} ({libelle_moyen})",
+            recipients=destinataires, html=html)
+        send_email_async(current_app.extensions["mail"], msg)
+    except Exception as e:
+        current_app.logger.error(f"[NOTIF PAIEMENT] {e}")
+
+
 @bp.route("/paiement/confirmer", methods=["POST"])
 @login_required
 def paiement_confirmer():
@@ -3087,6 +3132,7 @@ def paiement_confirmer():
     log_action("CREATE", "paiement", p.id,
                f"Déclaration paiement {libelle_moyen} — réf {reference}, {duree} mois",
                user_id=current_user.id, tenant_id=t.id)
+    _notifier_admin_nouveau_paiement(t, p)  # e-mail instantané au super-admin
     flash(f"Paiement déclaré (réf. {reference}). Votre abonnement sera activé "
           f"après vérification, généralement sous 24-48h. Merci !", "success")
     return redirect(url_for("tenant.paiement"))

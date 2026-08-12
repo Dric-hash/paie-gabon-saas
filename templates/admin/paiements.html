@@ -22,7 +22,7 @@
   <div style="display:flex;align-items:center;gap:.25rem">
     <a href="/admin"           class="nav-link">🏠 Dashboard</a>
     <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
-    <a href="/admin/paiements" class="nav-link active">💳 Paiements</a>
+    <a href="/admin/paiements" class="nav-link active">💳 Paiements{% if nb_paiements_attente %}<span style="background:#ef4444;color:#fff;border-radius:100px;padding:1px 8px;font-size:.7rem;font-weight:800;margin-left:6px">{{ nb_paiements_attente }}</span>{% endif %}</a>
     <a href="/admin/plans"     class="nav-link">📋 Plans</a>
     <a href="/admin/stats"     class="nav-link">📈 Stats</a>
   </div>
