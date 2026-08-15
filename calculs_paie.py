@@ -761,13 +761,16 @@ _SEUIL_10       = 44.0   # 40 → 44h : +10% (4h max)
 # au-delà de 44h : +30%
 
 
-def _classer_jour_btp(jour, feries_set):
+def _classer_jour_btp(jour, feries_set, separer_ferie=False):
     """
     Analyse UNE ligne de pointage de façon indépendante.
     Renvoie un tuple (categorie, heures_jour, heures_nuit) où categorie ∈
-    {"ORDINAIRE", "DIM_FERIE_TRAVAILLE", "FERIE_CHOME", "REPOS"}.
+    {"ORDINAIRE", "DIM_FERIE_TRAVAILLE", "FERIE_TRAVAILLE", "FERIE_CHOME", "REPOS"}.
 
-    Aucune présomption : on lit exactement ce qui est pointé (pas de "8h d'office").
+    Si `separer_ferie` est True, un JOUR FÉRIÉ chômé payé travaillé est isolé
+    ("FERIE_TRAVAILLE") pour être majoré à son propre taux (cases fj/fn), le
+    dimanche non férié restant en "DIM_FERIE_TRAVAILLE" (+70%/repos hebdo).
+    Aucune présomption : on lit exactement ce qui est pointé.
     """
     d = jour.get("date")
     hj = float(jour.get("heures", jour.get("heures_jour", 0)) or 0)
@@ -787,6 +790,9 @@ def _classer_jour_btp(jour, feries_set):
     else:
         travaille = (hj + hn) > 0
 
+    # Jour férié chômé payé TRAVAILLÉ : isolé si demandé (le férié prime sur le dimanche)
+    if separer_ferie and est_ferie and travaille:
+        return ("FERIE_TRAVAILLE", hj, hn)
     if (est_dimanche or est_ferie) and travaille:
         # Dimanche/férié travaillé : l'intégralité bascule en +70% (base + fin de journée)
         return ("DIM_FERIE_TRAVAILLE", hj, hn)
@@ -804,7 +810,8 @@ def _cle_semaine(d):
     return (iso[0], iso[1])
 
 
-def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -> dict:
+def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None,
+                             separer_ferie: bool = False) -> dict:
     """
     Ventile un MOIS de pointage selon la réglementation BTP Gabon, semaine par semaine.
 
@@ -845,14 +852,19 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -
         d = jour.get("date")
         if d is None:
             continue
-        cat, hj, hn = _classer_jour_btp(jour, feries_set)
+        cat, hj, hn = _classer_jour_btp(jour, feries_set, separer_ferie=separer_ferie)
         sem = semaines.setdefault(_cle_semaine(d), {
             "cumul_ordinaire": 0.0,  # heures de jour ordinaires (cumul hebdo)
             "nuit": 0.0,             # heures de nuit (+40%)
             "dim_ferie": 0.0,        # heures dim/férié travaillés (+70%)
+            "ferie_jour": 0.0,       # heures férié chômé payé travaillé — jour (fj)
+            "ferie_nuit": 0.0,       # heures férié chômé payé travaillé — nuit (fn)
             "feries_chomes": 0.0,    # heures normales issues de fériés chômés
         })
-        if cat == "DIM_FERIE_TRAVAILLE":
+        if cat == "FERIE_TRAVAILLE":
+            sem["ferie_jour"] += hj
+            sem["ferie_nuit"] += hn
+        elif cat == "DIM_FERIE_TRAVAILLE":
             sem["dim_ferie"] += hj + hn
         elif cat == "FERIE_CHOME":
             sem["feries_chomes"] += HEURES_JOUR_FERIE_CHOME
@@ -862,7 +874,8 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -
         # "REPOS" : rien
 
     tot = {"heures_normales": 0.0, "heures_sup_10": 0.0, "heures_sup_30": 0.0,
-           "heures_sup_40": 0.0, "heures_sup_70": 0.0}
+           "heures_sup_40": 0.0, "heures_sup_70": 0.0,
+           "heures_sup_fj": 0.0, "heures_sup_fn": 0.0}
     detail_semaines = []
 
     for cle in sorted(semaines.keys()):
@@ -874,12 +887,16 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None) -
         h30 = max(cumul - seuil_10, 0.0)                                # S+4 et +
         h40 = s["nuit"]
         h70 = s["dim_ferie"]
+        hfj = s["ferie_jour"]
+        hfn = s["ferie_nuit"]
 
         tot["heures_normales"] += normales
         tot["heures_sup_10"]   += h10
         tot["heures_sup_30"]   += h30
         tot["heures_sup_40"]   += h40
         tot["heures_sup_70"]   += h70
+        tot["heures_sup_fj"]   += hfj
+        tot["heures_sup_fn"]   += hfn
 
         detail_semaines.append({
             "semaine": f"{cle[0]}-S{cle[1]:02d}",
@@ -1001,6 +1018,13 @@ def ventiler_heures_mois(convention, jours, feries=None, seuil_normales: float =
         # 5 cases distinctes (jour férié / nuit / nuit férié). Seuls les
         # coefficients diffèrent (cf. COEFFS_HEURES_SUP_CONVENTION).
         return ventiler_heures_mois_petrole(jours, feries=feries, seuil_normales=seuil_normales)
+    if c == "MINIER":
+        # Modèle hebdomadaire (Art. 40) avec SÉPARATION des jours fériés chômés
+        # payés (routés vers fj/fn au taux +100 %/+150 %), distincts du repos.
+        res = ventiler_heures_mois_btp(jours, feries=feries,
+                                       seuil_normales=seuil_normales, separer_ferie=True)
+        res.setdefault("heures_sup_30b", 0.0)
+        return res
     res = ventiler_heures_mois_btp(jours, feries=feries, seuil_normales=seuil_normales)
     res.setdefault("heures_sup_30b", 0.0)
     return res
@@ -1856,12 +1880,13 @@ def calculer_preavis_code(anciennete_annees: int) -> int:
         return 180 + (anciennete_annees - 30) * 10
 
 
-def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> int:
+def preavis_jours(convention, anciennete_annees: int, cadre: bool = False,
+                  encadrement: bool = False) -> int:
     """
     Durée du préavis (jours) selon la convention applicable, en retenant
     toujours la durée la plus favorable au salarié (Code Art. 80 & 82).
-    Le paramètre `cadre` distingue, pour les conventions à double barème
-    (ex. Transports Aériens), le personnel de maîtrise/cadres de l'exécution.
+    `cadre` distingue la maîtrise/cadres de l'exécution (conventions à double
+    barème). `encadrement` cible le barème intermédiaire (ex. Minier Cat. 6-7).
     """
     c = _conv(convention)
     legal = calculer_preavis_code(anciennete_annees)
@@ -1881,7 +1906,8 @@ def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> in
         return max(calculer_preavis_bois(anciennete_annees), legal)
     if c == "MINIER":
         from convention_minier import calculer_preavis_minier
-        return max(calculer_preavis_minier(anciennete_annees, cadre=cadre), legal)
+        return max(calculer_preavis_minier(anciennete_annees, cadre=cadre,
+                                           encadrement=encadrement), legal)
     if c == "HYDROCARBURES":
         # Art. 30.5/30.6 : barème identique au Code du travail.
         return calculer_preavis_code(anciennete_annees)

@@ -301,11 +301,36 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     rupture = indemnite_rupture(convention, cause, base_calcul, anciennete_calcul)
     indem_rupture = rupture["montant"]
 
+    # ── Préavis : durée selon la convention ET la catégorie du salarié ────────
+    # Le barème est choisi d'après la catégorie (exécution / encadrement / cadre).
+    from calculs_paie import preavis_jours
+    cause_u = (cause or "").upper()
+    cat_code = getattr(getattr(salarie, "categorie", None), "code", None)
+    est_cadre = est_encadrement = False
+    if (convention or "").upper() == "MINIER":
+        from convention_minier import tier_preavis_minier
+        est_cadre, est_encadrement = tier_preavis_minier(cat_code)
+    else:
+        # Autres conventions : cadre déduit d'un code catégorie ≥ 8 si présent.
+        import re as _re
+        _m = _re.search(r"(\d+)", cat_code or "")
+        est_cadre = bool(_m and int(_m.group(1)) >= 8)
+    preavis_j = preavis_jours(convention, anciennete_calcul,
+                              cadre=est_cadre, encadrement=est_encadrement)
+    # La faute lourde prive du préavis ; sinon indemnité compensatrice si non effectué.
+    if cause_u == "FAUTE_LOURDE":
+        preavis_j = 0
+    preavis_montant = round(base_calcul * preavis_j / 30.0, 0) if preavis_j else 0
+
     return {
         "salarie":            salarie,
         "date_cessation":     date_cessation,
         "cause_cessation":    (cause or "").upper(),
         "type_indemnite":     rupture["type"],
+        "preavis_jours":      preavis_j,
+        "preavis_montant":    preavis_montant,
+        "preavis_categorie":  ("Cadre/Maîtrise" if est_cadre else
+                               "Encadrement" if est_encadrement else "Exécution"),
         "jours_acquis":       jours_acquis,
         "jours_pris":         jours_pris,
         "jours_restants":     jours_restants,

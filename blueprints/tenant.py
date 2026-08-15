@@ -6558,9 +6558,12 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN") and pts_travailles:
+    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN", "MINIER") and pts_travailles:
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
-        v = ventiler_heures_mois(conv, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
+        _feries = set()
+        for _an in {p.date.year for p in pts if getattr(p, "date", None)}:
+            _feries |= set(jours_feries_annee(_an).keys())
+        v = ventiler_heures_mois(conv, pointage_vers_jours(pts), feries=_feries, seuil_normales=t.seuil_hs)
         totaux = {
             "heures_normales": v["heures_normales"],
             "heures_sup_10":   v["heures_sup_10"],
@@ -6568,6 +6571,8 @@ def _pointages_mois_contexte(t, pointages, convention):
             "heures_sup_30b":  v.get("heures_sup_30b", 0.0),
             "heures_sup_40":   v["heures_sup_40"],
             "heures_sup_70":   v["heures_sup_70"],
+            "heures_sup_fj":   v.get("heures_sup_fj", 0.0),
+            "heures_sup_fn":   v.get("heures_sup_fn", 0.0),
         }
         detail_semaines = v.get("detail_semaines", [])
     else:
@@ -7297,16 +7302,21 @@ def api_pointage_mois(id):
             "message": "Aucun pointage pour cette période"})
     nb_jours = len(pts_travailles)
 
-    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
-        # Ventilation réglementaire (BTP/Pétrole/Industrie) : semaine par semaine, ligne par ligne
+    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN", "MINIER"):
+        # Ventilation réglementaire : semaine par semaine, ligne par ligne
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
-        v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), seuil_normales=t.seuil_hs)
+        _feries = set()
+        for _an in {p.date.year for p in pts if getattr(p, "date", None)}:
+            _feries |= set(jours_feries_annee(_an).keys())
+        v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), feries=_feries, seuil_normales=t.seuil_hs)
         heures_normales = v["heures_normales"]
         heures_sup_10   = v["heures_sup_10"]
         heures_sup_30   = v["heures_sup_30"]
         heures_sup_30b  = v.get("heures_sup_30b", 0.0)
         heures_sup_40   = v["heures_sup_40"]
         heures_sup_70   = v["heures_sup_70"]
+        heures_sup_fj   = v.get("heures_sup_fj", 0.0)
+        heures_sup_fn   = v.get("heures_sup_fn", 0.0)
         detail_semaines = v["detail_semaines"]
     else:
         # Autres conventions : cumul direct des colonnes déjà ventilées par jour
@@ -7316,6 +7326,8 @@ def api_pointage_mois(id):
         heures_sup_30b  = sum(float(getattr(p, "heures_sup_30b", 0) or 0) for p in pts_travailles)
         heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts_travailles)
         heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts_travailles)
+        heures_sup_fj   = 0.0
+        heures_sup_fn   = 0.0
         detail_semaines = []
     pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
                 Pointage.absent == True).all()
@@ -7328,7 +7340,9 @@ def api_pointage_mois(id):
         "heures_sup_30b":        round(heures_sup_30b, 2),
         "heures_sup_40":         round(heures_sup_40, 2),
         "heures_sup_70":         round(heures_sup_70, 2),
-        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_30b+heures_sup_40+heures_sup_70, 2),
+        "heures_sup_fj":         round(heures_sup_fj, 2),
+        "heures_sup_fn":         round(heures_sup_fn, 2),
+        "total_sup":             round(heures_sup_10+heures_sup_30+heures_sup_30b+heures_sup_40+heures_sup_70+heures_sup_fj+heures_sup_fn, 2),
         "detail_semaines":       detail_semaines,
         "message":               f"{nb_jours} jour(s) pointé(s) sur {dernier_jour}"
     })

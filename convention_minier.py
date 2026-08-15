@@ -227,3 +227,25 @@ PERMISSIONS_EVENEMENTS_MINIER = {
 }
 PLAFOND_PERMISSIONS_ANNUEL_MINIER = 13
 CREDIT_HEURES_DELEGUE_MINIER = 15
+
+
+# ── 13. Barème de préavis selon la catégorie du salarié ───────────────────────
+def tier_preavis_minier(categorie_code: str):
+    """Détermine le barème de préavis à partir du code catégorie du salarié.
+    Renvoie (cadre: bool, encadrement: bool) :
+      - Cadres/Maîtrise (Cat. 8-12) → (True, False)
+      - Encadrement (Cat. 6-7)      → (False, True)
+      - Personnel d'exécution       → (False, False)
+    Gère les codes de la grille minière (MO, OS1, M6, T8A, C10A, D12C…) et les
+    codes numériques (1-12)."""
+    import re
+    c = (categorie_code or "").strip().upper()
+    if c.startswith(("MO", "MS", "OS", "OQ", "OHQ")):
+        return (False, False)          # exécution explicite
+    m = re.search(r"(\d+)", c)
+    num = int(m.group(1)) if m else 0
+    if num >= 8:
+        return (True, False)           # cadres 8-12
+    if num in (6, 7):
+        return (False, True)           # encadrement 6-7
+    return (False, False)              # exécution
