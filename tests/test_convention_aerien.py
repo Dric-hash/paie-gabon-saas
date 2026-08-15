@@ -49,7 +49,8 @@ def test_isr_aerien():
 # ── Heures sup A.39 (mapping 5 cases) ─────────────────────────────────────────
 def test_heures_sup_aerien_coefficients():
     assert c.coeffs_heures_sup("AERIEN") == {
-        "10": 1.15, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00}
+        "10": 1.15, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00,
+        "fj": 2.00, "fn": 2.50}
 
 
 # ── Prime d'assiduité A.53 (3 % base, −50 %/−100 %) ──────────────────────────
@@ -79,4 +80,5 @@ def test_non_regression():
     assert c.calculer_preavis_industrie(12) == 150
     assert c.calculer_indemnite_services_rendus_btp(300000, 6) == 360000
     assert c.coeffs_heures_sup("INDUSTRIE") == {
-        "10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35}
+        "10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35,
+        "fj": 2.00, "fn": 2.50}

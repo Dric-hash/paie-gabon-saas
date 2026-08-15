@@ -96,7 +96,8 @@ from datetime import date
 
 def test_heures_sup_industrie_grille():
     assert c.coeffs_heures_sup("INDUSTRIE") == {
-        "10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35}
+        "10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35,
+        "fj": 2.00, "fn": 2.50}
 
 
 def test_heures_sup_industrie_montants():
@@ -166,7 +167,8 @@ def test_indemnite_deplacement_industrie():
 # ── Heures supplémentaires — Art. A.38 (16/35/50/80/135 %) ────────────────────
 def test_heures_sup_industrie_coefficients():
     g = c.coeffs_heures_sup("INDUSTRIE")
-    assert g == {"10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35}
+    assert g == {"10": 1.16, "30": 1.35, "30b": 1.50, "40": 1.80, "70": 2.35,
+                 "fj": 2.00, "fn": 2.50}
 
 
 def test_heures_sup_industrie_ventilation_5_buckets():

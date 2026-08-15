@@ -50,7 +50,8 @@ def test_preavis_petrole_egal_legal():
 # ── Coefficients d'heures sup par convention ──────────────────────────────────
 def test_coeffs_heures_sup_petrole():
     cf = c.coeffs_heures_sup("PETROLE")
-    assert cf == {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00}
+    assert cf == {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00,
+                  "fj": 2.00, "fn": 2.50}
 
 
 def test_coeffs_heures_sup_non_regression():

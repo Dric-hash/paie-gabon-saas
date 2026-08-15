@@ -306,6 +306,8 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     from calculs_paie import preavis_jours
     cause_u = (cause or "").upper()
     cat_code = getattr(getattr(salarie, "categorie", None), "code", None)
+    if not isinstance(cat_code, str):
+        cat_code = ""   # robustesse : catégorie absente ou non textuelle → exécution
     est_cadre = est_encadrement = False
     if (convention or "").upper() == "MINIER":
         from convention_minier import tier_preavis_minier
