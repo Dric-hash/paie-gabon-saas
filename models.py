@@ -634,6 +634,8 @@ class BulletinPaie(db.Model):
     heures_sup_30b        = db.Column(db.Numeric(15,2), default=0)  # repos/férié jour (Pétrole)
     heures_sup_40         = db.Column(db.Numeric(15,2), default=0)
     heures_sup_70         = db.Column(db.Numeric(15,2), default=0)
+    heures_sup_fj         = db.Column(db.Numeric(15,2), default=0)  # férié chômé payé — jour
+    heures_sup_fn         = db.Column(db.Numeric(15,2), default=0)  # férié chômé payé — nuit
     absences              = db.Column(db.Numeric(15,2), default=0)
     sursalaire            = db.Column(db.Numeric(15,2), default=0)
     prime_caisse          = db.Column(db.Numeric(15,2), default=0)
@@ -696,6 +698,10 @@ class BulletinPaie(db.Model):
     taux_heures_sup_40                  = db.Column(db.String(20), default='')
     base_heures_sup_70                  = db.Column(db.Numeric(15,2), default=0)
     taux_heures_sup_70                  = db.Column(db.String(20), default='')
+    base_heures_sup_fj                  = db.Column(db.Numeric(15,2), default=0)
+    taux_heures_sup_fj                  = db.Column(db.String(20), default='')
+    base_heures_sup_fn                  = db.Column(db.Numeric(15,2), default=0)
+    taux_heures_sup_fn                  = db.Column(db.String(20), default='')
     base_absences                       = db.Column(db.Numeric(15,2), default=0)
     taux_absences                       = db.Column(db.String(20), default='')
     base_sursalaire                     = db.Column(db.Numeric(15,2), default=0)

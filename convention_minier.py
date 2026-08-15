@@ -154,25 +154,47 @@ def prime_interim_minier(salaire_base_agent: float, salaire_base_poste: float) -
 
 
 # ── 10. Préavis (Art. 30.3) ───────────────────────────────────────────────────
-def calculer_preavis_minier(anciennete_annees: float, cadre: bool = False) -> int:
-    """Préavis EN JOURS. Au-delà de 30 ans : +15 j/année supplémentaire.
-    (Colonne « cadre » = encadrement Cat. 8-12 ; à confirmer.)"""
+# Trois barèmes selon la catégorie (EN JOURS, mois comptés à 30 j) :
+#   Ancienneté        Exécution   Encadr. 6-7   Cadres 8-12
+#   1 mois – 1 an        15           30            30
+#   1 – 3 ans            30           60            90
+#   3 – 5 ans            60           60            90
+#   5 – 10 ans           90           90            90
+#   10 – 15 ans         120          120           120
+#   15 – 20 ans         150          150           150
+#   20 – 30 ans         180          180           180
+#   Au-delà de 30 ans : + 15 j par année supplémentaire (les trois barèmes).
+def calculer_preavis_minier(anciennete_annees: float, cadre: bool = False,
+                            encadrement: bool = False) -> int:
+    """Préavis EN JOURS — Art. 30.3.
+      - encadrement=True → barème « Encadrement Cat. 6-7 »
+      - cadre=True       → barème « Cadres / Maîtrise Cat. 8-12 »
+      - sinon            → barème « Personnel d'Exécution »
+    """
     a = anciennete_annees
-    if cadre:
+    if cadre:          # Cadres / Maîtrise (Cat. 8-12)
         if a < 1:      base = 30
+        elif a < 3:    base = 90
+        elif a < 5:    base = 90
         elif a < 10:   base = 90
-        elif a < 15:   base = 90
-        elif a < 20:   base = 120
-        elif a <= 30:  base = 150
-        else:          base = 150
-    else:
+        elif a < 15:   base = 120
+        elif a < 20:   base = 150
+        else:          base = 180
+    elif encadrement:  # Encadrement (Cat. 6-7)
+        if a < 1:      base = 30
+        elif a < 3:    base = 60
+        elif a < 5:    base = 60
+        elif a < 10:   base = 90
+        elif a < 15:   base = 120
+        elif a < 20:   base = 150
+        else:          base = 180
+    else:              # Personnel d'exécution
         if a < 1:      base = 15
         elif a < 3:    base = 30
         elif a < 5:    base = 60
         elif a < 10:   base = 90
         elif a < 15:   base = 120
         elif a < 20:   base = 150
-        elif a <= 30:  base = 180
         else:          base = 180
     if a > 30:
         base += 15 * (int(a) - 30)

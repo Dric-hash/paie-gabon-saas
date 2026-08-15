@@ -44,6 +44,8 @@ COEFF_SUP_30         = 1.30
 COEFF_SUP_40         = 1.40     # nuit / dimanche
 COEFF_SUP_70         = 1.70     # jours fériés
 COEFF_SUP_30B        = 1.30     # repos/dimanche/férié — heures de JOUR (Pétrole)
+COEFF_SUP_FJ         = 2.00     # jour férié chômé payé — heures de JOUR (+100 %)
+COEFF_SUP_FN         = 2.50     # jour férié chômé payé — heures de NUIT (+150 %)
 
 # ─── COEFFICIENTS DES HEURES SUPPLÉMENTAIRES PAR CONVENTION ────────────────────
 # Le moteur de paie raisonne sur 5 « cases » : 10 / 30 / 30b / 40 / 70.
@@ -61,6 +63,7 @@ COEFF_SUP_30B        = 1.30     # repos/dimanche/férié — heures de JOUR (Pé
 COEFFS_HEURES_SUP_DEFAUT = {
     "10":  COEFF_SUP_10,  "30":  COEFF_SUP_30,  "30b": COEFF_SUP_30B,
     "40":  COEFF_SUP_40,  "70":  COEFF_SUP_70,
+    "fj":  COEFF_SUP_FJ,  "fn":  COEFF_SUP_FN,
 }
 COEFFS_HEURES_SUP_CONVENTION = {
     "PETROLE": {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00},
@@ -96,7 +99,8 @@ COEFFS_HEURES_SUP_CONVENTION = {
     # Entreprises Minières — Art. 40 (base 40h) : 8 premières HS +22 % (10),
     #   au-delà +50 % (30), nuit +68 % (40) ; repos hebdo jour +51 % (30b),
     #   nuit +102 % (70). [Fériés chômés payés +100 %/+150 % non distingués.]
-    "MINIER": {"10": 1.22, "30": 1.50, "30b": 1.51, "40": 1.68, "70": 2.02},
+    "MINIER": {"10": 1.22, "30": 1.50, "30b": 1.51, "40": 1.68, "70": 2.02,
+               "fj": 2.00, "fn": 2.50},
 }
 
 
@@ -108,7 +112,12 @@ def coeffs_heures_sup(convention=None) -> dict:
     historique, garantissant l'absence de régression.
     """
     c = (convention or "").upper()
-    return dict(COEFFS_HEURES_SUP_CONVENTION.get(c, COEFFS_HEURES_SUP_DEFAUT))
+    # Fusion non-régressive : la convention surcharge les défauts (qui incluent
+    # les cases fériés fj/fn). Les conventions ne définissant pas fj/fn héritent
+    # des valeurs par défaut (jour +100 %, nuit +150 %).
+    base = dict(COEFFS_HEURES_SUP_DEFAUT)
+    base.update(COEFFS_HEURES_SUP_CONVENTION.get(c, {}))
+    return base
 
 # Barème IRPP mensuel Gabon
 BAREME_IRPP = [
@@ -298,6 +307,8 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     heures_sup_30     = g("heures_sup_30")
     heures_sup_30b    = g("heures_sup_30b")
     heures_sup_40     = g("heures_sup_40")
+    heures_sup_fj     = g("heures_sup_fj")   # montant férié chômé payé — jour
+    heures_sup_fn     = g("heures_sup_fn")   # montant férié chômé payé — nuit
     heures_sup_70     = g("heures_sup_70")
     absences          = g("absences")
     sursalaire        = g("sursalaire")
@@ -385,6 +396,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     salaire_brut = (
         salaire_base
         + heures_sup_10 + heures_sup_30 + heures_sup_30b + heures_sup_40 + heures_sup_70
+        + heures_sup_fj + heures_sup_fn
         - absences
         + sursalaire
         + prime_caisse + carburant + prime_anciennete
@@ -497,6 +509,8 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "heures_sup_30b":              round(heures_sup_30b, 2),
         "heures_sup_40":               round(heures_sup_40, 2),
         "heures_sup_70":               round(heures_sup_70, 2),
+        "heures_sup_fj":               round(heures_sup_fj, 2),
+        "heures_sup_fn":               round(heures_sup_fn, 2),
         # Infos calcul heures sup (pour affichage bulletin)
         "taux_horaire_base":           round(th, 4),
         "taux_horaire_10":             round(th * _coeffs_hs["10"], 4),

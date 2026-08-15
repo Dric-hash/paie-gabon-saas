@@ -2080,6 +2080,7 @@ def bulletin_saisie():
         b.nb_jours_travailles=int(request.form.get("nb_jours_travailles") or 0)
         # ✅ Sauvegarder base et taux saisis manuellement pour chaque rubrique
         RUBRIQUES_BT = ["salaire_base","heures_sup_10","heures_sup_30","heures_sup_30b","heures_sup_40","heures_sup_70",
+            "heures_sup_fj","heures_sup_fn",
             "absences","sursalaire","prime_caisse","carburant","prime_anciennete",
             "indem_logement","indem_domesticite","indem_eau_electricite","indem_nourriture",
             "prime_transport","prime_responsabilite","prime_rendement","prime_assiduité",

@@ -182,6 +182,22 @@
         <td class="tr gain">{{ bulletin.heures_sup_70|fcfa }}</td>
         <td></td>
       </tr>{% endif %}
+      {% if bulletin.heures_sup_fj and bulletin.heures_sup_fj|float > 0 %}
+      <tr>
+        <td>Heures sup férié chômé payé — jour</td>
+        <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_fj|int if bulletin.base_heures_sup_fj else '' }}</td>
+        <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_fj or '' }}</td>
+        <td class="tr gain">{{ bulletin.heures_sup_fj|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
+      {% if bulletin.heures_sup_fn and bulletin.heures_sup_fn|float > 0 %}
+      <tr>
+        <td>Heures sup férié chômé payé — nuit</td>
+        <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_fn|int if bulletin.base_heures_sup_fn else '' }}</td>
+        <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_fn or '' }}</td>
+        <td class="tr gain">{{ bulletin.heures_sup_fn|fcfa }}</td>
+        <td></td>
+      </tr>{% endif %}
       {% if bulletin.absences and bulletin.absences|float > 0 %}
       <tr>
         <td>Absences</td>

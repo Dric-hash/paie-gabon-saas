@@ -226,6 +226,20 @@
             <td class="pf-cell"><input type="text" name="taux_heures_sup_70" id="taux_heures_sup_70" placeholder="1" oninput="calcMontant('heures_sup_70')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_70" id="f_heures_sup_70" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup férié chômé payé — jour</td>
+            <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_fj" id="base_heures_sup_fj" min="0" placeholder="0" oninput="calcMontant('heures_sup_fj')" class="pf-base"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td class="pf-cell"><input type="text" name="taux_heures_sup_fj" id="taux_heures_sup_fj" placeholder="1" oninput="calcMontant('heures_sup_fj')" class="pf-rate"/></td>
+            <td class="pf-cell"><input type="number" name="heures_sup_fj" id="f_heures_sup_fj" value="0" step="any" min="0" class="champ-calcul pf-amt" oninput="recalculer()"/></td>
+          </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup férié chômé payé — nuit</td>
+            <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_fn" id="base_heures_sup_fn" min="0" placeholder="0" oninput="calcMontant('heures_sup_fn')" class="pf-base"/></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
+            <td class="pf-cell"><input type="text" name="taux_heures_sup_fn" id="taux_heures_sup_fn" placeholder="1" oninput="calcMontant('heures_sup_fn')" class="pf-rate"/></td>
+            <td class="pf-cell"><input type="number" name="heures_sup_fn" id="f_heures_sup_fn" value="0" step="any" min="0" class="champ-calcul pf-amt" oninput="recalculer()"/></td>
+          </tr>
         </tbody>
       </table></div>
     </div>
