@@ -93,6 +93,10 @@ COEFFS_HEURES_SUP_CONVENTION = {
     #   repos/fériés de JOUR ... +50 % → 30b ; NUIT normal ...... +75 % → 40
     #   NUIT repos/fériés ...... +125 % → 70
     "BOIS": {"10": 1.13, "30": 1.35, "30b": 1.50, "40": 1.75, "70": 2.25},
+    # Entreprises Minières — Art. 40 (base 40h) : 8 premières HS +22 % (10),
+    #   au-delà +50 % (30), nuit +68 % (40) ; repos hebdo jour +51 % (30b),
+    #   nuit +102 % (70). [Fériés chômés payés +100 %/+150 % non distingués.]
+    "MINIER": {"10": 1.22, "30": 1.50, "30b": 1.51, "40": 1.68, "70": 2.02},
 }
 
 
@@ -333,6 +337,12 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         # selon 1/2/3 absences non autorisées du mois.
         from convention_bois import calculer_prime_assiduite_bois
         prime_assiduité = calculer_prime_assiduite_bois(
+            salaire_base, nb_absences=int(g("jours_absence_injustifiee")))
+        prime_assiduite_est_auto = True
+    elif prime_assiduité <= 0 and (donnees.get("convention") or "").upper() == "MINIER" and salaire_base > 0:
+        # Minier Art. 51 : 4 % du salaire de base, -25 %/journée d'absence non autorisée.
+        from convention_minier import calculer_prime_assiduite_minier
+        prime_assiduité = calculer_prime_assiduite_minier(
             salaire_base, nb_absences=int(g("jours_absence_injustifiee")))
         prime_assiduite_est_auto = True
     prime_qualite     = g("prime_qualite")
@@ -1755,6 +1765,7 @@ CONVENTIONS_DISPONIBLES = {
     "AERIEN":    "Convention Collective des Compagnies de Transports Aériens",
     "HOTELLERIE": "Convention Collective Hôtellerie – Restauration – Débits de Boissons",
     "BOIS":       "Convention Collective des Industries du Bois, Sciages et Placages",
+    "MINIER":     "Convention Collective des Entreprises Minières et Assimilées",
 }
 
 
@@ -1780,6 +1791,9 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
     if c == "BOIS":
         from convention_bois import calculer_prime_anciennete_bois
         return calculer_prime_anciennete_bois(salaire_base, anciennete_annees)
+    if c == "MINIER":
+        from convention_minier import calculer_prime_anciennete_minier
+        return calculer_prime_anciennete_minier(salaire_base, anciennete_annees)
     if c in ("BTP", "INDUSTRIE", "AERIEN"):
         # A.46/A.47 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
@@ -1851,6 +1865,9 @@ def preavis_jours(convention, anciennete_annees: int, cadre: bool = False) -> in
     if c == "BOIS":
         from convention_bois import calculer_preavis_bois
         return max(calculer_preavis_bois(anciennete_annees), legal)
+    if c == "MINIER":
+        from convention_minier import calculer_preavis_minier
+        return max(calculer_preavis_minier(anciennete_annees, cadre=cadre), legal)
     if c == "HYDROCARBURES":
         # Art. 30.5/30.6 : barème identique au Code du travail.
         return calculer_preavis_code(anciennete_annees)
@@ -1877,6 +1894,9 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
     if c == "BOIS":
         from convention_bois import calculer_indemnite_services_rendus_bois
         return calculer_indemnite_services_rendus_bois(moyenne_12_mois, anciennete_annees)
+    if c == "MINIER":
+        from convention_minier import calculer_indemnite_services_rendus_minier
+        return calculer_indemnite_services_rendus_minier(moyenne_12_mois, anciennete_annees)
     return 0.0
 
 

@@ -202,9 +202,9 @@
       <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
         🏖️ <span>{{ T.nav.conges }}</span>
       </a>
-      {% if (tenant.convention or '')|upper in ['HOTELLERIE', 'BOIS'] and current_user.is_tenant_admin %}
+      {% if (tenant.convention or '')|upper in ['HOTELLERIE', 'BOIS', 'MINIER'] and current_user.is_tenant_admin %}
       <a href="/prime-fin-annee" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='prime_fin_annee' else 'text-white/80 hover:bg-white/10' }}">
-        🎁 <span>{{ "Gratif. fin d'année" if (tenant.convention or '')|upper == 'BOIS' else "Prime fin d'année" }}</span>
+        🎁 <span>{% if (tenant.convention or '')|upper == 'BOIS' %}Gratif. fin d'année{% elif (tenant.convention or '')|upper == 'MINIER' %}13ᵉ mois{% else %}Prime fin d'année{% endif %}</span>
       </a>
       {% endif %}
       {% if current_user.is_tenant_admin or current_user.has_permission('view_salaries') %}

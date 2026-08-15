@@ -176,20 +176,6 @@ def _injecter_csp_nonce():
     return {"csp_nonce": getattr(g, "csp_nonce", "")}
 
 
-@app.context_processor
-def _injecter_paiements_attente():
-    """Compteur de paiements en attente de validation, pour le badge du menu
-    super-admin. Renvoie 0 pour tout autre utilisateur."""
-    try:
-        from flask_login import current_user
-        from models import Paiement
-        if current_user.is_authenticated and current_user.is_super_admin:
-            return {"nb_paiements_attente": Paiement.query.filter_by(statut="EN_ATTENTE").count()}
-    except Exception:
-        pass
-    return {"nb_paiements_attente": 0}
-
-
 @app.before_request
 def gerer_session_inactivite():
     excluded = ["/login", "/inscription", "/confirmer-email",
