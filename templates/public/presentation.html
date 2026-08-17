@@ -30,7 +30,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@600;700;800&display=swap" rel="stylesheet"/>
 
 {% set prix_min = (plans|map(attribute='prix_mensuel')|min) if plans else 15000 %}
 
@@ -59,10 +59,10 @@
 
 <style>
   :root{
-    --brand:#0f3d36; --brand-soft:#11463e; --brand-deep:#0c322c; --brand-hover:#16554b;
-    --accent:#b8862f; --accent-light:#e3b765; --accent-warm:#e9b043;
-    --page:#f6f6f3; --surface:#ffffff; --ink:#1c2b2a;
-    --sub:#5b6b68; --border:#e7e6e0;
+    --brand:#0f3d36; --brand-soft:#12463d; --brand-deep:#0a2b25; --brand-hover:#16554b;
+    --accent:#c68a12; --accent-light:#e9c46a; --accent-warm:#e9b043; --accent-deep:#a9760a;
+    --page:#f6f3ea; --surface:#fffdf7; --ink:#14231d;
+    --sub:#5c6b64; --border:#e7e2d4; --live:#1fae7a;
   }
   *{font-family:'Inter',system-ui,sans-serif;box-sizing:border-box}
   .display{font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-.02em}
@@ -130,6 +130,40 @@
   .ico-chip-dark{display:inline-flex;align-items:center;justify-content:center;width:2.85rem;height:2.85rem;
     border-radius:.8rem;background:rgba(255,255,255,.07);color:var(--accent-light);margin-bottom:.9rem}
   .ico-chip svg,.ico-chip-dark svg{display:block}
+
+  /* ═══ Refonte : système de design ═══ */
+  .figure{font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  /* Texture « papier réglé » pour les fonds sombres */
+  .ledger{position:relative}
+  .ledger::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.6;
+    background:repeating-linear-gradient(0deg,transparent 0 37px,rgba(233,196,106,.05) 37px 38px)}
+  .ledger::after{content:"";position:absolute;width:520px;height:520px;right:-140px;top:60px;pointer-events:none;
+    border-radius:50%;background:radial-gradient(circle,rgba(217,158,11,.14),transparent 68%)}
+  .ledger > *{position:relative;z-index:1}
+  /* Eyebrow de section */
+  .sec-eyebrow{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:.76rem;letter-spacing:.15em;
+    text-transform:uppercase;color:var(--accent-deep);text-align:center;display:block;margin-bottom:.65rem}
+  /* Étapes en cartes */
+  .step-card{background:var(--surface);border:1px solid var(--border);border-radius:1.1rem;padding:1.7rem 1.55rem;position:relative}
+  .step-card .no{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:.82rem;color:var(--accent-deep);letter-spacing:.08em}
+  .step-card .ic{width:3rem;height:3rem;border-radius:.85rem;background:rgba(15,61,54,.06);color:var(--brand);
+    display:flex;align-items:center;justify-content:center;margin:.9rem 0 1.05rem}
+  .step-card .ic svg{width:26px;height:26px}
+  .step-card h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:1.12rem;color:var(--brand);margin:0 0 .5rem}
+  .step-card p{color:var(--sub);font-size:.93rem;line-height:1.6;margin:0}
+  /* Menu mobile */
+  .burger{display:none}
+  #mnav{display:none}
+  @media(max-width:767px){
+    header nav > a{display:none}
+    .burger{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:.6rem;
+      border:1px solid rgba(255,255,255,.25);background:none;color:#fff;cursor:pointer}
+    #mnav.open{display:flex;flex-direction:column;padding:.4rem 1.5rem 1.1rem;background:var(--brand-deep);
+      border-bottom:1px solid rgba(255,255,255,.08)}
+    #mnav a{color:rgba(255,255,255,.9);text-decoration:none;padding:.75rem .2rem;font-weight:600;
+      border-bottom:1px solid rgba(255,255,255,.08)}
+    #mnav a:last-child{border-bottom:none;color:var(--accent-light)}
+  }
 </style>
 </head>
 <body>
@@ -183,19 +217,30 @@
       <a href="#faq"         style="color:rgba(255,255,255,.8);text-decoration:none;font-size:.9rem;font-weight:500" class="hidden md:inline">Questions</a>
       <a href="/login"       style="color:#fff;text-decoration:none;font-size:.9rem;font-weight:600">Se connecter</a>
       <a href="/inscription" class="btn-primary" style="padding:.55rem 1.1rem;font-size:.9rem">Essai gratuit</a>
+      <button class="burger" id="burger" aria-label="Ouvrir le menu" aria-expanded="false">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" x2="20" y1="7" y2="7"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="17" y2="17"/></svg>
+      </button>
     </nav>
+  </div>
+  <div id="mnav">
+    <a href="#fonctions">Fonctions</a>
+    <a href="#conventions">Conventions</a>
+    <a href="#tarifs">Tarifs</a>
+    <a href="#faq">Questions</a>
+    <a href="/login">Se connecter</a>
+    <a href="/inscription">Démarrer l'essai gratuit →</a>
   </div>
 </header>
 
 <!-- ══════════════ HÉROS ══════════════ -->
-<section style="background:linear-gradient(160deg,#0f3d36 0%,#11463e 55%,#0c322c 100%);color:#fff;overflow:hidden">
+<section class="ledger" style="background:radial-gradient(125% 95% at 80% 6%,#16564a 0%,#0f3d36 46%,#0a2b25 100%);color:#fff;overflow:hidden">
   <div class="wrap hero-grid" style="padding-top:4.5rem;padding-bottom:5rem">
     <div>
       <div class="eyebrow" style="background:rgba(184,134,47,.18);color:var(--accent-light);padding:.4rem .9rem;border-radius:9999px;margin-bottom:1.5rem">
         <span aria-hidden="true">🇬🇦</span> Conçu pour la réglementation gabonaise
       </div>
-      <h1 class="display" style="font-size:2.9rem;line-height:1.08;font-weight:800;margin:0 0 1.25rem">
-        La paie de votre entreprise,<br/><span class="accent">juste et sans calcul.</span>
+      <h1 class="display" style="font-size:3.1rem;line-height:1.03;font-weight:800;margin:0 0 1.25rem">
+        La paie juste,<br/><span style="color:var(--accent-light)">sans un seul calcul.</span>
       </h1>
       <p style="font-size:1.15rem;color:rgba(255,255,255,.82);line-height:1.6;margin:0 0 2rem;max-width:540px">
         Saisissez le salaire — PaieGabon calcule le reste : cotisations CNSS et CNAMGS, impôt IRPP,
@@ -260,8 +305,9 @@
 
 <!-- ══════════════ PROBLÈME / PROMESSE ══════════════ -->
 <section class="wrap" style="padding-top:4rem;padding-bottom:1rem;text-align:center;max-width:860px">
-  <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
-    Fini les calculs de paie sur Excel
+  <span class="sec-eyebrow reveal">Le parcours</span>
+  <h2 class="display reveal" style="font-size:2.05rem;font-weight:800;margin:0 0 1rem">
+    De la saisie à la déclaration, sans un calcul manuel
   </h2>
   <p class="reveal" style="font-size:1.1rem;color:var(--sub);line-height:1.7;max-width:680px;margin:0 auto">
     Les taux changent, les conventions sont complexes, et une erreur coûte cher en redressement CNSS.
@@ -270,20 +316,19 @@
 </section>
 
 <!-- ══════════════ COMMENT ÇA MARCHE ══════════════ -->
-<section id="comment" class="wrap" style="padding-top:3.5rem;padding-bottom:1rem">
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.75rem">
+<section id="comment" class="wrap" style="padding-top:3.25rem;padding-bottom:1rem">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.25rem">
     {% set etapes = [
-      ("1","Créez votre entreprise","Renseignez votre société et choisissez votre convention collective. Tout est préconfiguré selon la loi gabonaise."),
-      ("2","Ajoutez vos salariés","Mensuels ou journaliers, avec primes et indemnités. Vos informations sont sauvegardées en sécurité."),
-      ("3","Générez les bulletins","Un clic suffit : bulletins, cotisations et déclarations sont calculés et prêts à imprimer.")
+      ("01","clipboard-check","Créez votre entreprise","Renseignez votre société et choisissez votre convention collective. Tout est préconfiguré selon la loi gabonaise."),
+      ("02","users","Ajoutez vos salariés","Mensuels ou journaliers, avec primes et indemnités. Vos informations sont sauvegardées en sécurité."),
+      ("03","file-text","Générez les bulletins","Un clic suffit : bulletins, cotisations et déclarations sont calculés et prêts à imprimer.")
     ] %}
-    {% for n, titre, desc in etapes %}
-    <div class="reveal" style="display:flex;gap:1rem;align-items:flex-start">
-      <div class="step-num num">{{ n }}</div>
-      <div>
-        <h3 class="display" style="font-weight:700;font-size:1.08rem;margin:.25rem 0 .4rem">{{ titre }}</h3>
-        <p style="color:var(--sub);font-size:.93rem;line-height:1.6;margin:0">{{ desc }}</p>
-      </div>
+    {% for n, ic, titre, desc in etapes %}
+    <div class="reveal step-card">
+      <div class="no">{{ n }}</div>
+      <div class="ic">{{ icon(ic, 26) }}</div>
+      <h3>{{ titre }}</h3>
+      <p>{{ desc }}</p>
     </div>
     {% endfor %}
   </div>
@@ -403,7 +448,7 @@
       {% endif %}
       <h3 class="display" style="font-weight:800;font-size:1.3rem;margin:0 0 .35rem">{{ plan.nom }}</h3>
       <div style="margin:.5rem 0 1.25rem">
-        <span class="num display" style="font-size:2rem;font-weight:800;color:var(--brand)">{{ "{:,.0f}".format(plan.prix_mensuel).replace(",", " ") }}</span>
+        <span class="figure display" style="font-size:2rem;font-weight:800;color:var(--brand)">{{ "{:,.0f}".format(plan.prix_mensuel).replace(",", " ") }}</span>
         <span style="color:var(--sub);font-size:.9rem"> FCFA/mois</span>
       </div>
       <ul style="list-style:none;padding:0;margin:0 0 1.75rem">
@@ -498,6 +543,17 @@
 </footer>
 
 <script nonce="{{ csp_nonce }}">
+// Menu mobile
+(function(){
+  var b=document.getElementById('burger'), m=document.getElementById('mnav');
+  if(!b||!m) return;
+  b.addEventListener('click',function(){
+    var open=m.classList.toggle('open');
+    b.setAttribute('aria-expanded', open?'true':'false');
+  });
+  m.querySelectorAll('a').forEach(function(a){a.addEventListener('click',function(){m.classList.remove('open');b.setAttribute('aria-expanded','false');});});
+})();
+
 // Révélation au défilement (désactivée si l'utilisateur préfère moins d'animations)
 (function(){
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
