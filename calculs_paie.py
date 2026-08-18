@@ -101,6 +101,13 @@ COEFFS_HEURES_SUP_CONVENTION = {
     #   nuit +102 % (70). [Fériés chômés payés +100 %/+150 % non distingués.]
     "MINIER": {"10": 1.22, "30": 1.50, "30b": 1.51, "40": 1.68, "70": 2.02,
                "fj": 2.00, "fn": 2.50},
+    # Exploitations Forestières — Art. 38.2 / 39 (base 200 h) :
+    #   6 premières h de jour ..... +10 % → 10 ;  au-delà de jour ... +30 % → 30
+    #   repos hebdo / chômés (jour) +50 % → 30b ; nuit ouvrable ..... +60 % → 40
+    #   repos hebdo / chômés (nuit) +100 % → 70
+    #   fériés légaux : jour +100 % (fj) · nuit +150 % (fn)
+    "FORET": {"10": 1.10, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00,
+              "fj": 2.00, "fn": 2.50},
 }
 
 
@@ -354,6 +361,13 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         # Minier Art. 51 : 4 % du salaire de base, -25 %/journée d'absence non autorisée.
         from convention_minier import calculer_prime_assiduite_minier
         prime_assiduité = calculer_prime_assiduite_minier(
+            salaire_base, nb_absences=int(g("jours_absence_injustifiee")))
+        prime_assiduite_est_auto = True
+    elif prime_assiduité <= 0 and (donnees.get("convention") or "").upper() == "FORET" and salaire_base > 0:
+        # Forestières Art. 50.4 : 3 % du salaire mensuel de base ; abattement
+        # -50 % pour 1 absence, -100 % pour 2 absences non autorisées du mois.
+        from convention_foret import calculer_prime_assiduite_foret
+        prime_assiduité = calculer_prime_assiduite_foret(
             salaire_base, nb_absences=int(g("jours_absence_injustifiee")))
         prime_assiduite_est_auto = True
     prime_qualite     = g("prime_qualite")
@@ -1804,6 +1818,7 @@ CONVENTIONS_DISPONIBLES = {
     "HOTELLERIE": "Convention Collective Hôtellerie – Restauration – Débits de Boissons",
     "BOIS":       "Convention Collective des Industries du Bois, Sciages et Placages",
     "MINIER":     "Convention Collective des Entreprises Minières et Assimilées",
+    "FORET":      "Convention Collective des Exploitations Forestières",
 }
 
 
@@ -1832,6 +1847,9 @@ def prime_anciennete(convention, salaire_base: float, anciennete_annees: int) ->
     if c == "MINIER":
         from convention_minier import calculer_prime_anciennete_minier
         return calculer_prime_anciennete_minier(salaire_base, anciennete_annees)
+    if c == "FORET":
+        from convention_foret import calculer_prime_anciennete_foret
+        return calculer_prime_anciennete_foret(salaire_base, anciennete_annees)
     if c in ("BTP", "INDUSTRIE", "AERIEN"):
         # A.46/A.47 identique : 2 % après 2 ans, +1 %/an.
         return calculer_prime_anciennete_btp(salaire_base, anciennete_annees)
@@ -1908,6 +1926,9 @@ def preavis_jours(convention, anciennete_annees: int, cadre: bool = False,
         from convention_minier import calculer_preavis_minier
         return max(calculer_preavis_minier(anciennete_annees, cadre=cadre,
                                            encadrement=encadrement), legal)
+    if c == "FORET":
+        from convention_foret import calculer_preavis_foret
+        return max(calculer_preavis_foret(anciennete_annees), legal)
     if c == "HYDROCARBURES":
         # Art. 30.5/30.6 : barème identique au Code du travail.
         return calculer_preavis_code(anciennete_annees)
@@ -1937,6 +1958,9 @@ def indemnite_services_rendus(convention, moyenne_12_mois: float, anciennete_ann
     if c == "MINIER":
         from convention_minier import calculer_indemnite_services_rendus_minier
         return calculer_indemnite_services_rendus_minier(moyenne_12_mois, anciennete_annees)
+    if c == "FORET":
+        from convention_foret import calculer_indemnite_services_rendus_foret
+        return calculer_indemnite_services_rendus_foret(moyenne_12_mois, anciennete_annees)
     return 0.0
 
 
@@ -1997,8 +2021,8 @@ def permissions_familiales(convention, evenement: str) -> int:
     c = _conv(convention)
     if c == "PETROLE":
         return permissions_familiales_petrole(evenement)
-    if c in ("BTP", "INDUSTRIE", "AERIEN"):
-        # A.41/A.42 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
+    if c in ("BTP", "INDUSTRIE", "AERIEN", "FORET"):
+        # A.41 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
         return permissions_familiales_btp(evenement)
     # COMMERCE et défaut : même barème
     return permissions_familiales_commerce(evenement)

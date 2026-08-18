@@ -3408,6 +3408,10 @@ def grille_salaires():
         from convention_minier import grille_salaire_minier_seed
         grille = grille_salaire_minier_seed()
         est_seed = True
+    if not grille and (t.convention or "").upper() == "FORET":
+        from convention_foret import grille_salaire_foret_seed
+        grille = grille_salaire_foret_seed()
+        est_seed = True
     return render_template("tenant/grille_salaires.html", tenant=t,
         categories=GRILLE_CATEGORIES_AERIEN, grille=grille,
         est_seed=est_seed, nb_echelons=10)
@@ -6162,6 +6166,12 @@ def prime_fin_annee():
             pa = calculer_prime_anciennete_minier(moyenne, int(anc))
             prime = calculer_treizieme_mois_minier(moyenne, pa, mois_presence)
             eligible = anc >= 1 and prime > 0
+        elif conv == "FORET":
+            # Gratification Art. 51 : discrétionnaire, requiert ≥ 2 ans
+            # d'ancienneté (essai compris) ; le montant relève de l'appréciation
+            # de l'employeur (aucun taux conventionnel) → à saisir manuellement.
+            prime = 0.0
+            eligible = anc >= 2
         else:
             # Hôtellerie Art. 50 : 30 %, requiert ≥ 6 mois de présence
             prime = calculer_prime_fin_annee_hotellerie(moyenne, mois_presence)
