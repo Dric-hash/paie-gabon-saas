@@ -2423,6 +2423,7 @@ def _bulletin_imprimer_impl(id):
         "classique":   "tenant/bulletin_print.html",
         "moderne":     "tenant/bulletin_print_moderne.html",
         "minimaliste": "tenant/bulletin_print_minimaliste.html",
+        "grandlivre":  "tenant/bulletin_print_grandlivre.html",
     }
     template = template_map.get(modele, "tenant/bulletin_print.html")
     # Vérifier que le template existe réellement sur le serveur, sinon repli.

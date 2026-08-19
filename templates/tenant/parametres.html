@@ -418,11 +418,12 @@
       <p style="font-size:.8rem;color:#6b7280;margin-bottom:1.25rem">Choisissez la mise en page des bulletins. S'applique immédiatement à tous les bulletins.</p>
       <form method="POST" action="/parametres/modele-bulletin">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:1.25rem">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1rem;margin-bottom:1.25rem">
           {% for nom, titre, desc, gradient in [
             ('classique',   'Classique',   'Mise en page traditionnelle, compatible tous supports', 'background:#0f3d36'),
             ('moderne',     'Moderne',     'Design contemporain avec bandes colorées', 'background:linear-gradient(135deg,#0f3d36,#2563eb)'),
             ('minimaliste', 'Minimaliste', 'Épuré et sobre, idéal pour impression économique', 'background:white;border:1px solid #e5e7eb'),
+            ('grandlivre',  'Grand Livre', 'Signature PaieGabon : registre, chiffres au cordeau', 'background:linear-gradient(135deg,#124a3e,#0f3d36 55%,#0a2b25)'),
           ] %}
           <label style="cursor:pointer">
             <input type="radio" name="modele_bulletin" value="{{ nom }}"
