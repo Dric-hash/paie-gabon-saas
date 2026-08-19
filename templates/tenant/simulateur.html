@@ -77,16 +77,19 @@
         <label style="display:block;font-size:.8rem;font-weight:700;color:#166534;margin-bottom:.4rem">⚙️ Convention collective / régime</label>
         <select id="sel_convention" onchange="appliquerConvention(); simuler()"
           style="width:100%;border:1.5px solid #bbf7d0;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem;font-weight:600;background:white;color:#14532d">
-          <option value="AUCUNE"   {{ 'selected' if convention == 'AUCUNE' }}>Aucune (Code du travail — 40h/sem.)</option>
-          <option value="BTP"      {{ 'selected' if convention == 'BTP' }}>BTP (48h/sem. — heures structurelles)</option>
-          <option value="COMMERCE" {{ 'selected' if convention == 'COMMERCE' }}>Commerce (heures sup au jour)</option>
-          <option value="PETROLE"  {{ 'selected' if convention == 'PETROLE' }}>Pétrole</option>
-          <option value="INDUSTRIE" {{ 'selected' if convention == 'INDUSTRIE' }}>Industrie</option>
-          <option value="AERIEN"    {{ 'selected' if convention == 'AERIEN' }}>Transports Aériens</option>
-          <option value="HOTELLERIE" {{ 'selected' if convention == 'HOTELLERIE' }}>Hôtellerie – Restauration</option>
-          <option value="BOIS" {{ 'selected' if convention == 'BOIS' }}>Industries du Bois</option>
-          <option value="MINIER" {{ 'selected' if convention == 'MINIER' }}>Entreprises Minières</option>
-          <option value="FORET" {{ 'selected' if convention == 'FORET' }}>Exploitations Forestières</option>
+          {# Libellés courts pédagogiques ; repli automatique sur le libellé long #}
+          {# de CONVENTIONS_DISPONIBLES si un code n'est pas listé ici.            #}
+          {% set libelles_courts = {
+            "AUCUNE": "Aucune (Code du travail — 40h/sem.)",
+            "BTP": "BTP (48h/sem. — heures structurelles)",
+            "COMMERCE": "Commerce (heures sup au jour)",
+            "PETROLE": "Pétrole", "INDUSTRIE": "Industrie", "AERIEN": "Transports Aériens",
+            "HOTELLERIE": "Hôtellerie – Restauration", "BOIS": "Industries du Bois",
+            "MINIER": "Entreprises Minières", "FORET": "Exploitations Forestières"
+          } %}
+          {% for code, libelle in conventions_disponibles.items() %}
+          <option value="{{ code }}" {{ 'selected' if convention == code }}>{{ libelles_courts.get(code, libelle) }}</option>
+          {% endfor %}
         </select>
         <div id="conv-note" style="font-size:.7rem;color:#15803d;margin-top:.35rem"></div>
       </div>

@@ -317,7 +317,9 @@ def datetime_fr_filter(v):
 
 @app.context_processor
 def inject_globals():
-    return {"now": datetime.now(), "enumerate": enumerate, "app_version": APP_VERSION}
+    from calculs_paie import CONVENTIONS_DISPONIBLES
+    return {"now": datetime.now(), "enumerate": enumerate, "app_version": APP_VERSION,
+            "conventions_disponibles": CONVENTIONS_DISPONIBLES}
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.errorhandler(403)

@@ -177,16 +177,11 @@
             <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Convention applicable à l'entreprise</label>
             <select name="convention"
               style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;background:white">
-              <option value="AUCUNE"   {{ 'selected' if (tenant.convention or 'AUCUNE') == 'AUCUNE' }}>Aucune (Code du travail seul)</option>
-              <option value="BTP"      {{ 'selected' if tenant.convention == 'BTP' }}>Convention Collective BTP</option>
-              <option value="COMMERCE" {{ 'selected' if tenant.convention == 'COMMERCE' }}>Convention Collective du Commerce</option>
-              <option value="PETROLE"  {{ 'selected' if tenant.convention == 'PETROLE' }}>Convention Collective des professionnels du pétrole</option>
-              <option value="INDUSTRIE" {{ 'selected' if tenant.convention == 'INDUSTRIE' }}>Convention Collective des Entreprises Industrielles</option>
-              <option value="AERIEN"    {{ 'selected' if tenant.convention == 'AERIEN' }}>Convention Collective des Compagnies de Transports Aériens</option>
-              <option value="HOTELLERIE" {{ 'selected' if tenant.convention == 'HOTELLERIE' }}>Convention Collective Hôtellerie – Restauration – Débits de Boissons</option>
-              <option value="BOIS" {{ 'selected' if tenant.convention == 'BOIS' }}>Convention Collective des Industries du Bois, Sciages et Placages</option>
-              <option value="MINIER" {{ 'selected' if tenant.convention == 'MINIER' }}>Convention Collective des Entreprises Minières et Assimilées</option>
-              <option value="FORET" {{ 'selected' if tenant.convention == 'FORET' }}>Convention Collective des Exploitations Forestières</option>
+              {# Options générées depuis CONVENTIONS_DISPONIBLES (source unique) — #}
+              {# toute nouvelle convention apparaît ici automatiquement.          #}
+              {% for code, libelle in conventions_disponibles.items() %}
+              <option value="{{ code }}" {{ 'selected' if (tenant.convention or 'AUCUNE') == code }}>{{ libelle }}</option>
+              {% endfor %}
             </select>
             <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
               Détermine les barèmes de préavis, d'ancienneté, d'indemnité de services rendus,
