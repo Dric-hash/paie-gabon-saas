@@ -54,8 +54,10 @@
     .row-subtotal td:first-child,.row-subtotal td.bold{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;color:var(--green);}
     .row-subtotal td.tr{color:var(--green);font-size:12px;}
     /* NET */
-    .net-box{border:none;border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin:12px 0;background:linear-gradient(135deg,var(--green) 0%,var(--green-d) 100%);position:relative;overflow:hidden;}
+    .net-box{border:none;border-radius:12px;padding:15px 20px;margin:12px 0;background:linear-gradient(135deg,var(--green) 0%,var(--green-d) 100%);position:relative;overflow:hidden;}
     .net-box::before{content:"";position:absolute;inset:0;opacity:.5;background:repeating-linear-gradient(0deg,transparent 0 20px,rgba(233,196,106,.05) 20px 21px);}
+    .net-row{display:flex;justify-content:space-between;align-items:center;position:relative;z-index:1;}
+    .net-lettres{position:relative;z-index:1;font-size:9.5px;font-style:italic;color:rgba(255,255,255,.8);margin-top:7px;border-top:1px solid rgba(233,196,106,.25);padding-top:7px;}
     .net-label{font-family:'Plus Jakarta Sans',sans-serif;font-size:14px;font-weight:700;color:var(--gold-l);text-transform:uppercase;letter-spacing:.05em;position:relative;z-index:1;}
     .net-amount{font-size:26px;font-weight:600;color:#fff;position:relative;z-index:1;}
     .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:8px;}
@@ -451,8 +453,11 @@
   </table>
 
   <div class="net-box">
-    <span class="net-label">💰 {{ T.payslip.net_salary }}</span>
-    <span class="net-amount">{{ bulletin.net_a_payer|fcfa }}</span>
+    <div class="net-row">
+      <span class="net-label">{{ T.payslip.net_salary }}</span>
+      <span class="net-amount">{{ bulletin.net_a_payer|fcfa }}</span>
+    </div>
+    <div class="net-lettres">Arrêté à la somme de : {{ bulletin.net_a_payer|montant_en_lettres }} francs CFA.</div>
   </div>
 
   {% if multi_sites and recap_sites %}

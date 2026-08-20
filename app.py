@@ -315,6 +315,15 @@ def datetime_fr_filter(v):
         except: return v
     return v.strftime("%d/%m/%Y à %Hh%M")
 
+@app.template_filter("montant_en_lettres")
+def montant_en_lettres_filter(v):
+    """Montant entier en toutes lettres (français) — pour les bulletins."""
+    try:
+        from montant_lettres import nombre_en_lettres
+        return nombre_en_lettres(v)
+    except Exception:
+        return ""
+
 @app.context_processor
 def inject_globals():
     from calculs_paie import CONVENTIONS_DISPONIBLES

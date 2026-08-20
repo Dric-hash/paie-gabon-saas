@@ -3503,7 +3503,7 @@ def parametres_modele_bulletin():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     modele = request.form.get("modele_bulletin", "classique")
-    if modele not in ("classique", "moderne", "minimaliste"):
+    if modele not in ("classique", "moderne", "minimaliste", "grandlivre"):
         modele = "classique"
     t.modele_bulletin = modele
     db.session.commit()
