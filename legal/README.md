@@ -32,6 +32,6 @@ remplace tous les marqueurs entre crochets `[ ]` :
 2. **Loi gabonaise sur la protection des données** et autorité compétente : à
    citer nommément dans la politique de confidentialité une fois confirmée.
 3. **Transfert international** : les données sont hébergées hors du Gabon
-   (Railway, États-Unis) — vérifier l'encadrement requis.
+   (Hostinger, Chypre) — transfert hors Gabon encadré.
 4. **Mentions obligatoires** d'une entreprise gabonaise (RCCM, NIF, etc.) sur les
    mentions légales.

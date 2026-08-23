@@ -1,4 +1,4 @@
-# nixpacks.toml — Configuration de build Railway
+# nixpacks.toml — Configuration de build pour PaaS Nixpacks (optionnel sur un VPS Hostinger : le déploiement se fait via git + systemd)
 #
 # Ajoute le client PostgreSQL (pg_dump) nécessaire aux sauvegardes automatiques.
 # Sans ce fichier, pg_dump n'est pas disponible et backup.py échoue avec

@@ -45,11 +45,13 @@ app = Flask(__name__)
 app.config["MAX_FORM_MEMORY_SIZE"] = 20 * 1024 * 1024   # 20 Mo par champ
 app.config["MAX_FORM_PARTS"] = 10000                     # marge sur le nb de champs
 
-# Indicateur de production unique et robuste (présence d'une variable, pas
-# égalité stricte sur un nom d'environnement Railway qui peut être renommé).
+# Indicateur de production, indépendant de l'hébergeur (Hostinger / VPS).
+# ⚠️ Définir FLASK_ENV=production (ou APP_ENV=production) sur le serveur, sinon
+# les cookies sécurisés, le HTTPS forcé et le HSTS ne s'activent pas.
 EST_PRODUCTION = bool(
-    os.environ.get("RAILWAY_ENVIRONMENT")
-    or os.environ.get("FLASK_ENV") == "production"
+    os.environ.get("FLASK_ENV") == "production"
+    or os.environ.get("APP_ENV") == "production"
+    or os.environ.get("PRODUCTION")
 )
 app.config["EST_PRODUCTION"] = EST_PRODUCTION
 
@@ -344,7 +346,7 @@ def server_error(e):
         pass
     return render_template("auth/500.html"), 500
 
-# ── Health check (monitoring Railway / uptime) ────────────────────────────────
+# ── Health check (monitoring / uptime) ────────────────────────────────
 @app.route("/health")
 def health_check():
     """Vérifie que l'app et la base de données répondent."""

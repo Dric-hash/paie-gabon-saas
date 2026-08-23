@@ -22,7 +22,7 @@
 
 ### ⚠️ À vérifier avant le lancement
 
-- [ ] **`SECRET_KEY` de production** : générer une vraie clé unique et la définir dans les variables Railway. Ne jamais réutiliser celle de développement.
+- [ ] **`SECRET_KEY` de production** : générer une vraie clé unique et la définir dans les variables d'environnement du serveur. Ne jamais réutiliser celle de développement.
       Générer avec : `python -c "import secrets; print(secrets.token_hex(32))"`
 - [ ] **Mot de passe super-admin** : changer le mot de passe par défaut après le premier déploiement.
 - [ ] **Compte démo** : si un compte démo existe, s'assurer qu'il ne contient aucune donnée sensible réelle, ou le désactiver en production.
@@ -33,9 +33,9 @@
 ## 2. Sauvegardes — point critique
 
 - [ ] **Activer les sauvegardes de la base de données.** C'est le point le plus important avant d'accueillir de vrais clients : une perte de données de paie serait catastrophique.
-- Le module de sauvegarde vers Backblaze B2 (`backup.py`) est **codé et prêt**, mais en attente d'activation (il nécessitait le plan Railway Pro).
+- Le module de sauvegarde vers Backblaze B2 (`backup.py`) est **codé et prêt**, mais en attente d'activation (il se planifie via une tâche cron du serveur).
 - **Deux options** :
-  1. Activer le plan Railway Pro pour bénéficier des sauvegardes PostgreSQL automatiques de Railway.
+  1. Planifier les sauvegardes PostgreSQL : lancer `backup.py` via une tâche cron du serveur (ou utiliser les sauvegardes de l'hébergeur).
   2. Activer le module B2 en renseignant les variables `B2_KEY_ID`, `B2_APP_KEY`, `B2_BUCKET`, `B2_ENDPOINT`.
 - [ ] **Tester une restauration** au moins une fois. Une sauvegarde qu'on n'a jamais testée n'est pas une sauvegarde fiable.
 
@@ -43,21 +43,21 @@
 
 ## 3. Configuration & variables d'environnement
 
-Variables à renseigner dans Railway (voir `.env.example` pour le détail) :
+Variables à renseigner sur le serveur (Hostinger) (voir `.env.example` pour le détail) :
 
 | Variable | Obligatoire | Rôle |
 |----------|-------------|------|
 | `SECRET_KEY` | ✅ Oui | Signature des sessions |
-| `DATABASE_URL` | ✅ Oui (auto Railway) | Connexion PostgreSQL |
-| `RAILWAY_ENVIRONMENT=production` | ✅ Oui | Active HTTPS, cookies sécurisés, HSTS |
+| `DATABASE_URL` | ✅ Oui | Connexion PostgreSQL |
+| `FLASK_ENV=production` | ✅ Oui | Active HTTPS, cookies sécurisés, HSTS |
 | `SUPER_ADMIN_EMAIL` / `_PASSWORD` | ✅ Oui | Compte administrateur initial |
 | `SENTRY_DSN` | Recommandé | Monitoring des erreurs (déjà actif) |
 | `REDIS_URL` | Recommandé | Cache (accélère les KPIs) |
 | `MAIL_USERNAME` / `_PASSWORD` | Recommandé | Envoi d'emails |
 | `B2_*` | Si sauvegardes B2 | Sauvegardes externes |
 
-- [ ] Vérifier que `RAILWAY_ENVIRONMENT=production` est bien défini — sinon les cookies sécurisés et le HSTS ne s'activent pas.
-- [ ] Activer **Redis** (plugin Railway) pour le cache : sans lui, les indicateurs du tableau de bord sont recalculés à chaque visite.
+- [ ] Vérifier que `FLASK_ENV=production` est bien défini — sinon les cookies sécurisés et le HSTS ne s'activent pas.
+- [ ] Activer **Redis** (sur le serveur) pour le cache : sans lui, les indicateurs du tableau de bord sont recalculés à chaque visite.
 
 ---
 
@@ -122,7 +122,7 @@ Variables à renseigner dans Railway (voir `.env.example` pour le détail) :
 
 1. **Activer et tester les sauvegardes** de la base de données.
 2. Définir une **`SECRET_KEY` de production** unique et changer le mot de passe admin.
-3. Vérifier `RAILWAY_ENVIRONMENT=production` et activer **Redis**.
+3. Vérifier `FLASK_ENV=production` et activer **Redis**.
 4. Configurer les **alertes Sentry** + une surveillance uptime sur `/health`.
 5. Préparer les **documents légaux** (CGU, confidentialité, mentions légales).
 

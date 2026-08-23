@@ -9,11 +9,11 @@ Fonctionnement :
 
 Déclenchement :
     - Manuellement   : python backup.py
-    - Programmé      : via un Railway Cron Job (voir DEPLOIEMENT_BACKUP.md)
+    - Programmé      : via une tâche cron du serveur (voir DEPLOIEMENT_BACKUP.md)
     - Depuis l'app   : route POST /admin/backup (super-admin)
 
 Variables d'environnement requises :
-    DATABASE_URL              URL PostgreSQL (fournie par Railway)
+    DATABASE_URL              URL PostgreSQL (fournie par votre hébergeur)
     B2_KEY_ID                 Identifiant de clé applicative Backblaze
     B2_APP_KEY                Clé applicative Backblaze
     B2_BUCKET                 Nom du bucket B2

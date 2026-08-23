@@ -17,7 +17,7 @@ Variables d'environnement :
   CINETPAY_API_KEY  — dashboard CinetPay → Mon Compte → API
   CINETPAY_SITE_ID  — dashboard CinetPay → Mon Compte → API
   CINETPAY_ENV      — TEST ou PROD
-  APP_BASE_URL      — URL publique Railway (ex: https://amenack-paie.up.railway.app)
+  APP_BASE_URL      — URL publique de l'app (ex: https://paiegabon.com)
 """
 
 import os

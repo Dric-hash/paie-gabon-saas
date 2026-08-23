@@ -16,7 +16,7 @@ Variables d'environnement requises :
   AIRTEL_CLIENT_ID      — fourni par Airtel Developer Portal
   AIRTEL_CLIENT_SECRET  — fourni par Airtel Developer Portal
   AIRTEL_ENV            — "sandbox" (test) ou "production"
-  APP_BASE_URL          — URL publique de l'app (ex: https://amenack-paie.up.railway.app)
+  APP_BASE_URL          — URL publique de l'app (ex: https://paiegabon.com)
 """
 
 import os
@@ -244,7 +244,8 @@ def valider_signature_webhook(payload_bytes: bytes, signature_header: str) -> bo
     """
     if not AIRTEL_WEBHOOK_SECRET:
         est_production = (
-            os.environ.get("RAILWAY_ENVIRONMENT") is not None
+            os.environ.get("FLASK_ENV") == "production"
+            or os.environ.get("APP_ENV") == "production"
             or os.environ.get("AIRTEL_ENV") == "production"
         )
         if est_production:

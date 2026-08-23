@@ -326,7 +326,7 @@ def migrer():
         print(f"  Périodes     : {len(periodes_cache)}")
         print(f"\n  Connexion    : {ADMIN_EMAIL}")
         print(f"  Mot de passe : {ADMIN_PASSWORD}")
-        print(f"\n  URL : https://ameriack-paie.up.railway.app")
+        print(f"\n  URL : https://paiegabon.com")
         print("=" * 65)
 
 if __name__ == "__main__":
