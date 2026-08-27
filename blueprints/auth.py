@@ -267,6 +267,9 @@ def inscription():
             pays="Gabon", plan_id=plan.id if plan else None,
             statut="ESSAI",
             date_expiration=utcnow() + timedelta(days=30),
+            # Mode cabinet choisi à l'inscription (indépendant du plan) : le tenant
+            # peut alors gérer plusieurs entreprises dès la connexion.
+            est_cabinet=(request.form.get("mode_cabinet") in ("1", "on", "true")),
         )
         t.generate_token()
         db.session.add(t)
@@ -563,6 +566,39 @@ def cgv():
 @bp.route("/mentions-legales")
 def mentions_legales():
     return render_template("mentions_legales.html")
+
+
+@bp.route("/avis", methods=["GET", "POST"])
+def avis():
+    """Page publique de recueil d'avis (accessible connecté ou non)."""
+    from models import Avis
+    if request.method == "POST":
+        nps_raw = request.form.get("nps", "").strip()
+        try:
+            nps = int(nps_raw) if nps_raw != "" else None
+            if nps is not None and not (0 <= nps <= 10):
+                nps = None
+        except ValueError:
+            nps = None
+        a = Avis(
+            tenant_id    = (current_user.tenant_id if current_user.is_authenticated else None),
+            entreprise   = request.form.get("entreprise", "").strip()[:200],
+            nom          = request.form.get("nom", "").strip()[:120],
+            fonction     = request.form.get("fonction", "").strip()[:120],
+            outil_avant  = request.form.get("outil_avant", "").strip()[:200],
+            gain         = request.form.get("gain", "").strip(),
+            frustration  = request.form.get("frustration", "").strip(),
+            nps          = nps,
+            consentement = request.form.get("consentement") in ("1", "on", "true"),
+            commentaire  = request.form.get("commentaire", "").strip(),
+        )
+        db.session.add(a)
+        db.session.commit()
+        return render_template("avis_merci.html")
+    entreprise = ""
+    if current_user.is_authenticated and getattr(current_user, "tenant", None):
+        entreprise = current_user.tenant.denomination or ""
+    return render_template("avis.html", entreprise=entreprise)
 
 
 # ═══════════════════════════════════════════════════════════════════════════

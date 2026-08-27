@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Votre avis — PaieGabon</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{--vert:#0f3d36;--vert-d:#0a2b25;--or:#d99e0b;--or-l:#e9c46a;--parch:#f6f3ea}
+    body{background:var(--parch)}
+    .hero{background:radial-gradient(120% 90% at 82% 8%,#16564a 0%,var(--vert) 46%,var(--vert-d) 100%)}
+    .fld{width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.7rem .85rem;font-size:.95rem;box-sizing:border-box;background:#fff}
+    .fld:focus{outline:none;border-color:var(--or);box-shadow:0 0 0 3px rgba(217,158,11,.15)}
+    .lbl{display:block;font-weight:700;color:var(--vert);margin-bottom:.35rem;font-size:.95rem}
+    .nps input{position:absolute;opacity:0}
+    .nps label{cursor:pointer;border:1.5px solid #e5e7eb;border-radius:.6rem;min-width:2.4rem;height:2.6rem;
+      display:flex;align-items:center;justify-content:center;font-weight:700;color:#475569;font-family:ui-monospace,monospace}
+    .nps input:checked + label{background:var(--vert);color:#fff;border-color:var(--vert)}
+  </style>
+</head>
+<body class="min-h-screen">
+
+<nav class="hero text-white px-6 py-4 flex items-center justify-between">
+  <div class="flex items-center gap-2">
+    <div style="width:34px;height:34px;border-radius:9px;background:var(--or);color:var(--vert);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:19px">₣</div>
+    <span class="text-lg font-black">PaieGabon</span>
+  </div>
+  <a href="/" class="text-sm text-white/70 hover:text-white font-semibold">← Accueil</a>
+</nav>
+
+<main class="max-w-2xl mx-auto p-5 py-8">
+  <div class="mb-6">
+    <div class="text-xs font-bold tracking-widest uppercase" style="color:var(--or)">Votre expérience nous aide</div>
+    <h1 class="text-3xl font-black mt-1" style="color:var(--vert)">Donnez votre avis sur PaieGabon</h1>
+    <p class="text-gray-600 mt-2">2 minutes, pas plus. Vos réponses nous aident à améliorer l'outil — et, si vous l'autorisez, à porter la voix des entreprises gabonaises.</p>
+  </div>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="mb-4 rounded-xl px-4 py-3 text-sm {{ 'bg-red-50 text-red-700' if cat=='error' else 'bg-green-50 text-green-700' }}">{{ m }}</div>{% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="/avis" class="bg-white rounded-2xl shadow border border-gray-100 p-6 space-y-5">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div><label class="lbl">Entreprise</label>
+        <input type="text" name="entreprise" class="fld" value="{{ entreprise }}" placeholder="Nom de votre entreprise"/></div>
+      <div><label class="lbl">Votre nom</label>
+        <input type="text" name="nom" class="fld" placeholder="Prénom et nom"/></div>
+    </div>
+    <div><label class="lbl">Votre fonction <span class="text-gray-400 font-normal">(facultatif)</span></label>
+      <input type="text" name="fonction" class="fld" placeholder="Ex. Gérant, Comptable, RH"/></div>
+
+    <div><label class="lbl">1. Qu'utilisiez-vous <em>avant</em> PaieGabon ?</label>
+      <input type="text" name="outil_avant" class="fld" placeholder="Excel, un autre logiciel, un prestataire, rien…"/></div>
+
+    <div><label class="lbl">2. Qu'est-ce que PaieGabon vous a fait gagner ?</label>
+      <textarea name="gain" rows="3" class="fld" placeholder="Du temps, de la sérénité, la conformité…"></textarea></div>
+
+    <div><label class="lbl">3. Qu'est-ce qui vous a le plus manqué ou frustré ?</label>
+      <textarea name="frustration" rows="3" class="fld" placeholder="Soyez francs, c'est comme ça qu'on s'améliore."></textarea></div>
+
+    <div>
+      <label class="lbl">4. Sur 10, recommanderiez-vous PaieGabon à un confrère ?</label>
+      <div class="nps flex flex-wrap gap-2 mt-1">
+        {% for n in range(0, 11) %}
+        <div><input type="radio" name="nps" id="nps{{ n }}" value="{{ n }}"/><label for="nps{{ n }}">{{ n }}</label></div>
+        {% endfor %}
+      </div>
+      <div class="flex justify-between text-xs text-gray-400 mt-1"><span>Pas du tout</span><span>Absolument</span></div>
+    </div>
+
+    <div><label class="lbl">Un mot libre <span class="text-gray-400 font-normal">(facultatif)</span></label>
+      <textarea name="commentaire" rows="2" class="fld" placeholder="Ce que vous voulez nous dire."></textarea></div>
+
+    <label class="flex items-start gap-3 bg-gray-50 rounded-xl p-3 cursor-pointer">
+      <input type="checkbox" name="consentement" value="1" class="mt-1"/>
+      <span class="text-sm text-gray-600">J'autorise PaieGabon à citer mon avis (avec mon nom et mon entreprise) dans sa communication.</span>
+    </label>
+
+    <button type="submit" class="w-full text-white font-bold rounded-xl py-3.5" style="background:var(--vert)">
+      Envoyer mon avis
+    </button>
+    <p class="text-center text-xs text-gray-400">Vos données restent chez PaieGabon et ne sont jamais revendues.</p>
+  </form>
+</main>
+</body>
+</html>

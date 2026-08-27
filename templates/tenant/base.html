@@ -179,6 +179,9 @@
       <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
         ⚙️ <span>{{ T.nav.parametres }}</span>
       </a>
+      <a href="/avis" target="_blank" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-white/80 hover:bg-white/10">
+        💬 <span>Donner mon avis</span>
+      </a>
       {% else %}
       <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
         🏠 <span>{{ T.nav.dashboard }}</span>

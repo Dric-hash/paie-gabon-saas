@@ -192,6 +192,21 @@ def admin_tenants():
         plans=Plan.query.all(), q=q, statut=statut)
 
 
+@bp.route("/admin/avis")
+@super_admin_required
+def admin_avis():
+    from models import Avis
+    avis_list = Avis.query.order_by(Avis.date_creation.desc()).all()
+    notes = [a.nps for a in avis_list if a.nps is not None]
+    nps_moyen = round(sum(notes) / len(notes), 1) if notes else None
+    promoteurs = len([n for n in notes if n >= 9])
+    detracteurs = len([n for n in notes if n <= 6])
+    nps_score = round((promoteurs - detracteurs) / len(notes) * 100) if notes else None
+    return render_template("admin/avis.html", avis_list=avis_list, total=len(avis_list),
+        nps_moyen=nps_moyen, nps_score=nps_score,
+        nb_citables=len([a for a in avis_list if a.consentement]))
+
+
 @bp.route("/admin/tenants/nouveau", methods=["GET", "POST"])
 @super_admin_required
 def admin_tenant_nouveau():

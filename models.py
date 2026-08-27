@@ -1634,3 +1634,22 @@ class MessageSupport(db.Model):
 
     tenant = db.relationship("Tenant", backref=db.backref("messages_support", lazy=True))
     auteur = db.relationship("Utilisateur", foreign_keys=[user_id])
+
+
+# ── Avis / retours d'expérience utilisateurs ──────────────────────────────────
+class Avis(db.Model):
+    """Retour d'expérience laissé via la page publique /avis (connecté ou non)."""
+    __tablename__ = "avis"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+    entreprise    = db.Column(db.String(200))
+    nom           = db.Column(db.String(120))
+    fonction      = db.Column(db.String(120))
+    outil_avant   = db.Column(db.String(200))   # ce qu'ils utilisaient avant
+    gain          = db.Column(db.Text)          # ce que PaieGabon leur a apporté
+    frustration   = db.Column(db.Text)          # ce qui manque / frustre
+    nps           = db.Column(db.Integer)        # note de recommandation 0..10
+    consentement  = db.Column(db.Boolean, default=False)  # autorise citation publique
+    commentaire   = db.Column(db.Text)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    tenant = db.relationship("Tenant", backref=db.backref("avis", lazy=True))
