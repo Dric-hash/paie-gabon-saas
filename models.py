@@ -1650,6 +1650,7 @@ class Avis(db.Model):
     frustration   = db.Column(db.Text)          # ce qui manque / frustre
     nps           = db.Column(db.Integer)        # note de recommandation 0..10
     consentement  = db.Column(db.Boolean, default=False)  # autorise citation publique
+    mis_en_avant  = db.Column(db.Boolean, default=False)  # affiché sur la page d'accueil
     commentaire   = db.Column(db.Text)
     date_creation = db.Column(db.DateTime, default=utcnow)
     tenant = db.relationship("Tenant", backref=db.backref("avis", lazy=True))

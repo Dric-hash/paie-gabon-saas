@@ -47,7 +47,19 @@
         {% if a.frustration %}<div><span class="text-gray-400 font-semibold">Frustration :</span> {{ a.frustration }}</div>{% endif %}
         {% if a.commentaire %}<div class="italic text-gray-600">« {{ a.commentaire }} »</div>{% endif %}
       </div>
-      <div class="mt-3 text-xs text-gray-400">{{ a.date_creation.strftime('%d/%m/%Y à %Hh%M') if a.date_creation else '' }}</div>
+      <div class="mt-3 flex items-center justify-between gap-3">
+        <div class="text-xs text-gray-400">{{ a.date_creation.strftime('%d/%m/%Y à %Hh%M') if a.date_creation else '' }}</div>
+        {% if a.consentement %}
+        <form method="POST" action="/admin/avis/{{ a.id }}/vedette" class="shrink-0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          {% if a.mis_en_avant %}
+          <button type="submit" class="text-xs font-bold rounded-lg px-3 py-1.5 bg-amber-500 text-white">★ Sur l'accueil — retirer</button>
+          {% else %}
+          <button type="submit" class="text-xs font-bold rounded-lg px-3 py-1.5 border border-amber-400 text-amber-700 hover:bg-amber-50">☆ Mettre en avant sur l'accueil</button>
+          {% endif %}
+        </form>
+        {% endif %}
+      </div>
     </div>
     {% endfor %}
   </div>

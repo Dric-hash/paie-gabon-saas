@@ -43,9 +43,14 @@ def index():
             else url_for("tenant.dashboard")
         )
     # Visiteurs non connectés : page de présentation
-    from models import Plan
+    from models import Plan, Avis
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
-    return render_template("public/presentation.html", plans=plans)
+    # Témoignages : uniquement ceux mis en avant ET dont l'auteur a consenti.
+    avis_vedette = (Avis.query
+                    .filter_by(mis_en_avant=True, consentement=True)
+                    .order_by(Avis.date_creation.desc())
+                    .limit(6).all())
+    return render_template("public/presentation.html", plans=plans, avis_vedette=avis_vedette)
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────

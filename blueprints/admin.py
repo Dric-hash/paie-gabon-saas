@@ -207,6 +207,20 @@ def admin_avis():
         nb_citables=len([a for a in avis_list if a.consentement]))
 
 
+@bp.route("/admin/avis/<int:id>/vedette", methods=["POST"])
+@super_admin_required
+def admin_avis_vedette(id):
+    from models import Avis
+    a = Avis.query.get_or_404(id)
+    # Sécurité : on ne met en avant qu'un avis dont l'auteur a consenti à la citation.
+    if a.consentement:
+        a.mis_en_avant = not a.mis_en_avant
+        db.session.commit()
+    else:
+        flash("Cet avis ne peut pas être affiché : l'auteur n'a pas donné son consentement.", "error")
+    return redirect(url_for("admin.admin_avis"))
+
+
 @bp.route("/admin/tenants/nouveau", methods=["GET", "POST"])
 @super_admin_required
 def admin_tenant_nouveau():
