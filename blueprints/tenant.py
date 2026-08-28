@@ -2119,6 +2119,26 @@ def bulletin_saisie():
             flash(f"Bulletin {'validé' if b.statut=='VALIDÉ' else 'sauvegardé'}.","success")
         return redirect(url_for("tenant.bulletin_detail",id=b.id))
     sid=request.args.get("salarie_id",type=int)
+    # ── Mode édition : ?id=<bulletin> pré-remplit le formulaire ──────────────
+    bulletin_edit=None; valeurs_edit={}
+    edit_id=request.args.get("id",type=int) or request.args.get("bulletin_id",type=int)
+    if edit_id:
+        be=BulletinPaie.query.filter_by(id=edit_id,tenant_id=t.id).first_or_404()
+        if be.statut in ("VALIDÉ","VALIDE","PAYÉ","PAYE"):
+            flash("Ce bulletin est validé ou payé : annulez d'abord sa validation "
+                  "depuis la liste des bulletins pour pouvoir le modifier.","error")
+            return redirect(url_for("tenant.bulletin_detail",id=be.id))
+        bulletin_edit=be; sid=be.salarie_id
+        _exclus={"id","tenant_id","salarie_id","periode_id","numero","numero_seq",
+                 "statut","date_creation","date_validation","date_paiement","mode_paiement"}
+        for col in be.__table__.columns:
+            if col.name in _exclus: continue
+            val=getattr(be,col.name)
+            if val is None: continue
+            try: valeurs_edit[col.name]=float(val)
+            except (TypeError,ValueError): valeurs_edit[col.name]=val
+        _comps=BulletinComposant.query.filter_by(bulletin_id=be.id).all()
+        valeurs_edit["__composants"]={f"composant_{c.composant_id}":float(c.montant or 0) for c in _comps}
     ss=Salarie.query.filter_by(id=sid,tenant_id=t.id).first() if sid else None
     c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
     acomptes_attente = Acompte.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_ATTENTE").all() if sid else []
@@ -2127,7 +2147,9 @@ def bulletin_saisie():
         ComposantPaie.ordre, ComposantPaie.libelle).all()
     return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t,
         acomptes_attente=acomptes_attente, total_acomptes=total_acomptes,
-        composants_actifs=composants_actifs)
+        composants_actifs=composants_actifs,
+        bulletin_edit=bulletin_edit, valeurs_edit=valeurs_edit,
+        periode_sel_id=(bulletin_edit.periode_id if bulletin_edit else None))
 
 @bp.route("/bulletins/<int:id>")
 @login_required

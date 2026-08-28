@@ -57,7 +57,7 @@
             class="pf-input">
             <option value="">— Sélectionner —</option>
             {% for p in periodes %}
-            <option value="{{ p.id }}" data-mois="{{ p.mois }}" data-annee="{{ p.annee }}">{{ p.libelle_complet }}</option>
+            <option value="{{ p.id }}" data-mois="{{ p.mois }}" data-annee="{{ p.annee }}" {% if periode_sel_id and periode_sel_id==p.id %}selected{% endif %}>{{ p.libelle_complet }}</option>
             {% endfor %}
           </select>
         </div>
@@ -1076,4 +1076,28 @@ document.getElementById('modal_btp')?.addEventListener('click', function(e) {
     </div>
   </div>
 </div>
+
+{% if bulletin_edit %}
+<script type="application/json" id="edit_data">{{ valeurs_edit|tojson }}</script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  try {
+    var data = JSON.parse(document.getElementById('edit_data').textContent || '{}');
+    var comps = data.__composants || {}; delete data.__composants;
+    Object.keys(data).forEach(function (k) {
+      var v = data[k];
+      if (v === null || v === '') return;
+      var el = document.getElementById('f_' + k) || document.getElementById(k)
+               || document.querySelector('[name="' + k + '"]');
+      if (el) el.value = v;
+    });
+    Object.keys(comps).forEach(function (name) {
+      var el = document.querySelector('[name="' + name + '"]');
+      if (el) el.value = comps[name];
+    });
+    if (typeof recalculer === 'function') recalculer();
+  } catch (e) { console.error('Pré-remplissage édition :', e); }
+});
+</script>
+{% endif %}
 {% endblock %}
