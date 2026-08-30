@@ -562,6 +562,8 @@ def run_migrations():
         "ALTER TABLE pointages ADD COLUMN IF NOT EXISTS type_jour VARCHAR(20) DEFAULT 'NORMAL'",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS modele_bulletin VARCHAR(30) DEFAULT 'classique'",
         "ALTER TABLE avis ADD COLUMN IF NOT EXISTS mis_en_avant BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS heures_normales NUMERIC(7,2) DEFAULT 0",
+        "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS heures_sup NUMERIC(7,2) DEFAULT 0",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS logo_url TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS grille_salaires TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS notes TEXT",

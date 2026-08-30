@@ -4673,10 +4673,13 @@ def journaliers_paie_generer():
         if j.id in heures_custom:
             total_h  = heures_custom[j.id]
             nb_jours = 1  # heures manuelles = considéré comme 1 entrée
+            h_norm   = total_h; h_sup = 0.0   # pas de détail sur saisie manuelle
         else:
             pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
                           Pointage.present==True).all()
-            total_h  = sum(float(p.heures_normales or 0)+float(p.heures_sup or 0) for p in pts)
+            h_norm   = sum(float(p.heures_normales or 0) for p in pts)
+            h_sup    = sum(float(p.heures_sup or 0) for p in pts)
+            total_h  = h_norm + h_sup
             nb_jours = len(pts)
         if total_h <= 0 and nb_jours == 0: continue
         if FeuillePaieJournalier.query.filter_by(
@@ -4686,6 +4689,7 @@ def journaliers_paie_generer():
             tenant_id=t.id, journalier_id=j.id,
             date_debut=date_debut, date_fin=date_fin,
             nb_jours=nb_jours, total_heures=total_h,
+            heures_normales=h_norm, heures_sup=h_sup,
             taux_horaire=taux, montant_brut=round(total_h*taux, 2),
             statut="EN_ATTENTE"))
         nb += 1
@@ -4729,6 +4733,8 @@ def journaliers_paie_generer_mois():
             Pointage.date_pointage <= date_fin,
             Pointage.present == True).all()
         total_h  = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
+        h_norm   = sum(float(p.heures_normales or 0) for p in pts)
+        h_sup    = sum(float(p.heures_sup or 0) for p in pts)
         nb_jours = len(pts)
         if total_h <= 0 and nb_jours == 0:
             continue
@@ -4739,6 +4745,7 @@ def journaliers_paie_generer_mois():
             tenant_id=t.id, journalier_id=j.id,
             date_debut=date_debut, date_fin=date_fin,
             nb_jours=nb_jours, total_heures=total_h,
+            heures_normales=h_norm, heures_sup=h_sup,
             taux_horaire=taux, montant_brut=brut,
             statut="EN_ATTENTE"))
         nb += 1

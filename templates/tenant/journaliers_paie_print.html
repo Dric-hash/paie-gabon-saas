@@ -85,7 +85,15 @@
       </td>
       <td>{{ f.date_debut.strftime('%d/%m/%Y') }} → {{ f.date_fin.strftime('%d/%m/%Y') }}</td>
       <td class="center">{{ f.nb_jours }}</td>
-      <td class="num">{{ "%.1f"|format(f.total_heures|float) }}h</td>
+      <td class="num">
+        {% set hn = f.heures_normales|float %}{% set hs = f.heures_sup|float %}
+        {% if (hn + hs) > 0 %}
+          {{ "%.1f"|format(hn) }}h <span style="color:#9ca3af;font-size:8px">norm.</span>
+          {% if hs > 0 %}<br/><b>{{ "%.1f"|format(hs) }}h</b> <span style="color:#9ca3af;font-size:8px">sup.</span>{% endif %}
+        {% else %}
+          {{ "%.1f"|format(f.total_heures|float) }}h
+        {% endif %}
+      </td>
       <td class="num">{{ f.taux_horaire|int }}</td>
       <td class="num">{{ (f.taux_horaire|float * 8)|int }}</td>
       <td class="num">

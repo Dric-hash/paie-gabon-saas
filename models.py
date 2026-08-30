@@ -971,6 +971,8 @@ class FeuillePaieJournalier(db.Model):
     date_paiement = db.Column(db.Date)
     nb_jours      = db.Column(db.Integer, default=0)
     total_heures  = db.Column(db.Numeric(7,2), default=0)
+    heures_normales = db.Column(db.Numeric(7,2), default=0)  # détail pour l'impression
+    heures_sup      = db.Column(db.Numeric(7,2), default=0)  # détail pour l'impression
     taux_horaire  = db.Column(db.Numeric(12,2), nullable=False)
     montant_brut  = db.Column(db.Numeric(15,2), default=0)
     avance_deduite = db.Column(db.Numeric(15,2), default=0)  # avances déduites (figé au paiement)
