@@ -58,6 +58,36 @@
         <option value="PAYÉ">Payées uniquement</option>
       </select>
     </div>
+    <!-- ── Sélection des SITES à imprimer (optionnel) ────────────────── -->
+    {% if sites %}
+    <div style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
+        <label style="font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase">
+          Sites à imprimer
+        </label>
+        <label style="font-size:.72rem;color:#0f3d36;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:.3rem">
+          <input type="checkbox" id="sites_cocher_tout_site" onclick="sitesToggleToutSite(this)" checked>
+          Tous
+        </label>
+      </div>
+      <p style="font-size:.68rem;color:#9ca3af;margin-bottom:.5rem">
+        Cochez les sites à inclure. Si tout est coché (ou tout décoché), tous les sites sont imprimés.
+      </p>
+      <div style="max-height:150px;overflow-y:auto;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem">
+        {% for s in sites %}
+        <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem .25rem;font-size:.82rem;cursor:pointer;border-radius:.4rem">
+          <input type="checkbox" class="cb-site-choix" value="{{ s.id }}" checked>
+          <span>🏗️ {{ s.nom }}</span>
+        </label>
+        {% endfor %}
+        <label style="display:flex;align-items:center;gap:.5rem;padding:.3rem .25rem;font-size:.82rem;cursor:pointer;border-radius:.4rem;border-top:1px solid #f3f4f6;margin-top:.25rem;padding-top:.5rem">
+          <input type="checkbox" class="cb-site-choix" value="sans" checked>
+          <span style="color:#6b7280">Sans site (non affectés)</span>
+        </label>
+      </div>
+    </div>
+    {% endif %}
+
     <!-- ── Sélection des journaliers à imprimer (optionnel) ──────────── -->
     <div style="margin-bottom:1rem">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.4rem">
@@ -626,6 +656,9 @@ function fermerModalSites() {
 function sitesToggleTout(master) {
   document.querySelectorAll('.cb-site-jour').forEach(cb => cb.checked = master.checked);
 }
+function sitesToggleToutSite(master) {
+  document.querySelectorAll('.cb-site-choix').forEach(cb => cb.checked = master.checked);
+}
 function lancerImpressionSites() {
   const debut  = document.getElementById('sites_debut').value;
   const fin    = document.getElementById('sites_fin').value;
@@ -641,6 +674,12 @@ function lancerImpressionSites() {
   // (ni "tout coché", ni "tout décoché" → comportement actuel = tout le monde).
   if (coches.length > 0 && coches.length < total) {
     params.push('ids=' + coches.join(','));
+  }
+  // Sites cochés : transmis seulement si l'utilisateur a restreint la sélection.
+  const sitesCoches = Array.from(document.querySelectorAll('.cb-site-choix:checked')).map(cb => cb.value);
+  const sitesTotal  = document.querySelectorAll('.cb-site-choix').length;
+  if (sitesCoches.length > 0 && sitesCoches.length < sitesTotal) {
+    params.push('sites=' + sitesCoches.join(','));
   }
   window.open('/journaliers/paie/imprimer-sites?' + params.join('&'), '_blank');
   fermerModalSites();

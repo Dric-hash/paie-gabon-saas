@@ -5399,6 +5399,25 @@ def journaliers_paie_imprimer_sites():
 
     sites_list = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
 
+    # ── Sélection optionnelle des SITES à imprimer ────────────────────
+    # Le front peut transmettre ?sites=1,4,7 pour ne sortir que certains sites.
+    # La valeur 0 (ou "sans") inclut les journaliers sans aucune affectation.
+    # Absent ou vide → comportement historique : tous les sites.
+    sites_param = request.args.get("sites", "").strip()
+    sites_voulus = None
+    if sites_param:
+        sites_voulus = set()
+        for x in sites_param.split(","):
+            x = x.strip()
+            if x.isdigit():
+                sites_voulus.add(int(x))
+            elif x.lower() == "sans":
+                sites_voulus.add(0)
+        if sites_voulus:
+            feuilles = [f for f in feuilles
+                        if (site_par_journalier.get(f.journalier_id).id
+                            if site_par_journalier.get(f.journalier_id) else 0) in sites_voulus]
+
     # Déduction des avances (par journalier) sur les feuilles affichées
     imput_av = _imputer_avances_journalier(
         feuilles, _avances_par_journalier(t.id, {f.journalier_id for f in feuilles}))
