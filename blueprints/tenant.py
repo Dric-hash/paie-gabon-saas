@@ -4739,8 +4739,13 @@ def journaliers_paie_generer_mois():
         if total_h <= 0 and nb_jours == 0:
             continue
         taux = float(j.taux_horaire or 0)
-        from calculs_paie import arrondi_millier_superieur
-        brut = arrondi_millier_superieur(total_h * taux)   # arrondi au millier de F supérieur
+        montant_exact = total_h * taux
+        # Arrondi au millier supérieur UNIQUEMENT si l'utilisateur l'a demandé.
+        if request.form.get("arrondi_millier") in ("1", "on", "true"):
+            from calculs_paie import arrondi_millier_superieur
+            brut = arrondi_millier_superieur(montant_exact)
+        else:
+            brut = round(montant_exact)   # montant exact au franc — l'utilisateur ajuste s'il veut
         db.session.add(FeuillePaieJournalier(
             tenant_id=t.id, journalier_id=j.id,
             date_debut=date_debut, date_fin=date_fin,
@@ -4915,7 +4920,7 @@ def journalier_payer(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    f.montant_brut = f.montant_a_payer   # fige l'arrondi millier sup. pour les mensuels
+    f.montant_brut = f.montant_a_payer   # = montant enregistré (arrondi éventuel déjà appliqué à la génération)
     # Déduction des avances non régularisées du journalier (plus ancienne d'abord)
     avs = (AvanceJournalier.query.filter_by(tenant_id=t.id, journalier_id=f.journalier_id)
            .order_by(AvanceJournalier.date_avance).all())

@@ -1,9 +1,10 @@
-"""Arrondi au millier de franc supérieur — paie des journaliers MENSUELS.
+"""Paie des journaliers MENSUELS — montant, avances et audit.
 
-Vérifie que `FeuillePaieJournalier.montant_a_payer` arrondit au millier supérieur
-pour les journaliers de type MENSUEL (et seulement ceux-là), y compris pour des
-feuilles déjà enregistrées avant la mise en place de l'arrondi, et que les
-impressions affichent bien le montant arrondi.
+L'arrondi au millier de franc supérieur est désormais OPTIONNEL et appliqué à la
+génération (case à cocher). `FeuillePaieJournalier.montant_a_payer` renvoie le
+montant enregistré tel quel (il ne re-force plus l'arrondi), afin que toute
+modification manuelle soit respectée. Les feuilles ci-dessous simulent une
+génération avec l'arrondi activé (montant déjà à 230 000).
 """
 import os
 import sys
@@ -49,7 +50,7 @@ def client():
         fm = FeuillePaieJournalier(tenant_id=t.id, journalier_id=jm.id,
                                    date_debut=date(2026, 6, 1), date_fin=date(2026, 6, 30),
                                    nb_jours=30, total_heures=240, taux_horaire=958.33,
-                                   montant_brut=229999.20, statut="EN_ATTENTE")
+                                   montant_brut=230000.0, statut="EN_ATTENTE")
         fj = FeuillePaieJournalier(tenant_id=t.id, journalier_id=jj.id,
                                    date_debut=date(2026, 6, 1), date_fin=date(2026, 6, 15),
                                    nb_jours=5, total_heures=40, taux_horaire=1000,
@@ -64,11 +65,17 @@ def client():
         db.session.remove()
 
 
-def test_mensuel_arrondi_au_millier_superieur(client):
+def test_mensuel_montant_respecte(client):
+    # Nouveau contrat : montant_a_payer renvoie le montant ENREGISTRÉ tel quel.
+    # L'arrondi millier est décidé à la génération, plus re-forcé à la lecture,
+    # donc toute valeur enregistrée (ronde, exacte ou éditée) est respectée.
     with flask_app.app_context():
         fm = db.session.get(FeuillePaieJournalier, client._ids["fm"])
-        assert float(fm.montant_brut) == pytest.approx(229999.20)   # brut inchangé
-        assert fm.montant_a_payer == 230000                         # arrondi à l'affichage
+        assert float(fm.montant_brut) == pytest.approx(230000)
+        assert fm.montant_a_payer == 230000
+        # Une valeur non ronde n'est PAS re-arrondie
+        fm.montant_brut = 229999.20; db.session.commit()
+        assert fm.montant_a_payer == pytest.approx(229999.20)
 
 
 def test_journalier_non_arrondi(client):

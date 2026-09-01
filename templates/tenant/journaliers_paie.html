@@ -191,6 +191,10 @@
       <input type="number" name="annee" value="{{ now.year }}" min="2020" max="2100"
         style="width:90px;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
     </div>
+    <label style="display:flex;align-items:center;gap:.45rem;font-size:.78rem;color:#374151;cursor:pointer;padding-bottom:.55rem">
+      <input type="checkbox" name="arrondi_millier" value="1"/>
+      Arrondir au millier de F supérieur
+    </label>
     <button type="submit"
       style="background:#7c3aed;color:#fff;padding:.6rem 1.1rem;border-radius:.625rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">
       Générer la paie du mois
