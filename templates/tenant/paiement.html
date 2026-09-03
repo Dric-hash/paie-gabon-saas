@@ -19,6 +19,20 @@
       {{ (tenant.plan.prix_mensuel|float)|int|fcfa if tenant.plan else '—' }}<span style="font-size:.875rem;opacity:.7">/mois</span>
     </div>
     <div style="font-size:.75rem;opacity:.6;margin-top:.25rem">Statut : {{ tenant.statut }}</div>
+    {% if tenant.date_expiration %}
+      {% set jrs = (tenant.heures_avant_expiration / 24)|round(0,'floor')|int if tenant.heures_avant_expiration is not none else 0 %}
+      <div style="margin-top:.5rem;font-size:.8rem;opacity:.85">
+        {{ 'Essai' if tenant.statut=='ESSAI' else 'Abonnement' }} jusqu'au
+        <strong>{{ tenant.date_expiration.strftime('%d/%m/%Y') }}</strong>
+      </div>
+      <div style="margin-top:.4rem;display:inline-block;font-size:.72rem;font-weight:700;border-radius:.5rem;padding:.2rem .65rem;
+        {% if tenant.est_expire %}background:#fee2e2;color:#991b1b
+        {% elif jrs <= 7 %}background:#fef3c7;color:#92400e
+        {% else %}background:#dcfce7;color:#166534{% endif %}">
+        {% if tenant.est_expire %}⛔ Expiré — à renouveler
+        {% else %}⏳ {{ jrs }} jour{{ 's' if jrs > 1 else '' }} restant{{ 's' if jrs > 1 else '' }}{% endif %}
+      </div>
+    {% endif %}
   </div>
 </div>
 
