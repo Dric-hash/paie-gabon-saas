@@ -317,6 +317,52 @@ def admin_tenant_detail(id):
         nb_journaliers=nb_journaliers,
         now=utcnow())
 
+@bp.route("/admin/tenants/<int:id>/enregistrer-paiement", methods=["POST"])
+@super_admin_required
+def admin_tenant_enregistrer_paiement(id):
+    """Enregistre un paiement reçu (Airtel Money / virement / espèces) pour un
+    tenant, avec durée et montant (réduction dégressive appliquée au formulaire,
+    ajustable par le super-admin). Active le tenant et prolonge l'abonnement."""
+    import uuid
+    from models import Paiement
+    from dateutil.relativedelta import relativedelta
+    t = Tenant.query.get_or_404(id)
+    duree   = int(request.form.get("duree", 1) or 1)
+    plan_id = request.form.get("plan_id", type=int) or t.plan_id
+    plan    = Plan.query.get(plan_id) if plan_id else None
+    # Montant : celui saisi (réduction déjà appliquée). Repli = prix × durée × remise.
+    remises = {1: 1.0, 3: 0.95, 6: 0.90, 12: 0.85}
+    montant = request.form.get("montant", type=float)
+    if montant is None or montant < 0:
+        montant = round(float(plan.prix_mensuel) * duree * remises.get(duree, 1.0)) if plan else 0
+
+    p = Paiement(
+        tenant_id=t.id, plan_id=plan_id, montant=montant, duree_mois=duree,
+        moyen=(request.form.get("moyen") or "Autre")[:30],
+        reference_interne=f"ADM-{t.id}-{uuid.uuid4().hex[:10].upper()}",
+        reference_externe=(request.form.get("reference") or "").strip()[:200],
+        statut="SUCCES", date_confirmation=utcnow())
+    db.session.add(p)
+    # Activer + prolonger (cumul sur l'échéance en cours)
+    base = utcnow()
+    if t.date_expiration and t.date_expiration > base:
+        base = t.date_expiration
+    t.date_expiration = base + relativedelta(months=duree)
+    if plan_id:
+        t.plan_id = plan_id
+    t.statut = "ACTIF"
+    t.alerte_expiration_envoyee = None
+    db.session.commit()
+    log_action("CREATE", "paiement", p.id,
+               f"Paiement enregistré (admin, {p.moyen}) — {duree} mois, "
+               f"{montant:.0f} F, actif jusqu'au {t.date_expiration.strftime('%d/%m/%Y')}",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Paiement enregistré : {montant:.0f} F pour {duree} mois. "
+          f"Abonnement actif jusqu'au {t.date_expiration.strftime('%d/%m/%Y')}.", "success")
+    return redirect(url_for("admin.admin_tenant_detail", id=t.id))
+
+
 @bp.route("/admin/tenants/<int:id>/statut", methods=["POST"])
 @super_admin_required
 def admin_tenant_statut(id):
