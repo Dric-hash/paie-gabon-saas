@@ -752,32 +752,53 @@ def admin_tenant_supprimer(id):
     t = Tenant.query.get_or_404(id)
     nom = t.denomination
     try:
-        # ── 1. Pointages journaliers (FK bloquante) ───────────────────────
-        for j in Journalier.query.filter_by(tenant_id=id).all():
-            Pointage.query.filter_by(journalier_id=j.id).delete()
-            FeuillePaieJournalier.query.filter_by(journalier_id=j.id).delete()
-            AffectationSite.query.filter_by(journalier_id=j.id).delete()
-        Journalier.query.filter_by(tenant_id=id).delete()
+        from models import (Site, ComposantPaie, BulletinComposant, Paiement, Avis,
+                            MessageSupport, OAuthClient, AuditLog, AvanceJournalier,
+                            Prestataire, ContratPrestation, FacturePrestataire,
+                            LigneFacturePrestataire, AvancePrestataire, PaiementPrestataire)
+        opt = dict(synchronize_session=False)
 
-        # ── 2. Données salariés ────────────────────────────────────────────
-        for s in Salarie.query.filter_by(tenant_id=id).all():
-            BulletinPaie.query.filter_by(salarie_id=s.id).delete()
-            Contrat.query.filter_by(salarie_id=s.id).delete()
-            Pointage.query.filter_by(salarie_id=s.id).delete()
-            Acompte.query.filter_by(salarie_id=s.id).delete()
-            Conge.query.filter_by(salarie_id=s.id).delete()
-            AffectationSite.query.filter_by(salarie_id=s.id).delete()
-        Salarie.query.filter_by(tenant_id=id).delete()
+        # ── 0. Enfant sans tenant_id : liens bulletin ↔ composant ──────────
+        bulletin_ids = [b.id for b in BulletinPaie.query.filter_by(tenant_id=id).with_entities(BulletinPaie.id)]
+        if bulletin_ids:
+            BulletinComposant.query.filter(BulletinComposant.bulletin_id.in_(bulletin_ids)).delete(**opt)
 
-        # ── 3. Reste du tenant ─────────────────────────────────────────────
-        AffectationSite.query.filter_by(tenant_id=id).delete()
-        from models import Site
-        Site.query.filter_by(tenant_id=id).delete()
-        PeriodePaie.query.filter_by(tenant_id=id).delete()
-        CategorieEmploi.query.filter_by(tenant_id=id).delete()
-        Acompte.query.filter_by(tenant_id=id).delete()
-        Conge.query.filter_by(tenant_id=id).delete()
-        Utilisateur.query.filter_by(tenant_id=id).delete()
+        # ── 1. Sous-arbre prestataires (enfants → parents) ─────────────────
+        LigneFacturePrestataire.query.filter_by(tenant_id=id).delete(**opt)
+        PaiementPrestataire.query.filter_by(tenant_id=id).delete(**opt)
+        AvancePrestataire.query.filter_by(tenant_id=id).delete(**opt)
+        FacturePrestataire.query.filter_by(tenant_id=id).delete(**opt)
+        ContratPrestation.query.filter_by(tenant_id=id).delete(**opt)
+        Prestataire.query.filter_by(tenant_id=id).delete(**opt)
+
+        # ── 2. Données salariés & journaliers (enfants) ────────────────────
+        BulletinPaie.query.filter_by(tenant_id=id).delete(**opt)
+        Contrat.query.filter_by(tenant_id=id).delete(**opt)
+        Pointage.query.filter_by(tenant_id=id).delete(**opt)
+        FeuillePaieJournalier.query.filter_by(tenant_id=id).delete(**opt)
+        AffectationSite.query.filter_by(tenant_id=id).delete(**opt)
+        Acompte.query.filter_by(tenant_id=id).delete(**opt)
+        Conge.query.filter_by(tenant_id=id).delete(**opt)
+        AvanceJournalier.query.filter_by(tenant_id=id).delete(**opt)
+
+        # ── 3. Entités de référence ────────────────────────────────────────
+        Journalier.query.filter_by(tenant_id=id).delete(**opt)
+        Salarie.query.filter_by(tenant_id=id).delete(**opt)
+        Site.query.filter_by(tenant_id=id).delete(**opt)
+        ComposantPaie.query.filter_by(tenant_id=id).delete(**opt)
+        CategorieEmploi.query.filter_by(tenant_id=id).delete(**opt)
+        PeriodePaie.query.filter_by(tenant_id=id).delete(**opt)
+
+        # ── 4. Divers rattachés au tenant (dont audit_logs, la FK bloquante) ─
+        Paiement.query.filter_by(tenant_id=id).delete(**opt)
+        Avis.query.filter_by(tenant_id=id).delete(**opt)
+        MessageSupport.query.filter_by(tenant_id=id).delete(**opt)
+        OAuthClient.query.filter_by(tenant_id=id).delete(**opt)
+        AuditLog.query.filter_by(tenant_id=id).delete(**opt)
+        Utilisateur.query.filter_by(tenant_id=id).delete(**opt)
+
+        # ── 5. Détacher les entreprises gérées par ce cabinet ──────────────
+        Tenant.query.filter_by(cabinet_id=id).update({"cabinet_id": None}, **opt)
 
         db.session.delete(t)
         db.session.commit()

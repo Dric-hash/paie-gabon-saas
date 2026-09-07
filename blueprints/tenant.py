@@ -6554,6 +6554,23 @@ def salaries_imprimer():
     return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
 
 
+@bp.route("/salaries/registre")
+@login_required
+def salaries_registre():
+    """Registre du personnel (registre d'employeur) — document légal listant tous
+    les salariés dans l'ordre chronologique d'embauche, avec les mentions requises."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    # Ordre chronologique d'embauche (usage du registre d'employeur)
+    salaries_list = (Salarie.query.filter_by(tenant_id=t.id)
+                     .order_by(Salarie.date_embauche.asc().nullslast(), Salarie.id.asc()).all())
+    for s in salaries_list:
+        s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
+    return render_template("tenant/registre_personnel_print.html",
+        salaries=salaries_list, tenant=t, now=datetime.now())
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # ── IMPRESSION DES POINTAGES (salariés & journaliers) ─────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Registre du personnel — {{ tenant.denomination }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family:'Segoe UI', system-ui, sans-serif; color:#12211d; margin:16px; font-size:10px; }
+    .head { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #0f3d36; padding-bottom:8px; margin-bottom:10px; }
+    .ent { font-size:15px; font-weight:800; color:#0f3d36; }
+    .ent .meta { font-size:9px; color:#555; font-weight:normal; margin-top:2px; line-height:1.5; }
+    h1 { font-size:14px; margin:0; color:#0f3d36; text-align:right; }
+    .sub { font-size:9px; color:#667; text-align:right; margin-top:2px; }
+    table { width:100%; border-collapse:collapse; margin-top:6px; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px 4px; font-size:8px; text-transform:uppercase; letter-spacing:.3px; }
+    td { padding:4px; border:1px solid #e0e0e0; font-size:9px; vertical-align:top; }
+    tr:nth-child(even) td { background:#fafafa; }
+    .c { text-align:center; } .mono { font-family:'Courier New',monospace; }
+    .foot { margin-top:14px; display:flex; justify-content:space-between; font-size:9px; color:#555; }
+    .sign { margin-top:26px; text-align:right; font-size:10px; }
+    .sign .line { margin-top:34px; border-top:1px solid #999; width:220px; display:inline-block; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    @media print { body { margin:0; padding:8px; } .noprint { display:none; } tr { page-break-inside:avoid; } thead { display:table-header-group; } }
+    @page { size: A4 landscape; margin:10mm; }
+  </style>
+</head>
+<body>
+  <div class="noprint" style="margin-bottom:10px; text-align:right;">
+    <button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button>
+  </div>
+
+  <div class="head">
+    <div class="ent">
+      {{ tenant.denomination }}{% if tenant.sigle %} ({{ tenant.sigle }}){% endif %}
+      <div class="meta">
+        {% if tenant.adresse %}{{ tenant.adresse }} · {% endif %}{{ tenant.ville or 'Libreville' }}, Gabon<br/>
+        {% if tenant.nif %}NIF : {{ tenant.nif }} · {% endif %}{% if tenant.telephone %}Tél : {{ tenant.telephone }}{% endif %}
+      </div>
+    </div>
+    <div>
+      <h1>REGISTRE DU PERSONNEL</h1>
+      <div class="sub">{{ salaries|length }} salarié(s) · édité le {{ now.strftime('%d/%m/%Y') }}</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="c">N°</th>
+        <th>Matricule</th>
+        <th>Nom & Prénom</th>
+        <th class="c">Sexe</th>
+        <th>Date naiss.</th>
+        <th>Nationalité</th>
+        <th>Emploi / Qualification</th>
+        <th class="c">Cat.</th>
+        <th class="c">Contrat</th>
+        <th>Embauche</th>
+        <th>Sortie / motif</th>
+        <th>N° CNSS</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in salaries %}
+      <tr>
+        <td class="c mono">{{ loop.index }}</td>
+        <td class="mono">{{ s.matricule }}</td>
+        <td><strong>{{ s.nom }}</strong> {{ s.prenom }}</td>
+        <td class="c">{{ s.sexe or '—' }}</td>
+        <td class="mono">{{ s.date_naissance.strftime('%d/%m/%Y') if s.date_naissance else '—' }}</td>
+        <td>{{ s.nationalite or '—' }}</td>
+        <td>{{ s.emploi or (s._contrat_actif.poste if s._contrat_actif else '—') }}</td>
+        <td class="c">{{ s.categorie.nom if s.categorie else (s.niveau or '—') }}</td>
+        <td class="c">{{ s._contrat_actif.type_contrat if s._contrat_actif else '—' }}</td>
+        <td class="mono">{{ s.date_embauche.strftime('%d/%m/%Y') if s.date_embauche else '—' }}</td>
+        <td class="mono">
+          {% if s.date_cessation %}{{ s.date_cessation.strftime('%d/%m/%Y') }}{% if s.type_rupture %}<br/><span style="font-size:8px;color:#777">{{ s.type_rupture }}</span>{% endif %}
+          {% else %}<span style="color:#777">En poste</span>{% endif %}
+        </td>
+        <td class="mono">{{ s.numero_cnss or '—' }}</td>
+      </tr>
+      {% endfor %}
+      {% if not salaries %}
+      <tr><td colspan="12" class="c" style="padding:16px;color:#999">Aucun salarié enregistré.</td></tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <div class="sign">
+    Fait à {{ tenant.ville or 'Libreville' }}, le {{ now.strftime('%d/%m/%Y') }}<br/>
+    <span class="line">L'employeur (nom, cachet et signature)</span>
+  </div>
+
+  <div class="foot">
+    <span>Registre tenu conformément au Code du travail gabonais.</span>
+    <span>{{ tenant.denomination }} — édité via PaieGabon</span>
+  </div>
+</body>
+</html>
