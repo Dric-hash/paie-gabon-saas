@@ -3542,7 +3542,9 @@ def parametres_societe():
         flash("Accès refusé. Seul l'administrateur peut modifier les paramètres.", "error")
         return redirect(url_for("tenant.parametres"))
     t=get_tenant()
-    for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region"]:
+    for f in ["denomination","sigle","activite","secteur","nif","numero_cnss","numero_cnamgs","adresse","boite_postale","telephone","ville","region","representant_nom","representant_fonction"]:
+        if f not in request.form:   # champ absent de ce formulaire → ne pas écraser
+            continue
         try: setattr(t,f,request.form.get(f,"").strip() or None)
         except: pass
     # Convention collective applicable — mise à jour uniquement si le champ est

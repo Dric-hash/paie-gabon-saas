@@ -18,7 +18,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, black
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                TableStyle, HRFlowable)
+                                TableStyle, HRFlowable, Image)
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT, TA_JUSTIFY
 
 C_DARK   = HexColor("#1a2332")
@@ -69,9 +69,29 @@ def _styles():
     }
 
 
+def _logo_flowable(tenant, max_w=44*mm, max_h=20*mm):
+    """Construit l'image du logo à partir de tenant.logo_url (data URI base64).
+    Renvoie None si absent/illisible — le document ne casse jamais pour un logo."""
+    url = getattr(tenant, "logo_url", None)
+    if not url or "base64," not in url:
+        return None
+    try:
+        import base64
+        raw = base64.b64decode(url.split("base64,", 1)[1])
+        try:
+            from PIL import Image as PILImage
+            iw, ih = PILImage.open(io.BytesIO(raw)).size
+            ratio = min(max_w / iw, max_h / ih)
+            w, h = iw * ratio, ih * ratio
+        except Exception:
+            w, h = max_h, max_h
+        return Image(io.BytesIO(raw), width=w, height=h)
+    except Exception:
+        return None
+
+
 def _entete(tenant, S):
-    """En-tête commun : identité de l'entreprise."""
-    lignes = []
+    """En-tête commun : logo (si présent) + identité de l'entreprise."""
     details = []
     if tenant.nif:
         details.append(f"NIF : {tenant.nif}")
@@ -79,23 +99,42 @@ def _entete(tenant, S):
         details.append(tenant.ville)
     if getattr(tenant, "telephone", None):
         details.append(f"Tél : {tenant.telephone}")
-    elements = [
+    texte = [
         Paragraph(tenant.denomination, S["entete_ent"]),
         Paragraph(" · ".join(details), S["entete_det"]),
+    ]
+    logo = _logo_flowable(tenant)
+    if logo is not None:
+        bloc = Table([[logo, texte]], colWidths=[48*mm, None])
+        bloc.setStyle(TableStyle([
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING", (0, 0), (0, 0), 10),
+        ]))
+        head = [bloc]
+    else:
+        head = texte
+    return head + [
         Spacer(1, 4),
         HRFlowable(width="100%", thickness=1.5, color=C_DARK),
         Spacer(1, 24),
     ]
-    return elements
 
 
-def _signature(tenant, S, ville="Libreville"):
-    """Bloc lieu/date + signature en bas de document."""
+def _signature(tenant, S, ville=None):
+    """Bloc lieu/date + signature, nominatif : nomme le représentant légal."""
+    ville = ville or getattr(tenant, "ville", None) or "Libreville"
+    nom = (getattr(tenant, "representant_nom", None) or "").strip()
+    fonction = (getattr(tenant, "representant_fonction", None) or "").strip()
+    if nom:
+        qui = f"{fonction}<br/>{nom}" if fonction else nom
+    else:
+        qui = "La Direction"
     return [
         Spacer(1, 30),
         Paragraph(f"Fait à {ville}, le {_date_fr(date.today())}", S["lieu_date"]),
         Spacer(1, 8),
-        Paragraph("Pour l'entreprise,<br/>La Direction", S["signature"]),
+        Paragraph(f"Pour l'entreprise,<br/>{qui}", S["signature"]),
         Spacer(1, 40),
         Paragraph("_______________________", S["signature"]),
         Paragraph("Signature et cachet", S["entete_det"]),

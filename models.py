@@ -88,6 +88,8 @@ class Tenant(db.Model):
     # Valeurs : "classique" | "moderne" | "minimaliste"
     # ✅ LOGO — colonne Text pour stocker base64 sans limite
     logo_url         = db.Column(db.Text)
+    representant_nom      = db.Column(db.String(150))   # nom du représentant légal (signataire)
+    representant_fonction = db.Column(db.String(100))   # ex. Gérant, Directeur Général
     langue           = db.Column(db.String(5), default="fr")  # "fr" | "en"
     # Convention collective applicable : "AUCUNE" | "BTP" | "COMMERCE"
     convention       = db.Column(db.String(20), default="AUCUNE")
