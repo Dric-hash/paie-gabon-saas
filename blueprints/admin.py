@@ -755,13 +755,15 @@ def admin_tenant_supprimer(id):
         from models import (Site, ComposantPaie, BulletinComposant, Paiement, Avis,
                             MessageSupport, OAuthClient, AuditLog, AvanceJournalier,
                             Prestataire, ContratPrestation, FacturePrestataire,
-                            LigneFacturePrestataire, AvancePrestataire, PaiementPrestataire)
+                            LigneFacturePrestataire, AvancePrestataire, PaiementPrestataire,
+                            DocumentSalarie)
         opt = dict(synchronize_session=False)
 
         # ── 0. Enfant sans tenant_id : liens bulletin ↔ composant ──────────
         bulletin_ids = [b.id for b in BulletinPaie.query.filter_by(tenant_id=id).with_entities(BulletinPaie.id)]
         if bulletin_ids:
             BulletinComposant.query.filter(BulletinComposant.bulletin_id.in_(bulletin_ids)).delete(**opt)
+        DocumentSalarie.query.filter_by(tenant_id=id).delete(**opt)
 
         # ── 1. Sous-arbre prestataires (enfants → parents) ─────────────────
         LigneFacturePrestataire.query.filter_by(tenant_id=id).delete(**opt)

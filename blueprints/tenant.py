@@ -1291,8 +1291,12 @@ def salarie_detail(id):
     taux_presence = round(nb_presences / (nb_presences + nb_absences) * 100
                           ) if (nb_presences + nb_absences) > 0 else 0
 
+    from models import DocumentSalarie
+    documents = (DocumentSalarie.query.filter_by(tenant_id=t.id, salarie_id=id)
+                 .order_by(DocumentSalarie.date_creation.desc()).all())
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
+        documents=documents,
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
         total_irpp=total_irpp, nb_mois=nb_mois,
         anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois,
@@ -1604,6 +1608,9 @@ def salarie_supprimer(id):
         Pointage.query.filter_by(salarie_id=id).delete()
         Acompte.query.filter_by(salarie_id=id).delete()
         Conge.query.filter_by(salarie_id=id).delete()
+        from models import DocumentSalarie, AffectationSite
+        DocumentSalarie.query.filter_by(salarie_id=id).delete()
+        AffectationSite.query.filter_by(salarie_id=id).delete()
         db.session.delete(s); db.session.commit()
         log_action("DELETE", "salarie", id, f"Suppression salarié {nom}")
         db.session.commit()
@@ -6150,6 +6157,71 @@ def salarie_document(sal_id, type_doc):
         logger.error(f"Erreur génération document {type_doc} : {e}")
         flash(f"Erreur lors de la génération du document : {e}", "error")
         return redirect(url_for("tenant.salarie_detail", id=sal_id))
+
+
+# ── DOSSIER SALARIÉ : pièces jointes (contrat signé, CNI, diplômes…) ───────────
+_DOC_MIMES = {"pdf": "application/pdf", "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png"}
+
+@bp.route("/salaries/<int:id>/documents", methods=["POST"])
+@login_required
+def salarie_document_upload(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        flash("Accès refusé.", "error"); return redirect(url_for("tenant.salarie_detail", id=id))
+    s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    from models import DocumentSalarie
+    f = request.files.get("fichier")
+    if not f or not f.filename:
+        flash("Aucun fichier sélectionné.", "error"); return redirect(url_for("tenant.salarie_detail", id=id))
+    f.seek(0, 2); taille = f.tell(); f.seek(0)
+    if taille > 4 * 1024 * 1024:
+        flash("Fichier trop volumineux (max 4 Mo).", "error"); return redirect(url_for("tenant.salarie_detail", id=id))
+    ext = f.filename.rsplit(".", 1)[-1].lower() if "." in f.filename else ""
+    if ext not in _DOC_MIMES:
+        flash("Format non accepté (PDF, JPG ou PNG uniquement).", "error"); return redirect(url_for("tenant.salarie_detail", id=id))
+    import base64
+    data_uri = f"data:{_DOC_MIMES[ext]};base64," + base64.b64encode(f.read()).decode()
+    doc = DocumentSalarie(tenant_id=t.id, salarie_id=s.id,
+        type_document=(request.form.get("type_document") or "Autre")[:60],
+        nom_fichier=f.filename[:255], mime=_DOC_MIMES[ext], taille=taille, contenu=data_uri)
+    db.session.add(doc); db.session.commit()
+    log_action("CREATE", "document_salarie", doc.id,
+               f"Document « {doc.type_document} » ajouté au dossier de {s.nom_complet}",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash("📎 Document ajouté au dossier.", "success")
+    return redirect(url_for("tenant.salarie_detail", id=id))
+
+
+@bp.route("/salaries/<int:id>/documents/<int:doc_id>")
+@login_required
+def salarie_document_download(id, doc_id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    from models import DocumentSalarie
+    doc = DocumentSalarie.query.filter_by(id=doc_id, salarie_id=id, tenant_id=t.id).first_or_404()
+    import base64, io
+    try:
+        raw = base64.b64decode((doc.contenu or "").split("base64,", 1)[1])
+    except Exception:
+        abort(404)
+    return send_file(io.BytesIO(raw), mimetype=doc.mime or "application/octet-stream",
+                     as_attachment=True, download_name=doc.nom_fichier or "document")
+
+
+@bp.route("/salaries/<int:id>/documents/<int:doc_id>/supprimer", methods=["POST"])
+@login_required
+def salarie_document_supprimer(id, doc_id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        flash("Accès refusé.", "error"); return redirect(url_for("tenant.salarie_detail", id=id))
+    from models import DocumentSalarie
+    doc = DocumentSalarie.query.filter_by(id=doc_id, salarie_id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(doc); db.session.commit()
+    flash("Document supprimé du dossier.", "success")
+    return redirect(url_for("tenant.salarie_detail", id=id))
 
 
 @bp.route("/api/conges/jours-acquis/<int:sal_id>")

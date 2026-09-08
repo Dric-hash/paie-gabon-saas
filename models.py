@@ -1651,3 +1651,20 @@ class Avis(db.Model):
     commentaire   = db.Column(db.Text)
     date_creation = db.Column(db.DateTime, default=utcnow)
     tenant = db.relationship("Tenant", backref=db.backref("avis", lazy=True))
+
+
+# ── Documents du dossier salarié (contrat signé, CNI, diplômes, etc.) ──────────
+class DocumentSalarie(db.Model):
+    """Pièce jointe au dossier d'un salarié. Le fichier est stocké en base
+    (data URI base64), comme le logo — plafonné à 4 Mo par fichier."""
+    __tablename__ = "documents_salarie"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id    = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    type_document = db.Column(db.String(60))    # Contrat, CNI, Diplôme, Certificat médical, Autre
+    nom_fichier   = db.Column(db.String(255))
+    mime          = db.Column(db.String(100))
+    taille        = db.Column(db.Integer)       # octets
+    contenu       = db.Column(db.Text)          # data URI base64
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie", backref=db.backref("documents", lazy=True))

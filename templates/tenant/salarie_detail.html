@@ -221,6 +221,59 @@
       {% endif %}
     </div>
 
+    <!-- Dossier / Documents -->
+    <div class="card p-5">
+      <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">📁 Dossier / Documents</h2>
+
+      {% if documents %}
+      <div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1rem">
+        {% for d in documents %}
+        <div style="display:flex;align-items:center;gap:.75rem;background:#f9fafb;border:1px solid #f3f4f6;border-radius:.75rem;padding:.6rem .75rem">
+          <span style="font-size:1.2rem">{% if d.mime == 'application/pdf' %}📄{% else %}🖼️{% endif %}</span>
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:700;color:#111827;font-size:.85rem">{{ d.type_document }}</div>
+            <div style="font-size:.72rem;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
+              {{ d.nom_fichier }} · {{ (d.taille / 1024)|round|int }} Ko · {{ d.date_creation.strftime('%d/%m/%Y') if d.date_creation else '' }}
+            </div>
+          </div>
+          <a href="/salaries/{{ salarie.id }}/documents/{{ d.id }}" title="Télécharger"
+             style="font-size:.78rem;font-weight:700;color:#0f3d36;text-decoration:none;background:#ecfdf5;padding:.3rem .6rem;border-radius:.5rem">⬇️</a>
+          {% if current_user.can_edit %}
+          <form method="POST" action="/salaries/{{ salarie.id }}/documents/{{ d.id }}/supprimer" style="margin:0"
+                onsubmit="return confirm('Supprimer ce document ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" title="Supprimer"
+              style="font-size:.78rem;color:#9ca3af;background:#f3f4f6;border:none;padding:.3rem .5rem;border-radius:.5rem;cursor:pointer">🗑️</button>
+          </form>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:1rem 0;color:#9ca3af;font-size:.85rem">
+        <div style="font-size:1.5rem;margin-bottom:.25rem">📂</div>
+        Aucun document au dossier
+      </div>
+      {% endif %}
+
+      {% if current_user.can_edit %}
+      <form method="POST" action="/salaries/{{ salarie.id }}/documents" enctype="multipart/form-data"
+            style="border-top:1px solid #f3f4f6;padding-top:1rem;display:flex;flex-direction:column;gap:.5rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <select name="type_document" style="border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem;font-size:.85rem">
+          <option>Contrat</option><option>CNI / Passeport</option><option>Diplôme</option>
+          <option>Certificat médical</option><option>Attestation</option><option>Autre</option>
+        </select>
+        <input type="file" name="fichier" accept=".pdf,.jpg,.jpeg,.png" required
+               style="font-size:.8rem;border:1px solid #e5e7eb;border-radius:.625rem;padding:.4rem"/>
+        <button type="submit" style="background:#0f3d36;color:white;padding:.55rem;border-radius:.625rem;font-weight:700;font-size:.85rem;border:none;cursor:pointer">
+          📎 Ajouter au dossier
+        </button>
+        <p style="font-size:.68rem;color:#9ca3af;text-align:center;margin:0">PDF, JPG ou PNG · 4 Mo max</p>
+      </form>
+      {% endif %}
+    </div>
+
     <!-- Zone danger — suppression -->
     {% if current_user.is_tenant_admin %}
     <div class="card p-5" style="border:1px solid #fca5a5;background:#fef2f2">
