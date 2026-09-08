@@ -90,6 +90,14 @@
             value="{{ contrat.date_fin.strftime('%Y-%m-%d') if contrat and contrat.date_fin else '' }}"
             style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
         </div>
+        <div>
+          <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.375rem">
+            Fin de période d'essai <span style="color:#9ca3af">(alerte RH)</span>
+          </label>
+          <input type="date" name="date_fin_essai"
+            value="{{ contrat.date_fin_essai.strftime('%Y-%m-%d') if contrat and contrat.date_fin_essai else '' }}"
+            style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box"/>
+        </div>
       </div>
 
       <button type="submit"

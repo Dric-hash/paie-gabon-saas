@@ -489,6 +489,46 @@ def dashboard():
             "msg":f"{acomptes_att} acompte(s) n'ont pas encore été déduits des bulletins.",
             "lien":"/acomptes","lien_texte":"Voir les acomptes"})
 
+    # ── Alertes RH : essai, CDD, visite médicale, congés à poser ──────────────
+    from datetime import timedelta as _td
+    _auj = now.date(); _j15 = _auj + _td(days=15); _j30 = _auj + _td(days=30)
+
+    _essais = (Contrat.query.filter_by(tenant_id=t.id, actif=True)
+               .filter(Contrat.date_fin_essai.isnot(None),
+                       Contrat.date_fin_essai >= _auj, Contrat.date_fin_essai <= _j15).count())
+    if _essais:
+        alertes.append({"type":"warning","icone":"⏳","titre":f"{_essais} période(s) d'essai à échéance",
+            "msg":"Une ou plusieurs périodes d'essai se terminent sous 15 jours. Confirmez ou mettez fin au contrat avant l'échéance.",
+            "lien":"/salaries","lien_texte":"Voir les salariés"})
+
+    _cdd = (Contrat.query.filter_by(tenant_id=t.id, actif=True)
+            .filter(Contrat.type_contrat.ilike("%CDD%"),
+                    Contrat.date_fin.isnot(None),
+                    Contrat.date_fin >= _auj, Contrat.date_fin <= _j15).count())
+    if _cdd:
+        alertes.append({"type":"warning","icone":"📄","titre":f"{_cdd} CDD arrive(nt) à échéance",
+            "msg":"Un ou plusieurs contrats à durée déterminée se terminent sous 15 jours. Pensez au renouvellement ou à la fin de contrat.",
+            "lien":"/salaries","lien_texte":"Voir les salariés"})
+
+    _vm = (Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")
+           .filter(Salarie.date_prochaine_visite_medicale.isnot(None),
+                   Salarie.date_prochaine_visite_medicale <= _j30).all())
+    if _vm:
+        _retard = sum(1 for s in _vm if s.date_prochaine_visite_medicale < _auj)
+        _msg = (f"{_retard} visite(s) médicale(s) en retard, {len(_vm)} à programmer sous 30 jours."
+                if _retard else f"{len(_vm)} salarié(s) ont une visite médicale à programmer sous 30 jours.")
+        alertes.append({"type":"warning" if _retard else "info","icone":"🩺",
+            "titre":"Visites médicales à programmer","msg":_msg,
+            "lien":"/salaries","lien_texte":"Voir les salariés"})
+
+    _soldes = (Conge.query.filter_by(tenant_id=t.id, annee=now.year)
+               .filter(Conge.date_depart.is_(None)).all())
+    _aposer = sum(1 for c in _soldes if (float(c.jours_acquis or 0) - float(c.jours_pris or 0)) >= 24)
+    if _aposer:
+        alertes.append({"type":"info","icone":"🏖️","titre":f"{_aposer} salarié(s) avec des congés à poser",
+            "msg":"Certains salariés ont accumulé 24 jours ou plus de congés non pris. Pensez à planifier leurs congés.",
+            "lien":"/conges","lien_texte":"Voir les congés"})
+
     # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
     exp_date = t.date_expiration
     jours_restants = (exp_date.date() - now.date()).days if exp_date else None
@@ -1131,6 +1171,7 @@ def salarie_nouveau():
             nationalite=request.form.get("nationalite","GABONAISE"),
             sexe=request.form.get("sexe"),
             date_naissance=_pd(request.form.get("date_naissance")),
+            date_prochaine_visite_medicale=_pd(request.form.get("date_prochaine_visite_medicale")),
             date_embauche=_pd(request.form["date_embauche"]),
             situation_matrimoniale=request.form.get("situation_matrimoniale"),
             nb_enfants=int(request.form.get("nb_enfants") or 0),
@@ -1323,6 +1364,7 @@ def salarie_modifier(id):
             ("email",request.form.get("email","").strip() or None),
             ("nationalite",request.form.get("nationalite")),
             ("sexe",request.form.get("sexe")),("date_naissance",_pd(request.form.get("date_naissance"))),
+            ("date_prochaine_visite_medicale",_pd(request.form.get("date_prochaine_visite_medicale"))),
             ("situation_matrimoniale",request.form.get("situation_matrimoniale")),
             ("nb_enfants",int(request.form.get("nb_enfants") or 0)),
             ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
@@ -1469,6 +1511,7 @@ def contrat_nouveau(sal_id):
             type_contrat = type_c,
             date_debut   = date_debut,
             date_fin     = date_fin,
+            date_fin_essai = _parse_date(request.form.get("date_fin_essai")),
             salaire_base = salaire,
             poste        = poste,
             categorie_id = cat_id,
@@ -1528,6 +1571,7 @@ def contrat_modifier(id):
                                        salarie=s, tenant=t, categories=cats, contrat=c)
         else:
             c.date_fin = None
+        c.date_fin_essai = _parse_date(request.form.get("date_fin_essai"))
 
         db.session.flush()
         log_action("UPDATE", "contrat", c.id,

@@ -529,6 +529,7 @@ class Salarie(db.Model):
     date_naissance         = db.Column(db.Date)
     date_embauche          = db.Column(db.Date, nullable=False)
     date_cessation         = db.Column(db.Date)
+    date_prochaine_visite_medicale = db.Column(db.Date)   # alerte RH : prochaine visite médicale
     situation_matrimoniale = db.Column(db.String(50))
     nb_enfants             = db.Column(db.Integer, default=0)
     nb_enfants_moins_16ans = db.Column(db.Integer, default=0)
@@ -579,6 +580,7 @@ class Contrat(db.Model):
     type_contrat = db.Column(db.String(50), default="CDI")
     date_debut   = db.Column(db.Date, nullable=False)
     date_fin     = db.Column(db.Date)
+    date_fin_essai = db.Column(db.Date)   # fin de la période d'essai (alerte RH)
     salaire_base = db.Column(db.Numeric(15,2), nullable=False)
     poste        = db.Column(db.String(200))
     categorie_id = db.Column(db.Integer, db.ForeignKey("categories_emploi.id"))

@@ -48,6 +48,8 @@
 
     {{ field("Date de naissance", "date_naissance", "date",
              value=salarie.date_naissance|string if salarie and salarie.date_naissance else '') }}
+    {{ field("Prochaine visite médicale", "date_prochaine_visite_medicale", "date",
+             value=salarie.date_prochaine_visite_medicale|string if salarie and salarie.date_prochaine_visite_medicale else '') }}
   </div>
 
   <!-- Emploi -->
