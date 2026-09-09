@@ -756,7 +756,7 @@ def admin_tenant_supprimer(id):
                             MessageSupport, OAuthClient, AuditLog, AvanceJournalier,
                             Prestataire, ContratPrestation, FacturePrestataire,
                             LigneFacturePrestataire, AvancePrestataire, PaiementPrestataire,
-                            DocumentSalarie)
+                            DocumentSalarie, ConfigRubrique)
         opt = dict(synchronize_session=False)
 
         # ── 0. Enfant sans tenant_id : liens bulletin ↔ composant ──────────
@@ -764,6 +764,7 @@ def admin_tenant_supprimer(id):
         if bulletin_ids:
             BulletinComposant.query.filter(BulletinComposant.bulletin_id.in_(bulletin_ids)).delete(**opt)
         DocumentSalarie.query.filter_by(tenant_id=id).delete(**opt)
+        ConfigRubrique.query.filter_by(tenant_id=id).delete(**opt)
 
         # ── 1. Sous-arbre prestataires (enfants → parents) ─────────────────
         LigneFacturePrestataire.query.filter_by(tenant_id=id).delete(**opt)

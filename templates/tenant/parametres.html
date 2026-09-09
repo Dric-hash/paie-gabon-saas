@@ -37,7 +37,7 @@
         </div>
         {% endmacro %}
         {{ fi("Dénomination sociale *", "denomination", tenant.denomination) }}
-        {{ fi("Sigle / Abréviation", "sigle", tenant.sigle, "Ex: SGTG") }}
+        {{ fi("Sigle / Abréviation", "sigle", tenant.sigle, "Ex: STG") }}
         {{ fi("Activité principale", "activite", tenant.activite, "Ex: Génie Civil") }}
         {{ fi("Secteur", "secteur", tenant.secteur, "Ex: BTP, Construction") }}
         {{ fi("Représentant légal (signataire des documents)", "representant_nom", tenant.representant_nom, "Ex: Cédric MBADINGA") }}
@@ -426,7 +426,7 @@
             ('moderne',     'Moderne',     'Design contemporain avec bandes colorées', 'background:linear-gradient(135deg,#0f3d36,#2563eb)'),
             ('minimaliste', 'Minimaliste', 'Épuré et sobre, idéal pour impression économique', 'background:white;border:1px solid #e5e7eb'),
             ('grandlivre',  'Grand Livre', 'Signature PaieGabon : registre, chiffres au cordeau', 'background:linear-gradient(135deg,#124a3e,#0f3d36 55%,#0a2b25)'),
-            ('sgtg',        'Détaillé',    'Complet type SGTG : toutes rubriques, cotisations, cumuls, congés', 'background:#c9c9c9;border:1px solid #999'),
+            ('sgtg',        'Détaillé',    'Complet : toutes les rubriques, cotisations salariales et patronales, cumuls et congés', 'background:#c9c9c9;border:1px solid #999'),
           ] %}
           <label style="cursor:pointer">
             <input type="radio" name="modele_bulletin" value="{{ nom }}"
@@ -454,6 +454,51 @@
             Actuel : <strong>{{ (tenant.modele_bulletin or 'classique')|capitalize }}</strong>
           </span>
         </div>
+      </form>
+    </div>
+
+    <!-- ── Paramétrage des rubriques fixes souples ────────────────────── -->
+    <div class="card p-5" style="margin-top:1rem">
+      <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">⚙️ Rubriques configurables</h2>
+      <p class="text-xs text-gray-400 mb-4">
+        Pour la prime de panier, le transport net, la représentation et la salisure :
+        choisissez si elles entrent dans le brut, leur position, et à quelles cotisations elles sont soumises.
+        Par défaut : hors brut et non soumises.
+      </p>
+      <form method="POST" action="/parametres/rubriques" class="space-y-3">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+            <thead>
+              <tr style="background:#f9fafb;text-align:center">
+                <th style="text-align:left;padding:.5rem">Rubrique</th>
+                <th style="padding:.5rem">Dans le brut</th><th style="padding:.5rem">Position</th>
+                <th style="padding:.5rem">CNSS</th><th style="padding:.5rem">CNAMGS</th><th style="padding:.5rem">IRPP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for cle, lib in [('panier','Prime de panier'),('transport','Transport net'),('representation','Représentation'),('salisure','Salisure')] %}
+              {% set cfg = config_rubriques.get(cle) or {} %}
+              <tr style="border-top:1px solid #f3f4f6;text-align:center">
+                <td style="text-align:left;padding:.5rem;font-weight:600">{{ lib }}</td>
+                <td style="padding:.5rem"><input type="checkbox" name="{{ cle }}_brut" {{ 'checked' if cfg.get('entre_dans_brut') }}/></td>
+                <td style="padding:.5rem">
+                  <select name="{{ cle }}_position" style="border:1px solid #e5e7eb;border-radius:.4rem;padding:.2rem .4rem">
+                    <option value="BAS" {{ 'selected' if cfg.get('position','BAS') != 'HAUT' }}>Bas</option>
+                    <option value="HAUT" {{ 'selected' if cfg.get('position') == 'HAUT' }}>Haut</option>
+                  </select>
+                </td>
+                <td style="padding:.5rem"><input type="checkbox" name="{{ cle }}_cnss" {{ 'checked' if cfg.get('soumis_cnss') }}/></td>
+                <td style="padding:.5rem"><input type="checkbox" name="{{ cle }}_cnamgs" {{ 'checked' if cfg.get('soumis_cnamgs') }}/></td>
+                <td style="padding:.5rem"><input type="checkbox" name="{{ cle }}_irpp" {{ 'checked' if cfg.get('soumis_irpp') }}/></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl py-2 px-4 font-bold text-sm">
+          💾 Enregistrer le paramétrage
+        </button>
       </form>
     </div>
   </div>

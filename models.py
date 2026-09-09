@@ -1672,3 +1672,20 @@ class DocumentSalarie(db.Model):
     contenu       = db.Column(db.Text)          # data URI base64
     date_creation = db.Column(db.DateTime, default=utcnow)
     salarie = db.relationship("Salarie", backref=db.backref("documents", lazy=True))
+
+
+# ── Configuration des rubriques fixes « souples » (panier, transport, etc.) ────
+class ConfigRubrique(db.Model):
+    """Paramétrage par tenant des rubriques fixes configurables du bulletin
+    (prime de panier, transport net, représentation, salisure). Défaut : hors
+    brut et non soumises, ce qui reproduit le comportement historique."""
+    __tablename__ = "config_rubriques"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    cle           = db.Column(db.String(30), nullable=False)   # panier|transport|representation|salisure
+    entre_dans_brut = db.Column(db.Boolean, default=False)
+    position      = db.Column(db.String(4), default="BAS")     # HAUT | BAS
+    soumis_cnss   = db.Column(db.Boolean, default=False)
+    soumis_cnamgs = db.Column(db.Boolean, default=False)
+    soumis_irpp   = db.Column(db.Boolean, default=False)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "cle", name="uq_config_rubrique_tenant_cle"),)

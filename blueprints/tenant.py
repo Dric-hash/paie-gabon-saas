@@ -48,6 +48,22 @@ logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("tenant", __name__)
 
+
+def _config_rubriques_dict(tenant_id):
+    """Renvoie la config des rubriques fixes souples pour un tenant :
+    {cle: {entre_dans_brut, soumis_cnss, soumis_cnamgs, soumis_irpp, position}}.
+    Absente → le calcul applique le défaut (hors brut, non soumis)."""
+    try:
+        from models import ConfigRubrique
+        out = {}
+        for c in ConfigRubrique.query.filter_by(tenant_id=tenant_id).all():
+            out[c.cle] = {"entre_dans_brut": c.entre_dans_brut, "soumis_cnss": c.soumis_cnss,
+                          "soumis_cnamgs": c.soumis_cnamgs, "soumis_irpp": c.soumis_irpp,
+                          "position": c.position}
+        return out
+    except Exception:
+        return {}
+
 # ── Rôles assignables au sein d'un tenant ─────────────────────────────────────
 # Liste blanche stricte : un admin de tenant ne peut JAMAIS attribuer le rôle
 # plateforme SUPER_ADMIN (sinon escalade de privilèges → accès cross-tenant).
@@ -798,6 +814,7 @@ def api_simuler_paie():
                     "soumis_irpp": comp.soumis_irpp,
                     "entre_dans_brut": comp.entre_dans_brut, "position": comp.position})
         d["composants"] = comps_live
+        d["config_rubriques"] = _config_rubriques_dict(t.id)
 
         result = calculer_bulletin(d, nb_parts=nb_parts)
 
@@ -2114,6 +2131,7 @@ def bulletin_saisie():
                         .replace(",", " "),
                         "info")
 
+        donnees["config_rubriques"] = _config_rubriques_dict(t.id)
         res=calculer_bulletin(dict(donnees, convention=t.convention),nb_parts=float(s.nombre_parts or 1))
         ex=BulletinPaie.query.filter_by(tenant_id=t.id,salarie_id=sid,periode_id=pid).first()
         # 🔒 Immuabilité : un bulletin validé est un document de paie officiel.
@@ -2506,7 +2524,7 @@ def _bulletin_imprimer_impl(id):
     if per is not None:
         recap_sites, multi_sites = _recap_sites_salarie_periode(t, b.salarie_id, per.annee, per.mois)
 
-    # ── Cumuls année à date + congés (pour le modèle détaillé type SGTG) ──────
+    # ── Cumuls année à date + congés (pour le modèle détaillé) ──────
     cumuls = None; conges_annees = []
     try:
         annee = per.annee if per else None
@@ -3440,6 +3458,7 @@ def parametres():
     # Passer tous les plans actifs pour l'onglet abonnement
     plans_dispo = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel.asc()).all()
     return render_template("tenant/parametres.html", tenant=t,
+        config_rubriques=_config_rubriques_dict(t.id),
         rubriques=RubriquePaie.query.filter_by(actif=True).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
         users=Utilisateur.query.filter_by(tenant_id=t.id).all(),
@@ -3600,6 +3619,31 @@ def parametres_modele_bulletin():
     db.session.commit()
     flash(f"Modèle d'impression « {modele.capitalize()} » appliqué.", "success")
     return redirect(url_for("tenant.parametres"))
+
+@bp.route("/parametres/rubriques", methods=["POST"])
+@login_required
+def parametres_rubriques():
+    """Enregistre le paramétrage des rubriques fixes souples (panier, transport,
+    représentation, salisure) : entre dans le brut, position, soumis CNSS/CNAMGS/IRPP."""
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        flash("Accès refusé.", "error"); return redirect(url_for("tenant.parametres"))
+    from models import ConfigRubrique
+    for cle in ("panier", "transport", "representation", "salisure"):
+        c = ConfigRubrique.query.filter_by(tenant_id=t.id, cle=cle).first()
+        if not c:
+            c = ConfigRubrique(tenant_id=t.id, cle=cle)
+            db.session.add(c)
+        c.entre_dans_brut = request.form.get(f"{cle}_brut") == "on"
+        c.position        = "HAUT" if request.form.get(f"{cle}_position") == "HAUT" else "BAS"
+        c.soumis_cnss     = request.form.get(f"{cle}_cnss") == "on"
+        c.soumis_cnamgs   = request.form.get(f"{cle}_cnamgs") == "on"
+        c.soumis_irpp     = request.form.get(f"{cle}_irpp") == "on"
+    db.session.commit()
+    flash("Paramétrage des rubriques enregistré.", "success")
+    return redirect(url_for("tenant.parametres"))
+
 
 @bp.route("/parametres/societe", methods=["POST"])
 @tenant_required

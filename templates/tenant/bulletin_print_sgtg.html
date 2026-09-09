@@ -40,11 +40,20 @@
     /* Signatures */
     .sig td { border:1px solid #999; height:60px; vertical-align:top; padding:3px 6px; font-weight:bold; }
     .foot { margin-top:8px; font-size:8px; color:#333; }
-    @media print { body { background:#fff; padding:0; } .page { width:auto; padding:8mm; } }
+    @media print { body { background:#fff; padding:0; } .page { width:auto; padding:8mm; } .no-print { display:none !important; } }
+    .no-print { max-width:210mm; margin:0 auto 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .btn { border:none; border-radius:8px; padding:9px 16px; font-size:13px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; }
+    .btn-print { background:#0f3d36; color:#fff; } .btn-pdf { background:#d99e0b; color:#fff; } .btn-back { background:#e5e7eb; color:#111; }
     @page { size: A4; margin: 8mm; }
   </style>
 </head>
 <body>
+<div class="no-print">
+  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer / Enregistrer PDF</button>
+  <a class="btn btn-pdf" href="/bulletins/{{ bulletin.id }}/pdf">📄 Télécharger PDF</a>
+  <a class="btn btn-back" href="/bulletins/{{ bulletin.id }}">← Retour</a>
+  <span style="color:#555;font-size:12px;margin-left:6px">{{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet if bulletin.periode else '' }}</span>
+</div>
 {% set b = bulletin %}{% set s = bulletin.salarie %}{% set p = bulletin.periode %}
 {% macro n(v) %}{% if v and (v|float) != 0 %}{{ '{:,.0f}'.format(v|float).replace(',', ' ') }}{% endif %}{% endmacro %}
 {% macro tx(part, base) %}{% if base and (base|float) != 0 %}{{ '{:.1f}'.format((part|float) / (base|float) * 100).replace('.', ',') }}{% endif %}{% endmacro %}
@@ -200,6 +209,16 @@
       <td>{{ '{:.2f}'.format(cg.jours_acquis|float).replace('.', ',') if cg.jours_acquis else '-' }}</td>
       <td>{{ '{:.2f}'.format(cg.jours_pris|float).replace('.', ',') if cg.jours_pris else '-' }}</td>
       <td class="b">{{ '{:.2f}'.format((cg.jours_acquis|float)-(cg.jours_pris|float)).replace('.', ',') }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <!-- ══════════ RÉPARTITION MULTI-SITES ══════════ -->
+  {% if multi_sites and recap_sites %}
+  <table class="grid" style="border:1px solid #999;border-top:none">
+    <tr><th>Heures travaillées par site (période)</th><th>Jours</th><th>Heures</th></tr>
+    {% for st in recap_sites %}
+    <tr><td>{{ st.nom }}</td><td>{{ st.jours }}</td><td class="b">{{ '%g'|format(st.heures) }} h</td></tr>
     {% endfor %}
   </table>
   {% endif %}

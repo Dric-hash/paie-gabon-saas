@@ -473,6 +473,28 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
             "soumis_cnss": s_cnss, "soumis_cnamgs": s_cnamgs, "soumis_irpp": s_irpp,
             "entre_dans_brut": entre_brut, "position": (c.get("position") or "BAS"),
         })
+    # ── Rubriques fixes configurables (panier, transport, représentation, salisure) ──
+    # Défaut : hors brut, non soumises (comportement historique inchangé). Le tenant
+    # peut les reconfigurer (entrer dans le brut, soumettre à CNSS/CNAMGS/IRPP).
+    _cfg_rub = donnees.get("config_rubriques") or {}
+    for _cle, _mt in (("panier", prime_panier), ("transport", indem_transport_net),
+                      ("representation", indem_representation), ("salisure", prime_salisure)):
+        if not _mt:
+            continue
+        _c = _cfg_rub.get(_cle) or {}
+        _entre = bool(_c.get("entre_dans_brut", False))
+        _sc = bool(_c.get("soumis_cnss", False))
+        _sm = bool(_c.get("soumis_cnamgs", False))
+        _si = bool(_c.get("soumis_irpp", False))
+        if _entre: delta_brut += _mt
+        else:      net_hors_brut += _mt
+        if _entre and not _sc:     delta_non_cnss   += _mt
+        elif (not _entre) and _sc: delta_non_cnss   -= _mt
+        if _entre and not _sm:     delta_non_cnamgs += _mt
+        elif (not _entre) and _sm: delta_non_cnamgs -= _mt
+        if _entre and not _si:     delta_non_irpp   += _mt
+        elif (not _entre) and _si: delta_non_irpp   -= _mt
+
     salaire_brut += delta_brut
 
     # ── 3. CNSS ─────────────────────────────────────────────────────────────
@@ -524,8 +546,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     salaire_net = net_avant_irpp - irpp
     net_a_payer = (
         salaire_net
-        + prime_panier + indem_transport_net + indem_representation + prime_salisure
-        + net_hors_brut          # gains/retenues hors brut versés directement
+        + net_hors_brut          # panier, transport, représentation, salisure, composants hors brut
         - acompte
     )
 
