@@ -67,6 +67,29 @@
     </div>
 
     <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.5rem">Salaire brut & position</label>
+      <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:.5rem .25rem">
+        <label style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;font-size:.85rem;cursor:pointer">
+          <input type="checkbox" name="entre_dans_brut"
+            {{ 'checked' if not composant or composant.entre_dans_brut else '' }}/>
+          <span>Entre dans le <strong>salaire brut</strong> (compte dans le total brut affiché)</span>
+        </label>
+        <div style="display:flex;align-items:center;gap:.6rem;padding:.5rem .75rem;font-size:.85rem">
+          <span style="font-weight:600">Position sur le bulletin :</span>
+          <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+            <input type="radio" name="position" value="HAUT" {{ 'checked' if composant and composant.position == 'HAUT' else '' }}/> Haut
+          </label>
+          <label style="display:flex;align-items:center;gap:.3rem;cursor:pointer">
+            <input type="radio" name="position" value="BAS" {{ 'checked' if not composant or composant.position != 'HAUT' else '' }}/> Bas
+          </label>
+        </div>
+      </div>
+      <p style="font-size:.72rem;color:#9ca3af;margin-top:.4rem">
+        « Hors brut » = versé/déduit mais non compté dans le brut (ex. remboursement de frais). Il reste payé au salarié.
+      </p>
+    </div>
+
+    <div>
       <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.35rem">Ordre d'affichage (optionnel)</label>
       <input type="number" name="ordre" min="0" value="{{ composant.ordre if composant else 0 }}"
         style="width:120px;border:1px solid #d1d5db;border-radius:.625rem;padding:.5rem .75rem;font-size:.9rem"/>

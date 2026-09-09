@@ -434,6 +434,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     delta_non_cnss = 0.0
     delta_non_cnamgs = 0.0
     delta_non_irpp = 0.0
+    net_hors_brut = 0.0          # gains/retenues versés mais HORS brut (ajoutés au net)
     total_composants_gains = 0.0
     total_composants_retenues = 0.0
     composants_detail = []
@@ -449,16 +450,28 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         s_cnss   = bool(c.get("soumis_cnss", True))
         s_cnamgs = bool(c.get("soumis_cnamgs", True))
         s_irpp   = bool(c.get("soumis_irpp", True))
-        delta_brut += signe
+        entre_brut = bool(c.get("entre_dans_brut", True))
         if est_gain: total_composants_gains += montant
         else:        total_composants_retenues += montant
-        if not s_cnss:   delta_non_cnss   += signe
-        if not s_cnamgs: delta_non_cnamgs += signe
-        if not s_irpp:   delta_non_irpp   += signe
+        # Brut : n'ajoute que si l'élément entre dans le brut
+        if entre_brut:
+            delta_brut += signe
+        else:
+            net_hors_brut += signe   # payé/déduit directement, hors brut
+        # Assiettes de cotisation, INDÉPENDANTES du brut :
+        #  - dans le brut mais NON soumis → retirer de l'assiette (+signe dans delta_non)
+        #  - HORS brut mais soumis        → ajouter à l'assiette (−signe dans delta_non)
+        if entre_brut and not s_cnss:       delta_non_cnss   += signe
+        elif (not entre_brut) and s_cnss:   delta_non_cnss   -= signe
+        if entre_brut and not s_cnamgs:     delta_non_cnamgs += signe
+        elif (not entre_brut) and s_cnamgs: delta_non_cnamgs -= signe
+        if entre_brut and not s_irpp:       delta_non_irpp   += signe
+        elif (not entre_brut) and s_irpp:   delta_non_irpp   -= signe
         composants_detail.append({
             "libelle": c.get("libelle", ""), "sens": "GAIN" if est_gain else "RETENUE",
             "montant": round(montant, 2), "montant_signe": round(signe, 2),
             "soumis_cnss": s_cnss, "soumis_cnamgs": s_cnamgs, "soumis_irpp": s_irpp,
+            "entre_dans_brut": entre_brut, "position": (c.get("position") or "BAS"),
         })
     salaire_brut += delta_brut
 
@@ -512,6 +525,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     net_a_payer = (
         salaire_net
         + prime_panier + indem_transport_net + indem_representation + prime_salisure
+        + net_hors_brut          # gains/retenues hors brut versés directement
         - acompte
     )
 

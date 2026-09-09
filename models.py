@@ -801,6 +801,8 @@ class ComposantPaie(db.Model):
     soumis_cnss   = db.Column(db.Boolean, default=True)
     soumis_cnamgs = db.Column(db.Boolean, default=True)
     soumis_irpp   = db.Column(db.Boolean, default=True)
+    entre_dans_brut = db.Column(db.Boolean, default=True)      # compte dans le total brut
+    position      = db.Column(db.String(4), default="BAS")     # HAUT | BAS (section bulletin)
     actif         = db.Column(db.Boolean, default=True)
     ordre         = db.Column(db.Integer, default=0)
     cree_le       = db.Column(db.DateTime, default=utcnow)

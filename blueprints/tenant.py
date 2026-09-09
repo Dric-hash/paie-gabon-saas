@@ -795,7 +795,8 @@ def api_simuler_paie():
                 comps_live.append({
                     "libelle": comp.libelle, "sens": comp.sens, "montant": montant,
                     "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
-                    "soumis_irpp": comp.soumis_irpp})
+                    "soumis_irpp": comp.soumis_irpp,
+                    "entre_dans_brut": comp.entre_dans_brut, "position": comp.position})
         d["composants"] = comps_live
 
         result = calculer_bulletin(d, nb_parts=nb_parts)
@@ -2050,6 +2051,7 @@ def bulletin_saisie():
                     "composant_id": comp.id, "libelle": comp.libelle, "sens": comp.sens,
                     "montant": montant, "soumis_cnss": comp.soumis_cnss,
                     "soumis_cnamgs": comp.soumis_cnamgs, "soumis_irpp": comp.soumis_irpp,
+                    "entre_dans_brut": comp.entre_dans_brut, "position": comp.position,
                     "base": request.form.get(f"base_composant_{comp.id}", type=float),
                     "taux": request.form.get(f"taux_composant_{comp.id}", type=float),
                 })
@@ -6935,6 +6937,8 @@ def composant_nouveau():
             soumis_cnss   = request.form.get("soumis_cnss")   == "on",
             soumis_cnamgs = request.form.get("soumis_cnamgs") == "on",
             soumis_irpp   = request.form.get("soumis_irpp")   == "on",
+            entre_dans_brut = request.form.get("entre_dans_brut") == "on",
+            position      = "HAUT" if request.form.get("position") == "HAUT" else "BAS",
             ordre         = request.form.get("ordre", type=int) or 0,
             actif         = True,
         )
@@ -6961,6 +6965,8 @@ def composant_modifier(id):
         c.soumis_cnss   = request.form.get("soumis_cnss")   == "on"
         c.soumis_cnamgs = request.form.get("soumis_cnamgs") == "on"
         c.soumis_irpp   = request.form.get("soumis_irpp")   == "on"
+        c.entre_dans_brut = request.form.get("entre_dans_brut") == "on"
+        c.position      = "HAUT" if request.form.get("position") == "HAUT" else "BAS"
         c.ordre         = request.form.get("ordre", type=int) or 0
         db.session.commit()
         flash(f"Composant « {c.libelle} » modifié.", "success")
