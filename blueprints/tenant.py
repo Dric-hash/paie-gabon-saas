@@ -64,6 +64,14 @@ def _config_rubriques_dict(tenant_id):
     except Exception:
         return {}
 
+
+def _pdf_bulletin_bytes(b, t):
+    """Choisit le générateur PDF selon le modèle du tenant."""
+    from pdf_bulletin import generer_bulletin_pdf, generer_bulletin_detaille_pdf
+    if (getattr(t, "modele_bulletin", None) or "classique") == "sgtg":
+        return generer_bulletin_detaille_pdf(b, t)
+    return generer_bulletin_pdf(b, t)
+
 # ── Rôles assignables au sein d'un tenant ─────────────────────────────────────
 # Liste blanche stricte : un admin de tenant ne peut JAMAIS attribuer le rôle
 # plateforme SUPER_ADMIN (sinon escalade de privilèges → accès cross-tenant).
@@ -2391,7 +2399,7 @@ def bulletin_pdf(id):
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     try:
         from pdf_bulletin import generer_bulletin_pdf
-        pdf_bytes = generer_bulletin_pdf(b, t)
+        pdf_bytes = _pdf_bulletin_bytes(b, t)
         nom_fichier = (
             f"bulletin_{b.salarie.nom}_{b.salarie.prenom}_{b.periode.annee}_{b.periode.mois:02d}.pdf"
             .replace(" ", "_")
@@ -2426,7 +2434,7 @@ def bulletins_export_zip(periode_id):
 
     from pdf_bulletin import generer_bulletins_pdf
     try:
-        data = generer_bulletins_pdf(bulletins, t)
+        data = generer_bulletins_pdf(bulletins, t, modele=(t.modele_bulletin or "classique"))
     except Exception as e:
         logger.error(f"Erreur génération PDF groupé période {periode_id} : {e}")
         flash(f"Erreur lors de la génération du PDF : {e}", "error")
@@ -2582,7 +2590,7 @@ def bulletin_envoyer_email(id):
         )
         # Joindre le bulletin en PDF
         from pdf_bulletin import generer_bulletin_pdf
-        pdf_bytes = generer_bulletin_pdf(b, t)
+        pdf_bytes = _pdf_bulletin_bytes(b, t)
         nom_pdf = (f"bulletin_{s.nom}_{s.prenom}_"
                    f"{b.periode.annee}_{b.periode.mois:02d}.pdf")
         msg.attach(nom_pdf, "application/pdf", pdf_bytes)
@@ -2618,7 +2626,7 @@ def bulletins_envoyer_tous():
                 recipients=[b.salarie.email], body=corps,
                 sender=current_app.config["MAIL_DEFAULT_SENDER"])
             from pdf_bulletin import generer_bulletin_pdf
-            pdf_bytes = generer_bulletin_pdf(b, t)
+            pdf_bytes = _pdf_bulletin_bytes(b, t)
             nom_pdf = (f"bulletin_{b.salarie.nom}_{b.salarie.prenom}_"
                        f"{b.periode.annee}_{b.periode.mois:02d}.pdf")
             msg.attach(nom_pdf, "application/pdf", pdf_bytes)
