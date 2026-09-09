@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Bulletin de paie — {{ bulletin.salarie.nom_complet }}</title>
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; }
+    body { font-family: Arial, Helvetica, sans-serif; color:#111; font-size:9px; background:#e9e9e9; padding:14px; }
+    .page { width:210mm; min-height:290mm; margin:0 auto; background:#fff; padding:10mm; }
+    table { width:100%; border-collapse:collapse; }
+    .band { background:#c9c9c9; font-style:italic; font-weight:bold; padding:2px 5px; }
+    .band-r { background:#c9c9c9; font-weight:bold; padding:2px 5px; text-align:center; }
+    .num { text-align:right; font-variant-numeric:tabular-nums; }
+    .b { font-weight:bold; } .c { text-align:center; } .i { font-style:italic; }
+    /* En-tête */
+    .top td { padding:2px 5px; vertical-align:top; }
+    .title { font-weight:bold; font-style:italic; font-size:13px; text-align:center; }
+    /* Identité */
+    .ident td { padding:2px 6px; vertical-align:top; font-size:9px; }
+    .ident .lib { color:#333; }
+    /* Rubriques */
+    .rub th { background:#c9c9c9; font-style:italic; text-align:left; padding:2px 5px; }
+    .rub th.n { text-align:right; }
+    .rub td { padding:1.5px 5px; border-bottom:.4px solid #eee; }
+    .brut td { background:#dcdcdc; font-weight:bold; }
+    /* Cotisations */
+    .cot th { background:#c9c9c9; font-style:italic; font-size:8px; padding:2px 5px; }
+    .cot td { padding:1.5px 5px; border-bottom:.4px solid #eee; font-size:8.5px; }
+    .tot td { background:#dcdcdc; font-weight:bold; }
+    /* Net */
+    .netbox { background:#c9c9c9; text-align:center; padding:10px; }
+    .netbox .lbl { font-style:italic; color:#333; font-size:11px; }
+    .netbox .val { font-size:20px; font-weight:bold; }
+    /* Cumuls / congés */
+    .grid th { background:#c9c9c9; font-style:italic; font-size:8px; padding:2px 5px; text-align:right; }
+    .grid th:first-child { text-align:left; }
+    .grid td { padding:2px 5px; text-align:right; font-size:8.5px; }
+    .grid td:first-child { text-align:left; font-weight:bold; }
+    /* Signatures */
+    .sig td { border:1px solid #999; height:60px; vertical-align:top; padding:3px 6px; font-weight:bold; }
+    .foot { margin-top:8px; font-size:8px; color:#333; }
+    @media print { body { background:#fff; padding:0; } .page { width:auto; padding:8mm; } }
+    @page { size: A4; margin: 8mm; }
+  </style>
+</head>
+<body>
+{% set b = bulletin %}{% set s = bulletin.salarie %}{% set p = bulletin.periode %}
+{% macro n(v) %}{% if v and (v|float) != 0 %}{{ '{:,.0f}'.format(v|float).replace(',', ' ') }}{% endif %}{% endmacro %}
+{% macro tx(part, base) %}{% if base and (base|float) != 0 %}{{ '{:.1f}'.format((part|float) / (base|float) * 100).replace('.', ',') }}{% endif %}{% endmacro %}
+{% macro rub(lib, base, taux, gain, ret) %}
+  <tr>
+    <td>{{ lib }}</td>
+    <td class="num">{{ n(base) }}</td>
+    <td class="num">{{ taux if taux else '' }}</td>
+    <td class="num">{{ n(gain) }}</td>
+    <td class="num">{{ n(ret) }}</td>
+  </tr>
+{% endmacro %}
+
+<div class="page">
+
+  <!-- ══════════ EN-TÊTE ══════════ -->
+  <table class="top" style="border:1px solid #999">
+    <tr>
+      <td style="width:50%">
+        <span class="i">Edité le : {{ b.date_creation.strftime('%d/%m/%Y') if b.date_creation else '' }}
+          à {{ b.date_creation.strftime('%H:%M:%S') if b.date_creation else '' }}</span>
+        <div class="title">Bulletin de paie</div>
+      </td>
+      <td style="width:50%">
+        <table>
+          <tr><td class="b">PERIODE :</td><td class="c b">{{ p.libelle_mois|upper if p else '' }}</td><td class="num b">{{ p.annee if p else '' }}</td></tr>
+          <tr><td>DU {{ p.date_debut.strftime('%d/%m/%Y') if p and p.date_debut else '01/%02d/%s'|format(p.mois, p.annee) if p else '' }}</td>
+              <td class="c">AU</td>
+              <td class="num">{{ p.date_fin.strftime('%d/%m/%Y') if p and p.date_fin else '' }}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+  <div class="band-r" style="border:1px solid #999;border-top:none">Matricule - Nom - Prénom - Adresse</div>
+
+  <!-- ══════════ IDENTITÉ ══════════ -->
+  <table class="ident" style="border:1px solid #999;border-top:none">
+    <tr>
+      <!-- Société -->
+      <td style="width:44%;border-right:1px solid #ccc">
+        {% if tenant.logo_url %}<img src="{{ tenant.logo_url }}" style="max-height:34px;max-width:120px;float:right;margin-left:6px"/>{% endif %}
+        <div class="b">{{ tenant.denomination }}</div>
+        {% if tenant.adresse %}<div>{{ tenant.adresse }}</div>{% endif %}
+        <div>{{ tenant.ville or '' }}{% if tenant.boite_postale %} · BP {{ tenant.boite_postale }}{% endif %}</div>
+        {% if tenant.nif %}<div>NIF : {{ tenant.nif }}</div>{% endif %}
+        <div>N° CNSS : {{ tenant.numero_cnss or '' }}</div>
+        <div>N° CNAMGS : {{ tenant.numero_cnamgs or '' }}</div>
+      </td>
+      <!-- Salarié -->
+      <td style="width:56%">
+        <table>
+          <tr><td colspan="2" class="b">{{ s.matricule }} — {{ s.nom_complet }}</td></tr>
+          <tr><td class="lib">Tél : {{ s.telephone or '' }}</td><td class="num b">{{ s.nationalite or 'GABON' }}</td></tr>
+          <tr><td class="lib">Emploi : {{ s.emploi or '' }}</td><td class="num">Catégorie : {{ s.categorie.nom if s.categorie else (s.niveau or '') }}</td></tr>
+          <tr><td class="lib">N° CNSS : {{ s.numero_cnss or '' }}</td><td class="num">Sit.Fam : {{ s.situation_matrimoniale or '' }}</td></tr>
+          <tr><td class="lib">N° CNAMGS : {{ s.numero_cnamgs or '' }}</td><td class="num">Nbre de part : {{ '{:.1f}'.format(s.nombre_parts|float).replace('.', ',') if s.nombre_parts else '' }}</td></tr>
+          <tr><td class="lib">Date d'Embauche : {{ s.date_embauche.strftime('%d/%m/%Y') if s.date_embauche else '' }}</td>
+              <td class="num">Ancienneté : {% if s.date_embauche and p %}{{ (p.annee - s.date_embauche.year)*12 + p.mois - s.date_embauche.month }} mois{% endif %}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ══════════ RUBRIQUES ══════════ -->
+  <table class="rub" style="border:1px solid #999;border-top:none;margin-top:2px">
+    <tr><th style="width:40%">Rubriques</th><th class="n" style="width:15%">Base</th><th class="n" style="width:12%">Taux</th><th class="n" style="width:16%">Gains</th><th class="n" style="width:17%">Retenues</th></tr>
+
+    {# Composants personnalisés placés en HAUT #}
+    {% for c in composants if c.composant and c.composant.position == 'HAUT' %}
+      {{ rub(c.composant.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.composant.est_gain else None), (c.montant if not c.composant.est_gain else None)) }}
+    {% endfor %}
+
+    {{ rub("Salaire de base", b.base_salaire_base, b.taux_salaire, b.salaire_base, None) }}
+    {{ rub("Sursalaire", b.base_sursalaire, b.taux_sursalaire, b.sursalaire, None) }}
+    {{ rub("Heures supplémentaires +10%", None, None, b.heures_sup_10, None) }}
+    {{ rub("Heures supplémentaires +30%", None, None, b.heures_sup_30, None) }}
+    {{ rub("Heures supplémentaires +40%", None, None, b.heures_sup_40, None) }}
+    {{ rub("Heures supplémentaires +70%", None, None, b.heures_sup_70, None) }}
+    {{ rub("Absence", b.base_absences, b.taux_absences, None, b.absences) }}
+    {{ rub("Prime d'ancienneté", b.base_prime_anciennete, None, b.prime_anciennete, None) }}
+    {{ rub("Prime de transport", b.base_prime_transport, None, b.prime_transport, None) }}
+    {{ rub("Prime de responsabilité", None, None, b.prime_responsabilite, None) }}
+    {{ rub("Carburant", b.base_carburant, None, b.carburant, None) }}
+    {{ rub("Prime de performance", None, None, b.prime_performance, None) }}
+    {{ rub("Prime de rendement", None, None, b.prime_rendement, None) }}
+    {{ rub("Indemnités de licenciement", b.base_indem_licenciement, None, b.indem_licenciement, None) }}
+    {{ rub("Prime de qualité", b.base_prime_qualite, None, b.prime_qualite, None) }}
+    {{ rub("Allocations de congé", b.base_allocations_conge, None, b.allocations_conge, None) }}
+    {{ rub("Indem. Compens./congé (ancienneté)", b.base_indem_compensatrice_conge, None, b.indem_compensatrice_conge, None) }}
+    {{ rub("Indemnités de services rendus", b.base_indem_services_rendus, None, b.indem_services_rendus, None) }}
+    {{ rub("Indemnités comp. de préavis", b.base_indem_compensatrice_preavis, None, b.indem_compensatrice_preavis, None) }}
+    {{ rub("Indemnité de logement", b.base_indem_logement, None, b.indem_logement, None) }}
+
+    {# Composants personnalisés placés en BAS #}
+    {% for c in composants if c.composant and c.composant.position != 'HAUT' %}
+      {{ rub(c.composant.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.composant.est_gain else None), (c.montant if not c.composant.est_gain else None)) }}
+    {% endfor %}
+
+    <tr class="brut"><td class="c">*** Salaire Brut ***</td><td></td><td></td><td class="num">{{ n(b.salaire_brut) }}</td><td></td></tr>
+  </table>
+
+  <!-- ══════════ COTISATIONS ══════════ -->
+  <table class="cot" style="border:1px solid #999;border-top:none">
+    <tr>
+      <th style="width:40%;text-align:left">Cotisations et contributions sociales</th>
+      <th class="num">Base</th><th class="num">Taux salar.</th><th class="num">Part salarié</th>
+      <th class="num">Taux Patron.</th><th class="num">Part Employeur</th>
+    </tr>
+    <tr><td>CNSS</td><td class="num">{{ n(b.base_cnss) }}</td><td class="num">{{ tx(b.cnss_salarie, b.base_cnss) }}</td><td class="num">{{ n(b.cnss_salarie) }}</td><td class="num">{{ tx(b.cnss_patronale, b.base_cnss) }}</td><td class="num">{{ n(b.cnss_patronale) }}</td></tr>
+    <tr><td>CNAMGS</td><td class="num">{{ n(b.base_cnamgs) }}</td><td class="num">{{ tx(b.cnamgs_salarie, b.base_cnamgs) }}</td><td class="num">{{ n(b.cnamgs_salarie) }}</td><td class="num">{{ tx(b.cnamgs_patronale, b.base_cnamgs) }}</td><td class="num">{{ n(b.cnamgs_patronale) }}</td></tr>
+    <tr><td>TCS</td><td class="num">{{ n(b.base_tcs) }}</td><td class="num">{{ tx(b.tcs, b.base_tcs) }}</td><td class="num">{{ n(b.tcs) }}</td><td></td><td></td></tr>
+    <tr><td>IRPP (-)</td><td class="num">{{ n(b.base_irpp) }}</td><td class="num c">-</td><td class="num">{{ n(b.irpp) }}</td><td></td><td></td></tr>
+    <tr><td>Fonds National de l'Habitat</td><td class="num">{{ n(b.base_cnss) }}</td><td></td><td></td><td class="num">{{ tx(b.fnh, b.base_cnss) }}</td><td class="num">{{ n(b.fnh) }}</td></tr>
+    <tr><td>Contrib. à la Formation Professionnelle</td><td class="num">{{ n(b.base_cnss) }}</td><td></td><td></td><td class="num">{{ tx(b.cfp, b.base_cnss) }}</td><td class="num">{{ n(b.cfp) }}</td></tr>
+    <tr class="tot"><td>Total cotisations et contributions</td><td></td><td></td><td class="num">{{ n((b.cnss_salarie|float)+(b.cnamgs_salarie|float)+(b.tcs|float)+(b.irpp|float)) }}</td><td></td><td class="num">{{ n((b.cnss_patronale|float)+(b.cnamgs_patronale|float)+(b.fnh|float)+(b.cfp|float)) }}</td></tr>
+  </table>
+
+  <!-- ══════════ NET ══════════ -->
+  <table style="border:1px solid #999;border-top:none">
+    <tr>
+      <td style="width:55%;vertical-align:top;padding:3px 5px">
+        <table>
+          <tr><td>Net à payer avant impôt sur le revenu</td><td class="num b">{{ n((b.net_a_payer|float)+(b.irpp|float)) }}</td></tr>
+          <tr><td class="i">Prime de panier (+)</td><td class="num">{{ n(b.prime_panier) }}</td></tr>
+          <tr><td class="i">Prime de représentation (+)</td><td class="num">{{ n(b.indem_representation) }}</td></tr>
+          <tr><td class="i">Acompte (-)</td><td class="num">{{ n(b.acompte) }}</td></tr>
+        </table>
+      </td>
+      <td style="width:45%" class="netbox">
+        <div class="lbl">Net payé en F CFA</div>
+        <div class="val">{{ n(b.net_a_payer) }} XAF</div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- ══════════ CUMULS ══════════ -->
+  {% if cumuls %}
+  <table class="grid" style="border:1px solid #999;border-top:none;margin-top:2px">
+    <tr><th>Cumuls</th><th>Jours</th><th>Brut</th><th>Net impos.</th><th>Cot. Salar.</th><th>Cot. Patron.</th><th>Cot. Global.</th><th>Coût total</th></tr>
+    <tr><td>Année {{ p.annee if p else '' }}</td>
+      <td>{{ cumuls.jours|round|int }}</td><td>{{ n(cumuls.brut) }}</td><td>{{ n(cumuls.net_impos) }}</td>
+      <td>{{ n(cumuls.cot_salar) }}</td><td>{{ n(cumuls.cot_patron) }}</td><td>{{ n(cumuls.cot_global) }}</td><td>{{ n(cumuls.cout_total) }}</td></tr>
+  </table>
+  {% endif %}
+
+  <!-- ══════════ CONGÉS PAYÉS ══════════ -->
+  {% if conges_annees %}
+  <table class="grid" style="border:1px solid #999;border-top:none">
+    <tr><th>Congés payés</th><th>Dûs (jrs)</th><th>Acquis (jrs)</th><th>Pris (jrs)</th><th>Restant (jrs)</th></tr>
+    {% for cg in conges_annees %}
+    <tr><td>CP {{ cg.annee }}</td>
+      <td>{{ '{:.2f}'.format(cg.jours_acquis|float).replace('.', ',') if cg.jours_acquis else '-' }}</td>
+      <td>{{ '{:.2f}'.format(cg.jours_acquis|float).replace('.', ',') if cg.jours_acquis else '-' }}</td>
+      <td>{{ '{:.2f}'.format(cg.jours_pris|float).replace('.', ',') if cg.jours_pris else '-' }}</td>
+      <td class="b">{{ '{:.2f}'.format((cg.jours_acquis|float)-(cg.jours_pris|float)).replace('.', ',') }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+
+  <!-- ══════════ SIGNATURES ══════════ -->
+  <table class="sig" style="margin-top:6px">
+    <tr><td style="width:50%">EMPLOYEUR</td><td style="width:50%">EMPLOYE</td></tr>
+  </table>
+
+  <div class="foot">
+    Dans votre intérêt et pour vous aider à faire valoir vos droits, conservez ce bulletin sans limitation de durée.<br/>
+    L'entreprise adhère à la convention collective.
+  </div>
+
+</div>
+</body>
+</html>

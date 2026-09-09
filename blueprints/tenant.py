@@ -2490,6 +2490,7 @@ def _bulletin_imprimer_impl(id):
         "moderne":     "tenant/bulletin_print_moderne.html",
         "minimaliste": "tenant/bulletin_print_minimaliste.html",
         "grandlivre":  "tenant/bulletin_print_grandlivre.html",
+        "sgtg":        "tenant/bulletin_print_sgtg.html",
     }
     template = template_map.get(modele, "tenant/bulletin_print.html")
     # Vérifier que le template existe réellement sur le serveur, sinon repli.
@@ -2504,8 +2505,30 @@ def _bulletin_imprimer_impl(id):
     recap_sites, multi_sites = ([], False)
     if per is not None:
         recap_sites, multi_sites = _recap_sites_salarie_periode(t, b.salarie_id, per.annee, per.mois)
+
+    # ── Cumuls année à date + congés (pour le modèle détaillé type SGTG) ──────
+    cumuls = None; conges_annees = []
+    try:
+        annee = per.annee if per else None
+        if annee:
+            bs = (BulletinPaie.query.join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
+                  .filter(BulletinPaie.tenant_id == t.id, BulletinPaie.salarie_id == b.salarie_id,
+                          PeriodePaie.annee == annee).all())
+            f = lambda x: float(x or 0)
+            cot_sal = sum(f(x.cnss_salarie)+f(x.cnamgs_salarie)+f(x.tcs)+f(x.irpp) for x in bs)
+            cot_pat = sum(f(x.cnss_patronale)+f(x.cnamgs_patronale)+f(x.fnh)+f(x.cfp) for x in bs)
+            brut_c  = sum(f(x.salaire_brut) for x in bs)
+            cumuls = {"jours": sum(f(x.nb_jours_travailles) for x in bs),
+                      "brut": brut_c, "net_impos": sum(f(x.base_irpp) for x in bs),
+                      "cot_salar": cot_sal, "cot_patron": cot_pat,
+                      "cot_global": cot_sal + cot_pat, "cout_total": brut_c + cot_pat}
+        conges_annees = sorted(getattr(b.salarie, "conges", []) or [], key=lambda c: c.annee or 0)
+    except Exception as _e:
+        logger.warning(f"Cumuls/congés bulletin {b.id} indisponibles : {_e}")
+
     return render_template(template, bulletin=b, tenant=t, composants=composants,
-                           recap_sites=recap_sites, multi_sites=multi_sites)
+                           recap_sites=recap_sites, multi_sites=multi_sites,
+                           cumuls=cumuls, conges_annees=conges_annees)
 
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
@@ -3569,7 +3592,7 @@ def parametres_modele_bulletin():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     modele = request.form.get("modele_bulletin", "classique")
-    if modele not in ("classique", "moderne", "minimaliste", "grandlivre"):
+    if modele not in ("classique", "moderne", "minimaliste", "grandlivre", "sgtg"):
         modele = "classique"
     t.modele_bulletin = modele
     db.session.commit()
