@@ -6,7 +6,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, black, white
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                  TableStyle, HRFlowable)
+                                  TableStyle, HRFlowable, PageBreak)
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -40,19 +40,38 @@ def _flt(v):
         return 0.0
 
 def generer_bulletin_pdf(bulletin, tenant) -> bytes:
-    """
-    Génère le PDF d'un bulletin de paie.
-    Retourne les bytes du PDF.
-    """
+    """Génère le PDF d'un bulletin de paie (un seul). Retourne les bytes."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
-        buffer,
-        pagesize=A4,
+        buffer, pagesize=A4,
         leftMargin=12*mm, rightMargin=12*mm,
         topMargin=10*mm,  bottomMargin=10*mm,
         title=f"Bulletin de paie — {bulletin.salarie.nom_complet}",
     )
+    doc.build(_elements_bulletin(bulletin, tenant))
+    return buffer.getvalue()
 
+
+def generer_bulletins_pdf(bulletins, tenant) -> bytes:
+    """Génère UN SEUL PDF regroupant TOUS les bulletins (un par page)."""
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer, pagesize=A4,
+        leftMargin=12*mm, rightMargin=12*mm,
+        topMargin=10*mm,  bottomMargin=10*mm,
+        title="Bulletins de paie",
+    )
+    elements = []
+    for i, b in enumerate(bulletins):
+        if i > 0:
+            elements.append(PageBreak())
+        elements.extend(_elements_bulletin(b, tenant))
+    doc.build(elements)
+    return buffer.getvalue()
+
+
+def _elements_bulletin(bulletin, tenant):
+    """Construit la liste des flowables d'UN bulletin (styles + contenu)."""
     # ── Styles ────────────────────────────────────────────────────────────────
     def sty(name, **kwargs):
         defaults = dict(fontName="Helvetica", fontSize=9, leading=12,
@@ -396,14 +415,14 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
     elements.append(pat_tbl)
     elements.append(Spacer(1, 5*mm))
 
-    # Signatures
+    # Signatures — employeur + employé uniquement
     sig_data = [[
-        Paragraph("Signature Employé<br/><br/><br/>___________________<br/>"
+        Paragraph("L'Employeur<br/><br/><br/>___________________<br/>"
+                  f"{tenant.denomination}", s_center),
+        Paragraph("L'Employé<br/><br/><br/>___________________<br/>"
                   f"{s.nom_complet}", s_center),
-        Paragraph("Visa Responsable hiérarchique<br/><br/><br/>___________________", s_center),
-        Paragraph("Visa Responsable Site<br/><br/><br/>___________________", s_center),
     ]]
-    sig_tbl = Table(sig_data, colWidths=[W/3, W/3, W/3])
+    sig_tbl = Table(sig_data, colWidths=[W/2, W/2])
     sig_tbl.setStyle(TableStyle([
         ("LINEABOVE",     (0,0), (-1,0), 0.5, C_BORDER),
         ("TOPPADDING",    (0,0), (-1,-1), 8),
@@ -423,5 +442,4 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
         s_footnote
     ))
 
-    doc.build(elements)
-    return buffer.getvalue()
+    return elements

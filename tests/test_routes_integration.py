@@ -574,7 +574,7 @@ class TestDocumentsRH:
         assert r.status_code == 404
 
     def test_export_zip_bulletins(self, client):
-        """L'export ZIP doit produire une archive."""
+        """L'export « tous les bulletins » doit produire UN SEUL PDF."""
         with flask_app.app_context():
             from models import Tenant, Salarie, PeriodePaie, BulletinPaie
             from datetime import date
@@ -593,7 +593,8 @@ class TestDocumentsRH:
         auth_session(client, "admin@a.ga")
         r = client.get(f"/bulletins/export-zip/{pid}")
         assert r.status_code == 200
-        assert r.data[:2] == b"PK"  # signature ZIP
+        assert r.data[:4] == b"%PDF"  # un seul PDF regroupé
+        assert r.mimetype == "application/pdf"
 
 
 # ══════════════════════════════════════════════════════════════════════════════

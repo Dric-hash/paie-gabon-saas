@@ -2393,7 +2393,7 @@ def bulletin_pdf(id):
 @bp.route("/bulletins/export-zip/<int:periode_id>")
 @login_required
 def bulletins_export_zip(periode_id):
-    """Télécharge tous les bulletins d'une période dans un ZIP (un PDF par salarié)."""
+    """Télécharge TOUS les bulletins d'une période dans UN SEUL PDF (un par page)."""
     t = get_tenant()
     if not t:
         return redirect(url_for("auth.login"))
@@ -2404,32 +2404,23 @@ def bulletins_export_zip(periode_id):
         flash("Aucun bulletin à exporter pour cette période.", "error")
         return redirect(url_for("tenant.bulletins"))
 
-    import zipfile
-    from pdf_bulletin import generer_bulletin_pdf
-    zip_buffer = io.BytesIO()
-    erreurs = 0
-    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
-        for b in bulletins:
-            try:
-                pdf_bytes = generer_bulletin_pdf(b, t)
-                nom = (f"{b.salarie.nom}_{b.salarie.prenom}_{b.periode.annee}_{b.periode.mois:02d}.pdf"
-                       .replace(" ", "_"))
-                zf.writestr(nom, pdf_bytes)
-            except Exception as e:
-                erreurs += 1
-                logger.error(f"Erreur PDF bulletin {b.id} : {e}")
-    zip_buffer.seek(0)
-    data = zip_buffer.read()
+    from pdf_bulletin import generer_bulletins_pdf
+    try:
+        data = generer_bulletins_pdf(bulletins, t)
+    except Exception as e:
+        logger.error(f"Erreur génération PDF groupé période {periode_id} : {e}")
+        flash(f"Erreur lors de la génération du PDF : {e}", "error")
+        return redirect(url_for("tenant.bulletins"))
 
     log_action("EXPORT", "bulletin", periode_id,
-               f"Export ZIP {len(bulletins)} bulletins — {p.libelle_complet}",
+               f"Export PDF groupé {len(bulletins)} bulletins — {p.libelle_complet}",
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
 
-    nom_zip = f"bulletins_{p.libelle_mois}_{p.annee}_{t.slug}.zip".replace(" ", "_")
+    nom_pdf = f"bulletins_{p.libelle_mois}_{p.annee}_{t.slug}.pdf".replace(" ", "_")
     from flask import Response
-    return Response(data, mimetype="application/zip",
-                    headers={"Content-Disposition": f'attachment; filename="{nom_zip}"',
+    return Response(data, mimetype="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{nom_pdf}"',
                              "Content-Length": str(len(data))})
 
 
