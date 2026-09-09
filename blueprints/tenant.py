@@ -2554,7 +2554,8 @@ def _bulletin_imprimer_impl(id):
 
     return render_template(template, bulletin=b, tenant=t, composants=composants,
                            recap_sites=recap_sites, multi_sites=multi_sites,
-                           cumuls=cumuls, conges_annees=conges_annees)
+                           cumuls=cumuls, conges_annees=conges_annees,
+                           config_rubriques=_config_rubriques_dict(t.id))
 
 
 # ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
@@ -7529,10 +7530,12 @@ def api_calculer():
                     comps_live.append({
                         "libelle": comp.libelle, "sens": comp.sens, "montant": montant,
                         "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
-                        "soumis_irpp": comp.soumis_irpp})
+                        "soumis_irpp": comp.soumis_irpp,
+                        "entre_dans_brut": comp.entre_dans_brut, "position": comp.position})
             data["composants"] = comps_live
         if t:
             data["convention"] = t.convention
+            data["config_rubriques"] = _config_rubriques_dict(t.id)
         res = calculer_bulletin(data, nb_parts=nb_parts)
         res["acompte_auto"] = total_acomptes
         return jsonify(res)

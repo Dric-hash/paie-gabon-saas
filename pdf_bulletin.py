@@ -553,9 +553,23 @@ def _elements_bulletin_detaille(bulletin, tenant):
     def g(name): return getattr(b, name, 0)
     rows = [[P("Rubriques",7,True), P("Base",7,True,TA_RIGHT), P("Taux",7,True,TA_RIGHT),
              P("Gains",7,True,TA_RIGHT), P("Retenues",7,True,TA_RIGHT)]]
-    def rub(lib, base, taux, gain, ret):
+    def rub(lib, base, taux, gain, ret, force=False):
+        if not force and not (_flt(gain) or _flt(ret)):
+            return
         rows.append([P(lib,8), P(_nf(base),8,False,TA_RIGHT), P(str(taux) if taux else "",8,False,TA_RIGHT),
                      P(_nf(gain),8,False,TA_RIGHT), P(_nf(ret),8,False,TA_RIGHT)])
+    # Config des rubriques souples
+    try:
+        from models import ConfigRubrique
+        _cfg = {c.cle: c for c in ConfigRubrique.query.filter_by(tenant_id=tenant.id).all()}
+    except Exception:
+        _cfg = {}
+    def _pos(cle):
+        c = _cfg.get(cle); return c.position if c else "BAS"
+    _configs = [("Prime de panier", g("prime_panier"), "panier"),
+                ("Transport net", g("indem_transport"), "transport"),
+                ("Représentation", g("indem_representation"), "representation"),
+                ("Salisure", g("prime_salisure"), "salisure")]
     # composants HAUT
     try:
         from models import BulletinComposant
@@ -566,7 +580,11 @@ def _elements_bulletin_detaille(bulletin, tenant):
         if getattr(c, "composant", None) and c.composant.position == "HAUT":
             rub(c.composant.libelle, c.base, (c.taux or ""), c.montant if c.composant.est_gain else None,
                 c.montant if not c.composant.est_gain else None)
-    rub("Salaire de base", g("base_salaire_base"), g("taux_salaire"), g("salaire_base"), None)
+    # configurables HAUT
+    for lib, mt, cle in _configs:
+        if _pos(cle) == "HAUT" and _flt(mt):
+            rub(lib, None, None, mt, None)
+    rub("Salaire de base", g("base_salaire_base"), g("taux_salaire"), g("salaire_base"), None, force=True)
     rub("Sursalaire", g("base_sursalaire"), g("taux_sursalaire"), g("sursalaire"), None)
     rub("Heures supplémentaires +10%", None, None, g("heures_sup_10"), None)
     rub("Heures supplémentaires +30%", None, None, g("heures_sup_30"), None)
@@ -625,12 +643,13 @@ def _elements_bulletin_detaille(bulletin, tenant):
 
     # ── Net ──
     net_avant = _flt(g("net_a_payer")) + _flt(g("irpp"))
-    net_left = Table([
-        [P("Net à payer avant impôt sur le revenu",8), P(_nf(net_avant),8,True,TA_RIGHT)],
-        [P("Prime de panier (+)",8,color=C_GRAY), P(_nf(g("prime_panier")),8,False,TA_RIGHT)],
-        [P("Prime de représentation (+)",8,color=C_GRAY), P(_nf(g("indem_representation")),8,False,TA_RIGHT)],
-        [P("Acompte (-)",8,color=C_GRAY), P(_nf(g("acompte")),8,False,TA_RIGHT)],
-    ], colWidths=[W*0.55*0.7, W*0.55*0.3])
+    _net_rows = [[P("Net à payer avant impôt sur le revenu",8), P(_nf(net_avant),8,True,TA_RIGHT)]]
+    for lib, mt, cle in _configs:
+        if _pos(cle) != "HAUT" and _flt(mt):
+            _net_rows.append([P(lib + " (+)",8,color=C_GRAY), P(_nf(mt),8,False,TA_RIGHT)])
+    if _flt(g("acompte")):
+        _net_rows.append([P("Acompte (-)",8,color=C_GRAY), P(_nf(g("acompte")),8,False,TA_RIGHT)])
+    net_left = Table(_net_rows, colWidths=[W*0.55*0.7, W*0.55*0.3])
     net_left.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2),("LEFTPADDING",(0,0),(-1,-1),4)]))
     net_box = Table([[P("Net payé en F CFA",11,False,TA_CENTER)],[P(_nf(g("net_a_payer"))+" XAF",18,True,TA_CENTER)]],
                     colWidths=[W*0.45])

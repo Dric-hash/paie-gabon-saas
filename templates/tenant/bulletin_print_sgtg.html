@@ -58,6 +58,7 @@
 {% macro n(v) %}{% if v and (v|float) != 0 %}{{ '{:,.0f}'.format(v|float).replace(',', ' ') }}{% endif %}{% endmacro %}
 {% macro tx(part, base) %}{% if base and (base|float) != 0 %}{{ '{:.1f}'.format((part|float) / (base|float) * 100).replace('.', ',') }}{% endif %}{% endmacro %}
 {% macro rub(lib, base, taux, gain, ret) %}
+{% if (gain and gain|float != 0) or (ret and ret|float != 0) %}
   <tr>
     <td>{{ lib }}</td>
     <td class="num">{{ n(base) }}</td>
@@ -65,6 +66,7 @@
     <td class="num">{{ n(gain) }}</td>
     <td class="num">{{ n(ret) }}</td>
   </tr>
+{% endif %}
 {% endmacro %}
 
 <div class="page">
@@ -126,7 +128,24 @@
       {{ rub(c.composant.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.composant.est_gain else None), (c.montant if not c.composant.est_gain else None)) }}
     {% endfor %}
 
-    {{ rub("Salaire de base", b.base_salaire_base, b.taux_salaire, b.salaire_base, None) }}
+    {# Rubriques configurables (panier, transport, représentation, salisure) #}
+    {% set cfgr = config_rubriques or {} %}
+    {% set configs = [
+        ('Prime de panier', b.prime_panier, (cfgr.get('panier') or {}).get('position','BAS')),
+        ('Transport net', b.indem_transport, (cfgr.get('transport') or {}).get('position','BAS')),
+        ('Représentation', b.indem_representation, (cfgr.get('representation') or {}).get('position','BAS')),
+        ('Salisure', b.prime_salisure, (cfgr.get('salisure') or {}).get('position','BAS')),
+    ] %}
+    {# Configurables placées en HAUT #}
+    {% for lib, mt, pos in configs if pos == 'HAUT' and mt and mt|float != 0 %}
+      {{ rub(lib, None, None, mt, None) }}
+    {% endfor %}
+
+    <tr>
+      <td>Salaire de base</td><td class="num">{{ n(b.base_salaire_base) }}</td>
+      <td class="num">{{ b.taux_salaire if b.taux_salaire else '' }}</td>
+      <td class="num">{{ n(b.salaire_base) }}</td><td class="num"></td>
+    </tr>
     {{ rub("Sursalaire", b.base_sursalaire, b.taux_sursalaire, b.sursalaire, None) }}
     {{ rub("Heures supplémentaires +10%", None, None, b.heures_sup_10, None) }}
     {{ rub("Heures supplémentaires +30%", None, None, b.heures_sup_30, None) }}
@@ -177,8 +196,9 @@
       <td style="width:55%;vertical-align:top;padding:3px 5px">
         <table>
           <tr><td>Net à payer avant impôt sur le revenu</td><td class="num b">{{ n((b.net_a_payer|float)+(b.irpp|float)) }}</td></tr>
-          <tr><td class="i">Prime de panier (+)</td><td class="num">{{ n(b.prime_panier) }}</td></tr>
-          <tr><td class="i">Prime de représentation (+)</td><td class="num">{{ n(b.indem_representation) }}</td></tr>
+          {% for lib, mt, pos in configs if pos != 'HAUT' and mt and mt|float != 0 %}
+          <tr><td class="i">{{ lib }} (+)</td><td class="num">{{ n(mt) }}</td></tr>
+          {% endfor %}
           <tr><td class="i">Acompte (-)</td><td class="num">{{ n(b.acompte) }}</td></tr>
         </table>
       </td>
