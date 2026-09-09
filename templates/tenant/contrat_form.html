@@ -100,8 +100,32 @@
         </div>
       </div>
 
+      <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid #eee">
+        <label style="display:block;font-size:.8rem;font-weight:800;color:#0f3d36;margin-bottom:.25rem">💠 Primes récurrentes</label>
+        <p style="font-size:.72rem;color:#9ca3af;margin-bottom:.7rem">Montants mensuels habituels de ce salarié. Ils seront <strong>pré-remplis automatiquement</strong> à chaque bulletin (toujours modifiables). Laissez vide si non concerné.</p>
+        {% set labels = {'sursalaire':'Sursalaire','prime_transport':'Prime de transport','prime_responsabilite':'Prime de responsabilité','indem_logement':'Indemnité de logement','carburant':'Carburant','prime_panier':'Prime de panier','indem_representation':'Représentation','indem_transport':'Transport net','prime_salisure':'Salisure'} %}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
+          {% for key, lib in labels.items() %}
+          <div>
+            <label style="font-size:.72rem;color:#6b7280">{{ lib }}</label>
+            <input type="number" name="rec_{{ key }}" min="0" step="any" placeholder="0"
+              value="{{ (elements_rec|default({})).get(key,'') }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .5rem;font-size:.85rem;box-sizing:border-box"/>
+          </div>
+          {% endfor %}
+          {% for comp in composants|default([]) %}
+          <div>
+            <label style="font-size:.72rem;color:#6b7280">{{ comp.libelle }} <span style="color:#9ca3af">(composant)</span></label>
+            <input type="number" name="rec_composant_{{ comp.id }}" min="0" step="any" placeholder="0"
+              value="{{ (elements_rec|default({})).get('composant_' ~ comp.id, '') }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .5rem;font-size:.85rem;box-sizing:border-box"/>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
       <button type="submit"
-        style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer">
+        style="width:100%;background:#0f3d36;color:white;padding:.75rem;border-radius:.75rem;font-size:.875rem;font-weight:700;border:none;cursor:pointer;margin-top:1rem">
         💾 {{ 'Enregistrer les modifications' if contrat else 'Créer le contrat' }}
       </button>
     </form>

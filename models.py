@@ -582,6 +582,7 @@ class Contrat(db.Model):
     date_fin     = db.Column(db.Date)
     date_fin_essai = db.Column(db.Date)   # fin de la période d'essai (alerte RH)
     salaire_base = db.Column(db.Numeric(15,2), nullable=False)
+    elements_recurrents = db.Column(db.Text)   # JSON {champ: montant} — primes récurrentes pré-remplies à la saisie
     poste        = db.Column(db.String(200))
     categorie_id = db.Column(db.Integer, db.ForeignKey("categories_emploi.id"))
     actif        = db.Column(db.Boolean, default=True)

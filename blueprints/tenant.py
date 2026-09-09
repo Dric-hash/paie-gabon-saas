@@ -72,6 +72,31 @@ def _pdf_bulletin_bytes(b, t):
         return generer_bulletin_detaille_pdf(b, t)
     return generer_bulletin_pdf(b, t)
 
+
+# Primes récurrentes définissables au niveau du contrat (clés = champs de saisie)
+PRIMES_RECURRENTES = ["sursalaire", "prime_transport", "prime_responsabilite",
+                      "indem_logement", "carburant", "prime_panier",
+                      "indem_representation", "indem_transport", "prime_salisure"]
+
+def _build_elements_recurrents(tenant_id):
+    """Construit le JSON des primes récurrentes depuis le formulaire de contrat
+    (champs nommés rec_<clé> et rec_composant_<id>). Renvoie une chaîne JSON ou None."""
+    import json
+    elems = {}
+    for k in PRIMES_RECURRENTES:
+        v = request.form.get(f"rec_{k}", type=float)
+        if v:
+            elems[k] = v
+    try:
+        from models import ComposantPaie
+        for comp in ComposantPaie.query.filter_by(tenant_id=tenant_id, actif=True).all():
+            v = request.form.get(f"rec_composant_{comp.id}", type=float)
+            if v:
+                elems[f"composant_{comp.id}"] = v
+    except Exception:
+        pass
+    return json.dumps(elems) if elems else None
+
 # ── Rôles assignables au sein d'un tenant ─────────────────────────────────────
 # Liste blanche stricte : un admin de tenant ne peut JAMAIS attribuer le rôle
 # plateforme SUPER_ADMIN (sinon escalade de privilèges → accès cross-tenant).
@@ -1539,6 +1564,7 @@ def contrat_nouveau(sal_id):
             date_fin     = date_fin,
             date_fin_essai = _parse_date(request.form.get("date_fin_essai")),
             salaire_base = salaire,
+            elements_recurrents = _build_elements_recurrents(t.id),
             poste        = poste,
             categorie_id = cat_id,
             actif        = True,
@@ -1563,7 +1589,9 @@ def contrat_nouveau(sal_id):
         return redirect(url_for("tenant.contrats_salarie", sal_id=sal_id))
 
     return render_template("tenant/contrat_form.html",
-                           salarie=s, tenant=t, categories=cats, contrat=None)
+                           salarie=s, tenant=t, categories=cats, contrat=None,
+                           composants=ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).order_by(ComposantPaie.libelle).all(),
+                           elements_rec={})
 
 
 @bp.route("/contrats/<int:id>/modifier", methods=["GET","POST"])
@@ -1598,6 +1626,7 @@ def contrat_modifier(id):
         else:
             c.date_fin = None
         c.date_fin_essai = _parse_date(request.form.get("date_fin_essai"))
+        c.elements_recurrents = _build_elements_recurrents(t.id)
 
         db.session.flush()
         log_action("UPDATE", "contrat", c.id,
@@ -1607,8 +1636,13 @@ def contrat_modifier(id):
         flash("Contrat mis à jour.", "success")
         return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
 
+    import json as _json
+    try: _er = _json.loads(c.elements_recurrents) if c.elements_recurrents else {}
+    except Exception: _er = {}
     return render_template("tenant/contrat_form.html",
-                           salarie=s, tenant=t, categories=cats, contrat=c)
+                           salarie=s, tenant=t, categories=cats, contrat=c,
+                           composants=ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).order_by(ComposantPaie.libelle).all(),
+                           elements_rec=_er)
 
 
 @bp.route("/contrats/<int:id>/terminer", methods=["POST"])
@@ -7550,7 +7584,13 @@ def api_contrat(id):
     if not s: return jsonify({})
     c=Contrat.query.filter_by(salarie_id=id,tenant_id=t.id,actif=True).first()
     base={"nom":s.nom_complet,"poste":s.emploi,"matricule":s.matricule,"nombre_parts":float(s.nombre_parts or 1)}
-    if c: base["salaire_base"]=float(c.salaire_base); base["poste"]=c.poste or s.emploi
+    if c:
+        base["salaire_base"]=float(c.salaire_base); base["poste"]=c.poste or s.emploi
+        try:
+            import json as _json
+            base["elements"] = _json.loads(c.elements_recurrents) if c.elements_recurrents else {}
+        except Exception:
+            base["elements"] = {}
     return jsonify(base)
 
 @bp.route("/api/salarie/<int:id>/pointage-mois")

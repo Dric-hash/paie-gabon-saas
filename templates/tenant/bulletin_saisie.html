@@ -825,6 +825,12 @@ function chargerContrat(id) {
         document.getElementById("info_poste").textContent = data.poste || "—";
         document.getElementById("info_salaire").textContent = fmt(data.salaire_base) + "/mois";
         document.getElementById("info_salarie").style.display = "block";
+        if (data.elements) {
+          for (var k in data.elements) {
+            var el = document.getElementById("f_" + k) || document.querySelector('[name="' + k + '"]');
+            if (el) { el.value = data.elements[k]; }
+          }
+        }
         recalculer();
       }
     });
