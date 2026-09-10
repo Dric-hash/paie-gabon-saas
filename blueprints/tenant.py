@@ -79,22 +79,20 @@ PRIMES_RECURRENTES = ["sursalaire", "prime_transport", "prime_responsabilite",
                       "indem_representation", "indem_transport", "prime_salisure"]
 
 def _build_elements_recurrents(tenant_id):
-    """Construit le JSON des primes récurrentes depuis le formulaire de contrat
-    (champs nommés rec_<clé> et rec_composant_<id>). Renvoie une chaîne JSON ou None."""
+    """Construit le JSON des primes récurrentes depuis la liste dynamique du
+    formulaire de contrat (paires rec_key[] / rec_val[]). Renvoie JSON ou None."""
     import json
+    keys = request.form.getlist("rec_key")
+    vals = request.form.getlist("rec_val")
     elems = {}
-    for k in PRIMES_RECURRENTES:
-        v = request.form.get(f"rec_{k}", type=float)
-        if v:
-            elems[k] = v
-    try:
-        from models import ComposantPaie
-        for comp in ComposantPaie.query.filter_by(tenant_id=tenant_id, actif=True).all():
-            v = request.form.get(f"rec_composant_{comp.id}", type=float)
-            if v:
-                elems[f"composant_{comp.id}"] = v
-    except Exception:
-        pass
+    for k, v in zip(keys, vals):
+        k = (k or "").strip()
+        try:
+            montant = float(v)
+        except (TypeError, ValueError):
+            continue
+        if k and montant:
+            elems[k] = montant
     return json.dumps(elems) if elems else None
 
 # ── Rôles assignables au sein d'un tenant ─────────────────────────────────────

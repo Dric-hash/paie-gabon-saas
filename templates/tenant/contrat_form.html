@@ -102,26 +102,40 @@
 
       <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid #eee">
         <label style="display:block;font-size:.8rem;font-weight:800;color:#0f3d36;margin-bottom:.25rem">💠 Primes récurrentes</label>
-        <p style="font-size:.72rem;color:#9ca3af;margin-bottom:.7rem">Montants mensuels habituels de ce salarié. Ils seront <strong>pré-remplis automatiquement</strong> à chaque bulletin (toujours modifiables). Laissez vide si non concerné.</p>
-        {% set labels = {'sursalaire':'Sursalaire','prime_transport':'Prime de transport','prime_responsabilite':'Prime de responsabilité','indem_logement':'Indemnité de logement','carburant':'Carburant','prime_panier':'Prime de panier','indem_representation':'Représentation','indem_transport':'Transport net','prime_salisure':'Salisure'} %}
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem">
-          {% for key, lib in labels.items() %}
-          <div>
-            <label style="font-size:.72rem;color:#6b7280">{{ lib }}</label>
-            <input type="number" name="rec_{{ key }}" min="0" step="any" placeholder="0"
-              value="{{ (elements_rec|default({})).get(key,'') }}"
-              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .5rem;font-size:.85rem;box-sizing:border-box"/>
+        <p style="font-size:.72rem;color:#9ca3af;margin-bottom:.7rem">Ajoutez les primes/indemnités mensuelles habituelles de ce salarié. Elles seront <strong>pré-remplies</strong> à chaque bulletin (modifiables). Pour une prime qui n'existe pas encore, créez-la d'abord dans <a href="/composants" target="_blank" style="color:#0f3d36;font-weight:700">Composants</a>.</p>
+        <div id="rec-rows"></div>
+        <button type="button" id="rec-add-btn"
+          style="margin-top:.25rem;background:#e8f3ef;color:#0f3d36;border:1px dashed #0f3d36;border-radius:.5rem;padding:.45rem .85rem;font-size:.8rem;font-weight:700;cursor:pointer">
+          ➕ Ajouter une prime / indemnité
+        </button>
+
+        <template id="rec-row-tpl">
+          <div class="rec-row" style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:center">
+            <select name="rec_key" class="rec-key" style="flex:2;min-width:0;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .5rem;font-size:.85rem">
+              <option value="">— Choisir —</option>
+              <optgroup label="Rubriques">
+                <option value="sursalaire">Sursalaire</option>
+                <option value="prime_transport">Prime de transport</option>
+                <option value="prime_responsabilite">Prime de responsabilité</option>
+                <option value="indem_logement">Indemnité de logement</option>
+                <option value="carburant">Carburant</option>
+                <option value="prime_panier">Prime de panier</option>
+                <option value="indem_representation">Représentation</option>
+                <option value="indem_transport">Transport net</option>
+                <option value="prime_salisure">Salisure</option>
+              </optgroup>
+              {% if composants %}
+              <optgroup label="Composants">
+                {% for comp in composants %}<option value="composant_{{ comp.id }}">{{ comp.libelle }}</option>{% endfor %}
+              </optgroup>
+              {% endif %}
+            </select>
+            <input type="number" name="rec_val" class="rec-val" min="0" step="any" placeholder="Montant"
+              style="flex:1;min-width:80px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .5rem;font-size:.85rem"/>
+            <button type="button" class="rec-del" title="Retirer"
+              style="background:#fef2f2;color:#dc2626;border:none;border-radius:.5rem;padding:.45rem .6rem;cursor:pointer">🗑️</button>
           </div>
-          {% endfor %}
-          {% for comp in composants|default([]) %}
-          <div>
-            <label style="font-size:.72rem;color:#6b7280">{{ comp.libelle }} <span style="color:#9ca3af">(composant)</span></label>
-            <input type="number" name="rec_composant_{{ comp.id }}" min="0" step="any" placeholder="0"
-              value="{{ (elements_rec|default({})).get('composant_' ~ comp.id, '') }}"
-              style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .5rem;font-size:.85rem;box-sizing:border-box"/>
-          </div>
-          {% endfor %}
-        </div>
+        </template>
       </div>
 
       <button type="submit"
@@ -168,6 +182,31 @@
     {% endif %}
   </div>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+// ── Primes récurrentes : liste dynamique (ajouter / retirer) ──────────────
+(function(){
+  var REC_EXISTING = {{ elements_rec|default({})|tojson }};
+  var rows = document.getElementById('rec-rows');
+  var tpl  = document.getElementById('rec-row-tpl');
+  if (!rows || !tpl) return;
+  function addRow(key, val){
+    var node = tpl.content.cloneNode(true);
+    var sel = node.querySelector('.rec-key');
+    var inp = node.querySelector('.rec-val');
+    if (key) sel.value = key;
+    if (val !== undefined && val !== null) inp.value = val;
+    node.querySelector('.rec-del').addEventListener('click', function(){
+      this.closest('.rec-row').remove();
+    });
+    rows.appendChild(node);
+  }
+  document.getElementById('rec-add-btn').addEventListener('click', function(){ addRow(); });
+  var keys = Object.keys(REC_EXISTING || {});
+  if (keys.length === 0) { addRow(); }
+  else keys.forEach(function(k){ addRow(k, REC_EXISTING[k]); });
+})();
+</script>
 
 <script nonce="{{ csp_nonce }}">
 // Sélecteur de type de contrat visuel

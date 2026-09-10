@@ -478,7 +478,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     GRAY = HexColor("#c9c9c9"); LGRAY = HexColor("#dcdcdc"); BORD = HexColor("#999999")
     W = 186 * mm
 
-    def P(txt, size=8, bold=False, align=TA_LEFT, color=C_DARK):
+    def P(txt, size=9, bold=False, align=TA_LEFT, color=C_DARK):
         st = ParagraphStyle(f"d{id(txt)}{size}{align}", fontName="Helvetica-Bold" if bold else "Helvetica",
                             fontSize=size, leading=size + 2, textColor=color, alignment=align)
         return Paragraph(str(txt), st)
@@ -504,7 +504,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
          P("AU", 7, False, TA_CENTER),
          P(_df.strftime("%d/%m/%Y") if _df else "", 7, False, TA_RIGHT)],
     ], colWidths=[W*0.5*0.4, W*0.5*0.25, W*0.5*0.35])
-    per_tbl.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),1),("BOTTOMPADDING",(0,0),(-1,-1),1),
+    per_tbl.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
                                  ("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
     edite = ""
     if getattr(b, "date_creation", None):
@@ -516,7 +516,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     el.append(head)
     band = Table([[P("Matricule - Nom - Prénom - Adresse", 8, True, TA_CENTER)]], colWidths=[W])
     band.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRAY),("BOX",(0,0),(-1,-1),0.6,BORD),
-                              ("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2)]))
+                              ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5)]))
     el.append(band)
 
     # ── Identité société / salarié ──
@@ -526,7 +526,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     if getattr(tenant, "nif", None): soc.append(P("NIF : " + tenant.nif, 8))
     soc.append(P("N° CNSS : " + (tenant.numero_cnss or ""), 8))
     soc.append(P("N° CNAMGS : " + (tenant.numero_cnamgs or ""), 8))
-    cat = s.categorie.nom if getattr(s, "categorie", None) else (getattr(s, "niveau", "") or "")
+    cat = (s.categorie.libelle or s.categorie.code) if getattr(s, "categorie", None) else (getattr(s, "niveau", "") or "")
     anc = ""
     if getattr(s, "date_embauche", None) and p:
         anc = f"{(p.annee - s.date_embauche.year)*12 + p.mois - s.date_embauche.month} mois"
@@ -542,12 +542,12 @@ def _elements_bulletin_detaille(bulletin, tenant):
         [P("Date d'Embauche : " + (s.date_embauche.strftime("%d/%m/%Y") if getattr(s,'date_embauche',None) else ""), 8),
          P("Ancienneté : " + anc, 8, False, TA_RIGHT)],
     ], colWidths=[W*0.56*0.5, W*0.56*0.5])
-    emp.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),1),("BOTTOMPADDING",(0,0),(-1,-1),1),
+    emp.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
                              ("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
     ident = Table([[soc, emp]], colWidths=[W*0.44, W*0.56])
     ident.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("LINEAFTER",(0,0),(0,0),0.5,C_BORDER),
                                ("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
-    el.append(Spacer(1, 2)); el.append(ident)
+    el.append(Spacer(1, 7)); el.append(ident)
 
     # ── Rubriques ──
     def g(name): return getattr(b, name, 0)
@@ -612,10 +612,10 @@ def _elements_bulletin_detaille(bulletin, tenant):
     rub_tbl = Table(rows, colWidths=[W*0.40, W*0.15, W*0.12, W*0.16, W*0.17])
     rub_st = [("BACKGROUND",(0,0),(-1,0),GRAY),("BACKGROUND",(0,-1),(-1,-1),LGRAY),
               ("BOX",(0,0),(-1,-1),0.6,BORD),("LINEBELOW",(0,0),(-1,-2),0.3,C_BORDER),
-              ("TOPPADDING",(0,0),(-1,-1),1.5),("BOTTOMPADDING",(0,0),(-1,-1),1.5),
+              ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5),
               ("LEFTPADDING",(0,0),(-1,-1),4),("RIGHTPADDING",(0,0),(-1,-1),4)]
     rub_tbl.setStyle(TableStyle(rub_st))
-    el.append(Spacer(1, 2)); el.append(rub_tbl)
+    el.append(Spacer(1, 7)); el.append(rub_tbl)
 
     # ── Cotisations ──
     cot = [[P("Cotisations et contributions sociales",7,True), P("Base",7,True,TA_RIGHT),
@@ -637,7 +637,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     cot_tbl = Table(cot, colWidths=[W*0.40, W*0.12, W*0.12, W*0.12, W*0.12, W*0.12])
     cot_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),GRAY),("BACKGROUND",(0,-1),(-1,-1),LGRAY),
                                  ("BOX",(0,0),(-1,-1),0.6,BORD),("LINEBELOW",(0,0),(-1,-2),0.3,C_BORDER),
-                                 ("TOPPADDING",(0,0),(-1,-1),1.5),("BOTTOMPADDING",(0,0),(-1,-1),1.5),
+                                 ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5),
                                  ("LEFTPADDING",(0,0),(-1,-1),4),("RIGHTPADDING",(0,0),(-1,-1),4)]))
     el.append(cot_tbl)
 
@@ -650,10 +650,10 @@ def _elements_bulletin_detaille(bulletin, tenant):
     if _flt(g("acompte")):
         _net_rows.append([P("Acompte (-)",8,color=C_GRAY), P(_nf(g("acompte")),8,False,TA_RIGHT)])
     net_left = Table(_net_rows, colWidths=[W*0.55*0.7, W*0.55*0.3])
-    net_left.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2),("LEFTPADDING",(0,0),(-1,-1),4)]))
-    net_box = Table([[P("Net payé en F CFA",11,False,TA_CENTER)],[P(_nf(g("net_a_payer"))+" XAF",18,True,TA_CENTER)]],
+    net_left.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5),("LEFTPADDING",(0,0),(-1,-1),4)]))
+    net_box = Table([[P("Net payé en F CFA",13,False,TA_CENTER)],[P(_nf(g("net_a_payer"))+" XAF",24,True,TA_CENTER)]],
                     colWidths=[W*0.45])
-    net_box.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRAY),("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+    net_box.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRAY),("TOPPADDING",(0,0),(-1,-1),20),("BOTTOMPADDING",(0,0),(-1,-1),20),
                                  ("VALIGN",(0,0),(-1,-1),"MIDDLE")]))
     net = Table([[net_left, net_box]], colWidths=[W*0.55, W*0.45])
     net.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("VALIGN",(0,0),(-1,-1),"TOP")]))
@@ -683,9 +683,9 @@ def _elements_bulletin_detaille(bulletin, tenant):
                P(_nf(cumuls['cg']),8,False,TA_RIGHT), P(_nf(cumuls['cout']),8,False,TA_RIGHT)]]
         cu_tbl = Table(cu, colWidths=[W*0.16]+[W*0.12]*7)
         cu_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),GRAY),("BOX",(0,0),(-1,-1),0.6,BORD),
-                                    ("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2),
+                                    ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5),
                                     ("LEFTPADDING",(0,0),(-1,-1),4),("RIGHTPADDING",(0,0),(-1,-1),4)]))
-        el.append(Spacer(1,2)); el.append(cu_tbl)
+        el.append(Spacer(1,7)); el.append(cu_tbl)
 
     # ── Congés ──
     try:
@@ -702,16 +702,16 @@ def _elements_bulletin_detaille(bulletin, tenant):
                        P(fmt2(pr),8,False,TA_RIGHT), P(f"{ac-pr:.2f}".replace(".",","),8,True,TA_RIGHT)])
         cg_tbl = Table(cg, colWidths=[W*0.30, W*0.175, W*0.175, W*0.175, W*0.175])
         cg_tbl.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,0),GRAY),("BOX",(0,0),(-1,-1),0.6,BORD),
-                                    ("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2),
+                                    ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5),
                                     ("LEFTPADDING",(0,0),(-1,-1),4),("RIGHTPADDING",(0,0),(-1,-1),4)]))
         el.append(cg_tbl)
 
     # ── Signatures ──
-    sig = Table([[P("EMPLOYEUR",8,True), P("EMPLOYE",8,True)]], colWidths=[W*0.5, W*0.5], rowHeights=[52])
+    sig = Table([[P("EMPLOYEUR",8,True), P("EMPLOYE",8,True)]], colWidths=[W*0.5, W*0.5], rowHeights=[135])
     sig.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("LINEAFTER",(0,0),(0,0),0.6,BORD),
                              ("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),3),("LEFTPADDING",(0,0),(-1,-1),4)]))
-    el.append(Spacer(1,4)); el.append(sig)
-    el.append(Spacer(1,3))
+    el.append(Spacer(1,10)); el.append(sig)
+    el.append(Spacer(1,7))
     el.append(P("Dans votre intérêt et pour vous aider à faire valoir vos droits, conservez ce bulletin sans limitation de durée. "
                 "L'entreprise adhère à la convention collective.", 7, False, TA_LEFT, C_GRAY))
     return el

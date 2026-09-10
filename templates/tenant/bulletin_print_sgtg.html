@@ -109,7 +109,7 @@
         <table>
           <tr><td colspan="2" class="b">{{ s.matricule }} — {{ s.nom_complet }}</td></tr>
           <tr><td class="lib">Tél : {{ s.telephone or '' }}</td><td class="num b">{{ s.nationalite or 'GABON' }}</td></tr>
-          <tr><td class="lib">Emploi : {{ s.emploi or '' }}</td><td class="num">Catégorie : {{ s.categorie.nom if s.categorie else (s.niveau or '') }}</td></tr>
+          <tr><td class="lib">Emploi : {{ s.emploi or '' }}</td><td class="num">Catégorie : {{ (s.categorie.libelle or s.categorie.code) if s.categorie else (s.niveau or '') }}</td></tr>
           <tr><td class="lib">N° CNSS : {{ s.numero_cnss or '' }}</td><td class="num">Sit.Fam : {{ s.situation_matrimoniale or '' }}</td></tr>
           <tr><td class="lib">N° CNAMGS : {{ s.numero_cnamgs or '' }}</td><td class="num">Nbre de part : {{ '{:.1f}'.format(s.nombre_parts|float).replace('.', ',') if s.nombre_parts else '' }}</td></tr>
           <tr><td class="lib">Date d'Embauche : {{ s.date_embauche.strftime('%d/%m/%Y') if s.date_embauche else '' }}</td>
