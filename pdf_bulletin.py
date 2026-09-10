@@ -6,7 +6,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.colors import HexColor, black, white
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                  TableStyle, HRFlowable, PageBreak)
+                                  TableStyle, HRFlowable, PageBreak, KeepInFrame)
 from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
@@ -67,7 +67,12 @@ def generer_bulletins_pdf(bulletins, tenant, modele=None) -> bytes:
     for i, b in enumerate(bulletins):
         if i > 0:
             elements.append(PageBreak())
-        elements.extend(_build(b, tenant))
+        if modele == "sgtg":
+            # chaque bulletin détaillé tient sur UNE seule page
+            elements.append(KeepInFrame(doc.width, doc.height, _build(b, tenant),
+                                        mode="shrink", hAlign="LEFT", vAlign="TOP"))
+        else:
+            elements.extend(_build(b, tenant))
     doc.build(elements)
     return buffer.getvalue()
 
@@ -476,7 +481,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     from reportlab.lib.units import mm
     b = bulletin; s = bulletin.salarie; p = getattr(bulletin, "periode", None)
     GRAY = HexColor("#c9c9c9"); LGRAY = HexColor("#dcdcdc"); BORD = HexColor("#999999")
-    W = 186 * mm
+    W = 182 * mm
 
     def P(txt, size=9, bold=False, align=TA_LEFT, color=C_DARK):
         st = ParagraphStyle(f"d{id(txt)}{size}{align}", fontName="Helvetica-Bold" if bold else "Helvetica",
@@ -722,5 +727,7 @@ def generer_bulletin_detaille_pdf(bulletin, tenant) -> bytes:
     doc = SimpleDocTemplate(buffer, pagesize=A4, leftMargin=12*mm, rightMargin=12*mm,
                             topMargin=8*mm, bottomMargin=8*mm,
                             title=f"Bulletin de paie — {bulletin.salarie.nom_complet}")
-    doc.build(_elements_bulletin_detaille(bulletin, tenant))
+    els = _elements_bulletin_detaille(bulletin, tenant)
+    # KeepInFrame(shrink) : garantit que le bulletin tient sur UNE seule page
+    doc.build([KeepInFrame(doc.width, doc.height, els, mode="shrink", hAlign="LEFT", vAlign="TOP")])
     return buffer.getvalue()
