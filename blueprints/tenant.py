@@ -9532,6 +9532,61 @@ def rapport_pdf_email(periode_id):
     return redirect(url_for("tenant.bulletins", periode_id=periode_id))
 
 
+def _gen_excel_mensuel(tenant, mois_label, annee, lignes):
+    """Feuille Excel des contributions mensuelles (CFP / FNH / TCS / IRPP) par salarié."""
+    import openpyxl, io
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    thin = Side(style="thin", color="D0D5DD")
+    BD = Border(left=thin, right=thin, top=thin, bottom=thin)
+    CTR = Alignment(horizontal="center", vertical="center", wrap_text=True)
+    LFT = Alignment(horizontal="left", vertical="center")
+    RGT = Alignment(horizontal="right", vertical="center")
+    HF = PatternFill("solid", fgColor="0f3d36"); HN = Font(bold=True, color="FFFFFF", size=10)
+    TF = PatternFill("solid", fgColor="DCEAE5"); TN = Font(bold=True, size=10)
+
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Déclaration mensuelle"
+    ws.merge_cells("A1:H1")
+    ws["A1"] = f"{tenant.denomination} — Déclaration mensuelle {mois_label} {annee}"
+    ws["A1"].font = Font(bold=True, size=13, color="0f3d36"); ws["A1"].alignment = LFT
+    ws.merge_cells("A2:H2")
+    sub = []
+    if getattr(tenant, "nif", None): sub.append(f"NIF : {tenant.nif}")
+    if getattr(tenant, "numero_cnss", None): sub.append(f"CNSS : {tenant.numero_cnss}")
+    ws["A2"] = " · ".join(sub); ws["A2"].font = Font(size=9, color="667085")
+
+    headers = ["N°", "Matricule", "Nom & Prénom", "Salaire brut",
+               "CFP", "FNH", "TCS", "IRPP"]
+    r0 = 4
+    for c, h in enumerate(headers, 1):
+        cell = ws.cell(r0, c, h); cell.fill = HF; cell.font = HN; cell.alignment = CTR; cell.border = BD
+
+    tot = {"brut": 0, "cfp": 0, "fnh": 0, "tcs": 0, "irpp": 0}
+    r = r0 + 1
+    for i, l in enumerate(lignes, 1):
+        vals = [i, l["matricule"], l["nom"], l["brut"], l["cfp"], l["fnh"], l["tcs"], l["irpp"]]
+        for c, v in enumerate(vals, 1):
+            cell = ws.cell(r, c, v); cell.border = BD
+            if c == 1: cell.alignment = CTR
+            elif c in (2, 3): cell.alignment = LFT
+            else: cell.alignment = RGT; cell.number_format = "# ##0"
+        for k in tot: tot[k] += l[k]
+        r += 1
+    # Ligne total
+    ws.cell(r, 3, "TOTAL").font = TN; ws.cell(r, 3, "TOTAL").fill = TF; ws.cell(r, 3).alignment = RGT
+    for c, k in zip((4, 5, 6, 7, 8), ("brut", "cfp", "fnh", "tcs", "irpp")):
+        cell = ws.cell(r, c, tot[k]); cell.font = TN; cell.fill = TF; cell.alignment = RGT
+        cell.number_format = "# ##0"; cell.border = BD
+    for c in (1, 2): ws.cell(r, c).fill = TF; ws.cell(r, c).border = BD
+    ws.cell(r, 3).border = BD
+
+    widths = [5, 14, 30, 15, 12, 12, 12, 14]
+    for c, w in enumerate(widths, 1): ws.column_dimensions[get_column_letter(c)].width = w
+    ws.freeze_panes = "A5"
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    return buf.read()
+
+
 @bp.route("/declaration-cnss/export-excel")
 @login_required
 def declaration_cnss_excel():
@@ -9546,6 +9601,28 @@ def declaration_cnss_excel():
 
     MOIS_FR2 = ["","Janvier","Février","Mars","Avril","Mai","Juin",
                 "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+
+    if mode != "trimestriel":
+        # ── Mensuel : CFP / FNH / TCS / IRPP par salarié ─────────────────────
+        buls = (BulletinPaie.query.filter_by(tenant_id=t.id, periode_id=periode.id)
+                .options(joinedload(BulletinPaie.salarie)).all())
+        lignes = []
+        for b in sorted(buls, key=lambda x: (x.salarie.nom_complet if x.salarie else "")):
+            sal = b.salarie
+            lignes.append({
+                "nom": (sal.nom_complet if sal else ""),
+                "matricule": (sal.matricule if sal else "") or "",
+                "brut": float(b.salaire_brut or 0), "base_irpp": float(b.base_irpp or 0),
+                "cfp": float(b.cfp or 0), "fnh": float(b.fnh or 0),
+                "tcs": float(b.tcs or 0), "irpp": float(b.irpp or 0),
+            })
+        data = _gen_excel_mensuel(t, MOIS_FR2[periode.mois], periode.annee, lignes)
+        from flask import Response
+        nom_base = t.denomination.replace(" ", "_")[:20]
+        nom = f"declaration_mensuelle_{nom_base}_{MOIS_FR2[periode.mois]}_{periode.annee}.xlsx"
+        return Response(data,
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{nom}"'})
 
     if mode == "trimestriel":
         # ── Trimestre : récupérer les 3 mois ─────────────────────────────────
