@@ -231,8 +231,9 @@ def calculer_heures_sup_btp(salaire_base: float,
     Retourne un dict avec taux_horaire, montants et descriptifs pour le bulletin.
     """
     th = calculer_taux_horaire(salaire_base)
-    h10 = H_SUP_STRUCT_10 if h10 is None else float(h10)
-    h30 = H_SUP_STRUCT_30 if h30 is None else float(h30)
+    _btp = str(convention or "").upper() == "BTP"
+    h10 = (H_SUP_STRUCT_10 if _btp else 0.0) if h10 is None else float(h10)
+    h30 = (H_SUP_STRUCT_30 if _btp else 0.0) if h30 is None else float(h30)
     h40  = float(h40)
     h70  = float(h70)
     h30b = float(h30b)

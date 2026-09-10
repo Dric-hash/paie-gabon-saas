@@ -246,10 +246,16 @@ class TestHeuresSupBTP:
             assert cle in r
 
     def test_heures_structurelles_btp(self):
-        """Sans h10/h30, doit utiliser les valeurs structurelles 17,33h."""
-        r = calculer_heures_sup_btp(400_000)
+        """Convention BTP, sans h10/h30 → valeurs structurelles 17,33h."""
+        r = calculer_heures_sup_btp(400_000, convention="BTP")
         assert r["h10"] == pytest.approx(17.33, abs=0.01)
         assert r["h30"] == pytest.approx(17.33, abs=0.01)
+
+    def test_pas_de_structurel_hors_btp(self):
+        """Hors BTP, sans h10/h30 → aucune heure structurelle (0)."""
+        for conv in ("COMMERCE", "AUCUNE", None):
+            r = calculer_heures_sup_btp(400_000, convention=conv)
+            assert r["h10"] == 0.0 and r["h30"] == 0.0
 
     def test_heures_feries_coefficient_70(self):
         r = calculer_heures_sup_btp(400_000, h10=0, h30=0, h70=8.0)

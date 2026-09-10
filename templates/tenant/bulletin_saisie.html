@@ -599,30 +599,41 @@
 const H_NORM_MENSUEL  = 173.33;
 const H_SUP_STRUCT_JS = 17.33;   // 4h × 4,333 semaines/mois
 const C10 = 1.10, C30 = 1.30, C40 = 1.40, C70 = 1.70;
+const CONVENTION_TENANT = "{{ tenant.convention or '' }}".toUpperCase();
 
 function appliquerHSupBTP(salaireBase) {
   if (!salaireBase || salaireBase <= 0) { recalculer(); return; }
-  const th   = salaireBase / H_NORM_MENSUEL;
-  const th10 = Math.round(th * C10);
-  const th30 = Math.round(th * C30);
-  const mont10 = Math.round(H_SUP_STRUCT_JS * th10);
-  const mont30 = Math.round(H_SUP_STRUCT_JS * th30);
+  const th = salaireBase / H_NORM_MENSUEL;
+  const estBTP = (CONVENTION_TENANT === 'BTP');
 
-  // Base (taux horaire majoré), Taux (nb heures), Montant
-  const set = (base, taux, montant, prefix) => {
+  // Pré-remplir UNIQUEMENT le taux horaire majoré (colonne Base) de chaque type
+  // d'heures sup — nécessaire pour que la saisie des heures calcule le montant.
+  // N'assume AUCUNE heure supplémentaire par défaut.
+  const setBase = (prefix, coef) => {
     const b = document.getElementById('base_' + prefix);
-    const t = document.getElementById('taux_' + prefix);
-    const f = document.getElementById('f_'    + prefix);
-    if (b) b.value = base;
-    if (t) t.value = taux;
-    if (f) f.value = montant;
+    if (b) b.value = Math.round(th * coef);
   };
-  set(th10, H_SUP_STRUCT_JS, mont10, 'heures_sup_10');
-  set(th30, H_SUP_STRUCT_JS, mont30, 'heures_sup_30');
+  setBase('heures_sup_10', C10);
+  setBase('heures_sup_30', C30);
+  setBase('heures_sup_40', C40);
+  setBase('heures_sup_70', C70);
 
-  // Info taux horaire
+  // Heures structurelles (17,33h à +10% et +30%) : régime BTP 48h/semaine UNIQUEMENT.
+  if (estBTP) {
+    const setStruct = (prefix, coef) => {
+      const t = document.getElementById('taux_' + prefix);
+      const f = document.getElementById('f_'    + prefix);
+      const base = Math.round(th * coef);
+      if (t) t.value = H_SUP_STRUCT_JS;
+      if (f) f.value = Math.round(H_SUP_STRUCT_JS * base);
+    };
+    setStruct('heures_sup_10', C10);
+    setStruct('heures_sup_30', C30);
+  }
+
   const el = document.getElementById('info-th');
-  if (el) el.textContent = `Taux horaire : ${Math.round(th)} FCFA/h | +10% : ${th10} FCFA/h (${H_SUP_STRUCT_JS}h) | +30% : ${th30} FCFA/h (${H_SUP_STRUCT_JS}h)`;
+  if (el) el.textContent = `Taux horaire : ${Math.round(th)} FCFA/h`
+    + (estBTP ? ` · heures structurelles BTP appliquées (${H_SUP_STRUCT_JS}h)` : '');
 
   recalculer();
 }
