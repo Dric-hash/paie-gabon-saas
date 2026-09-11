@@ -519,7 +519,7 @@ def _elements_bulletin_detaille(bulletin, tenant):
     head.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("LINEAFTER",(0,0),(0,0),0.6,BORD),
                               ("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
     el.append(head)
-    band = Table([[P("Matricule - Nom - Prénom - Adresse", 8, True, TA_CENTER)]], colWidths=[W])
+    band = Table([[P("Matricule - Nom - Prénom(s) - Adresse", 8, True, TA_CENTER)]], colWidths=[W])
     band.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRAY),("BOX",(0,0),(-1,-1),0.6,BORD),
                               ("TOPPADDING",(0,0),(-1,-1),4.5),("BOTTOMPADDING",(0,0),(-1,-1),4.5)]))
     el.append(band)

@@ -17,7 +17,7 @@
     .top td { padding:2px 5px; vertical-align:top; }
     .title { font-weight:bold; font-style:italic; font-size:13px; text-align:center; }
     /* Identité */
-    .ident td { padding:2px 6px; vertical-align:top; font-size:9px; }
+    .ident td { padding:2px 6px; vertical-align:top; font-size:9px; word-break:break-word; overflow-wrap:anywhere; }
     .ident .lib { color:#333; }
     /* Rubriques */
     .rub th { background:#c9c9c9; font-style:italic; text-align:left; padding:2px 5px; }
@@ -89,7 +89,7 @@
       </td>
     </tr>
   </table>
-  <div class="band-r" style="border:1px solid #999;border-top:none">Matricule - Nom - Prénom - Adresse</div>
+  <div class="band-r" style="border:1px solid #999;border-top:none">Matricule - Nom - Prénom(s) - Adresse</div>
 
   <!-- ══════════ IDENTITÉ ══════════ -->
   <table class="ident" style="border:1px solid #999;border-top:none">
@@ -106,7 +106,8 @@
       </td>
       <!-- Salarié -->
       <td style="width:56%">
-        <table>
+        <table style="width:100%;table-layout:fixed">
+          <colgroup><col style="width:53%"><col style="width:47%"></colgroup>
           <tr><td colspan="2" class="b">{{ s.matricule }} — {{ s.nom_complet }}</td></tr>
           <tr><td class="lib">Tél : {{ s.telephone or '' }}</td><td class="num b">{{ s.nationalite or 'GABON' }}</td></tr>
           <tr><td class="lib">Emploi : {{ s.emploi or '' }}</td><td class="num">Catégorie : {{ (s.categorie.libelle or s.categorie.code) if s.categorie else (s.niveau or '') }}</td></tr>
