@@ -502,22 +502,25 @@ def _elements_bulletin_detaille(bulletin, tenant):
     if p and not _df:
         try: _df = date(p.annee, p.mois, _cal.monthrange(p.annee, p.mois)[1])
         except Exception: _df = None
+    per_inner = W * 0.5 - 12   # largeur utile dans la cellule (après padding)
     per_tbl = Table([
         [P("PERIODE :", 8, True), P((p.libelle_mois or "").upper() if p else "", 8, True, TA_CENTER),
          P(p.annee if p else "", 8, True, TA_RIGHT)],
         [P("DU " + (_dd.strftime("%d/%m/%Y") if _dd else ""), 7),
          P("AU", 7, False, TA_CENTER),
          P(_df.strftime("%d/%m/%Y") if _df else "", 7, False, TA_RIGHT)],
-    ], colWidths=[W*0.5*0.4, W*0.5*0.25, W*0.5*0.35])
+    ], colWidths=[per_inner*0.40, per_inner*0.22, per_inner*0.38])
     per_tbl.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
-                                 ("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
+                                 ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0)]))
     edite = ""
     if getattr(b, "date_creation", None):
         edite = "Edité le : " + b.date_creation.strftime("%d/%m/%Y à %H:%M:%S")
     head = Table([[ [P(edite, 7), P("Bulletin de paie", 12, True, TA_CENTER)], per_tbl ]],
                  colWidths=[W*0.5, W*0.5])
     head.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("LINEAFTER",(0,0),(0,0),0.6,BORD),
-                              ("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
+                              ("VALIGN",(0,0),(-1,-1),"TOP"),
+                              ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
+                              ("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
     el.append(head)
     band = Table([[P("Matricule - Nom - Prénom(s) - Adresse", 8, True, TA_CENTER)]], colWidths=[W])
     band.setStyle(TableStyle([("BACKGROUND",(0,0),(-1,-1),GRAY),("BOX",(0,0),(-1,-1),0.6,BORD),
