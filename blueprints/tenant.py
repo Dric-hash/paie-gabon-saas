@@ -2220,6 +2220,7 @@ def bulletin_saisie():
             db.session.add(BulletinComposant(
                 bulletin_id=b.id, composant_id=cs["composant_id"],
                 libelle=cs["libelle"], sens=cs["sens"], montant=cs["montant"],
+                position=cs.get("position") or "BAS",
                 base=cs.get("base"), taux=cs.get("taux"),
                 soumis_cnss=cs["soumis_cnss"], soumis_cnamgs=cs["soumis_cnamgs"],
                 soumis_irpp=cs["soumis_irpp"]))

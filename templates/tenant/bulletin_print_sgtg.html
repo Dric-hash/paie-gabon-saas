@@ -124,8 +124,8 @@
     <tr><th style="width:40%">Rubriques</th><th class="n" style="width:15%">Base</th><th class="n" style="width:12%">Taux</th><th class="n" style="width:16%">Gains</th><th class="n" style="width:17%">Retenues</th></tr>
 
     {# Composants personnalisés placés en HAUT #}
-    {% for c in composants if c.composant and c.composant.position == 'HAUT' %}
-      {{ rub(c.composant.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.composant.est_gain else None), (c.montant if not c.composant.est_gain else None)) }}
+    {% for c in composants if (c.position or 'BAS') == 'HAUT' %}
+      {{ rub(c.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.est_gain else None), (c.montant if not c.est_gain else None)) }}
     {% endfor %}
 
     {# Rubriques configurables (panier, transport, représentation, salisure) #}
@@ -167,8 +167,8 @@
     {{ rub("Indemnité de logement", b.base_indem_logement, None, b.indem_logement, None) }}
 
     {# Composants personnalisés placés en BAS #}
-    {% for c in composants if c.composant and c.composant.position != 'HAUT' %}
-      {{ rub(c.composant.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.composant.est_gain else None), (c.montant if not c.composant.est_gain else None)) }}
+    {% for c in composants if (c.position or 'BAS') != 'HAUT' %}
+      {{ rub(c.libelle, c.base, (c.taux if c.taux else ''), (c.montant if c.est_gain else None), (c.montant if not c.est_gain else None)) }}
     {% endfor %}
 
     <tr class="brut"><td class="c">*** Salaire Brut ***</td><td></td><td></td><td class="num">{{ n(b.salaire_brut) }}</td><td></td></tr>

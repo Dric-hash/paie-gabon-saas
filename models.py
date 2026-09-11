@@ -827,6 +827,7 @@ class BulletinComposant(db.Model):
     composant_id  = db.Column(db.Integer, db.ForeignKey("composants_paie.id"))
     libelle       = db.Column(db.String(120), nullable=False)
     sens          = db.Column(db.String(10), nullable=False, default="GAIN")
+    position      = db.Column(db.String(4), default="BAS")   # HAUT | BAS (instantané)
     soumis_cnss   = db.Column(db.Boolean, default=True)
     soumis_cnamgs = db.Column(db.Boolean, default=True)
     soumis_irpp   = db.Column(db.Boolean, default=True)

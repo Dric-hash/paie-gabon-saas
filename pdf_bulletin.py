@@ -582,9 +582,9 @@ def _elements_bulletin_detaille(bulletin, tenant):
     except Exception:
         comps = []
     for c in comps:
-        if getattr(c, "composant", None) and c.composant.position == "HAUT":
-            rub(c.composant.libelle, c.base, (c.taux or ""), c.montant if c.composant.est_gain else None,
-                c.montant if not c.composant.est_gain else None)
+        if (getattr(c, "position", None) or "BAS") == "HAUT":
+            rub(c.libelle, c.base, (c.taux or ""), c.montant if c.est_gain else None,
+                c.montant if not c.est_gain else None)
     # configurables HAUT
     for lib, mt, cle in _configs:
         if _pos(cle) == "HAUT" and _flt(mt):
@@ -610,9 +610,9 @@ def _elements_bulletin_detaille(bulletin, tenant):
     rub("Indemnités comp. de préavis", g("base_indem_compensatrice_preavis"), None, g("indem_compensatrice_preavis"), None)
     rub("Indemnité de logement", g("base_indem_logement"), None, g("indem_logement"), None)
     for c in comps:
-        if getattr(c, "composant", None) and c.composant.position != "HAUT":
-            rub(c.composant.libelle, c.base, (c.taux or ""), c.montant if c.composant.est_gain else None,
-                c.montant if not c.composant.est_gain else None)
+        if (getattr(c, "position", None) or "BAS") != "HAUT":
+            rub(c.libelle, c.base, (c.taux or ""), c.montant if c.est_gain else None,
+                c.montant if not c.est_gain else None)
     rows.append([P("*** Salaire Brut ***",8,True,TA_CENTER), P(""), P(""), P(_nf(g("salaire_brut")),8,True,TA_RIGHT), P("")])
     rub_tbl = Table(rows, colWidths=[W*0.40, W*0.15, W*0.12, W*0.16, W*0.17])
     rub_st = [("BACKGROUND",(0,0),(-1,0),GRAY),("BACKGROUND",(0,-1),(-1,-1),LGRAY),

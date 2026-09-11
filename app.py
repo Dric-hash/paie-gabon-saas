@@ -568,6 +568,7 @@ def run_migrations():
         "ALTER TABLE contrats ADD COLUMN IF NOT EXISTS elements_recurrents TEXT",
         "ALTER TABLE composants_paie ADD COLUMN IF NOT EXISTS entre_dans_brut BOOLEAN DEFAULT TRUE",
         "ALTER TABLE composants_paie ADD COLUMN IF NOT EXISTS position VARCHAR(4) DEFAULT 'BAS'",
+        "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS position VARCHAR(4) DEFAULT 'BAS'",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS date_prochaine_visite_medicale DATE",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS representant_fonction VARCHAR(100)",
         "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS heures_sup NUMERIC(7,2) DEFAULT 0",
