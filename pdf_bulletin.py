@@ -538,6 +538,8 @@ def _elements_bulletin_detaille(bulletin, tenant):
     parts = ""
     if getattr(s, "nombre_parts", None):
         parts = f"{float(s.nombre_parts):.1f}".replace(".", ",")
+    w_soc = W * 0.42; w_emp = W * 0.58
+    emp_inner = w_emp - 12        # largeur utile après padding de la cellule parente
     emp = Table([
         [P(f"{s.matricule} — {s.nom_complet}", 8, True), P("", 8)],
         [P("Tél : " + (getattr(s,'telephone','') or ""), 8), P(getattr(s,"nationalite","") or "GABON", 8, True, TA_RIGHT)],
@@ -546,12 +548,15 @@ def _elements_bulletin_detaille(bulletin, tenant):
         [P("N° CNAMGS : " + (getattr(s,'numero_cnamgs','') or ""), 8), P("Nbre de part : " + parts, 8, False, TA_RIGHT)],
         [P("Date d'Embauche : " + (s.date_embauche.strftime("%d/%m/%Y") if getattr(s,'date_embauche',None) else ""), 8),
          P("Ancienneté : " + anc, 8, False, TA_RIGHT)],
-    ], colWidths=[W*0.56*0.5, W*0.56*0.5])
+    ], colWidths=[emp_inner * 0.52, emp_inner * 0.48])
     emp.setStyle(TableStyle([("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3),
-                             ("LEFTPADDING",(0,0),(-1,-1),2),("RIGHTPADDING",(0,0),(-1,-1),2)]))
-    ident = Table([[soc, emp]], colWidths=[W*0.44, W*0.56])
+                             ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+                             ("VALIGN",(0,0),(-1,-1),"TOP")]))
+    ident = Table([[soc, emp]], colWidths=[w_soc, w_emp])
     ident.setStyle(TableStyle([("BOX",(0,0),(-1,-1),0.6,BORD),("LINEAFTER",(0,0),(0,0),0.5,C_BORDER),
-                               ("VALIGN",(0,0),(-1,-1),"TOP"),("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
+                               ("VALIGN",(0,0),(-1,-1),"TOP"),
+                               ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
+                               ("TOPPADDING",(0,0),(-1,-1),3),("BOTTOMPADDING",(0,0),(-1,-1),3)]))
     el.append(Spacer(1, 7)); el.append(ident)
 
     # ── Rubriques ──
