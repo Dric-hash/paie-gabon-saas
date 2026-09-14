@@ -470,6 +470,34 @@
   <p class="reveal" style="text-align:center;color:var(--sub);font-size:1.05rem;margin:0 0 3rem">
     Commencez gratuitement. Changez de formule quand vous voulez.
   </p>
+
+  <!-- ── Estimateur de tarif ─────────────────────────────────────── -->
+  <div class="reveal" style="max-width:640px;margin:0 auto 3.5rem;background:#fff;border:1px solid var(--border);border-radius:1rem;padding:1.75rem;box-shadow:0 10px 40px rgba(15,61,54,.08)">
+    <div style="font-weight:800;color:var(--brand);font-size:1.15rem;text-align:center;margin-bottom:.25rem">🧮 Estimez votre tarif en 5 secondes</div>
+    <p style="text-align:center;color:var(--sub);font-size:.9rem;margin:0 0 1.25rem">Sans inscription. Combien de salariés à gérer ?</p>
+
+    <div style="display:flex;align-items:center;gap:1rem;justify-content:center;margin-bottom:1.25rem">
+      <button type="button" id="estMoins" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:#f8f9fa;font-size:1.4rem;cursor:pointer;color:var(--brand)">−</button>
+      <input type="number" id="estEffectif" value="5" min="1" max="999"
+        style="width:90px;text-align:center;font-size:1.6rem;font-weight:800;color:var(--brand);border:2px solid var(--brand);border-radius:.75rem;padding:.4rem"/>
+      <button type="button" id="estPlus" style="width:40px;height:40px;border-radius:50%;border:1px solid var(--border);background:#f8f9fa;font-size:1.4rem;cursor:pointer;color:var(--brand)">+</button>
+      <span style="color:var(--sub);font-size:.95rem">salarié(s)</span>
+    </div>
+
+    <div id="estResult" style="text-align:center;background:linear-gradient(135deg,#f6f9f8,#eef4f2);border-radius:.85rem;padding:1.25rem">
+      <div style="font-size:.8rem;color:var(--sub);text-transform:uppercase;letter-spacing:.05em">Formule recommandée</div>
+      <div id="estPlan" style="font-size:1.5rem;font-weight:900;color:var(--brand);margin:.15rem 0"></div>
+      <div id="estPrix" style="font-size:2rem;font-weight:900;color:#111"></div>
+      <div id="estAnnuel" style="font-size:.9rem;color:#1c7c46;font-weight:700;margin-top:.2rem"></div>
+    </div>
+
+    <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;margin-top:1.25rem">
+      <a href="/inscription" class="btn-primary" style="flex:1;min-width:200px;text-align:center;padding:.8rem">Démarrer l'essai gratuit →</a>
+      <a id="estDevis" href="#" target="_blank" style="flex:1;min-width:200px;text-align:center;padding:.8rem;border:1px solid var(--brand);color:var(--brand);border-radius:.75rem;text-decoration:none;font-weight:700;background:#fff">💬 Recevoir un devis</a>
+    </div>
+    <p style="text-align:center;color:var(--sub);font-size:.78rem;margin:.9rem 0 0">Essai gratuit 30 jours · sans carte bancaire · sans engagement</p>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
     {% for plan in plans %}
     {% set populaire = (plan.code == 'PRO') %}
@@ -573,6 +601,45 @@
   </div>
 </footer>
 
+<script nonce="{{ csp_nonce }}">
+// ── Estimateur de tarif ───────────────────────────────────────────────
+(function(){
+  var eff = document.getElementById('estEffectif');
+  if (!eff) return;
+  var WA = "24174584772"; // WhatsApp PaieGabon
+  function fmt(n){ return n.toLocaleString('fr-FR').replace(/,/g,' '); }
+  function calc(){
+    var n = Math.max(1, Math.min(999, parseInt(eff.value) || 1));
+    var plan, prix;
+    if (n <= 10) { plan = "Starter"; prix = 15000; }
+    else if (n <= 50) { plan = "Pro"; prix = 35000; }
+    else { plan = "DEVIS"; prix = null; }
+    var elPlan = document.getElementById('estPlan');
+    var elPrix = document.getElementById('estPrix');
+    var elAn   = document.getElementById('estAnnuel');
+    var elDev  = document.getElementById('estDevis');
+    if (plan === "DEVIS") {
+      elPlan.textContent = "Grande entreprise";
+      elPrix.textContent = "Sur devis";
+      elAn.textContent = "Plus de 50 salariés — tarif personnalisé";
+      elDev.href = "https://wa.me/" + WA + "?text=" + encodeURIComponent(
+        "Bonjour, je souhaite un devis PaieGabon pour " + n + " salariés.");
+    } else {
+      var annuel = Math.round(prix * 12 * 0.85); // -15% en payant 12 mois
+      elPlan.textContent = "Formule " + plan;
+      elPrix.textContent = fmt(prix) + " F /mois";
+      elAn.textContent = "soit " + fmt(annuel) + " F/an en payant l'année (−15 %)";
+      elDev.href = "https://wa.me/" + WA + "?text=" + encodeURIComponent(
+        "Bonjour, je souhaite un devis PaieGabon.\nEffectif : " + n + " salariés\n" +
+        "Formule " + plan + " : " + fmt(prix) + " F/mois (ou " + fmt(annuel) + " F/an -15%).");
+    }
+  }
+  document.getElementById('estMoins').addEventListener('click', function(){ eff.value = Math.max(1,(parseInt(eff.value)||1)-1); calc(); });
+  document.getElementById('estPlus').addEventListener('click', function(){ eff.value = Math.min(999,(parseInt(eff.value)||1)+1); calc(); });
+  eff.addEventListener('input', calc);
+  calc();
+})();
+</script>
 <script nonce="{{ csp_nonce }}">
 // Menu mobile
 (function(){
