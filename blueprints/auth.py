@@ -256,6 +256,21 @@ def inscription():
         plan = (Plan.query.get(request.form.get("plan_id", ""))
                 or Plan.query.filter_by(code="STARTER").first())
         denom     = request.form.get("denomination", "").strip()
+
+        # ── Détection d'un doublon d'entreprise (même dénomination) ────────────
+        # Empêche une 2ᵉ inscription de la même société avec un autre email.
+        # Avertissement (pas blocage strict) : on peut confirmer si c'est une
+        # entreprise réellement différente.
+        if denom:
+            deja = Tenant.query.filter(Tenant.denomination.ilike(denom)).first()
+            if deja and request.form.get("confirmer_doublon") not in ("1", "on", "true"):
+                flash(f"Une entreprise nommée « {denom.upper()} » est déjà inscrite sur PaieGabon. "
+                      "Si c'est la vôtre, connectez-vous plutôt (ou récupérez votre mot de passe). "
+                      "S'il s'agit d'une autre entreprise, cochez « C'est bien une autre entreprise » ci-dessous et réessayez.",
+                      "error")
+                return render_template("auth/inscription.html", plans=plans,
+                                       doublon=True, denom_saisi=denom, email_saisi=email)
+
         slug_base = denom.lower().replace(" ", "_")[:30]
         slug = slug_base
         i = 1

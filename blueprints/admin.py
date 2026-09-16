@@ -181,6 +181,31 @@ def admin_dashboard():
         derniers_logs=derniers_logs,
         now=now)
 
+@bp.route("/admin/doublons")
+@super_admin_required
+def admin_doublons():
+    """Détecte les entreprises inscrites plusieurs fois (même dénomination)."""
+    from collections import defaultdict
+    from models import Salarie, BulletinPaie
+    groupes = defaultdict(list)
+    for t in Tenant.query.order_by(Tenant.denomination).all():
+        cle = (t.denomination or "").strip().upper()
+        if cle:
+            groupes[cle].append(t)
+    doublons = []
+    for cle, tenants in groupes.items():
+        if len(tenants) > 1:
+            infos = []
+            for t in tenants:
+                infos.append({
+                    "tenant": t,
+                    "nb_salaries": Salarie.query.filter_by(tenant_id=t.id).count(),
+                    "nb_bulletins": BulletinPaie.query.filter_by(tenant_id=t.id).count(),
+                })
+            doublons.append({"nom": cle, "tenants": infos})
+    return render_template("admin/doublons.html", doublons=doublons)
+
+
 @bp.route("/admin/tenants")
 @super_admin_required
 def admin_tenants():

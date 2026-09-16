@@ -35,7 +35,7 @@
         {# ── Entreprise ── #}
         <div class="field">
           <label for="denomination">Dénomination de l'entreprise</label>
-          <input type="text" name="denomination" id="denomination" required autofocus placeholder="Ex. Ameriack I.T. Solutions">
+          <input type="text" name="denomination" id="denomination" required autofocus placeholder="Ex. Ameriack I.T. Solutions" value="{{ denom_saisi or '' }}">
         </div>
         <div class="grid2">
           <div class="field">
@@ -76,7 +76,7 @@
         </div>
         <div class="field">
           <label for="email">Adresse email</label>
-          <input type="email" name="email" id="email" required placeholder="vous@entreprise.ga" autocomplete="email">
+          <input type="email" name="email" id="email" required placeholder="vous@entreprise.ga" autocomplete="email" value="{{ email_saisi or '' }}">
         </div>
         <div class="field">
           <label for="password">Mot de passe</label>
@@ -117,6 +117,16 @@
             <div class="p-desc">Gérez la paie de plusieurs entreprises depuis un seul compte. Vous pourrez ajouter vos sociétés clientes et basculer de l'une à l'autre dès la connexion.</div>
           </div>
         </label>
+
+        {% if doublon %}
+        <label class="plan" style="cursor:pointer;margin-top:.2rem;border:1px solid #e9a13b;background:#fff8ec">
+          <input type="checkbox" name="confirmer_doublon" value="1" required>
+          <div>
+            <div class="p-name" style="color:#b45309">⚠️ C'est bien une autre entreprise</div>
+            <div class="p-desc">Une société portant ce nom existe déjà. Cochez uniquement s'il s'agit d'une entreprise <strong>réellement différente</strong>. Si c'est la vôtre, <a href="/connexion" style="color:#0f3d36;font-weight:700">connectez-vous</a> ou <a href="/mot-de-passe-oublie" style="color:#0f3d36;font-weight:700">récupérez votre mot de passe</a>.</div>
+          </div>
+        </label>
+        {% endif %}
 
         <button type="submit" class="btn btn-primary" style="margin-top:.6rem">
           <span class="spin" aria-hidden="true"></span>

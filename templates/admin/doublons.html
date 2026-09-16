@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="wrap" style="max-width:1000px;margin:0 auto;padding:1.5rem">
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin-bottom:.25rem">🔍 Doublons d'entreprises</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin-bottom:1.5rem">
+    Entreprises inscrites plusieurs fois sous le même nom. Gardez celle qui contient les données,
+    et supprimez (ou suspendez) l'autre depuis sa fiche.
+  </p>
+
+  {% if not doublons %}
+  <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:.75rem;padding:1.25rem;color:#166534;font-weight:600">
+    ✅ Aucun doublon détecté. Toutes les entreprises ont un nom unique.
+  </div>
+  {% else %}
+  <div style="background:#fff8ec;border:1px solid #e9a13b;border-radius:.75rem;padding:.9rem 1.1rem;color:#b45309;margin-bottom:1.25rem">
+    ⚠️ {{ doublons|length }} nom(s) d'entreprise en double détecté(s).
+  </div>
+
+  {% for d in doublons %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;margin-bottom:1.25rem;overflow:hidden">
+    <div style="background:#0f3d36;color:#fff;padding:.6rem 1rem;font-weight:700">{{ d.nom }} — {{ d.tenants|length }} comptes</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.5rem .75rem">Inscription</th><th style="padding:.5rem .75rem">Statut</th>
+        <th style="padding:.5rem .75rem;text-align:right">Salariés</th>
+        <th style="padding:.5rem .75rem;text-align:right">Bulletins</th>
+        <th style="padding:.5rem .75rem"></th>
+      </tr>
+      {% for info in d.tenants %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.5rem .75rem">{{ info.tenant.date_inscription.strftime('%d/%m/%Y') if info.tenant.date_inscription else '—' }}</td>
+        <td style="padding:.5rem .75rem">{{ info.tenant.statut }}</td>
+        <td style="padding:.5rem .75rem;text-align:right;font-weight:700">{{ info.nb_salaries }}</td>
+        <td style="padding:.5rem .75rem;text-align:right;font-weight:700">{{ info.nb_bulletins }}</td>
+        <td style="padding:.5rem .75rem;text-align:right">
+          <a href="/admin/tenants/{{ info.tenant.id }}" style="color:#0f3d36;font-weight:700;text-decoration:none">Gérer →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    <div style="padding:.5rem 1rem;background:#fafafa;font-size:.78rem;color:#9ca3af">
+      💡 Conseil : gardez le compte avec le plus de salariés/bulletins ; fermez l'autre.
+    </div>
+  </div>
+  {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}
