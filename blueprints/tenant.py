@@ -1648,20 +1648,27 @@ def contrat_modifier(id):
 @tenant_required
 @can_edit
 def contrat_terminer(id):
-    """Marquer un contrat comme terminé (date de fin = aujourd'hui)."""
+    """Marquer un contrat comme terminé : motif de rupture + date d'arrêt,
+    répercutés sur le salarié pour le calcul du solde de tout compte."""
     t  = get_tenant()
     c  = Contrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     s  = c.salarie
-    motif = request.form.get("motif", "").strip()
+    type_rupture = (request.form.get("type_rupture", "").strip().upper()
+                    or request.form.get("motif", "").strip().upper() or "LICENCIEMENT")
+    date_arret = _parse_date(request.form.get("date_arret")) or date.today()
 
-    from datetime import date as _date
-    c.date_fin = _date.today()
+    c.date_fin = date_arret
     c.actif    = False
+    # Répercussion sur le salarié (utilisés par le solde de tout compte)
+    s.date_cessation = date_arret
+    s.type_rupture   = type_rupture
+    s.statut         = "INACTIF"
 
     log_action("UPDATE", "contrat", c.id,
-               f"Fin de contrat {s.nom_complet} — {motif or 'Non précisé'}")
+               f"Fin de contrat {s.nom_complet} — {type_rupture} au {date_arret.strftime('%d/%m/%Y')}",
+               user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
-    flash(f"Contrat de {s.nom_complet} terminé.", "success")
+    flash(f"Contrat de {s.nom_complet} terminé ({type_rupture.title()}, au {date_arret.strftime('%d/%m/%Y')}).", "success")
     return redirect(url_for("tenant.contrats_salarie", sal_id=s.id))
 
 
@@ -6204,9 +6211,9 @@ def solde_tout_compte(sal_id):
     date_cessation_str = request.args.get("date_cessation", "")
     try:
         date_cessation = datetime.strptime(date_cessation_str, "%Y-%m-%d").date() \
-            if date_cessation_str else date.today()
+            if date_cessation_str else (s.date_cessation or date.today())
     except ValueError:
-        date_cessation = date.today()
+        date_cessation = s.date_cessation or date.today()
 
     # 12 derniers bulletins
     bulletins_12 = BulletinPaie.query.filter_by(
@@ -6216,7 +6223,7 @@ def solde_tout_compte(sal_id):
     ).order_by(BulletinPaie.date_creation.desc()).limit(12).all()
 
     from conges_avance import calculer_solde_tout_compte
-    cause = request.args.get("cause", "LICENCIEMENT")
+    cause = request.args.get("cause") or (s.type_rupture or "LICENCIEMENT")
     solde = calculer_solde_tout_compte(
         s, bulletins_12, date_cessation, convention=t.convention,
         cause=cause, jours_conge_par_mois=t.jours_conge_par_mois
@@ -6281,7 +6288,7 @@ def salarie_document(sal_id, type_doc):
                             .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
                             .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
             from conges_avance import calculer_solde_tout_compte
-            cause = request.args.get("cause", "LICENCIEMENT")
+            cause = request.args.get("cause") or (s.type_rupture or "LICENCIEMENT")
             solde = calculer_solde_tout_compte(
                 s, bulletins_12, date_cess, convention=t.convention,
                 cause=cause, jours_conge_par_mois=t.jours_conge_par_mois
