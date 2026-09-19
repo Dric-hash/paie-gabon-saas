@@ -844,14 +844,24 @@ def admin_tenant_supprimer(id):
 @bp.route("/admin/backups")
 @super_admin_required
 def admin_backups():
-    """Page de gestion des sauvegardes : liste + déclenchement manuel."""
+    """Page de gestion des sauvegardes : liste + déclenchement manuel + fraîcheur."""
     from backup import list_backups, _config, _check_config
     cfg = _config()
     manquants = _check_config(cfg)
     backups = [] if manquants else list_backups()
+    # Fraîcheur : âge de la sauvegarde la plus récente
+    derniere = None
+    heures_depuis = None
+    stale = False
+    if backups:
+        derniere = max(b["date"] for b in backups)
+        _der_naive = derniere.replace(tzinfo=None) if derniere.tzinfo else derniere
+        heures_depuis = (datetime.utcnow() - _der_naive).total_seconds() / 3600
+        stale = heures_depuis > 48   # aucune sauvegarde depuis plus de 48h
     return render_template("admin/backups.html",
                            backups=backups, manquants=manquants,
-                           retention=cfg["retention"])
+                           retention=cfg["retention"],
+                           derniere=derniere, heures_depuis=heures_depuis, stale=stale)
 
 
 @bp.route("/admin/backups/run", methods=["POST"])

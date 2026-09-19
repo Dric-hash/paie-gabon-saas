@@ -79,6 +79,26 @@
   </div>
   {% else %}
 
+  <!-- ── État de fraîcheur ── -->
+  {% if stale %}
+  <div class="card p-6 mb-6 border-l-4 border-red-500 bg-red-50">
+    <h2 class="font-black text-red-800 mb-1">🔴 Aucune sauvegarde récente</h2>
+    <p class="text-sm text-red-700">
+      La dernière sauvegarde date de <strong>{{ heures_depuis|round(0)|int }} heures</strong>
+      ({{ derniere.strftime('%d/%m/%Y à %Hh%M') }} UTC). Vérifiez que la tâche cron
+      <code class="bg-red-100 px-1 rounded">backup.py</code> s'exécute bien chaque nuit.
+    </p>
+  </div>
+  {% elif derniere %}
+  <div class="card p-6 mb-6 border-l-4 border-green-500 bg-green-50">
+    <h2 class="font-black text-green-800 mb-1">🟢 Sauvegardes à jour</h2>
+    <p class="text-sm text-green-700">
+      Dernière sauvegarde il y a <strong>{{ heures_depuis|round(0)|int }} h</strong>
+      ({{ derniere.strftime('%d/%m/%Y à %Hh%M') }} UTC) · conservation {{ retention }} jours.
+    </p>
+  </div>
+  {% endif %}
+
   <!-- ── Bouton sauvegarde manuelle ── -->
   <div class="card p-6 mb-6 flex items-center justify-between">
     <div>
