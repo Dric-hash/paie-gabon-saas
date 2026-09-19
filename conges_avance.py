@@ -302,8 +302,14 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         moyenne_conge = sum(conge_12) / len(conge_12)
         base_rupture  = max(sum(bruts_12) / len(bruts_12), bruts_12[-1])
     else:
+        # Aucun bulletin : on retombe sur le salaire du contrat. Au moment du STC,
+        # le contrat est généralement TERMINÉ (actif=False) → prendre l'actif si
+        # présent, sinon le contrat le plus récent.
         contrat = next((c for c in salarie.contrats if c.actif), None)
-        moyenne_conge = base_rupture = float(contrat.salaire_base) if contrat else 0
+        if contrat is None and salarie.contrats:
+            contrat = sorted(salarie.contrats,
+                             key=lambda c: (c.date_debut or date.min))[-1]
+        moyenne_conge = base_rupture = float(contrat.salaire_base or 0) if contrat else 0
 
     # Indemnité compensatrice de congés (Gabon) :
     #   = moyenne du brut de congé × (jours acquis non pris / 24)
@@ -341,8 +347,9 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         est_cadre = bool(_m and int(_m.group(1)) >= 8)
     preavis_j = preavis_jours(convention, anciennete_calcul,
                               cadre=est_cadre, encadrement=est_encadrement)
-    # La faute lourde prive du préavis ; sinon indemnité compensatrice si non effectué.
-    if cause_u == "FAUTE_LOURDE":
+    # La faute lourde prive du préavis. En cas de démission, c'est le SALARIÉ qui
+    # doit le préavis : l'employeur ne verse pas d'indemnité compensatrice de préavis.
+    if cause_u in ("FAUTE_LOURDE", "DEMISSION"):
         preavis_j = 0
     preavis_montant = round(base_calcul * preavis_j / 30.0, 0) if preavis_j else 0
 
