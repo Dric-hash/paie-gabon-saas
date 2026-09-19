@@ -276,19 +276,37 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     )
     jours_restants = max(0, jours_acquis - jours_pris)
 
-    # Base de calcul
-    bruts_12 = [float(b.salaire_brut or 0) for b in bulletins_12mois if b.salaire_brut]
-    if bruts_12:
-        moyenne_12 = sum(bruts_12) / len(bruts_12)
-        dernier_brut = bruts_12[-1] if bruts_12 else 0
-    else:
-        # Fallback sur le contrat actuel
-        contrat = next((c for c in salarie.contrats if c.actif), None)
-        moyenne_12 = float(contrat.salaire_base) if contrat else 0
-        dernier_brut = moyenne_12
+    # Base de calcul de l'indemnité compensatrice de congés :
+    # on retient le "brut de congé" = brut MOINS les primes/indemnités NON maintenues
+    # pendant le congé (transport, panier, salissure, représentation, carburant),
+    # car elles compensent des sujétions liées à la présence effective au travail.
+    # Plancher sur les éléments permanents (maintenus) pour rester juste quelles que
+    # soient les options « entre dans le brut » de chaque prime.
+    def _f(v):
+        try: return float(v or 0)
+        except (TypeError, ValueError): return 0.0
+    def _base_conge(b):
+        brut = _f(b.salaire_brut)
+        non_maintenu = (_f(b.prime_transport) + _f(b.indem_transport) + _f(b.prime_panier)
+                        + _f(b.prime_salisure) + _f(b.indem_representation) + _f(b.carburant))
+        maintenu = (_f(b.salaire_base) + _f(b.sursalaire) + _f(b.prime_anciennete)
+                    + _f(b.prime_responsabilite) + _f(b.indem_logement))
+        return max(brut - non_maintenu, maintenu)
 
-    base_calcul      = max(moyenne_12, dernier_brut)
-    base_journaliere = round(base_calcul / JOURS_OUVRABLES_MOIS, 2)
+    # Base CONGÉS : brut de congé (hors primes non maintenues)
+    conge_12 = [_base_conge(b) for b in bulletins_12mois if b.salaire_brut]
+    # Base RUPTURE : salaire brut moyen complet (rémunération, inchangé)
+    bruts_12 = [_f(b.salaire_brut) for b in bulletins_12mois if b.salaire_brut]
+    if bruts_12:
+        base_conge_calc = max(sum(conge_12)/len(conge_12), conge_12[-1])
+        base_rupture    = max(sum(bruts_12)/len(bruts_12), bruts_12[-1])
+    else:
+        contrat = next((c for c in salarie.contrats if c.actif), None)
+        base_conge_calc = base_rupture = float(contrat.salaire_base) if contrat else 0
+
+    # Indemnité compensatrice de congés → base de congé (primes non maintenues exclues)
+    base_calcul      = base_rupture   # base "rémunération" pour rupture ET préavis
+    base_journaliere = round(base_conge_calc / JOURS_OUVRABLES_MOIS, 2)
     indemnite        = round(base_journaliere * jours_restants, 0)
 
     # ── Indemnité de rupture selon la CAUSE (Code Art. 87-90) ────────────────
@@ -298,7 +316,7 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
     # Non-cumul (Art. 89) : une seule de ces indemnités est versée.
     from calculs_paie import indemnite_rupture
     anciennete_calcul = acquis_calc["anciennete_annees_calcul"]   # fractionnaire (Art. 90)
-    rupture = indemnite_rupture(convention, cause, base_calcul, anciennete_calcul)
+    rupture = indemnite_rupture(convention, cause, base_rupture, anciennete_calcul)
     indem_rupture = rupture["montant"]
 
     # ── Préavis : durée selon la convention ET la catégorie du salarié ────────
@@ -338,9 +356,10 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         "jours_restants":     jours_restants,
         "bruts_12mois":       bruts_12,
         "nb_bulletins":       len(bruts_12),
-        "moyenne_12_mois":    round(moyenne_12, 0),
-        "dernier_brut":       round(dernier_brut, 0),
+        "moyenne_12_mois":    round(base_rupture, 0),
+        "dernier_brut":       round(base_rupture, 0),
         "base_calcul":        round(base_calcul, 0),
+        "base_conge":         round(base_conge_calc, 0),
         "base_journaliere":   base_journaliere,
         "indemnite_conges":   indemnite,
         "anciennete_annees":  acquis_calc["anciennete_annees"],
