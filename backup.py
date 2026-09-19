@@ -30,6 +30,15 @@ import logging
 import subprocess
 from datetime import datetime, timedelta, timezone
 
+# Charge le fichier .env situé à côté de ce script, pour que le lancement
+# manuel (python backup.py) et le cron aient bien les variables (DATABASE_URL,
+# B2_*, …). Sans ça, seul le service systemd de l'app les reçoit.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+except Exception:
+    pass
+
 logger = logging.getLogger("paiegalon.backup")
 
 
