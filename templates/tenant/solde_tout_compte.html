@@ -110,15 +110,21 @@
       {% endif %}
     </div>
 
-    <!-- Total à payer -->
+    <!-- Total à payer (NET) -->
     <div style="background:#0f3d36;border-radius:1rem;padding:1.25rem;color:white">
-      <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.5rem">TOTAL À PAYER</div>
-      <div style="font-size:2rem;font-weight:900;color:#34d399">{{ solde.total_a_payer|int|fcfa }}</div>
-      <div style="font-size:.75rem;color:rgba(255,255,255,.5);margin-top:.5rem">
-        Congés non pris : {{ solde.indemnite_conges|int|fcfa }}<br>
-        {% if solde.indem_licenciement > 0 %}
-        Indemnité licenciement : {{ solde.indem_licenciement|int|fcfa }}
-        {% endif %}
+      <div style="font-size:.8rem;color:rgba(255,255,255,.6);margin-bottom:.5rem">TOTAL NET À PAYER</div>
+      <div style="font-size:2rem;font-weight:900;color:#34d399">{{ solde.total_net|int|fcfa }}</div>
+      <div style="font-size:.75rem;color:rgba(255,255,255,.6);margin-top:.75rem;line-height:1.7">
+        Congés non pris (brut) : {{ solde.indemnite_conges|int|fcfa }}<br>
+        {% if solde.preavis_montant > 0 %}Préavis (brut) : {{ solde.preavis_montant|int|fcfa }}<br>{% endif %}
+        {% if solde.indem_licenciement > 0 %}Indemnité licenciement (exonérée) : {{ solde.indem_licenciement|int|fcfa }}<br>{% endif %}
+        <span style="color:rgba(255,255,255,.45)">
+        ── déductions sur partie cotisable ──<br>
+        CNSS : −{{ solde.stc_cnss_salarie|int|fcfa }} · CNAMGS : −{{ solde.stc_cnamgs_salarie|int|fcfa }}<br>
+        TCS : −{{ solde.stc_tcs|int|fcfa }} · IRPP : −{{ solde.stc_irpp|int|fcfa }}<br>
+        Total cotisations : −{{ solde.total_cotisations|int|fcfa }}
+        </span><br>
+        <strong style="color:rgba(255,255,255,.85)">Total brut : {{ solde.total_brut|int|fcfa }}</strong>
       </div>
       <div style="margin-top:1rem">
         <button onclick="window.print()"

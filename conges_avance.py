@@ -293,21 +293,25 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
                     + _f(b.prime_responsabilite) + _f(b.indem_logement))
         return max(brut - non_maintenu, maintenu)
 
-    # Base CONGÉS : brut de congé (hors primes non maintenues)
+    # Base CONGÉS : moyenne du brut de congé sur les mois TRAVAILLÉS (bulletins)
+    #   — brut de congé = hors primes non maintenues (transport, panier, salissure…)
     conge_12 = [_base_conge(b) for b in bulletins_12mois if b.salaire_brut]
     # Base RUPTURE : salaire brut moyen complet (rémunération, inchangé)
     bruts_12 = [_f(b.salaire_brut) for b in bulletins_12mois if b.salaire_brut]
-    if bruts_12:
-        base_conge_calc = max(sum(conge_12)/len(conge_12), conge_12[-1])
-        base_rupture    = max(sum(bruts_12)/len(bruts_12), bruts_12[-1])
+    if conge_12:
+        moyenne_conge = sum(conge_12) / len(conge_12)
+        base_rupture  = max(sum(bruts_12) / len(bruts_12), bruts_12[-1])
     else:
         contrat = next((c for c in salarie.contrats if c.actif), None)
-        base_conge_calc = base_rupture = float(contrat.salaire_base) if contrat else 0
+        moyenne_conge = base_rupture = float(contrat.salaire_base) if contrat else 0
 
-    # Indemnité compensatrice de congés → base de congé (primes non maintenues exclues)
+    # Indemnité compensatrice de congés (Gabon) :
+    #   = moyenne du brut de congé × (jours acquis non pris / 24)
+    #   24 = nombre de jours de congés annuels (2 j/mois × 12).
+    JOURS_CONGE_ANNUEL = 24.0
     base_calcul      = base_rupture   # base "rémunération" pour rupture ET préavis
-    base_journaliere = round(base_conge_calc / JOURS_OUVRABLES_MOIS, 2)
-    indemnite        = round(base_journaliere * jours_restants, 0)
+    base_journaliere = round(moyenne_conge / JOURS_CONGE_ANNUEL, 2)
+    indemnite        = round(moyenne_conge * jours_restants / JOURS_CONGE_ANNUEL, 0)
 
     # ── Indemnité de rupture selon la CAUSE (Code Art. 87-90) ────────────────
     # Licenciement (hors faute lourde) : 20 %/an SANS condition d'ancienneté,
@@ -342,6 +346,25 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         preavis_j = 0
     preavis_montant = round(base_calcul * preavis_j / 30.0, 0) if preavis_j else 0
 
+    # ── NET : on déduit cotisations + impôts sur la partie COTISABLE ──────────
+    # Cotisable/imposable : indemnité de congés + indemnité de préavis (nature salariale).
+    # L'indemnité de licenciement est réputée exonérée (versée nette).
+    from calculs_paie import calculer_bulletin as _calc_bul
+    cotisable_brut = float(indemnite) + float(preavis_montant)
+    nb_parts = float(getattr(salarie, "nombre_parts", None) or 1.0)
+    if cotisable_brut > 0:
+        _b = _calc_bul({"salaire_base": cotisable_brut}, nb_parts=nb_parts)
+        stc_cnss   = float(_b.get("cnss_salarie", 0) or 0)
+        stc_cnamgs = float(_b.get("cnamgs_salarie", 0) or 0)
+        stc_tcs    = float(_b.get("tcs", 0) or 0)
+        stc_irpp   = float(_b.get("irpp", 0) or 0)
+    else:
+        stc_cnss = stc_cnamgs = stc_tcs = stc_irpp = 0.0
+    total_cotisations = round(stc_cnss + stc_cnamgs + stc_tcs + stc_irpp, 0)
+    net_cotisable = round(cotisable_brut - total_cotisations, 0)
+    total_brut    = round(cotisable_brut + float(indem_rupture), 0)          # tout, avant déductions
+    total_net     = round(net_cotisable + float(indem_rupture), 0)           # licenciement exonéré ajouté net
+
     return {
         "salarie":            salarie,
         "date_cessation":     date_cessation,
@@ -359,13 +382,21 @@ def calculer_solde_tout_compte(salarie, bulletins_12mois, date_cessation=None,
         "moyenne_12_mois":    round(base_rupture, 0),
         "dernier_brut":       round(base_rupture, 0),
         "base_calcul":        round(base_calcul, 0),
-        "base_conge":         round(base_conge_calc, 0),
+        "base_conge":         round(moyenne_conge, 0),
         "base_journaliere":   base_journaliere,
         "indemnite_conges":   indemnite,
         "anciennete_annees":  acquis_calc["anciennete_annees"],
         "anciennete_mois":    acquis_calc["anciennete_mois"],
         "indem_licenciement": indem_rupture,
-        "total_a_payer":      indemnite + indem_rupture,
+        "cotisable_brut":     round(cotisable_brut, 0),
+        "stc_cnss_salarie":   round(stc_cnss, 0),
+        "stc_cnamgs_salarie": round(stc_cnamgs, 0),
+        "stc_tcs":            round(stc_tcs, 0),
+        "stc_irpp":           round(stc_irpp, 0),
+        "total_cotisations":  total_cotisations,
+        "total_brut":         total_brut,
+        "total_net":          total_net,
+        "total_a_payer":      total_net,
     }
 
 

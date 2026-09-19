@@ -111,7 +111,8 @@ class TestSoldeToutCompte:
         s = self._salarie(date(2024, 1, 1))
         buls = self._bulletins([300000]*6)
         r = calculer_solde_tout_compte(s, buls)
-        assert r["base_journaliere"] == pytest.approx(300000 / 26, abs=1)
+        # Base congé journalière = moyenne brut de congé / 24 (jours de congés annuels)
+        assert r["base_journaliere"] == pytest.approx(300000 / 24, abs=1)
 
     def test_indem_licenciement_apres_1_an(self):
         s = self._salarie(date(2020, 1, 1))
@@ -145,7 +146,11 @@ class TestSoldeToutCompte:
         s = self._salarie(date(2022, 1, 1))
         buls = self._bulletins([400000]*12)
         r = calculer_solde_tout_compte(s, buls, date(2026, 1, 1))
-        assert r["total_a_payer"] == r["indemnite_conges"] + r["indem_licenciement"]
+        # total_a_payer est désormais le NET (après déductions) et vaut total_net
+        assert r["total_a_payer"] == r["total_net"]
+        # total brut = congés + préavis + licenciement ; net = brut - cotisations
+        assert r["total_brut"] == r["indemnite_conges"] + r["preavis_montant"] + r["indem_licenciement"]
+        assert r["total_net"] == r["total_brut"] - r["total_cotisations"]
 
 
 class TestBilanConges:

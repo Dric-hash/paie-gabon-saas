@@ -296,11 +296,23 @@ def solde_tout_compte_pdf(salarie, tenant, solde, date_cessation=None) -> bytes:
     data.append(["Congés acquis non pris",
                  f"{solde.get('jours_restants', 0):.1f} jour(s)",
                  _fmt_fcfa(solde.get("indemnite_conges", 0))])
+    if solde.get("preavis_montant", 0) > 0:
+        data.append(["Indemnité de préavis",
+                     f"{solde.get('preavis_jours', 0)} jour(s)",
+                     _fmt_fcfa(solde.get("preavis_montant", 0))])
     if solde.get("indem_licenciement", 0) > 0:
-        data.append(["Indemnité de licenciement", "",
+        data.append(["Indemnité de licenciement", "(exonérée)",
                      _fmt_fcfa(solde.get("indem_licenciement", 0))])
-    data.append(["", "TOTAL À PAYER",
-                 _fmt_fcfa(solde.get("total_a_payer", 0))])
+    data.append(["", "TOTAL BRUT",
+                 _fmt_fcfa(solde.get("total_brut", 0))])
+    # Déductions sur la partie cotisable
+    data.append(["CNSS (salarié)", "", "- " + _fmt_fcfa(solde.get("stc_cnss_salarie", 0))])
+    data.append(["CNAMGS (salarié)", "", "- " + _fmt_fcfa(solde.get("stc_cnamgs_salarie", 0))])
+    data.append(["TCS", "", "- " + _fmt_fcfa(solde.get("stc_tcs", 0))])
+    data.append(["IRPP", "", "- " + _fmt_fcfa(solde.get("stc_irpp", 0))])
+    data.append(["", "TOTAL COTISATIONS", "- " + _fmt_fcfa(solde.get("total_cotisations", 0))])
+    data.append(["", "TOTAL NET À PAYER",
+                 _fmt_fcfa(solde.get("total_net", solde.get("total_a_payer", 0)))])
 
     t = Table(data, colWidths=[70*mm, 50*mm, 45*mm])
     t.setStyle(TableStyle([
