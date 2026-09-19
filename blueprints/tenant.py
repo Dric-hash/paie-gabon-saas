@@ -3500,6 +3500,73 @@ def webhook_cinetpay():
         return jsonify({"status": "ERREUR_INTERNE"}), 500
 
 
+@bp.route("/parametres/export-donnees")
+@tenant_required
+def parametres_export_donnees():
+    """Exporte toutes les données de l'entreprise dans un ZIP (classeur Excel multi-onglets)."""
+    import openpyxl, zipfile
+    from flask import Response
+    from openpyxl.styles import Font, PatternFill
+    t = get_tenant()
+
+    # (Onglet, Modèle, requête filtrée sur le tenant)
+    exports = [
+        ("Salariés",     Salarie,        Salarie.query.filter_by(tenant_id=t.id)),
+        ("Contrats",     Contrat,        Contrat.query.filter_by(tenant_id=t.id)),
+        ("Bulletins",    BulletinPaie,   BulletinPaie.query.filter_by(tenant_id=t.id)),
+        ("Périodes",     PeriodePaie,    PeriodePaie.query.filter_by(tenant_id=t.id)),
+        ("Congés",       Conge,          Conge.query.filter_by(tenant_id=t.id)),
+        ("Catégories",   CategorieEmploi, CategorieEmploi.query.filter_by(tenant_id=t.id)),
+        ("Composants",   ComposantPaie,  ComposantPaie.query.filter_by(tenant_id=t.id)),
+    ]
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    HF = PatternFill("solid", fgColor="0f3d36"); HN = Font(bold=True, color="FFFFFF")
+
+    def _val(v):
+        if v is None: return ""
+        if isinstance(v, (datetime, date)): return v.strftime("%d/%m/%Y %H:%M") if isinstance(v, datetime) else v.strftime("%d/%m/%Y")
+        if isinstance(v, bool): return "Oui" if v else "Non"
+        return v
+
+    for titre, modele, query in exports:
+        cols = [c.name for c in modele.__table__.columns]
+        ws = wb.create_sheet(titre[:31])
+        for ci, cn in enumerate(cols, 1):
+            cell = ws.cell(1, ci, cn); cell.fill = HF; cell.font = HN
+        for ri, obj in enumerate(query.all(), 2):
+            for ci, cn in enumerate(cols, 1):
+                ws.cell(ri, ci, _val(getattr(obj, cn, None)))
+        ws.freeze_panes = "A2"
+
+    xlsx_buf = io.BytesIO(); wb.save(xlsx_buf); xlsx_buf.seek(0)
+
+    # ZIP : le classeur + un LISEZ-MOI
+    nom_ent = (t.denomination or "entreprise").replace(" ", "_")[:30]
+    horodatage = datetime.now().strftime("%Y-%m-%d_%H%M")
+    readme = (
+        f"EXPORT DES DONNÉES — {t.denomination}\n"
+        f"Généré le {datetime.now().strftime('%d/%m/%Y à %H:%M')}\n\n"
+        f"Ce fichier contient une copie de vos données PaieGabon :\n"
+        f"  • Salariés, Contrats, Bulletins, Périodes, Congés, Catégories, Composants.\n\n"
+        f"Ouvrez le fichier .xlsx avec Excel, LibreOffice ou Google Sheets.\n"
+        f"Conservez cette archive en lieu sûr (disque, cloud personnel).\n\n"
+        f"— Ameriack I.T. Solutions / PaieGabon\n"
+    )
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr(f"donnees_{nom_ent}_{horodatage}.xlsx", xlsx_buf.getvalue())
+        zf.writestr("LISEZ-MOI.txt", readme)
+    zip_buf.seek(0)
+
+    log_action("EXPORT", "tenant", t.id, "Export des données de l'entreprise",
+               user_id=current_user.id, tenant_id=t.id)
+    nom_zip = f"export_paiegabon_{nom_ent}_{horodatage}.zip"
+    return Response(zip_buf.getvalue(), mimetype="application/zip",
+                    headers={"Content-Disposition": f'attachment; filename="{nom_zip}"'})
+
+
 @bp.route("/parametres")
 @tenant_required
 def parametres():
