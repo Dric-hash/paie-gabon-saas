@@ -279,6 +279,9 @@ class Utilisateur(db.Model, UserMixin):
     otp_tentatives           = db.Column(db.Integer, default=0)
     # 2FA optionnelle activée par l'utilisateur (super-admin : toujours active).
     twofa_active             = db.Column(db.Boolean, default=False)
+    twofa_methode            = db.Column(db.String(10), default="email")  # email | totp
+    twofa_secret             = db.Column(db.String(64))   # secret TOTP (base32)
+    backup_codes_hash        = db.Column(db.Text)         # JSON : liste de codes de secours hachés
     # ── Jeton de session ──────────────────────────────────────────────────────
     # Régénéré à chaque changement de mot de passe : invalide toutes les sessions
     # ouvertes (anti-détournement de session après reset / vol de mot de passe).
@@ -315,6 +318,53 @@ class Utilisateur(db.Model, UserMixin):
         self.otp_code_hash = None
         self.otp_expiry    = None
         self.otp_tentatives = 0
+
+    # ── TOTP (application d'authentification) ────────────────────────────────
+    def generer_totp_secret(self):
+        """Génère et enregistre un nouveau secret TOTP (base32). À confirmer ensuite."""
+        import pyotp
+        self.twofa_secret = pyotp.random_base32()
+        return self.twofa_secret
+
+    def totp_uri(self, emetteur="PaieGabon"):
+        """URI otpauth:// pour le QR code (à scanner avec Google Authenticator)."""
+        import pyotp
+        return pyotp.totp.TOTP(self.twofa_secret).provisioning_uri(
+            name=self.email, issuer_name=emetteur)
+
+    def verify_totp(self, code):
+        """Vérifie un code TOTP (tolérance ±1 fenêtre pour le décalage d'horloge)."""
+        import pyotp
+        if not self.twofa_secret:
+            return False
+        try:
+            return pyotp.TOTP(self.twofa_secret).verify(str(code).strip(), valid_window=1)
+        except Exception:
+            return False
+
+    def generer_codes_secours(self, n=8):
+        """Génère n codes de secours, stocke leur haché, renvoie les codes en clair (à afficher UNE fois)."""
+        import secrets, json
+        codes = [f"{secrets.randbelow(10**4):04d}-{secrets.randbelow(10**4):04d}" for _ in range(n)]
+        self.backup_codes_hash = json.dumps([generate_password_hash(c) for c in codes])
+        return codes
+
+    def verify_code_secours(self, code):
+        """Vérifie un code de secours ; s'il est valide, il est consommé (usage unique)."""
+        import json
+        if not self.backup_codes_hash:
+            return False
+        try:
+            hashes = json.loads(self.backup_codes_hash)
+        except Exception:
+            return False
+        code = str(code).strip()
+        for h in hashes:
+            if check_password_hash(h, code):
+                hashes.remove(h)
+                self.backup_codes_hash = json.dumps(hashes)
+                return True
+        return False
 
 
     @property

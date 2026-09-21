@@ -65,6 +65,10 @@ def login():
     if current_user.is_authenticated:
         return redirect(next_page or url_for("auth.index"))
     if request.method == "POST":
+        # Honeypot anti-robot : champ caché que seuls les bots remplissent.
+        if request.form.get("website", "").strip():
+            flash("Erreur de validation. Veuillez réessayer.", "error")
+            return render_template("auth/login.html")
         email = request.form.get("email", "").strip().lower()
         pw    = request.form.get("password", "")
         user  = Utilisateur.query.filter_by(email=email, actif=True).first()
@@ -101,6 +105,15 @@ def login():
                 # (ex. problème d'envoi d'email). À retirer une fois le souci réglé.
                 _2fa_off = os.environ.get("DISABLE_SUPERADMIN_2FA", "").lower() in ("1", "true", "yes")
                 _besoin_2fa = (user.is_super_admin and not _2fa_off) or getattr(user, "twofa_active", False)
+                _methode = getattr(user, "twofa_methode", "email") or "email"
+
+                # ── 2FA par application d'authentification (TOTP) : aucun email à envoyer ──
+                if _besoin_2fa and _methode == "totp" and getattr(user, "twofa_secret", None):
+                    session["2fa_user_id"] = user.id
+                    session["post_login_next"] = next_page
+                    return redirect(url_for("auth.verifier_2fa"))
+
+                # ── 2FA par email (code à 6 chiffres) ──
                 if _besoin_2fa and os.environ.get("MAIL_PASSWORD"):
                     code = f"{sec.randbelow(1000000):06d}"
                     user.set_otp(code)
@@ -164,8 +177,37 @@ def verifier_2fa():
         code = request.form.get("code", "").strip()
         now  = utcnow()
         MAX_OTP = 5
+        _methode = getattr(user, "twofa_methode", "email") or "email"
 
-        # Code expiré ou inexistant
+        # ── Vérification TOTP (application d'authentification) ──
+        if _methode == "totp":
+            ok = user.verify_totp(code) or user.verify_code_secours(code)
+            if ok:
+                user.otp_tentatives = 0
+                user.derniere_connexion = now
+                db.session.commit()
+                log_action("LOGIN", "utilisateur", user.id,
+                           f"Connexion 2FA (app) de {user.nom_complet} ({user.role_label})",
+                           user_id=user.id, tenant_id=user.tenant_id)
+                db.session.commit()
+                session.pop("2fa_user_id", None)
+                login_user(user)
+                _next = session.pop("post_login_next", "")
+                return redirect(_next or url_for("auth.index"))
+            else:
+                user.otp_tentatives = (user.otp_tentatives or 0) + 1
+                if user.otp_tentatives >= MAX_OTP:
+                    user.otp_tentatives = 0; db.session.commit()
+                    session.pop("2fa_user_id", None)
+                    flash("Trop de tentatives. Veuillez vous reconnecter.", "error")
+                    return redirect(url_for("auth.login"))
+                db.session.commit()
+                reste = MAX_OTP - user.otp_tentatives
+                flash(f"Code incorrect. Il vous reste {reste} tentative(s). "
+                      f"Vous pouvez aussi utiliser un code de secours.", "error")
+                return render_template("auth/verifier_2fa.html", email=user.email, methode="totp")
+
+        # ── Vérification par code email (existant) ──
         if not user.otp_code_hash or not user.otp_expiry or now > user.otp_expiry:
             user.clear_otp(); db.session.commit()
             session.pop("2fa_user_id", None)
@@ -195,7 +237,7 @@ def verifier_2fa():
             reste = MAX_OTP - user.otp_tentatives
             flash(f"Code incorrect. Il vous reste {reste} tentative(s).", "error")
 
-    return render_template("auth/verifier_2fa.html", email=user.email)
+    return render_template("auth/verifier_2fa.html", email=user.email, methode=(getattr(user,"twofa_methode","email") or "email"))
 
 
 @bp.route("/login/renvoyer-2fa", methods=["POST"])
@@ -235,6 +277,10 @@ def renvoyer_2fa():
 def inscription():
     plans = Plan.query.filter_by(actif=True).all()
     if request.method == "POST":
+        # Honeypot anti-robot : champ caché que seuls les bots remplissent.
+        if request.form.get("website", "").strip():
+            flash("Erreur de validation. Veuillez réessayer.", "error")
+            return render_template("auth/inscription.html", plans=plans)
         email    = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
@@ -827,3 +873,72 @@ def envoyer_confirmation_paiement(tenant, paiement, date_expiration):
         send_email_async(mail, msg)
     except Exception as e:
         current_app.logger.error(f"[CONFIRM PAIEMENT] {e}")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 2FA — Application d'authentification (TOTP)
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/mon-compte/2fa")
+@login_required
+def twofa_statut():
+    return render_template("auth/twofa_statut.html", user=current_user)
+
+
+@bp.route("/mon-compte/2fa/activer", methods=["POST"])
+@login_required
+def twofa_activer():
+    """Génère un secret TOTP et affiche le QR code à scanner."""
+    import qrcode, io, base64
+    u = current_user
+    u.generer_totp_secret()      # nouveau secret (pas encore activé)
+    db.session.commit()
+    # QR code en image base64
+    img = qrcode.make(u.totp_uri())
+    buf = io.BytesIO(); img.save(buf, format="PNG")
+    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+    return render_template("auth/twofa_activer.html",
+                           qr_b64=qr_b64, secret=u.twofa_secret)
+
+
+@bp.route("/mon-compte/2fa/confirmer", methods=["POST"])
+@login_required
+def twofa_confirmer():
+    """Vérifie un premier code TOTP puis active la 2FA + génère les codes de secours."""
+    u = current_user
+    code = request.form.get("code", "").strip()
+    if not u.twofa_secret or not u.verify_totp(code):
+        flash("Code incorrect. Réessayez en scannant à nouveau le QR code.", "error")
+        return redirect(url_for("auth.twofa_statut"))
+    u.twofa_active  = True
+    u.twofa_methode = "totp"
+    codes = u.generer_codes_secours()
+    db.session.commit()
+    log_action("UPDATE", "utilisateur", u.id, "Activation 2FA (application)",
+               user_id=u.id, tenant_id=u.tenant_id)
+    db.session.commit()
+    flash("Double authentification activée ✅", "success")
+    return render_template("auth/twofa_codes.html", codes=codes)
+
+
+@bp.route("/mon-compte/2fa/desactiver", methods=["POST"])
+@login_required
+def twofa_desactiver():
+    """Désactive la 2FA après vérification du mot de passe."""
+    u = current_user
+    pw = request.form.get("password", "")
+    if not u.check_password(pw):
+        flash("Mot de passe incorrect.", "error")
+        return redirect(url_for("auth.twofa_statut"))
+    if u.is_super_admin:
+        flash("La double authentification est obligatoire pour un super-administrateur.", "error")
+        return redirect(url_for("auth.twofa_statut"))
+    u.twofa_active = False
+    u.twofa_methode = "email"
+    u.twofa_secret = None
+    u.backup_codes_hash = None
+    db.session.commit()
+    log_action("UPDATE", "utilisateur", u.id, "Désactivation 2FA",
+               user_id=u.id, tenant_id=u.tenant_id)
+    db.session.commit()
+    flash("Double authentification désactivée.", "success")
+    return redirect(url_for("auth.twofa_statut"))

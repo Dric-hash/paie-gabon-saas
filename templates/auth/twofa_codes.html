@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Codes de secours — PaieGabon</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f6f9f8;margin:0;color:#111}
+    .wrap{max-width:520px;margin:3rem auto;padding:0 1rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;padding:2rem;box-shadow:0 10px 40px rgba(15,61,54,.06)}
+    h1{color:#0f3d36;font-size:1.3rem}
+    .warn{background:#fef3c7;border:1px solid #fcd34d;border-radius:.6rem;padding:1rem;color:#92400e;font-size:.9rem;margin:1rem 0}
+    .codes{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin:1.25rem 0}
+    .codes div{font-family:monospace;background:#f3f4f6;padding:.6rem;border-radius:.4rem;text-align:center;font-size:1.05rem;font-weight:700;letter-spacing:.05rem}
+    .btn{display:inline-block;background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border-radius:.6rem;text-decoration:none;font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🔑 Vos codes de secours</h1>
+      <div class="warn">
+        ⚠️ <strong>Conservez ces codes en lieu sûr</strong> (imprimés, ou dans un gestionnaire de mots de passe).
+        Ils vous permettent de vous connecter si vous perdez votre téléphone.
+        <strong>Ils ne seront plus jamais affichés.</strong> Chaque code ne fonctionne qu'une seule fois.
+      </div>
+      <div class="codes">
+        {% for c in codes %}<div>{{ c }}</div>{% endfor %}
+      </div>
+      <a class="btn" href="/parametres">J'ai noté mes codes — Continuer</a>
+    </div>
+  </div>
+</body>
+</html>

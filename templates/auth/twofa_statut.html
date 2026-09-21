@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Double authentification — PaieGabon</title>
+  <style>
+    body{font-family:system-ui,sans-serif;background:#f6f9f8;margin:0;color:#111}
+    .wrap{max-width:560px;margin:3rem auto;padding:0 1rem}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;padding:2rem;box-shadow:0 10px 40px rgba(15,61,54,.06)}
+    h1{color:#0f3d36;font-size:1.4rem;margin:0 0 .5rem}
+    .badge{display:inline-block;padding:.3rem .8rem;border-radius:999px;font-weight:700;font-size:.85rem}
+    .on{background:#dcfce7;color:#166534}.off{background:#fee2e2;color:#991b1b}
+    .btn{display:inline-block;background:#0f3d36;color:#fff;padding:.7rem 1.25rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer;text-decoration:none;font-size:.95rem}
+    .btn-danger{background:#fff;color:#b91c1c;border:1px solid #fca5a5}
+    input{width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;margin:.5rem 0;box-sizing:border-box}
+    a.back{color:#6b7280;text-decoration:none;font-size:.9rem}
+    .flash{padding:.7rem 1rem;border-radius:.5rem;margin-bottom:1rem;font-size:.9rem}
+    .flash.error{background:#fee2e2;color:#991b1b}.flash.success{background:#dcfce7;color:#166534}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a href="/parametres" class="back">← Retour</a>
+    <div class="card" style="margin-top:1rem">
+      <h1>🔐 Double authentification (2FA)</h1>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+      <p style="color:#6b7280;font-size:.95rem">
+        La double authentification ajoute un code à usage unique à votre connexion,
+        pour protéger vos données de paie même si votre mot de passe est compromis.
+      </p>
+
+      {% if user.twofa_active and user.twofa_methode == 'totp' %}
+        <p>État : <span class="badge on">✅ Activée (application d'authentification)</span></p>
+        <form method="POST" action="/mon-compte/2fa/desactiver" style="margin-top:1.5rem">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <label style="font-size:.85rem;font-weight:700">Désactiver — confirmez votre mot de passe :</label>
+          <input type="password" name="password" placeholder="Votre mot de passe" required>
+          <button class="btn btn-danger" type="submit">Désactiver la 2FA</button>
+        </form>
+      {% else %}
+        <p>État : <span class="badge off">Non activée</span></p>
+        <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:.6rem;padding:1rem;margin:1rem 0;font-size:.88rem;color:#075985">
+          Vous aurez besoin d'une application gratuite sur votre téléphone :
+          <strong>Google Authenticator</strong>, <strong>Authy</strong> ou équivalent.
+        </div>
+        <form method="POST" action="/mon-compte/2fa/activer">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button class="btn" type="submit">Activer la double authentification</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

@@ -21,3 +21,5 @@ flask-limiter==3.5.0
 boto3==1.34.69
 # Monitoring des erreurs en production (alertes + stack traces)
 sentry-sdk[flask]==2.61.1
+pyotp==2.9.0
+qrcode==7.4.2
