@@ -10551,7 +10551,8 @@ def modele_contrat_nouveau():
         db.session.add(m); db.session.commit()
         flash("Modèle de contrat enregistré.", "success")
         return redirect(url_for("tenant.modeles_contrat"))
-    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=None, balises=BALISES_CONTRAT)
+    from documents_rh import TRAMES_CONTRAT
+    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=None, balises=BALISES_CONTRAT, trames=TRAMES_CONTRAT)
 
 
 @bp.route("/parametres/contrats/<int:id>/modifier", methods=["GET", "POST"])
@@ -10568,7 +10569,8 @@ def modele_contrat_modifier(id):
         db.session.commit()
         flash("Modèle mis à jour.", "success")
         return redirect(url_for("tenant.modeles_contrat"))
-    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=m, balises=BALISES_CONTRAT)
+    from documents_rh import TRAMES_CONTRAT
+    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=m, balises=BALISES_CONTRAT, trames=TRAMES_CONTRAT)
 
 
 @bp.route("/parametres/contrats/<int:id>/supprimer", methods=["POST"])

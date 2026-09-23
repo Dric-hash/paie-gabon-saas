@@ -25,6 +25,24 @@
           </select>
         </div>
       </div>
+      <div style="background:#f0f9ff;border:1px solid #bae6fd;border-radius:.6rem;padding:.9rem 1.1rem;margin-bottom:1rem">
+        <label style="display:block;font-size:.8rem;font-weight:700;color:#075985;margin-bottom:.4rem">
+          🧩 Partir d'un modèle type (facultatif)
+        </label>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+          <select id="tramesel" style="padding:.5rem;border:1px solid #bae6fd;border-radius:.5rem;font-size:.85rem">
+            <option value="">— Choisir une trame —</option>
+            <option value="CDI">CDI (durée indéterminée)</option>
+            <option value="CDD">CDD (durée déterminée)</option>
+            <option value="CHANTIER">Contrat de chantier</option>
+            <option value="JOURNALIER">Contrat journalier</option>
+          </select>
+          <button type="button" id="chargertrame" style="background:#0369a1;color:#fff;border:none;padding:.5rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer;font-size:.85rem">Charger la trame</button>
+        </div>
+        <p style="font-size:.72rem;color:#0369a1;margin:.5rem 0 0">
+          La trame fournit une structure d'articles et les champs à remplir. Les clauses entre [ ] sont à compléter par vos soins.
+        </p>
+      </div>
       <label style="display:block;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.25rem">
         Contenu du contrat (articles, clauses…)
       </label>
@@ -54,4 +72,22 @@
     ⚠️ Le contenu et la conformité juridique des modèles relèvent de votre responsabilité. PaieGabon fournit l'outil de mise en forme, pas de conseil juridique.
   </div>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+(function(){
+  var TRAMES = {{ trames|tojson }};
+  var btn = document.getElementById("chargertrame");
+  if (!btn) return;
+  btn.addEventListener("click", function(){
+    var sel = document.getElementById("tramesel").value;
+    var ta  = document.querySelector('textarea[name="contenu"]');
+    if (!sel || !ta) return;
+    if (ta.value.trim() && !confirm("Remplacer le contenu actuel par la trame « " + sel + " » ?")) return;
+    ta.value = TRAMES[sel] || "";
+    // pré-remplir le type si vide
+    var typ = document.querySelector('select[name="type_contrat"]');
+    if (typ) typ.value = sel;
+  });
+})();
+</script>
 {% endblock %}

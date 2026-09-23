@@ -462,3 +462,89 @@ def generer_contrat_pdf(modele, salarie, tenant, contrat=None) -> bytes:
     el.append(Spacer(1, 24))
     el.extend(_signature(tenant, S, ville=ctx.get("ville")))
     return _build(el)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# TRAMES DE CONTRAT — structures neutres (articles + balises) à COMPLÉTER.
+# Aucune clause juridique n'est imposée : le contenu entre [ ] est à préciser
+# par l'entreprise, sous sa responsabilité.
+# ═══════════════════════════════════════════════════════════════════════════
+_SOUSCRITS = (
+    "ENTRE LES SOUSSIGNÉS :\n\n"
+    "{{entreprise}}, sise à {{entreprise_adresse}}, {{entreprise_ville}}, "
+    "NIF {{entreprise_nif}}, immatriculée à la CNSS sous le n° {{entreprise_cnss}}, "
+    "représentée par {{representant}}, {{representant_fonction}},\n"
+    "ci-après dénommée « l'Employeur », d'une part,\n\n"
+    "ET\n\n"
+    "{{nom_complet}}, né(e) le {{date_naissance}}, de nationalité {{nationalite}}, "
+    "demeurant à {{adresse}}, immatriculé(e) à la CNSS sous le n° {{numero_cnss}},\n"
+    "ci-après dénommé(e) « le Salarié », d'autre part,\n\n"
+    "IL A ÉTÉ CONVENU CE QUI SUIT :\n\n"
+)
+_SIGN_FIN = "\nFait à {{ville}}, le {{date_jour}}, en deux exemplaires originaux.\n"
+
+TRAMES_CONTRAT = {
+    "CDI": _SOUSCRITS +
+        "ARTICLE 1 – ENGAGEMENT\n"
+        "L'Employeur engage le Salarié en qualité de {{poste}}, à compter du {{date_debut}}, "
+        "dans le cadre d'un contrat à durée indéterminée.\n\n"
+        "ARTICLE 2 – PÉRIODE D'ESSAI\n"
+        "Le présent contrat est assorti d'une période d'essai qui prend fin le {{periode_essai}}. "
+        "[Précisez les conditions de renouvellement et de rupture durant l'essai.]\n\n"
+        "ARTICLE 3 – FONCTIONS\n"
+        "[Décrivez les missions et responsabilités du Salarié.]\n\n"
+        "ARTICLE 4 – LIEU DE TRAVAIL\n"
+        "[Précisez le lieu d'exécution du travail.]\n\n"
+        "ARTICLE 5 – DURÉE DU TRAVAIL\n"
+        "[Précisez l'horaire et la durée hebdomadaire de travail.]\n\n"
+        "ARTICLE 6 – RÉMUNÉRATION\n"
+        "Le Salarié perçoit un salaire de base mensuel de {{salaire_base}}. "
+        "[Précisez les éléments accessoires éventuels : primes, indemnités…]\n\n"
+        "ARTICLE 7 – CONGÉS\n"
+        "[Précisez les droits à congés conformément à la convention applicable.]\n\n"
+        "ARTICLE 8 – OBLIGATIONS DES PARTIES\n"
+        "[Précisez les obligations réciproques, la confidentialité, etc.]\n\n"
+        "ARTICLE 9 – RUPTURE DU CONTRAT\n"
+        "[Précisez les conditions de préavis et de rupture.]\n"
+        + _SIGN_FIN,
+
+    "CDD": _SOUSCRITS +
+        "ARTICLE 1 – OBJET ET DURÉE\n"
+        "L'Employeur engage le Salarié en qualité de {{poste}} dans le cadre d'un contrat à durée "
+        "déterminée, du {{date_debut}} au {{date_fin}}.\n"
+        "[Précisez le motif du recours au CDD.]\n\n"
+        "ARTICLE 2 – PÉRIODE D'ESSAI\n"
+        "La période d'essai prend fin le {{periode_essai}}.\n\n"
+        "ARTICLE 3 – FONCTIONS\n"
+        "[Décrivez les missions confiées au Salarié.]\n\n"
+        "ARTICLE 4 – RÉMUNÉRATION\n"
+        "Le salaire de base mensuel est fixé à {{salaire_base}}.\n\n"
+        "ARTICLE 5 – FIN DE CONTRAT\n"
+        "[Précisez les conditions de fin de contrat et l'indemnité éventuelle.]\n"
+        + _SIGN_FIN,
+
+    "CHANTIER": _SOUSCRITS +
+        "ARTICLE 1 – OBJET\n"
+        "L'Employeur engage le Salarié en qualité de {{poste}} pour l'exécution des travaux du chantier "
+        "[désignez le chantier], à compter du {{date_debut}}.\n\n"
+        "ARTICLE 2 – DURÉE\n"
+        "Le contrat est conclu pour la durée du chantier. [Précisez la fin prévisionnelle : {{date_fin}}.]\n\n"
+        "ARTICLE 3 – LIEU DES TRAVAUX\n"
+        "[Indiquez le lieu du chantier.]\n\n"
+        "ARTICLE 4 – RÉMUNÉRATION\n"
+        "Le salaire de base est fixé à {{salaire_base}}. [Précisez les primes de chantier éventuelles.]\n\n"
+        "ARTICLE 5 – FIN DU CONTRAT\n"
+        "Le contrat prend fin à l'achèvement des travaux pour lesquels le Salarié a été engagé. "
+        "[Précisez les modalités.]\n"
+        + _SIGN_FIN,
+
+    "JOURNALIER": _SOUSCRITS +
+        "ARTICLE 1 – OBJET\n"
+        "L'Employeur engage le Salarié en qualité de {{poste}} pour une prestation journalière, "
+        "à compter du {{date_debut}}.\n\n"
+        "ARTICLE 2 – RÉMUNÉRATION\n"
+        "[Précisez le taux journalier / horaire et les modalités de paiement.]\n\n"
+        "ARTICLE 3 – CONDITIONS DE TRAVAIL\n"
+        "[Précisez le lieu, les horaires et la nature des tâches.]\n"
+        + _SIGN_FIN,
+}
