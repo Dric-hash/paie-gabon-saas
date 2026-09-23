@@ -267,7 +267,7 @@ def cabinet_production():
         })
 
     return render_template("tenant/cabinet_production.html",
-        cabinet=t, lignes=lignes, mois=mois, annee=annee,
+        tenant=t, cabinet=t, lignes=lignes, mois=mois, annee=annee,
         mois_label=MOIS_FR[mois], mois_fr=MOIS_FR,
         nb_todo=nb_todo, nb_encours=nb_encours, nb_termine=nb_termine,
         nb_entreprises=len(entreprises))

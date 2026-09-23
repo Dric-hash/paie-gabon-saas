@@ -8,10 +8,16 @@
     <h1 style="font-size:1.6rem;font-weight:900;color:#0f3d36;margin:0">{{ cabinet.denomination }}</h1>
     <p style="color:#6b7280;font-size:.9rem;margin-top:.25rem">Vos entreprises clientes</p>
   </div>
-  <a href="/cabinet/entreprise/nouvelle"
-     style="background:{% if cabinet.peut_ajouter_entreprise %}#0f3d36{% else %}#9ca3af{% endif %};color:white;padding:.7rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap">
-    + Ajouter une entreprise
-  </a>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <a href="/cabinet/production"
+       style="background:#fff;color:#0f3d36;border:1px solid #0f3d36;padding:.7rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap">
+      📊 Tableau de production
+    </a>
+    <a href="/cabinet/entreprise/nouvelle"
+       style="background:{% if cabinet.peut_ajouter_entreprise %}#0f3d36{% else %}#9ca3af{% endif %};color:white;padding:.7rem 1.25rem;border-radius:.75rem;font-weight:700;font-size:.85rem;text-decoration:none;white-space:nowrap">
+      + Ajouter une entreprise
+    </a>
+  </div>
 </div>
 
 {% if not cabinet.peut_ajouter_entreprise %}

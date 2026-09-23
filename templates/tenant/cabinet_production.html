@@ -1,0 +1,88 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1100px;margin:0 auto;padding:1.5rem">
+
+  <!-- En-tête + sélecteur de mois -->
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">📊 Production mensuelle</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">
+        État de la paie de vos {{ nb_entreprises }} entreprise(s) pour <strong>{{ mois_label }} {{ annee }}</strong>.
+      </p>
+    </div>
+    <form method="GET" style="display:flex;gap:.5rem;align-items:center">
+      <select name="mois" style="padding:.5rem;border:1px solid #e5e7eb;border-radius:.5rem">
+        {% for i in range(1,13) %}
+        <option value="{{ i }}" {% if i==mois %}selected{% endif %}>{{ mois_fr[i] }}</option>
+        {% endfor %}
+      </select>
+      <input type="number" name="annee" value="{{ annee }}" style="width:90px;padding:.5rem;border:1px solid #e5e7eb;border-radius:.5rem">
+      <button type="submit" style="background:#0f3d36;color:#fff;border:none;padding:.5rem 1rem;border-radius:.5rem;font-weight:700;cursor:pointer">Voir</button>
+    </form>
+  </div>
+
+  <!-- Cartes récap -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:.85rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#b91c1c">{{ nb_todo }}</div>
+      <div style="font-size:.8rem;color:#991b1b;font-weight:600">⚪ À faire</div>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:.85rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#b45309">{{ nb_encours }}</div>
+      <div style="font-size:.8rem;color:#92400e;font-weight:600">🟡 En cours</div>
+    </div>
+    <div style="background:#ecfdf5;border:1px solid #a7f3d0;border-radius:.85rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#047857">{{ nb_termine }}</div>
+      <div style="font-size:.8rem;color:#065f46;font-weight:600">🟢 Terminé</div>
+    </div>
+  </div>
+
+  <!-- Tableau -->
+  {% if lignes %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <div style="overflow-x:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem;min-width:640px">
+      <tr style="background:#0f3d36;color:#fff;text-align:left">
+        <th style="padding:.7rem .9rem">Entreprise</th>
+        <th style="padding:.7rem .9rem;text-align:center">Salariés</th>
+        <th style="padding:.7rem .9rem;text-align:center">Période</th>
+        <th style="padding:.7rem .9rem;text-align:center">Bulletins</th>
+        <th style="padding:.7rem .9rem;text-align:center">Validés</th>
+        <th style="padding:.7rem .9rem;text-align:center">Statut</th>
+        <th style="padding:.7rem .9rem"></th>
+      </tr>
+      {% for l in lignes %}
+      <tr style="border-top:1px solid #f3f4f6;{% if l.statut=='todo' %}background:#fef8f8{% elif l.statut=='termine' %}background:#f7fdfa{% endif %}">
+        <td style="padding:.65rem .9rem;font-weight:600">{{ l.tenant.denomination }}</td>
+        <td style="padding:.65rem .9rem;text-align:center">{{ l.nb_salaries }}</td>
+        <td style="padding:.65rem .9rem;text-align:center">
+          {% if l.periode %}<span style="color:#059669">✓</span>{% else %}<span style="color:#d1d5db">—</span>{% endif %}
+        </td>
+        <td style="padding:.65rem .9rem;text-align:center">
+          {% if l.nb_salaries %}{{ l.nb_bulletins }}/{{ l.nb_salaries }}{% else %}—{% endif %}
+        </td>
+        <td style="padding:.65rem .9rem;text-align:center">
+          {% if l.nb_salaries %}{{ l.nb_valides }}/{{ l.nb_salaries }}{% else %}—{% endif %}
+        </td>
+        <td style="padding:.65rem .9rem;text-align:center">
+          {% if l.statut=='todo' %}<span style="background:#fee2e2;color:#991b1b;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700">À faire</span>
+          {% elif l.statut=='encours' %}<span style="background:#fef3c7;color:#92400e;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700">En cours</span>
+          {% elif l.statut=='termine' %}<span style="background:#d1fae5;color:#065f46;padding:.2rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700">Terminé</span>
+          {% else %}<span style="color:#9ca3af;font-size:.75rem">Aucun salarié</span>{% endif %}
+        </td>
+        <td style="padding:.65rem .9rem;text-align:right">
+          <a href="/cabinet/entrer/{{ l.tenant.id }}" style="color:#0f3d36;font-weight:700;text-decoration:none">Ouvrir →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    </div>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2rem;text-align:center;color:#6b7280">
+    Aucune entreprise gérée pour le moment.
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
