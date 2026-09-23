@@ -10585,7 +10585,7 @@ def modele_contrat_supprimer(id):
 @bp.route("/salaries/<int:sal_id>/contrat-pdf/<int:modele_id>")
 @tenant_required
 def salarie_contrat_pdf(sal_id, modele_id):
-    """Génère le PDF du contrat d'un salarié à partir d'un modèle du tenant."""
+    """Génère le contrat d'un salarié, l'enregistre dans son dossier ET le télécharge."""
     t = get_tenant()
     s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
     m = ModeleContrat.query.filter_by(id=modele_id, tenant_id=t.id).first_or_404()
@@ -10597,4 +10597,25 @@ def salarie_contrat_pdf(sal_id, modele_id):
         flash("Erreur lors de la génération du contrat.", "error")
         return redirect(url_for("tenant.salarie_detail", id=sal_id))
     nom = f"contrat_{s.nom}_{s.prenom}_{m.type_contrat}".replace(" ", "_") + ".pdf"
+
+    # Archiver une copie dans le dossier du salarié (sauf si ?telecharger_seul=1)
+    if request.args.get("telecharger_seul") != "1":
+        try:
+            import base64
+            from models import DocumentSalarie
+            data_uri = "data:application/pdf;base64," + base64.b64encode(pdf).decode()
+            doc = DocumentSalarie(
+                tenant_id=t.id, salarie_id=s.id,
+                type_document="Contrat",
+                nom_fichier=f"{m.nom} — {date.today().strftime('%d-%m-%Y')}.pdf"[:255],
+                mime="application/pdf", taille=len(pdf), contenu=data_uri)
+            db.session.add(doc); db.session.commit()
+            log_action("CREATE", "document_salarie", doc.id,
+                       f"Contrat « {m.nom} » généré et archivé pour {s.nom_complet}",
+                       user_id=current_user.id, tenant_id=t.id)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            current_app.logger.error(f"[CONTRAT ARCHIVE] {e}")
+
     return _doc_response(pdf, nom)
