@@ -1,0 +1,48 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">📄 Modèles de contrat</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">
+        Créez vos modèles (CDI, CDD, contrat de chantier…) avec des champs qui se remplissent automatiquement.
+      </p>
+    </div>
+    <a href="/parametres/contrats/nouveau" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Nouveau modèle</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if modeles %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Nom</th><th style="padding:.6rem .9rem">Type</th><th style="padding:.6rem .9rem;text-align:right">Actions</th>
+      </tr>
+      {% for m in modeles %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem .9rem;font-weight:600">{{ m.nom }}</td>
+        <td style="padding:.6rem .9rem">{{ m.type_contrat }}</td>
+        <td style="padding:.6rem .9rem;text-align:right">
+          <a href="/parametres/contrats/{{ m.id }}/modifier" style="color:#0f3d36;font-weight:700;text-decoration:none;margin-right:1rem">Modifier</a>
+          <form method="POST" action="/parametres/contrats/{{ m.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer ce modèle ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" style="background:none;border:none;color:#b91c1c;font-weight:700;cursor:pointer">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p style="color:#6b7280;font-size:.85rem;margin-top:1rem">
+    💡 Pour générer un contrat : allez sur la fiche d'un salarié → « Générer un contrat » → choisissez le modèle.
+  </p>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2rem;text-align:center;color:#6b7280">
+    Aucun modèle pour le moment. Créez votre premier modèle de contrat.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

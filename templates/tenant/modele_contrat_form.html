@@ -1,0 +1,57 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1000px;margin:0 auto;padding:1.5rem">
+  <a href="/parametres/contrats" style="color:#6b7280;text-decoration:none;font-size:.9rem">← Retour aux modèles</a>
+  <h1 style="font-size:1.4rem;font-weight:800;color:#0f3d36;margin:.5rem 0 1rem">
+    {{ "Modifier le modèle" if modele else "Nouveau modèle de contrat" }}
+  </h1>
+
+  <div style="display:grid;grid-template-columns:1fr 280px;gap:1.5rem;align-items:start">
+    <!-- Éditeur -->
+    <form method="POST">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:flex;gap:1rem;margin-bottom:1rem">
+        <div style="flex:1">
+          <label style="display:block;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.25rem">Nom du modèle</label>
+          <input type="text" name="nom" value="{{ modele.nom if modele else '' }}" required placeholder="Ex. CDI cadre, Contrat de chantier"
+            style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div style="width:200px">
+          <label style="display:block;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.25rem">Type</label>
+          <select name="type_contrat" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem">
+            {% for tc in ['CDI','CDD','CHANTIER','JOURNALIER','AUTRE'] %}
+            <option value="{{ tc }}" {% if modele and modele.type_contrat==tc %}selected{% endif %}>{{ tc }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <label style="display:block;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.25rem">
+        Contenu du contrat (articles, clauses…)
+      </label>
+      <textarea name="contenu" rows="22" placeholder="Rédigez ici vos articles et clauses. Insérez les champs entre accolades, ex. {{ '{{nom_complet}}' }}, {{ '{{poste}}' }}, {{ '{{salaire_base}}' }}…"
+        style="width:100%;padding:.75rem;border:1px solid #e5e7eb;border-radius:.5rem;font-family:inherit;font-size:.9rem;line-height:1.6;box-sizing:border-box">{{ modele.contenu if modele else '' }}</textarea>
+      <div style="margin-top:1rem">
+        <button type="submit" style="background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Enregistrer</button>
+      </div>
+    </form>
+
+    <!-- Balises disponibles -->
+    <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;position:sticky;top:1rem">
+      <div style="font-weight:800;color:#0f3d36;font-size:.9rem;margin-bottom:.5rem">🏷️ Champs disponibles</div>
+      <p style="font-size:.75rem;color:#6b7280;margin:0 0 .75rem">Copiez une balise dans votre texte : elle sera remplie automatiquement.</p>
+      <div style="max-height:420px;overflow-y:auto;font-size:.78rem">
+        {% for balise, desc in balises %}
+        <div style="padding:.35rem 0;border-bottom:1px solid #f0f0f0">
+          <code style="background:#e6efec;color:#0f3d36;padding:.1rem .3rem;border-radius:.25rem;font-weight:700">{{ balise }}</code>
+          <div style="color:#6b7280;margin-top:.1rem">{{ desc }}</div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#fff8ec;border:1px solid #e9a13b;border-radius:.6rem;padding:.9rem 1.1rem;color:#92400e;font-size:.82rem;margin-top:1.25rem">
+    ⚠️ Le contenu et la conformité juridique des modèles relèvent de votre responsabilité. PaieGabon fournit l'outil de mise en forme, pas de conseil juridique.
+  </div>
+</div>
+{% endblock %}

@@ -20,7 +20,7 @@ from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Sala
                     Acompte, Journalier, Pointage, FeuillePaieJournalier,
                     Site, AffectationSite, Paiement, OAuthClient, AuditLog,
                     Prestataire, FacturePrestataire, ComposantPaie, BulletinComposant,
-                    AvanceJournalier, MessageSupport)
+                    AvanceJournalier, MessageSupport, ModeleContrat)
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                            calculer_heures_sup_btp, distribuer_heures_semaine_btp,
                            calculer_prime_anciennete_btp, calculer_preavis_btp,
@@ -223,6 +223,54 @@ def cabinet_dashboard():
     return render_template("tenant/cabinet_dashboard.html",
         cabinet=t, apercu=apercu,
         nb_entreprises=len(entreprises), total_salaries=total_salaries)
+
+
+@bp.route("/cabinet/production")
+@login_required
+def cabinet_production():
+    """Tableau de production mensuelle : état de chaque entreprise pour un mois donné."""
+    t = get_tenant()
+    if not t or not t.est_cabinet:
+        return redirect(url_for("tenant.dashboard"))
+
+    _now = datetime.now()
+    mois  = request.args.get("mois", type=int) or _now.month
+    annee = request.args.get("annee", type=int) or _now.year
+    MOIS_FR = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin",
+               "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
+
+    entreprises = (Tenant.query.filter_by(cabinet_id=t.id)
+                   .order_by(Tenant.denomination).all())
+    VALIDE = ("VALIDÉ", "VALIDE", "PAYÉ")
+    lignes = []
+    nb_todo = nb_encours = nb_termine = 0
+    for e in entreprises:
+        nb_sal = Salarie.query.filter_by(tenant_id=e.id, statut="ACTIF").count()
+        periode = (PeriodePaie.query.filter_by(tenant_id=e.id, mois=mois, annee=annee).first())
+        nb_bul = nb_val = 0
+        if periode:
+            nb_bul = BulletinPaie.query.filter_by(tenant_id=e.id, periode_id=periode.id).count()
+            nb_val = (BulletinPaie.query.filter_by(tenant_id=e.id, periode_id=periode.id)
+                      .filter(BulletinPaie.statut.in_(VALIDE)).count())
+        # Statut global de l'entreprise pour ce mois
+        if nb_sal == 0:
+            statut = "vide"
+        elif nb_bul == 0:
+            statut = "todo"; nb_todo += 1
+        elif nb_val >= nb_sal and nb_sal > 0:
+            statut = "termine"; nb_termine += 1
+        else:
+            statut = "encours"; nb_encours += 1
+        lignes.append({
+            "tenant": e, "nb_salaries": nb_sal, "periode": periode,
+            "nb_bulletins": nb_bul, "nb_valides": nb_val, "statut": statut,
+        })
+
+    return render_template("tenant/cabinet_production.html",
+        cabinet=t, lignes=lignes, mois=mois, annee=annee,
+        mois_label=MOIS_FR[mois], mois_fr=MOIS_FR,
+        nb_todo=nb_todo, nb_encours=nb_encours, nb_termine=nb_termine,
+        nb_entreprises=len(entreprises))
 
 
 @bp.route("/cabinet/entrer/<int:entreprise_id>")
@@ -1387,6 +1435,7 @@ def salarie_detail(id):
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
         documents=documents,
+        modeles_contrat=ModeleContrat.query.filter_by(tenant_id=t.id, actif=True).order_by(ModeleContrat.nom).all(),
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
         total_irpp=total_irpp, nb_mois=nb_mois,
         anciennete_ans=anciennete_ans, anciennete_mois=anciennete_mois,
@@ -10473,3 +10522,79 @@ def salaries_pointage():
         annee=annee, mois=mois, tenant=t,
         mois_nom=f"{_MOIS_FR_SAL[mois]} {annee}",
         convention=t.convention)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MODÈLES DE CONTRAT — le tenant crée ses propres modèles (balises {{...}})
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/parametres/contrats")
+@tenant_required
+def modeles_contrat():
+    t = get_tenant()
+    modeles = ModeleContrat.query.filter_by(tenant_id=t.id).order_by(ModeleContrat.nom).all()
+    from documents_rh import BALISES_CONTRAT
+    return render_template("tenant/modeles_contrat.html", modeles=modeles, balises=BALISES_CONTRAT)
+
+
+@bp.route("/parametres/contrats/nouveau", methods=["GET", "POST"])
+@tenant_required
+@can_edit
+def modele_contrat_nouveau():
+    t = get_tenant()
+    from documents_rh import BALISES_CONTRAT
+    if request.method == "POST":
+        m = ModeleContrat(
+            tenant_id=t.id,
+            nom=request.form.get("nom", "").strip() or "Modèle sans nom",
+            type_contrat=request.form.get("type_contrat", "CDI"),
+            contenu=request.form.get("contenu", ""))
+        db.session.add(m); db.session.commit()
+        flash("Modèle de contrat enregistré.", "success")
+        return redirect(url_for("tenant.modeles_contrat"))
+    return render_template("tenant/modele_contrat_form.html", modele=None, balises=BALISES_CONTRAT)
+
+
+@bp.route("/parametres/contrats/<int:id>/modifier", methods=["GET", "POST"])
+@tenant_required
+@can_edit
+def modele_contrat_modifier(id):
+    t = get_tenant()
+    m = ModeleContrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    from documents_rh import BALISES_CONTRAT
+    if request.method == "POST":
+        m.nom = request.form.get("nom", "").strip() or m.nom
+        m.type_contrat = request.form.get("type_contrat", m.type_contrat)
+        m.contenu = request.form.get("contenu", "")
+        db.session.commit()
+        flash("Modèle mis à jour.", "success")
+        return redirect(url_for("tenant.modeles_contrat"))
+    return render_template("tenant/modele_contrat_form.html", modele=m, balises=BALISES_CONTRAT)
+
+
+@bp.route("/parametres/contrats/<int:id>/supprimer", methods=["POST"])
+@tenant_required
+@can_edit
+def modele_contrat_supprimer(id):
+    t = get_tenant()
+    m = ModeleContrat.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    db.session.delete(m); db.session.commit()
+    flash("Modèle supprimé.", "success")
+    return redirect(url_for("tenant.modeles_contrat"))
+
+
+@bp.route("/salaries/<int:sal_id>/contrat-pdf/<int:modele_id>")
+@tenant_required
+def salarie_contrat_pdf(sal_id, modele_id):
+    """Génère le PDF du contrat d'un salarié à partir d'un modèle du tenant."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    m = ModeleContrat.query.filter_by(id=modele_id, tenant_id=t.id).first_or_404()
+    from documents_rh import generer_contrat_pdf
+    try:
+        pdf = generer_contrat_pdf(m, s, t)
+    except Exception as e:
+        current_app.logger.error(f"[CONTRAT PDF] {e}")
+        flash("Erreur lors de la génération du contrat.", "error")
+        return redirect(url_for("tenant.salarie_detail", id=sal_id))
+    nom = f"contrat_{s.nom}_{s.prenom}_{m.type_contrat}".replace(" ", "_") + ".pdf"
+    return _doc_response(pdf, nom)

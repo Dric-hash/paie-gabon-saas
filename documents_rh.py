@@ -354,3 +354,111 @@ def solde_tout_compte_pdf(salarie, tenant, solde, date_cessation=None) -> bytes:
     el.append(Paragraph(f"Fait à {getattr(tenant,'ville',None) or 'Libreville'}, "
                         f"le {_date_fr(date.today())}", S["entete_det"]))
     return _build(el)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONTRATS DE TRAVAIL — modèles éditables par le tenant + génération PDF
+# ═══════════════════════════════════════════════════════════════════════════
+# Balises disponibles dans les modèles (affichées au tenant dans l'éditeur).
+BALISES_CONTRAT = [
+    ("{{entreprise}}",            "Nom de l'entreprise"),
+    ("{{entreprise_adresse}}",    "Adresse de l'entreprise"),
+    ("{{entreprise_ville}}",      "Ville de l'entreprise"),
+    ("{{entreprise_nif}}",        "NIF de l'entreprise"),
+    ("{{entreprise_cnss}}",       "N° CNSS employeur"),
+    ("{{representant}}",          "Nom du représentant légal"),
+    ("{{representant_fonction}}", "Fonction du représentant"),
+    ("{{nom_complet}}",           "Nom et prénom du salarié"),
+    ("{{nom}}",                   "Nom du salarié"),
+    ("{{prenom}}",                "Prénom du salarié"),
+    ("{{matricule}}",             "Matricule du salarié"),
+    ("{{sexe}}",                  "Sexe"),
+    ("{{date_naissance}}",        "Date de naissance"),
+    ("{{nationalite}}",           "Nationalité"),
+    ("{{adresse}}",               "Adresse du salarié"),
+    ("{{situation_matrimoniale}}","Situation matrimoniale"),
+    ("{{numero_cnss}}",           "N° CNSS du salarié"),
+    ("{{numero_cnamgs}}",         "N° CNAMGS du salarié"),
+    ("{{poste}}",                 "Poste / fonction"),
+    ("{{emploi}}",                "Emploi"),
+    ("{{categorie}}",             "Catégorie professionnelle"),
+    ("{{type_contrat}}",          "Type de contrat (CDI, CDD…)"),
+    ("{{date_debut}}",            "Date de début du contrat"),
+    ("{{date_fin}}",              "Date de fin (CDD)"),
+    ("{{periode_essai}}",         "Fin de période d'essai"),
+    ("{{salaire_base}}",          "Salaire de base (chiffres)"),
+    ("{{date_jour}}",             "Date du jour"),
+    ("{{ville}}",                 "Ville (signature)"),
+]
+
+
+def _contexte_contrat(salarie, tenant, contrat=None):
+    """Construit le dictionnaire balise -> valeur pour un salarié donné."""
+    contrat = contrat or next((c for c in getattr(salarie, "contrats", []) if c.actif), None) \
+              or (salarie.contrats[-1] if getattr(salarie, "contrats", None) else None)
+    cat = ""
+    if getattr(salarie, "categorie", None):
+        cat = salarie.categorie.libelle or salarie.categorie.code or ""
+    def d(v): return _date_fr(v) if v else ""
+    return {
+        "entreprise":            tenant.denomination or "",
+        "entreprise_adresse":    getattr(tenant, "adresse", "") or "",
+        "entreprise_ville":      getattr(tenant, "ville", "") or "",
+        "entreprise_nif":        getattr(tenant, "nif", "") or "",
+        "entreprise_cnss":       getattr(tenant, "numero_cnss", "") or "",
+        "representant":          getattr(tenant, "representant_nom", "") or "",
+        "representant_fonction": getattr(tenant, "representant_fonction", "") or "",
+        "nom_complet":           salarie.nom_complet if hasattr(salarie, "nom_complet") else f"{salarie.nom} {salarie.prenom}",
+        "nom":                   salarie.nom or "",
+        "prenom":                salarie.prenom or "",
+        "matricule":             salarie.matricule or "",
+        "sexe":                  salarie.sexe or "",
+        "date_naissance":        d(salarie.date_naissance),
+        "nationalite":           salarie.nationalite or "",
+        "adresse":               salarie.adresse or "",
+        "situation_matrimoniale":salarie.situation_matrimoniale or "",
+        "numero_cnss":           salarie.numero_cnss or "",
+        "numero_cnamgs":         salarie.numero_cnamgs or "",
+        "poste":                 (contrat.poste if contrat and contrat.poste else (salarie.emploi or "")),
+        "emploi":                salarie.emploi or "",
+        "categorie":             cat,
+        "type_contrat":          (contrat.type_contrat if contrat else "") or "",
+        "date_debut":            d(contrat.date_debut) if contrat else d(salarie.date_embauche),
+        "date_fin":              d(contrat.date_fin) if contrat else "",
+        "periode_essai":         d(contrat.date_fin_essai) if contrat else "",
+        "salaire_base":          _fmt_fcfa(contrat.salaire_base) if contrat and contrat.salaire_base else "",
+        "date_jour":             _date_fr(date.today()),
+        "ville":                 getattr(tenant, "ville", "") or "",
+    }
+
+
+def _remplir_balises(texte, contexte):
+    """Remplace {{cle}} par sa valeur ; laisse la balise si inconnue (visible = à corriger)."""
+    import re
+    def repl(m):
+        cle = m.group(1).strip()
+        return str(contexte.get(cle, m.group(0)))
+    return re.sub(r"\{\{\s*([\w]+)\s*\}\}", repl, texte or "")
+
+
+def generer_contrat_pdf(modele, salarie, tenant, contrat=None) -> bytes:
+    """Génère le PDF d'un contrat à partir d'un modèle du tenant et des données du salarié."""
+    S = _styles()
+    ctx = _contexte_contrat(salarie, tenant, contrat)
+    texte = _remplir_balises(modele.contenu, ctx)
+
+    el = _entete(tenant, S)
+    titre = (modele.nom or "CONTRAT DE TRAVAIL").upper()
+    el.append(Paragraph(titre, ParagraphStyle("t", parent=S["titre"], alignment=TA_CENTER,
+                                              fontSize=14, spaceAfter=14)))
+    corps = ParagraphStyle("corps_contrat", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10, leading=15, spaceAfter=6)
+    for bloc in (texte or "").split("\n"):
+        bloc = bloc.strip()
+        if bloc:
+            el.append(Paragraph(bloc.replace("&", "&amp;"), corps))
+        else:
+            el.append(Spacer(1, 6))
+    el.append(Spacer(1, 24))
+    el.extend(_signature(tenant, S, ville=ctx.get("ville")))
+    return _build(el)

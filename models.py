@@ -338,7 +338,7 @@ class Utilisateur(db.Model, UserMixin):
         if not self.twofa_secret:
             return False
         try:
-            return pyotp.TOTP(self.twofa_secret).verify(str(code).strip(), valid_window=1)
+            return pyotp.TOTP(self.twofa_secret).verify(str(code).strip(), valid_window=2)
         except Exception:
             return False
 
@@ -1741,3 +1741,17 @@ class ConfigRubrique(db.Model):
     soumis_cnamgs = db.Column(db.Boolean, default=False)
     soumis_irpp   = db.Column(db.Boolean, default=False)
     __table_args__ = (db.UniqueConstraint("tenant_id", "cle", name="uq_config_rubrique_tenant_cle"),)
+
+
+class ModeleContrat(db.Model):
+    """Modèle de contrat créé par le tenant : texte libre avec des balises {{champ}}
+    remplies automatiquement à la génération. Le contenu juridique relève du tenant."""
+    __tablename__ = "modeles_contrat"
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    nom         = db.Column(db.String(150), nullable=False)   # ex. "CDI cadre", "Contrat de chantier"
+    type_contrat = db.Column(db.String(30), default="CDI")    # CDI | CDD | CHANTIER | JOURNALIER | AUTRE
+    contenu     = db.Column(db.Text, default="")              # texte avec balises {{...}}
+    actif       = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    tenant = db.relationship("Tenant", backref="modeles_contrat")

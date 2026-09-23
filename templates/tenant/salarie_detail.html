@@ -60,6 +60,14 @@
         <a href="/salaries/{{ salarie.id }}/document/attestation-salaire" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-bottom:1px solid #f3f4f6">💰 Attestation de salaire</a>
         <a href="/salaries/{{ salarie.id }}/document/certificat-travail" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-bottom:1px solid #f3f4f6">📜 Certificat de travail</a>
         <a href="/salaries/{{ salarie.id }}/document/solde-tout-compte" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none">🧾 Solde de tout compte</a>
+        {% if modeles_contrat %}
+        <div style="border-top:1px solid #e5e7eb;background:#f9fafb;padding:.4rem 1rem;font-size:.7rem;font-weight:700;color:#6b7280;text-transform:uppercase">Contrats</div>
+        {% for mc in modeles_contrat %}
+        <a href="/salaries/{{ salarie.id }}/contrat-pdf/{{ mc.id }}" style="display:block;padding:.6rem 1rem;font-size:.83rem;color:#374151;text-decoration:none;border-top:1px solid #f3f4f6">📄 {{ mc.nom }}</a>
+        {% endfor %}
+        {% else %}
+        <a href="/parametres/contrats" style="display:block;padding:.6rem 1rem;font-size:.8rem;color:#0f3d36;text-decoration:none;border-top:1px solid #e5e7eb;font-style:italic">+ Créer un modèle de contrat</a>
+        {% endif %}
       </div>
     </div>
     {% if current_user.is_tenant_admin %}

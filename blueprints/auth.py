@@ -888,14 +888,24 @@ def twofa_statut():
 @login_required
 def twofa_activer():
     """Génère un secret TOTP et affiche le QR code à scanner."""
-    import qrcode, io, base64
+    try:
+        import qrcode, io, base64
+    except ImportError:
+        flash("La double authentification n'est pas encore disponible sur ce serveur "
+              "(module manquant). Contactez l'administrateur.", "error")
+        return redirect(url_for("auth.twofa_statut"))
     u = current_user
-    u.generer_totp_secret()      # nouveau secret (pas encore activé)
-    db.session.commit()
-    # QR code en image base64
-    img = qrcode.make(u.totp_uri())
-    buf = io.BytesIO(); img.save(buf, format="PNG")
-    qr_b64 = base64.b64encode(buf.getvalue()).decode()
+    try:
+        u.generer_totp_secret()      # nouveau secret (pas encore activé)
+        db.session.commit()
+        img = qrcode.make(u.totp_uri())
+        buf = io.BytesIO(); img.save(buf, format="PNG")
+        qr_b64 = base64.b64encode(buf.getvalue()).decode()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f"[2FA ACTIVER] {e}")
+        flash("Impossible d'activer la 2FA pour le moment. Réessayez plus tard.", "error")
+        return redirect(url_for("auth.twofa_statut"))
     return render_template("auth/twofa_activer.html",
                            qr_b64=qr_b64, secret=u.twofa_secret)
 
