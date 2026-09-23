@@ -10533,7 +10533,7 @@ def modeles_contrat():
     t = get_tenant()
     modeles = ModeleContrat.query.filter_by(tenant_id=t.id).order_by(ModeleContrat.nom).all()
     from documents_rh import BALISES_CONTRAT
-    return render_template("tenant/modeles_contrat.html", modeles=modeles, balises=BALISES_CONTRAT)
+    return render_template("tenant/modeles_contrat.html", tenant=t, modeles=modeles, balises=BALISES_CONTRAT)
 
 
 @bp.route("/parametres/contrats/nouveau", methods=["GET", "POST"])
@@ -10551,7 +10551,7 @@ def modele_contrat_nouveau():
         db.session.add(m); db.session.commit()
         flash("Modèle de contrat enregistré.", "success")
         return redirect(url_for("tenant.modeles_contrat"))
-    return render_template("tenant/modele_contrat_form.html", modele=None, balises=BALISES_CONTRAT)
+    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=None, balises=BALISES_CONTRAT)
 
 
 @bp.route("/parametres/contrats/<int:id>/modifier", methods=["GET", "POST"])
@@ -10568,7 +10568,7 @@ def modele_contrat_modifier(id):
         db.session.commit()
         flash("Modèle mis à jour.", "success")
         return redirect(url_for("tenant.modeles_contrat"))
-    return render_template("tenant/modele_contrat_form.html", modele=m, balises=BALISES_CONTRAT)
+    return render_template("tenant/modele_contrat_form.html", tenant=t, modele=m, balises=BALISES_CONTRAT)
 
 
 @bp.route("/parametres/contrats/<int:id>/supprimer", methods=["POST"])
