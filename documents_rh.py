@@ -389,7 +389,66 @@ BALISES_CONTRAT = [
     ("{{salaire_base}}",          "Salaire de base (chiffres)"),
     ("{{date_jour}}",             "Date du jour"),
     ("{{ville}}",                 "Ville (signature)"),
+    ("{{entreprise_telephone}}",  "Téléphone de l'entreprise"),
+    ("{{entreprise_secteur}}",    "Secteur d'activité"),
+    ("{{convention}}",            "Convention collective"),
+    ("{{salarie_telephone}}",     "Téléphone du salarié"),
+    ("{{salarie_email}}",         "Email du salarié"),
+    ("{{nombre_parts}}",          "Nombre de parts (IRPP)"),
+    ("{{nb_enfants}}",            "Nombre d'enfants"),
+    ("{{jours_conge_mois}}",      "Jours de congé acquis par mois"),
+    ("{{salaire_annuel}}",        "Salaire annuel (chiffres)"),
+    ("{{salaire_lettres}}",       "Salaire de base EN LETTRES"),
 ]
+
+
+def _nombre_en_lettres(n):
+    """Convertit un entier en toutes lettres (français). Ex. 250000 -> deux cent cinquante mille."""
+    try:
+        n = int(round(float(n)))
+    except (TypeError, ValueError):
+        return ""
+    if n == 0:
+        return "zéro"
+    U = ["","un","deux","trois","quatre","cinq","six","sept","huit","neuf","dix","onze","douze",
+         "treize","quatorze","quinze","seize","dix-sept","dix-huit","dix-neuf"]
+    D = ["","","vingt","trente","quarante","cinquante","soixante","soixante","quatre-vingt","quatre-vingt"]
+    def sous_cent(x, final=True):
+        if x < 20: return U[x]
+        d, u = divmod(x, 10)
+        if d in (7, 9):
+            base = D[d]; reste = U[10 + u]
+            return (base + "-" + reste) if base else reste
+        base = D[d]
+        if u == 0:
+            # "quatre-vingts" seulement si c'est le dernier mot du nombre
+            return base + ("s" if (d == 8 and final) else "")
+        if u == 1 and d in (2,3,4,5,6):
+            return base + "-et-un"
+        return base + "-" + U[u]
+    def sous_mille(x, final=True):
+        c, r = divmod(x, 100)
+        out = ""
+        if c:
+            out += ("cent" if c == 1 else U[c] + " cent")
+            # "cents" pluriel seulement si multiple ET dernier mot du nombre
+            if r == 0 and c > 1 and final: out += "s"
+        if r:
+            out += (" " if out else "") + sous_cent(r, final)
+        return out
+    parts = []
+    for unite, mot in [(10**9,"milliard"),(10**6,"million"),(10**3,"mille")]:
+        q, n = divmod(n, unite)
+        if q:
+            if unite == 1000:
+                seg = "" if q == 1 else sous_mille(q, final=False) + " "
+                parts.append(seg + "mille")
+            else:
+                seg = sous_mille(q, final=False)
+                parts.append(seg + " " + mot + ("s" if q > 1 else ""))
+    if n:
+        parts.append(sous_mille(n, final=True))
+    return " ".join(p for p in parts if p).strip()
 
 
 def _contexte_contrat(salarie, tenant, contrat=None):
@@ -429,6 +488,16 @@ def _contexte_contrat(salarie, tenant, contrat=None):
         "salaire_base":          _fmt_fcfa(contrat.salaire_base) if contrat and contrat.salaire_base else "",
         "date_jour":             _date_fr(date.today()),
         "ville":                 getattr(tenant, "ville", "") or "",
+        "entreprise_telephone":  getattr(tenant, "telephone", "") or "",
+        "entreprise_secteur":    getattr(tenant, "secteur", "") or "",
+        "convention":            getattr(tenant, "convention", "") or "",
+        "salarie_telephone":     salarie.telephone or "",
+        "salarie_email":         salarie.email or "",
+        "nombre_parts":          (str(salarie.nombre_parts) if salarie.nombre_parts is not None else ""),
+        "nb_enfants":            (str(salarie.nb_enfants) if salarie.nb_enfants is not None else "0"),
+        "jours_conge_mois":      (str(getattr(tenant, "jours_conge_par_mois", "") or "")),
+        "salaire_annuel":        (_fmt_fcfa((contrat.salaire_base or 0) * 12) if contrat and contrat.salaire_base else ""),
+        "salaire_lettres":       (_nombre_en_lettres(contrat.salaire_base) + " francs CFA" if contrat and contrat.salaire_base else ""),
     }
 
 
@@ -513,7 +582,7 @@ TRAMES_CONTRAT = {
         "ARTICLE 5 – DURÉE DU TRAVAIL\n"
         "[Précisez l'horaire et la durée hebdomadaire de travail.]\n\n"
         "ARTICLE 6 – RÉMUNÉRATION\n"
-        "Le Salarié perçoit un salaire de base mensuel de {{salaire_base}}. "
+        "Le Salarié perçoit un salaire de base mensuel de {{salaire_base}} ({{salaire_lettres}}). "
         "[Précisez les éléments accessoires éventuels : primes, indemnités…]\n\n"
         "ARTICLE 7 – CONGÉS\n"
         "[Précisez les droits à congés conformément à la convention applicable.]\n\n"
@@ -533,7 +602,7 @@ TRAMES_CONTRAT = {
         "ARTICLE 3 – FONCTIONS\n"
         "[Décrivez les missions confiées au Salarié.]\n\n"
         "ARTICLE 4 – RÉMUNÉRATION\n"
-        "Le salaire de base mensuel est fixé à {{salaire_base}}.\n\n"
+        "Le salaire de base mensuel est fixé à {{salaire_base}} ({{salaire_lettres}}).\n\n"
         "ARTICLE 5 – FIN DE CONTRAT\n"
         "[Précisez les conditions de fin de contrat et l'indemnité éventuelle.]\n"
         + _SIGN_FIN,
@@ -547,7 +616,7 @@ TRAMES_CONTRAT = {
         "ARTICLE 3 – LIEU DES TRAVAUX\n"
         "[Indiquez le lieu du chantier.]\n\n"
         "ARTICLE 4 – RÉMUNÉRATION\n"
-        "Le salaire de base est fixé à {{salaire_base}}. [Précisez les primes de chantier éventuelles.]\n\n"
+        "Le salaire de base est fixé à {{salaire_base}} ({{salaire_lettres}}). [Précisez les primes de chantier éventuelles.]\n\n"
         "ARTICLE 5 – FIN DU CONTRAT\n"
         "Le contrat prend fin à l'achèvement des travaux pour lesquels le Salarié a été engagé. "
         "[Précisez les modalités.]\n"
