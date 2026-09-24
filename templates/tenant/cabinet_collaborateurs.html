@@ -5,15 +5,52 @@
     <div>
       <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">👥 Collaborateurs du cabinet</h1>
       <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">
-        Assignez à chaque collaborateur les entreprises qu'il peut gérer.
+        Créez vos collaborateurs et assignez-leur les entreprises qu'ils peuvent gérer.
       </p>
     </div>
-    <a href="/parametres" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700;font-size:.85rem">+ Ajouter un utilisateur</a>
+    <button type="button" id="toggleForm" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;border:none;cursor:pointer;font-weight:700;font-size:.85rem">+ Nouveau collaborateur</button>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
   {% endwith %}
+
+  <!-- Formulaire création (masqué par défaut) -->
+  <form method="POST" action="/cabinet/collaborateurs/nouveau" id="formCollab"
+        style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Nom *</label>
+        <input type="text" name="nom" required style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Prénom</label>
+        <input type="text" name="prenom" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Email *</label>
+        <input type="email" name="email" required style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Mot de passe * (8 car. min)</label>
+        <input type="text" name="password" required minlength="8" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+      </div>
+      <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Rôle</label>
+        <select name="role" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem">
+          <option value="COMPTABLE">Comptable</option>
+          <option value="GESTIONNAIRE">Gestionnaire</option>
+          <option value="RH">RH</option>
+          <option value="LECTURE">Lecture seule</option>
+        </select>
+      </div>
+    </div>
+    <p style="font-size:.75rem;color:#6b7280;margin:.25rem 0 .75rem">
+      Après création, vous choisirez les entreprises que ce collaborateur pourra gérer.
+    </p>
+    <button type="submit" style="background:#0f3d36;color:#fff;padding:.6rem 1.25rem;border:none;border-radius:.5rem;font-weight:700;cursor:pointer">Créer le collaborateur</button>
+  </form>
 
   <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
     <table style="width:100%;border-collapse:collapse;font-size:.9rem">
@@ -50,4 +87,8 @@
     💡 L'<strong>administrateur</strong> du cabinet voit toutes les entreprises. Un <strong>collaborateur</strong> ne voit que celles qui lui sont assignées.
   </p>
 </div>
+<script nonce="{{ csp_nonce }}">
+  var b=document.getElementById("toggleForm"), f=document.getElementById("formCollab");
+  if(b&&f) b.addEventListener("click",function(){ f.style.display = (f.style.display==="none"?"block":"none"); });
+</script>
 {% endblock %}

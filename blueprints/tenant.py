@@ -10697,3 +10697,46 @@ def cabinet_collaborateur_assigner(uid):
     assignees = {a.entreprise_id for a in CollaborateurEntreprise.query.filter_by(utilisateur_id=u.id).all()}
     return render_template("tenant/cabinet_collaborateur_assigner.html",
                            tenant=t, collaborateur=u, entreprises=entreprises, assignees=assignees)
+
+
+@bp.route("/cabinet/collaborateurs/nouveau", methods=["POST"])
+@tenant_required
+def cabinet_collaborateur_nouveau():
+    """Crée un collaborateur directement depuis la page cabinet, puis enchaîne sur l'assignation."""
+    t = get_tenant()
+    if not t or not t.est_cabinet or not current_user.is_tenant_admin:
+        return redirect(url_for("tenant.dashboard"))
+    # Limite d'utilisateurs du plan
+    if t.plan and t.plan.max_utilisateurs:
+        nb = Utilisateur.query.filter_by(tenant_id=t.id, actif=True).count()
+        if nb >= t.plan.max_utilisateurs:
+            flash(f"Limite atteinte — Plan « {t.plan.nom} » : {t.plan.max_utilisateurs} utilisateur(s) maximum. "
+                  "Passez au plan supérieur pour en ajouter d'autres.", "error")
+            return redirect(url_for("tenant.cabinet_collaborateurs"))
+    email    = request.form.get("email", "").strip().lower()
+    nom      = request.form.get("nom", "").strip()
+    prenom   = request.form.get("prenom", "").strip()
+    password = request.form.get("password", "")
+    role     = request.form.get("role", "COMPTABLE").strip().upper()
+    # Un collaborateur n'est jamais administrateur du cabinet
+    if role not in ROLES_TENANT_AUTORISES or role == "TENANT_ADMIN":
+        role = "COMPTABLE"
+    if not email or not nom or not password:
+        flash("Veuillez renseigner au moins le nom, l'email et le mot de passe.", "error")
+        return redirect(url_for("tenant.cabinet_collaborateurs"))
+    if len(password) < 8:
+        flash("Le mot de passe doit contenir au moins 8 caractères.", "error")
+        return redirect(url_for("tenant.cabinet_collaborateurs"))
+    if Utilisateur.query.filter_by(email=email).first():
+        flash("Cet email est déjà utilisé.", "error")
+        return redirect(url_for("tenant.cabinet_collaborateurs"))
+    u = Utilisateur(nom=nom, prenom=prenom, email=email, role=role,
+                    tenant_id=t.id, actif=True, email_verifie=True)
+    u.set_password(password)
+    db.session.add(u); db.session.commit()
+    log_action("CREATE", "utilisateur", u.id,
+               f"Collaborateur {u.nom_complet} créé ({role})",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"Collaborateur {u.nom_complet} créé. Assignez-lui maintenant des entreprises.", "success")
+    return redirect(url_for("tenant.cabinet_collaborateur_assigner", uid=u.id))
