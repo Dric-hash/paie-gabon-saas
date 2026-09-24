@@ -30,13 +30,13 @@ def _fmt(v):
     try:
         n = int(float(v or 0))
         return f"{n:,}".replace(",", " ") + " FCFA"
-    except:
+    except (ValueError, TypeError):
         return "0 FCFA"
 
 def _flt(v):
     try:
         return float(v or 0)
-    except:
+    except (ValueError, TypeError):
         return 0.0
 
 def generer_bulletin_pdf(bulletin, tenant) -> bytes:

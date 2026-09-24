@@ -2471,8 +2471,8 @@ def bulletin_paye(id):
             montant=float(b.net_a_payer or 0),
             motif=f"Salaire {nom} — {periode}".strip(" —"),
             compte_suggere="6611", date_operation=b.date_paiement)
-    except Exception:
-        pass
+    except Exception as _e:
+        current_app.logger.warning(f"[COMPTA] Proposition d'écriture échouée (bulletin {b.id}) : {_e}")
     flash("Bulletin marqué comme payé.", "success")
     return redirect(url_for("tenant.bulletin_detail", id=id))
 
@@ -5265,8 +5265,8 @@ def journalier_payer(id):
             montant=float(net),
             motif=f"Paie journalier {nom} — {f.date_debut}→{f.date_fin}",
             compte_suggere="6611", date_operation=f.date_paiement)
-    except Exception:
-        pass
+    except Exception as _e:
+        current_app.logger.warning(f"[COMPTA] Proposition d'écriture échouée (journalier {f.id}) : {_e}")
     if a_deduire > 0:
         flash(f"Paiement de {f.journalier.nom_complet} enregistré "
               f"(net {net:,.0f} F après {a_deduire:,.0f} F d'avances).".replace(",", " "), "success")
@@ -7915,7 +7915,7 @@ def api_semaine_btp():
 
     try:
         date_ref = datetime.strptime(date_str, "%Y-%m-%d").date()
-    except:
+    except (ValueError, TypeError):
         date_ref = datetime.now().date()
 
     lundi  = date_ref - timedelta(days=date_ref.weekday())

@@ -400,7 +400,8 @@ def admin_tenant_statut(id):
         try:
             from datetime import datetime as _dt
             t.date_expiration = _dt.strptime(date_exp, "%Y-%m-%d")
-        except: pass
+        except (ValueError, TypeError):
+            flash("Date d'expiration invalide (format attendu : AAAA-MM-JJ).", "error")
     elif request.form.get("clear_expiration"):
         t.date_expiration = None
     db.session.commit(); flash(f"{t.denomination} mis à jour.","success")
