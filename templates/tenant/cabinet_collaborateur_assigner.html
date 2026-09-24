@@ -1,0 +1,44 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:700px;margin:0 auto;padding:1.5rem">
+  <a href="/cabinet/collaborateurs" style="color:#6b7280;text-decoration:none;font-size:.9rem">← Retour aux collaborateurs</a>
+  <h1 style="font-size:1.4rem;font-weight:800;color:#0f3d36;margin:.5rem 0 .25rem">
+    Entreprises de {{ collaborateur.nom_complet }}
+  </h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:0 0 1.25rem">
+    Cochez les entreprises que ce collaborateur peut gérer.
+  </p>
+
+  {% if entreprises %}
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="display:flex;gap:.5rem;margin-bottom:.75rem">
+      <button type="button" id="tout" style="font-size:.8rem;background:#eef4f2;border:1px solid #d1e0dc;color:#0f3d36;padding:.35rem .7rem;border-radius:.4rem;cursor:pointer;font-weight:700">Tout cocher</button>
+      <button type="button" id="rien" style="font-size:.8rem;background:#f9fafb;border:1px solid #e5e7eb;color:#6b7280;padding:.35rem .7rem;border-radius:.4rem;cursor:pointer;font-weight:700">Tout décocher</button>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden;max-height:440px;overflow-y:auto">
+      {% for e in entreprises %}
+      <label style="display:flex;align-items:center;gap:.75rem;padding:.7rem .9rem;border-top:1px solid #f3f4f6;cursor:pointer">
+        <input type="checkbox" name="entreprises" value="{{ e.id }}" class="chk"
+          {% if e.id in assignees %}checked{% endif %} style="width:18px;height:18px;accent-color:#0f3d36">
+        <span style="font-weight:600">{{ e.denomination }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <div style="margin-top:1.25rem">
+      <button type="submit" style="background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Enregistrer les assignations</button>
+    </div>
+  </form>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:2rem;text-align:center;color:#6b7280">
+    Aucune entreprise dans le portefeuille du cabinet pour le moment.
+  </div>
+  {% endif %}
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  var t=document.getElementById("tout"), r=document.getElementById("rien");
+  if(t) t.addEventListener("click",function(){document.querySelectorAll(".chk").forEach(c=>c.checked=true)});
+  if(r) r.addEventListener("click",function(){document.querySelectorAll(".chk").forEach(c=>c.checked=false)});
+</script>
+{% endblock %}

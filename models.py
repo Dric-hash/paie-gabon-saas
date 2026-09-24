@@ -1755,3 +1755,15 @@ class ModeleContrat(db.Model):
     actif       = db.Column(db.Boolean, default=True)
     date_creation = db.Column(db.DateTime, default=utcnow)
     tenant = db.relationship("Tenant", backref="modeles_contrat")
+
+class CollaborateurEntreprise(db.Model):
+    """Assigne une entreprise gérée à un collaborateur du cabinet.
+    Un collaborateur ne voit/gère que les entreprises qui lui sont assignées ;
+    l'administrateur du cabinet voit toutes les entreprises."""
+    __tablename__ = "collaborateur_entreprise"
+    id             = db.Column(db.Integer, primary_key=True)
+    utilisateur_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"), nullable=False)
+    entreprise_id  = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+    __table_args__ = (db.UniqueConstraint("utilisateur_id", "entreprise_id",
+                                          name="uq_collab_entreprise"),)

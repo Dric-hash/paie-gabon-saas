@@ -1,0 +1,53 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:860px;margin:0 auto;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">👥 Collaborateurs du cabinet</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">
+        Assignez à chaque collaborateur les entreprises qu'il peut gérer.
+      </p>
+    </div>
+    <a href="/parametres" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700;font-size:.85rem">+ Ajouter un utilisateur</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Collaborateur</th>
+        <th style="padding:.6rem .9rem">Rôle</th>
+        <th style="padding:.6rem .9rem;text-align:center">Entreprises</th>
+        <th style="padding:.6rem .9rem;text-align:right"></th>
+      </tr>
+      {% for c in collaborateurs %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem .9rem">
+          <div style="font-weight:600">{{ c.user.nom_complet }}</div>
+          <div style="font-size:.78rem;color:#9ca3af">{{ c.user.email }}</div>
+        </td>
+        <td style="padding:.6rem .9rem">
+          {% if c.admin %}<span style="background:#dbeafe;color:#1e40af;padding:.15rem .5rem;border-radius:999px;font-size:.75rem;font-weight:700">Admin</span>
+          {% else %}<span style="color:#6b7280">Collaborateur</span>{% endif %}
+        </td>
+        <td style="padding:.6rem .9rem;text-align:center;font-weight:700">
+          {% if c.admin %}<span style="color:#1e40af" title="L'administrateur voit toutes les entreprises">Toutes</span>
+          {% else %}{{ c.nb_assignees }} / {{ nb_entreprises }}{% endif %}
+        </td>
+        <td style="padding:.6rem .9rem;text-align:right">
+          {% if not c.admin %}
+          <a href="/cabinet/collaborateurs/{{ c.user.id }}/assigner" style="color:#0f3d36;font-weight:700;text-decoration:none">Assigner →</a>
+          {% else %}<span style="color:#9ca3af;font-size:.82rem">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p style="color:#6b7280;font-size:.82rem;margin-top:1rem">
+    💡 L'<strong>administrateur</strong> du cabinet voit toutes les entreprises. Un <strong>collaborateur</strong> ne voit que celles qui lui sont assignées.
+  </p>
+</div>
+{% endblock %}

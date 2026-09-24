@@ -204,6 +204,12 @@ def cabinet_dashboard():
     from sqlalchemy import func
     entreprises = (Tenant.query.filter_by(cabinet_id=t.id)
                    .order_by(Tenant.denomination).all())
+    # Un collaborateur ne voit que les entreprises qui lui sont assignées.
+    if not current_user.is_tenant_admin:
+        from models import CollaborateurEntreprise
+        ids_ok = {a.entreprise_id for a in CollaborateurEntreprise.query.filter_by(
+            utilisateur_id=current_user.id).all()}
+        entreprises = [e for e in entreprises if e.id in ids_ok]
 
     # Aperçu par entreprise : nombre de salariés actifs + dernière période
     apercu = []
@@ -241,6 +247,12 @@ def cabinet_production():
 
     entreprises = (Tenant.query.filter_by(cabinet_id=t.id)
                    .order_by(Tenant.denomination).all())
+    # Un collaborateur ne voit que les entreprises qui lui sont assignées.
+    if not current_user.is_tenant_admin:
+        from models import CollaborateurEntreprise
+        ids_ok = {a.entreprise_id for a in CollaborateurEntreprise.query.filter_by(
+            utilisateur_id=current_user.id).all()}
+        entreprises = [e for e in entreprises if e.id in ids_ok]
     VALIDE = ("VALIDÉ", "VALIDE", "PAYÉ")
     lignes = []
     nb_todo = nb_encours = nb_termine = 0
@@ -290,6 +302,14 @@ def cabinet_entrer(entreprise_id):
     if entreprise.cabinet_id != t.id:
         flash("Cette entreprise ne fait pas partie de votre portefeuille.", "error")
         return redirect(url_for("tenant.cabinet_dashboard"))
+    # GARDE-FOU 2 : un collaborateur ne peut entrer que dans SES entreprises assignées.
+    if not current_user.is_tenant_admin:
+        from models import CollaborateurEntreprise
+        assigne = CollaborateurEntreprise.query.filter_by(
+            utilisateur_id=current_user.id, entreprise_id=entreprise.id).first()
+        if not assigne:
+            flash("Vous n'êtes pas assigné à cette entreprise.", "error")
+            return redirect(url_for("tenant.cabinet_dashboard"))
 
     session["cabinet_entreprise_id"] = entreprise.id
     log_action("SUPPORT_ACCESS", "tenant", entreprise.id,
@@ -10621,3 +10641,59 @@ def salarie_contrat_pdf(sal_id, modele_id):
             current_app.logger.error(f"[CONTRAT ARCHIVE] {e}")
 
     return _doc_response(pdf, nom)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# COLLABORATEURS DU CABINET — assignation d'entreprises
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/cabinet/collaborateurs")
+@tenant_required
+def cabinet_collaborateurs():
+    """Liste les collaborateurs du cabinet + le nombre d'entreprises assignées."""
+    t = get_tenant()
+    if not t or not t.est_cabinet or not current_user.is_tenant_admin:
+        return redirect(url_for("tenant.cabinet_dashboard") if t and t.est_cabinet else url_for("tenant.dashboard"))
+    from models import CollaborateurEntreprise
+    collaborateurs = Utilisateur.query.filter_by(tenant_id=t.id).order_by(Utilisateur.nom).all()
+    nb_entreprises = Tenant.query.filter_by(cabinet_id=t.id).count()
+    infos = []
+    for u in collaborateurs:
+        nb = CollaborateurEntreprise.query.filter_by(utilisateur_id=u.id).count()
+        infos.append({"user": u, "nb_assignees": nb, "admin": u.is_tenant_admin})
+    return render_template("tenant/cabinet_collaborateurs.html",
+                           tenant=t, collaborateurs=infos, nb_entreprises=nb_entreprises)
+
+
+@bp.route("/cabinet/collaborateurs/<int:uid>/assigner", methods=["GET", "POST"])
+@tenant_required
+def cabinet_collaborateur_assigner(uid):
+    """Assigne des entreprises à un collaborateur (cases à cocher)."""
+    t = get_tenant()
+    if not t or not t.est_cabinet or not current_user.is_tenant_admin:
+        return redirect(url_for("tenant.dashboard"))
+    u = Utilisateur.query.filter_by(id=uid, tenant_id=t.id).first_or_404()
+    from models import CollaborateurEntreprise
+    entreprises = Tenant.query.filter_by(cabinet_id=t.id).order_by(Tenant.denomination).all()
+
+    if request.method == "POST":
+        choisies = set(request.form.getlist("entreprises", type=int))
+        actuelles = {a.entreprise_id: a for a in CollaborateurEntreprise.query.filter_by(utilisateur_id=u.id).all()}
+        # Ajouter les nouvelles
+        for eid in choisies:
+            if eid not in actuelles:
+                db.session.add(CollaborateurEntreprise(utilisateur_id=u.id, entreprise_id=eid))
+        # Retirer les décochées
+        for eid, a in actuelles.items():
+            if eid not in choisies:
+                db.session.delete(a)
+        db.session.commit()
+        log_action("UPDATE", "utilisateur", u.id,
+                   f"Assignation de {len(choisies)} entreprise(s) à {u.nom_complet}",
+                   user_id=current_user.id, tenant_id=t.id)
+        db.session.commit()
+        flash(f"{len(choisies)} entreprise(s) assignée(s) à {u.nom_complet}.", "success")
+        return redirect(url_for("tenant.cabinet_collaborateurs"))
+
+    assignees = {a.entreprise_id for a in CollaborateurEntreprise.query.filter_by(utilisateur_id=u.id).all()}
+    return render_template("tenant/cabinet_collaborateur_assigner.html",
+                           tenant=t, collaborateur=u, entreprises=entreprises, assignees=assignees)
