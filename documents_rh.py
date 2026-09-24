@@ -450,16 +450,31 @@ def generer_contrat_pdf(modele, salarie, tenant, contrat=None) -> bytes:
     el = _entete(tenant, S)
     titre = (modele.nom or "CONTRAT DE TRAVAIL").upper()
     el.append(Paragraph(titre, ParagraphStyle("t", parent=S["titre"], alignment=TA_CENTER,
-                                              fontSize=14, spaceAfter=14)))
+                                              fontSize=14, spaceAfter=16)))
     corps = ParagraphStyle("corps_contrat", parent=S["corps"], alignment=TA_JUSTIFY,
                            fontSize=10, leading=15, spaceAfter=6)
+    article = ParagraphStyle("article_contrat", parent=S["corps"], fontName="Helvetica-Bold",
+                             fontSize=10.5, leading=14, spaceBefore=10, spaceAfter=3, keepWithNext=1)
+    section = ParagraphStyle("section_contrat", parent=S["corps"], fontName="Helvetica-Bold",
+                             fontSize=10, leading=14, spaceBefore=6, spaceAfter=4, keepWithNext=1)
+
+    def _esc(x):
+        return x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
     for bloc in (texte or "").split("\n"):
         bloc = bloc.strip()
-        if bloc:
-            el.append(Paragraph(bloc.replace("&", "&amp;"), corps))
+        if not bloc:
+            el.append(Spacer(1, 6)); continue
+        up = bloc.upper()
+        # Titre d'article : "ARTICLE 1 - ..." → gras + espace au-dessus
+        if up.startswith("ARTICLE") and (len(bloc) < 90):
+            el.append(Paragraph(_esc(bloc), article))
+        # En-tête de section : ligne courte tout en majuscules (ex. "ENTRE LES SOUSSIGNÉS :")
+        elif bloc == up and len(bloc) < 60 and any(ch.isalpha() for ch in bloc):
+            el.append(Paragraph(_esc(bloc), section))
         else:
-            el.append(Spacer(1, 6))
-    el.append(Spacer(1, 24))
+            el.append(Paragraph(_esc(bloc), corps))
+    el.append(Spacer(1, 26))
     el.extend(_signature(tenant, S, ville=ctx.get("ville")))
     return _build(el)
 
