@@ -23,10 +23,18 @@ blueprints/tenant/
 ## ✅ Déjà fait (méthode validée sur le vrai code)
 
 - **Étape 0** : `tenant.py` → `tenant/__init__.py`. Tests : 490 verts.
-- **Étape 1** : extraction de `sites.py` (9 routes, /sites…). Tests : 490 verts,
-  9 endpoints `tenant.site*` préservés.
+- **Étape 1** : `sites.py` (9 routes). ✅ 490 verts.
+- **Étape 2** : `cabinet.py` (8 routes, 2 blocs non contigus + constante `ROLES_TENANT_AUTORISES`). ✅ 490 verts.
+- **Étape 3** : `conges.py` (14 routes congés + acomptes, 2 blocs). ✅ 490 verts
+  après ajout des imports `joinedload`, `func`, `desc` (voir leçon ci-dessous).
 
-Le dossier contient donc déjà `__init__.py` (~10 380 lignes) et `sites.py` (~375).
+`__init__.py` est passé de 10 742 à **~9 580 lignes**.
+
+### ⚠️ Leçon (thème congés)
+Le test a échoué sur `NameError: joinedload` : un thème peut utiliser des imports
+**sqlalchemy** (`joinedload`, `func`, `desc`, `and_`, `or_`…) qu'il faut remettre
+dans l'en-tête du nouveau fichier. **Vérifier aussi ces imports**, pas seulement
+les models/helpers. Et surtout : **les tests attrapent tout — d'où la règle d'or.**
 
 ## Recette pour extraire un thème (à répéter)
 
@@ -51,6 +59,8 @@ Pour chaque thème (ex. `conges`) :
 | `__init__.py` | bp, constantes, helpers partagés, hooks, imports finaux | 0 |
 | `_common.py` (optionnel) | les 21 helpers partagés | 0 |
 | `sites.py` | ✅ sites, affectations | 9 |
+| ✅ `cabinet.py` | cabinet, collaborateurs, production | 8 |
+| ✅ `conges.py` | congés, acomptes | 14 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
@@ -72,8 +82,8 @@ Pour chaque thème (ex. `conges`) :
 
 ## Ordre recommandé (du plus sûr au plus délicat)
 
-1. ✅ `sites.py` (fait)
-2. `cabinet.py`, `conges.py`, `declarations.py`
+1. ✅ `sites.py`, ✅ `cabinet.py`, ✅ `conges.py` (faits)
+2. `declarations.py`
 3. `journaliers.py`, `salaries.py`, `bulletins.py` (les gros)
 4. `parametres.py`, `paiements.py`, `divers.py`
 
