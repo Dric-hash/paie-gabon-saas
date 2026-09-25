@@ -39,6 +39,9 @@ blueprints/tenant/
   après ajout de `calculer_bulletin` & co (calculs_paie), utilisés par les routes API.
   Note : `calculer_parts_irpp` est dans **core**, pas calculs_paie. `mail` s'accède
   via `current_app.extensions["mail"]` (pas d'import).
+- **Étape 8** : `parametres.py` (19 routes paramètres/utilisateurs/rubriques/grille,
+  4 blocs). ✅ après ajout du décorateur `admin_only` (core). **Penser aussi à
+  `admin_only`, `plan_required`, `require_permission`** parmi les décorateurs.
 
 `__init__.py` est passé de 10 742 à **~9 580 lignes**.
 
@@ -77,6 +80,7 @@ Pour chaque thème (ex. `conges`) :
 | ✅ `journaliers.py` | journaliers, pointage, feuilles, avances | 29 |
 | ✅ `salaries.py` | salariés, contrats, documents, modèles | 28 |
 | ✅ `bulletins.py` | bulletins, périodes, composants, API | 41 |
+| ✅ `parametres.py` | paramètres, utilisateurs, rubriques, grille | 19 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
