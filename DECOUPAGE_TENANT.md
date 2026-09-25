@@ -35,6 +35,10 @@ blueprints/tenant/
 - **Étape 6** : `salaries.py` (28 routes, 10 blocs dispersés). ✅ après ajout de
   `logger` (défini dans `__init__`, L47) et `parse_date` (core). **Noms module
   fréquents à ne pas oublier** dans les prochains thèmes : `logger`, `parse_date`.
+- **Étape 7** : `bulletins.py` (41 routes bulletins/périodes/composants/API, 7 blocs). ✅
+  après ajout de `calculer_bulletin` & co (calculs_paie), utilisés par les routes API.
+  Note : `calculer_parts_irpp` est dans **core**, pas calculs_paie. `mail` s'accède
+  via `current_app.extensions["mail"]` (pas d'import).
 
 `__init__.py` est passé de 10 742 à **~9 580 lignes**.
 
@@ -72,6 +76,7 @@ Pour chaque thème (ex. `conges`) :
 | ✅ `declarations.py` | CNSS, DAS, exports | 10 |
 | ✅ `journaliers.py` | journaliers, pointage, feuilles, avances | 29 |
 | ✅ `salaries.py` | salariés, contrats, documents, modèles | 28 |
+| ✅ `bulletins.py` | bulletins, périodes, composants, API | 41 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
@@ -95,7 +100,7 @@ Pour chaque thème (ex. `conges`) :
 
 1. ✅ `sites.py`, ✅ `cabinet.py`, ✅ `conges.py` (faits)
 2. ✅ `declarations.py` (fait)
-3. ✅ `journaliers.py` (fait) ; ✅ `salaries.py` (fait) ; `bulletins.py`
+3. ✅ `journaliers.py` (fait) ; ✅ `salaries.py`, ✅ `bulletins.py` (faits)
 4. `parametres.py`, `paiements.py`, `divers.py`
 
 ## Règle d'or
