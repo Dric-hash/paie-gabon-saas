@@ -25,8 +25,9 @@ blueprints/tenant/
 - **Étape 0** : `tenant.py` → `tenant/__init__.py`. Tests : 490 verts.
 - **Étape 1** : `sites.py` (9 routes). ✅ 490 verts.
 - **Étape 2** : `cabinet.py` (8 routes, 2 blocs non contigus + constante `ROLES_TENANT_AUTORISES`). ✅ 490 verts.
-- **Étape 3** : `conges.py` (14 routes congés + acomptes, 2 blocs). ✅ 490 verts
-  après ajout des imports `joinedload`, `func`, `desc` (voir leçon ci-dessous).
+- **Étape 3** : `conges.py` (14 routes, 2 blocs). ✅ après imports sqlalchemy.
+- **Étape 4** : `declarations.py` (10 routes CNSS/DAS + 4 helpers Excel/CSV,
+  4 blocs dispersés). ✅ après ajout du décorateur `plan_required` (core).
 
 `__init__.py` est passé de 10 742 à **~9 580 lignes**.
 
@@ -61,6 +62,7 @@ Pour chaque thème (ex. `conges`) :
 | `sites.py` | ✅ sites, affectations | 9 |
 | ✅ `cabinet.py` | cabinet, collaborateurs, production | 8 |
 | ✅ `conges.py` | congés, acomptes | 14 |
+| ✅ `declarations.py` | CNSS, DAS, exports | 10 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
@@ -83,7 +85,7 @@ Pour chaque thème (ex. `conges`) :
 ## Ordre recommandé (du plus sûr au plus délicat)
 
 1. ✅ `sites.py`, ✅ `cabinet.py`, ✅ `conges.py` (faits)
-2. `declarations.py`
+2. ✅ `declarations.py` (fait)
 3. `journaliers.py`, `salaries.py`, `bulletins.py` (les gros)
 4. `parametres.py`, `paiements.py`, `divers.py`
 
