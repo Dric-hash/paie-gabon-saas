@@ -53,6 +53,14 @@ La détection automatique de frontières (`^def [a-z]`) **NE voit PAS** les help
 `def _helper`, et scinder les zones pour les exclure. Le dashboard (~340 lignes) a
 aussi une grosse surface de dépendances (calc, cache, conventions) → header généreux.
 
+- **Étape 10 (finale)** : `divers.py` (28 routes, ~1748 lignes). ✅ après correction
+  des frontières (`^def ` au lieu de `^def [a-z]` pour ne pas avaler les helpers `_xxx`)
+  et ajout de `os`, `notifications`, `jours_feries`, `_NOTIF_MODELS`.
+
+## 🏁 TERMINÉ
+`tenant.py` (10 742 lignes) → package de 11 fichiers. `__init__.py` réduit au noyau
+(blueprint + constantes + helpers partagés + hooks). Les 490 tests restent verts.
+
 `__init__.py` est passé de 10 742 à **~9 580 lignes**.
 
 ### ⚠️ Leçon (thème congés)
@@ -92,7 +100,7 @@ Pour chaque thème (ex. `conges`) :
 | ✅ `bulletins.py` | bulletins, périodes, composants, API | 41 |
 | ✅ `parametres.py` | paramètres, utilisateurs, rubriques, grille | 19 |
 | ✅ `paiements.py` | Airtel, CinetPay, webhooks, abonnement | 11 |
-| ⏳ `divers.py` | dashboard, rapports, export, recherche, audit | ~28 |
+| ✅ `divers.py` | dashboard, rapports, export, recherche, audit | 28 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
