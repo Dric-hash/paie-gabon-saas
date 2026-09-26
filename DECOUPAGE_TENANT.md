@@ -42,6 +42,16 @@ blueprints/tenant/
 - **Étape 8** : `parametres.py` (19 routes paramètres/utilisateurs/rubriques/grille,
   4 blocs). ✅ après ajout du décorateur `admin_only` (core). **Penser aussi à
   `admin_only`, `plan_required`, `require_permission`** parmi les décorateurs.
+- **Étape 9** : `paiements.py` (11 routes Airtel/CinetPay/webhooks/abonnement). ✅ du premier coup.
+
+### ⚠️ DERNIER thème `divers.py` — piège à connaître
+Les routes restantes (dashboard, rapports, export Sage, recherche, audit, APIs)
+sont **entremêlées avec des helpers partagés** (`_doc_response`, `_activer_abonnement`…).
+La détection automatique de frontières (`^def [a-z]`) **NE voit PAS** les helpers
+`def _xxx` (underscore) → elle inclut par erreur ces helpers dans les zones de routes.
+**Avant d'extraire divers** : vérifier ligne par ligne qu'aucune zone ne contient un
+`def _helper`, et scinder les zones pour les exclure. Le dashboard (~340 lignes) a
+aussi une grosse surface de dépendances (calc, cache, conventions) → header généreux.
 
 `__init__.py` est passé de 10 742 à **~9 580 lignes**.
 
@@ -81,6 +91,8 @@ Pour chaque thème (ex. `conges`) :
 | ✅ `salaries.py` | salariés, contrats, documents, modèles | 28 |
 | ✅ `bulletins.py` | bulletins, périodes, composants, API | 41 |
 | ✅ `parametres.py` | paramètres, utilisateurs, rubriques, grille | 19 |
+| ✅ `paiements.py` | Airtel, CinetPay, webhooks, abonnement | 11 |
+| ⏳ `divers.py` | dashboard, rapports, export, recherche, audit | ~28 |
 | `salaries.py` | salariés, contrats, documents, modèles de contrat | ~25 |
 | `bulletins.py` | bulletins, périodes, composants | ~21 |
 | `journaliers.py` | journaliers, pointage, feuilles, avances | ~29 |
