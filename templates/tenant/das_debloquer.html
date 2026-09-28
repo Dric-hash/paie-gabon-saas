@@ -1,0 +1,80 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:760px;margin:0 auto;padding:1.5rem">
+  <a href="/declaration-das?annee={{ annee }}" style="color:#6b7280;text-decoration:none;font-size:.9rem">← Retour à la DAS</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.5rem 0 .25rem">
+    Édition officielle de la DAS {{ annee }}
+  </h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin:.75rem 0;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if deja_payee %}
+  <div style="background:#dcfce7;border:1px solid #86efac;border-radius:.85rem;padding:1.5rem;text-align:center;margin-top:1rem">
+    <div style="font-size:2rem">✅</div>
+    <div style="font-weight:800;color:#166534;font-size:1.1rem;margin:.25rem 0">Édition débloquée</div>
+    <p style="color:#166534;font-size:.9rem;margin:.25rem 0 1rem">La DAS {{ annee }} est débloquée. Vous pouvez éditer les documents officiels.</p>
+    <a href="/declaration-das/id21?annee={{ annee }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.25rem;border-radius:.6rem;text-decoration:none;font-weight:700">Éditer la DAS</a>
+  </div>
+  {% else %}
+
+  <p style="color:#6b7280;font-size:.92rem;margin:.25rem 0 1.25rem">
+    Préparez et vérifiez votre DAS gratuitement (aperçu filigrané). Pour obtenir le
+    <strong>document officiel sans filigrane</strong>, prêt à déposer, débloquez l'édition.
+  </p>
+
+  <!-- Carte tarif -->
+  <div style="border:1px solid #e5e7eb;border-radius:.9rem;overflow:hidden">
+    <div style="background:#0f3d36;color:#fff;padding:1rem 1.25rem;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:800">Édition DAS {{ annee }}</div>
+        <div style="font-size:.78rem;opacity:.85">{{ "Tarif cabinet (par société)" if tarif.tarif_type=="CABINET" else "Tarif entreprise" }}</div>
+      </div>
+      <div style="text-align:right">
+        {% if tarif.reduction %}<div style="text-decoration:line-through;opacity:.7;font-size:.85rem">{{ "{:,}".format(tarif.prix_base).replace(","," ") }} F</div>{% endif %}
+        <div style="font-size:1.5rem;font-weight:900">{{ "{:,}".format(tarif.prix).replace(","," ") }} FCFA</div>
+      </div>
+    </div>
+    {% if tarif.est_earlybird %}
+    <div style="background:#fff8ec;color:#92400e;padding:.6rem 1.25rem;font-size:.82rem;border-bottom:1px solid #e5e7eb">
+      🎁 <strong>Réduction anticipée −{{ tarif.taux_reduction }}%</strong> appliquée — valable jusqu'au {{ tarif.date_limite.strftime('%d/%m/%Y') }}. Après cette date : {{ "{:,}".format(tarif.prix_base).replace(","," ") }} F.
+    </div>
+    {% endif %}
+
+    <div style="padding:1.25rem">
+      <div style="font-size:.85rem;color:#374151;margin-bottom:1rem">
+        <strong>Comment payer :</strong> effectuez le paiement par Airtel Money ou Moov Money,
+        puis déclarez-le ci-dessous avec la référence de la transaction. Votre édition sera
+        débloquée dès confirmation de la réception.
+      </div>
+      <form method="POST" action="/declaration-das/debloquer/declarer">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="annee" value="{{ annee }}"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Moyen de paiement</label>
+            <select name="moyen" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem">
+              <option value="AIRTEL_MONEY">Airtel Money</option>
+              <option value="MOOV_MONEY">Moov Money</option>
+              <option value="AUTRE">Autre</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Téléphone payeur</label>
+            <input type="text" name="telephone" placeholder="074..." style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+          </div>
+        </div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Référence de la transaction *</label>
+        <input type="text" name="reference" required placeholder="Ex. TXN123456789" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box;margin-bottom:1rem">
+        <button type="submit" style="background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">J'ai payé — débloquer mon édition</button>
+      </form>
+    </div>
+  </div>
+
+  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.6rem;padding:.9rem 1.1rem;color:#6b7280;font-size:.8rem;margin-top:1.25rem">
+    ℹ️ Vous restez responsable de la vérification des montants déclarés. PaieGabon fournit l'édition automatisée du document, pas un conseil fiscal.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

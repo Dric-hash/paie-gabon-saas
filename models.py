@@ -1767,3 +1767,25 @@ class CollaborateurEntreprise(db.Model):
     date_creation  = db.Column(db.DateTime, default=utcnow)
     __table_args__ = (db.UniqueConstraint("utilisateur_id", "entreprise_id",
                                           name="uq_collab_entreprise"),)
+
+
+class EditionDAS(db.Model):
+    """Suivi du déblocage payant de la Déclaration Annuelle des Salaires par société
+    et par année. La préparation/aperçu est gratuite ; l'édition finale est débloquée
+    après paiement."""
+    __tablename__ = "edition_das"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    annee          = db.Column(db.Integer, nullable=False)          # exercice concerné
+    statut         = db.Column(db.String(12), default="PREPARE")    # PREPARE | PAYEE
+    montant        = db.Column(db.Numeric(12, 2))                   # montant réglé
+    tarif_type     = db.Column(db.String(12))                       # ENTREPRISE | CABINET
+    paiement_id    = db.Column(db.Integer, db.ForeignKey("paiements.id"))
+    date_paiement  = db.Column(db.DateTime)
+    debloque_par   = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))  # si déblocage manuel
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "annee", name="uq_edition_das_tenant_annee"),)
+
+    @property
+    def est_payee(self):
+        return self.statut == "PAYEE"

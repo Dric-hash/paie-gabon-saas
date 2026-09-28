@@ -56,6 +56,17 @@
 </style>
 </head>
 <body>
+{% if not das_payee %}
+<style>
+  .das-filigrane{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
+  .das-filigrane .row{position:absolute;left:-10%;width:120%;transform:rotate(-30deg);
+    font-weight:900;font-size:34px;color:rgba(200,0,0,.10);white-space:nowrap;text-align:center;letter-spacing:2px}
+  @media print{.das-filigrane .row{color:rgba(200,0,0,.14)}}
+</style>
+<div class="das-filigrane">
+  {% for i in range(0,12) %}<div class="row" style="top:{{ i*9 }}%">ÉPREUVE — NON VALIDE POUR DÉPÔT &nbsp; ÉPREUVE — NON VALIDE POUR DÉPÔT</div>{% endfor %}
+</div>
+{% endif %}
 
 <div class="barre">
   <button onclick="window.print()">🖨️ Imprimer / Enregistrer en PDF (paysage)</button>

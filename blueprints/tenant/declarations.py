@@ -10,6 +10,7 @@ from blueprints.tenant import bp
 from core import tenant_required, get_tenant, plan_required
 from audit import log_action
 from models import db, BulletinPaie, PeriodePaie, Salarie
+from das_facturation import das_prix, das_est_payee, marquer_das_payee
 
 
 def _gen_excel_cnss(tenant, trim_label, annee, mois_labels,
@@ -487,7 +488,8 @@ def declaration_das_annexes():
     db.session.commit()
 
     return render_template("tenant/declaration_das_annexes_print.html",
-        tenant=t, lignes=lignes, totaux=totaux, id20=id20,
+        tenant=t,
+        das_payee=das_est_payee(t.id, annee), lignes=lignes, totaux=totaux, id20=id20,
         lignes_hono=lignes_hono, tot_hono=tot_hono,
         annee=annee, nb=len(lignes), genere_le=_dt.now())
 
@@ -518,7 +520,8 @@ def declaration_das_id21():
     db.session.commit()
 
     return render_template("tenant/declaration_das_id21_print.html",
-        tenant=t, lignes=lignes, totaux=totaux, controles=controles,
+        tenant=t,
+        das_payee=das_est_payee(t.id, annee), lignes=lignes, totaux=totaux, controles=controles,
         annee=annee, nb=len(lignes), genere_le=_dt.now())
 
 
@@ -553,7 +556,8 @@ def declaration_das_id19():
     db.session.commit()
 
     return render_template("tenant/declaration_das_id19_print.html",
-        tenant=t, lignes=eligibles, annee=annee, nb=len(eligibles),
+        tenant=t,
+        das_payee=das_est_payee(t.id, annee), lignes=eligibles, annee=annee, nb=len(eligibles),
         genere_le=_dt.now(), seuil=SEUIL_MENSUEL)
 
 
@@ -709,6 +713,7 @@ def declaration_das():
 
     return render_template("tenant/declaration_das.html",
         tenant=t, annees=annees, annee=annee,
+        das_payee=das_est_payee(t.id, annee), das_tarif=das_prix(t, annee),
         lignes=lignes, totaux=totaux, erreur=erreur, controles=controles,
         lignes_hono=lignes_hono, tot_hono=tot_hono)
 
@@ -725,6 +730,11 @@ def declaration_das_excel():
         return redirect(url_for("auth.login"))
 
     annee = request.args.get("annee", type=int) or date.today().year
+    # VERROU : l'édition Excel officielle nécessite le déblocage payant.
+    if not das_est_payee(t.id, annee):
+        flash("L'édition officielle de la DAS nécessite le déblocage payant. "
+              "L'aperçu reste disponible gratuitement.", "error")
+        return redirect(url_for("tenant.das_debloquer", annee=annee))
     from declaration_das import generer_das_excel, DASVide
     import models as _models
     try:
@@ -1078,3 +1088,82 @@ En cas de problème : support@paiegalon.com
 """.strip()
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DÉBLOCAGE PAYANT DE LA DAS (édition officielle)
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/declaration-das/debloquer")
+@login_required
+def das_debloquer():
+    """Page de déblocage de l'édition officielle de la DAS (affiche le tarif)."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    annee = request.args.get("annee", type=int) or (date.today().year - 1)
+    tarif = das_prix(t, annee)
+    deja  = das_est_payee(t.id, annee)
+    return render_template("tenant/das_debloquer.html",
+                           tenant=t, annee=annee, tarif=tarif, deja_payee=deja)
+
+
+@bp.route("/declaration-das/debloquer/declarer", methods=["POST"])
+@login_required
+def das_debloquer_declarer():
+    """Le client déclare avoir payé (référence mobile money) → paiement EN_ATTENTE.
+    Le déblocage effectif se fait après confirmation (super-admin) ou paiement en ligne."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    annee     = request.form.get("annee", type=int) or (date.today().year - 1)
+    moyen     = (request.form.get("moyen") or "AIRTEL_MONEY").strip()
+    reference = (request.form.get("reference") or "").strip()
+    telephone = (request.form.get("telephone") or "").strip()
+    if not reference:
+        flash("Veuillez indiquer la référence de votre paiement.", "error")
+        return redirect(url_for("tenant.das_debloquer", annee=annee))
+    tarif = das_prix(t, annee)
+    from models import Paiement
+    import secrets as _sec
+    p = Paiement(
+        tenant_id=t.id, moyen=moyen, montant=tarif["prix"], duree_mois=0,
+        reference_interne="DAS-" + _sec.token_hex(5).upper(),
+        reference_externe=reference, telephone=telephone, statut="EN_ATTENTE",
+        notes=f"DAS {annee} — édition ({tarif['tarif_type']}) déclarée par {current_user.email}")
+    db.session.add(p); db.session.commit()
+    log_action("CREATE", "paiement", p.id,
+               f"Déblocage DAS {annee} déclaré ({tarif['prix']:.0f} FCFA)")
+    db.session.commit()
+    flash("Paiement déclaré. Votre édition sera débloquée dès confirmation de la réception. "
+          "Vous serez notifié.", "success")
+    return redirect(url_for("tenant.das_debloquer", annee=annee))
+
+
+@bp.route("/admin/das/confirmer/<int:paiement_id>", methods=["POST"])
+@login_required
+def das_confirmer_paiement(paiement_id):
+    """Super-admin : confirme un paiement DAS reçu → débloque l'édition de la société/année."""
+    if not current_user.is_super_admin:
+        abort(403)
+    from models import Paiement, Tenant
+    import re as _re
+    p = Paiement.query.get_or_404(paiement_id)
+    m = _re.search(r"DAS (\d{4})", p.notes or "")
+    if not m:
+        flash("Ce paiement n'est pas un déblocage DAS.", "error")
+        return redirect(request.referrer or url_for("admin.admin_dashboard"))
+    annee = int(m.group(1))
+    t = Tenant.query.get(p.tenant_id)
+    tarif_type = "CABINET" if "CABINET" in (p.notes or "") else "ENTREPRISE"
+    p.statut = "SUCCES"; p.date_confirmation = datetime.now()
+    marquer_das_payee(t, annee, p.montant, tarif_type,
+                      paiement_id=p.id, debloque_par=current_user.id)
+    log_action("UPDATE", "paiement", p.id,
+               f"DAS {annee} débloquée pour {t.denomination} (confirmée)")
+    db.session.commit()
+    flash(f"DAS {annee} débloquée pour {t.denomination}.", "success")
+    return redirect(request.referrer or url_for("admin.admin_dashboard"))

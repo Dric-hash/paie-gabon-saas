@@ -179,6 +179,14 @@ def test_export_excel_refuse_starter(client):
 
 def test_export_excel_cabinet_telecharge(client):
     _login(client, "admin@cab.ga")
+    # Sans déblocage : l'édition officielle est verrouillée (paywall DAS)
+    r = client.get("/declaration-das/excel?annee=2025", follow_redirects=False)
+    assert r.status_code == 302
+    # Après déblocage : le téléchargement fonctionne
+    from das_facturation import marquer_das_payee
+    from models import Tenant
+    t = Tenant.query.filter_by(slug="cabinet-co").first()
+    marquer_das_payee(t, 2025, 100000, "CABINET")
     r = client.get("/declaration-das/excel?annee=2025")
     assert r.status_code == 200
     assert "spreadsheetml" in r.headers.get("Content-Type", "")
@@ -219,3 +227,23 @@ def test_ecran_affiche_honoraires(client):
     assert r.status_code == 200
     assert b"MBADINGA" in r.data and b"GLOBAL TECH" in r.data
     assert "Honoraires".encode() in r.data
+
+
+# ── Facturation DAS (paywall) ─────────────────────────────────────────────────
+def test_das_tarifs_et_earlybird():
+    from datetime import date
+    from das_facturation import das_prix
+    class T:
+        def __init__(self, cab): self.cabinet_id = cab
+    # Entreprise seule, hors early-bird
+    p = das_prix(T(None), 2024, aujourd_hui=date(2025, 6, 1))
+    assert p["tarif_type"] == "ENTREPRISE" and p["prix"] == 200000 and p["reduction"] == 0
+    # Entreprise, early-bird -20%
+    p = das_prix(T(None), 2024, aujourd_hui=date(2025, 2, 1))
+    assert p["est_earlybird"] and p["prix"] == 160000
+    # Cabinet, tarif par société
+    p = das_prix(T(7), 2024, aujourd_hui=date(2025, 6, 1))
+    assert p["tarif_type"] == "CABINET" and p["prix"] == 100000
+    # Cabinet, early-bird
+    p = das_prix(T(7), 2024, aujourd_hui=date(2025, 2, 1))
+    assert p["prix"] == 80000
