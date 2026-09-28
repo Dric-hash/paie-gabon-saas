@@ -327,6 +327,10 @@ def _gen_excel_cnamgs(tenant, trim_label, annee, mois_labels,
 # DÉCLARATIONS SOCIALES & FISCALES
 # ══════════════════════════════════════════════════════════════════════════════
 
+import io
+from flask import abort
+from blueprints.tenant import logger
+
 @bp.route("/declaration-cnss")
 @login_required
 def declaration_cnss():

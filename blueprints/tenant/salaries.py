@@ -17,6 +17,12 @@ from models import (db, Salarie, Contrat, CategorieEmploi, DocumentSalarie, Mode
                     Pointage, Site, AffectationSite)
 
 
+from models import utcnow
+from core import calculer_parts_irpp
+from calculs_paie import calculer_bulletin, ventiler_heures_mois
+from jours_feries import jours_feries_annee
+from blueprints.tenant import _MOIS_FR, _MOIS_FR_SAL, _JOURS_FR_SAL
+
 @bp.route("/salaries")
 @login_required
 def salaries():

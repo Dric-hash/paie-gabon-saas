@@ -12,6 +12,9 @@ from models import (db, Plan, Utilisateur, Salarie, Contrat, PeriodePaie, Bullet
                     Conge, CategorieEmploi, ComposantPaie, ConfigRubrique, RubriquePaie)
 
 
+import io
+from i18n import SUPPORTED_LANGUAGES, set_language
+
 @bp.route("/parametres/api/regenerer-token", methods=["POST"])
 @tenant_required
 @admin_only

@@ -18,6 +18,12 @@ from models import (db, BulletinPaie, BulletinComposant, PeriodePaie, ComposantP
                     Salarie, Contrat, Acompte, Pointage, Site, AffectationSite)
 
 
+import os, io
+from models import utcnow
+from core import csv_safe
+from jours_feries import jours_feries_annee
+from blueprints.tenant import attribuer_numero_bulletin
+
 @bp.route("/api/simuler-paie/scenarios", methods=["POST"])
 @login_required
 def api_simuler_scenarios():

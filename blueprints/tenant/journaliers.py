@@ -14,6 +14,10 @@ from models import (db, Journalier, Pointage, FeuillePaieJournalier, AvanceJourn
                     Salarie, Site, AffectationSite, Contrat, CategorieEmploi)
 
 
+from core import csv_safe
+from jours_feries import type_jour_auto
+from blueprints.tenant import _MOIS_FR
+
 @bp.route("/journaliers/<int:id>/convertir", methods=["GET", "POST"])
 @login_required
 def journalier_convertir(id):

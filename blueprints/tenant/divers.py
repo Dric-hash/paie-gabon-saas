@@ -2,7 +2,7 @@
 """Tableau de bord, rapports, exports comptables (Sage), recherche, audit, jours fériés,
 notifications, simulateur, prime de fin d'année et APIs internes —
 extrait de tenant.py (même blueprint « tenant »)."""
-import os
+import os, io
 from datetime import datetime, date, timedelta
 from flask import (render_template, request, redirect, url_for, flash, session,
                    current_app, abort, send_file, jsonify, Response)
@@ -24,6 +24,8 @@ from models import (db, Tenant, Salarie, Contrat, PeriodePaie, BulletinPaie, Bul
                     AffectationSite, Pointage, Journalier, FeuillePaieJournalier, MessageSupport,
                     Plan, Prestataire, FacturePrestataire, AuditLog, RubriquePaie)
 
+
+from core import csv_safe
 
 @bp.route("/profil/2fa", methods=["POST"])
 @login_required
