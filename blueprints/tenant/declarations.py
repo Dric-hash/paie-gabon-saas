@@ -12,6 +12,12 @@ from audit import log_action
 from models import db, BulletinPaie, PeriodePaie, Salarie
 from das_facturation import das_prix, das_est_payee, marquer_das_payee
 
+def _totaux_das_zero():
+    """Totaux DAS neutres (toutes clés à 0) — évite un plantage du gabarit
+    quand l'agrégation échoue ou qu'il n'y a aucune donnée."""
+    return {k: 0 for k in ("nb_salaries", "brut_presence", "av_nature", "brut_conge",
+            "total_1a5", "tcts", "irpp", "cfp", "fnh", "total_impots", "ni_total")}
+
 
 def _gen_excel_cnss(tenant, trim_label, annee, mois_labels,
                     sal_data, total_base_cnss, total_base_cnamgs,
@@ -469,7 +475,7 @@ def declaration_das_annexes():
         import models as _models
         lignes, totaux = agreger_das(t, annee, models=_models)
     except Exception:
-        lignes, totaux = [], {}
+        lignes, totaux = [], _totaux_das_zero()
     try:
         from declaration_das import agreger_honoraires
         import models as _models
@@ -518,7 +524,7 @@ def declaration_das_id21():
         lignes, totaux = agreger_das(t, annee, models=_models)
         controles = controles_coherence_das(lignes, totaux)
     except Exception:
-        lignes, totaux, controles = [], {}, []
+        lignes, totaux, controles = [], _totaux_das_zero(), []
 
     log_action("EXPORT", "declaration", None, f"Impression listing ID21 — exercice {annee}")
     db.session.commit()
@@ -548,7 +554,7 @@ def declaration_das_id19():
         import models as _models
         lignes, totaux = agreger_das(t, annee, models=_models)
     except Exception:
-        lignes, totaux = [], {}
+        lignes, totaux = [], _totaux_das_zero()
 
     # Seuil DGI : salariés percevant plus de 80 000 F/mois en moyenne sur
     # leur période de présence. On approxime par le total imposable / 12.
@@ -1171,3 +1177,22 @@ def das_confirmer_paiement(paiement_id):
     db.session.commit()
     flash(f"DAS {annee} débloquée pour {t.denomination}.", "success")
     return redirect(request.referrer or url_for("admin.admin_dashboard"))
+
+
+@bp.route("/admin/das")
+@login_required
+def das_admin_liste():
+    """Super-admin : liste les déblocages DAS déclarés (à confirmer) et confirmés."""
+    if not current_user.is_super_admin:
+        abort(403)
+    from models import Paiement, Tenant
+    paiements = (Paiement.query
+                 .filter(Paiement.notes.like("DAS %"))
+                 .order_by(Paiement.date_creation.desc()).all())
+    rows = []
+    for p in paiements:
+        t = Tenant.query.get(p.tenant_id)
+        rows.append({"p": p, "entreprise": t.denomination if t else "—",
+                     "en_attente": p.statut == "EN_ATTENTE"})
+    nb_attente = sum(1 for r in rows if r["en_attente"])
+    return render_template("tenant/das_admin.html", rows=rows, nb_attente=nb_attente)

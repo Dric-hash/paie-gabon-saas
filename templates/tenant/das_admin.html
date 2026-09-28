@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:1000px;margin:0 auto;padding:1.5rem">
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem">🗂️ Déblocages DAS</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:0 0 1rem">
+    {{ nb_attente }} paiement(s) en attente de confirmation.
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if rows %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Entreprise</th>
+        <th style="padding:.6rem .9rem">Détail</th>
+        <th style="padding:.6rem .9rem;text-align:right">Montant</th>
+        <th style="padding:.6rem .9rem">Réf.</th>
+        <th style="padding:.6rem .9rem">Statut</th>
+        <th style="padding:.6rem .9rem;text-align:right">Action</th>
+      </tr>
+      {% for r in rows %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem .9rem;font-weight:600">{{ r.entreprise }}</td>
+        <td style="padding:.6rem .9rem;color:#6b7280;font-size:.82rem">{{ r.p.notes }}</td>
+        <td style="padding:.6rem .9rem;text-align:right;font-weight:700">{{ "{:,.0f}".format(r.p.montant|float).replace(","," ") }} F</td>
+        <td style="padding:.6rem .9rem;font-family:monospace;font-size:.8rem">{{ r.p.reference_externe or "—" }}</td>
+        <td style="padding:.6rem .9rem">
+          {% if r.en_attente %}<span style="background:#fef3c7;color:#92400e;padding:.15rem .5rem;border-radius:999px;font-size:.75rem;font-weight:700">En attente</span>
+          {% else %}<span style="background:#dcfce7;color:#166534;padding:.15rem .5rem;border-radius:999px;font-size:.75rem;font-weight:700">✅ Confirmé</span>{% endif %}
+        </td>
+        <td style="padding:.6rem .9rem;text-align:right">
+          {% if r.en_attente %}
+          <form method="POST" action="/admin/das/confirmer/{{ r.p.id }}" style="display:inline" onsubmit="return confirm('Confirmer ce paiement et débloquer la DAS ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button type="submit" style="background:#0f3d36;color:#fff;border:none;padding:.4rem .85rem;border-radius:.5rem;font-weight:700;cursor:pointer;font-size:.82rem">Confirmer & débloquer</button>
+          </form>
+          {% else %}<span style="color:#9ca3af;font-size:.82rem">—</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2rem;text-align:center;color:#6b7280">
+    Aucun déblocage DAS pour le moment.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

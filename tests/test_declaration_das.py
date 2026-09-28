@@ -247,3 +247,14 @@ def test_das_tarifs_et_earlybird():
     # Cabinet, early-bird
     p = das_prix(T(7), 2024, aujourd_hui=date(2025, 2, 1))
     assert p["prix"] == 80000
+
+
+# ── Flux admin de déblocage DAS ───────────────────────────────────────────────
+def test_das_documents_vides_ne_plantent_pas(client):
+    """Les documents DAS ne doivent pas planter (500) même sans données."""
+    _login(client, "admin@cab.ga")
+    for u in ["/declaration-das/id21?annee=2099",
+              "/declaration-das/id19?annee=2099",
+              "/declaration-das/annexes?annee=2099"]:
+        r = client.get(u)
+        assert r.status_code != 500, f"{u} plante sur données vides"

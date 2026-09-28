@@ -752,3 +752,56 @@ class TestPagesLegales:
 
     def test_confidentialite_accessible(self, client):
         assert client.get("/politique-confidentialite").status_code == 200
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NON-RÉGRESSION : routes de téléchargement / import / export
+# But : attraper les imports manquants (NameError) sur les routes peu couvertes.
+# Un statut 500 = régression (souvent un import oublié). 200/302/400/403/404 = OK.
+# ═══════════════════════════════════════════════════════════════════════════
+class TestTelechargementsExports:
+    """Frappe les routes de génération de fichiers ; aucune ne doit renvoyer 500."""
+
+    def _login_admin(self, client):
+        login(client, "admin@a.ga")
+
+    def test_routes_sans_parametre_ne_plantent_pas(self, client):
+        self._login_admin(client)
+        urls = [
+            "/salaries/pointage/modele",        # télécharger modèle pointage salariés
+            "/journaliers/pointage/modele",     # télécharger modèle pointage journaliers
+            "/salaries/import/modele",          # modèle d'import salariés
+            "/parametres/export-donnees",       # export ZIP des données
+            "/parametres/modele-bulletin",      # modèle de bulletin
+            "/parametres/grille-salaires",      # page grille
+            "/langue/fr",                       # changement de langue
+            "/recherche?q=test",                # recherche globale
+            "/api/recherche-rapide?q=test",     # API recherche rapide
+            "/messages",                        # messagerie support
+        ]
+        for u in urls:
+            r = client.get(u, follow_redirects=False)
+            assert r.status_code != 500, f"{u} renvoie 500 (probable import manquant)"
+
+    def test_routes_avec_periode_ne_plantent_pas(self, client):
+        self._login_admin(client)
+        from models import PeriodePaie, Tenant
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        p = PeriodePaie.query.filter_by(tenant_id=t.id).first()
+        assert p is not None
+        urls = [
+            f"/export/sage/journal/{p.id}",
+            f"/export/sage/livre/{p.id}",
+            f"/export/sage/les-deux/{p.id}",
+            f"/rapport/pdf/{p.id}",
+        ]
+        for u in urls:
+            r = client.get(u, follow_redirects=False)
+            assert r.status_code != 500, f"{u} renvoie 500 (probable import manquant)"
+
+    def test_import_pointage_sans_fichier_ne_plante_pas(self, client):
+        """POST d'import sans fichier : doit être géré proprement (pas de 500)."""
+        self._login_admin(client)
+        for u in ["/salaries/pointage/importer", "/journaliers/pointage/importer"]:
+            r = client.post(u, data={}, follow_redirects=False)
+            assert r.status_code != 500, f"{u} renvoie 500 sans fichier"
