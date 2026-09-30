@@ -1769,6 +1769,27 @@ class CollaborateurEntreprise(db.Model):
                                           name="uq_collab_entreprise"),)
 
 
+class HistoriqueSalarie(db.Model):
+    """Historique des modifications de champs sensibles d'un salarié
+    (date d'embauche, fonction) — consultable par le tenant."""
+    __tablename__ = "historique_salarie"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id     = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    champ          = db.Column(db.String(30), nullable=False)   # "date_embauche" | "emploi"
+    ancienne_valeur = db.Column(db.String(255))
+    nouvelle_valeur = db.Column(db.String(255))
+    modifie_par    = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    modifie_par_nom = db.Column(db.String(150))                 # nom figé (au cas où l'utilisateur est supprimé)
+    date_modification = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie", backref="historique_modifs")
+
+    LIBELLES = {"date_embauche": "Date d'embauche", "emploi": "Fonction"}
+    @property
+    def champ_libelle(self):
+        return self.LIBELLES.get(self.champ, self.champ)
+
+
 class EditionDAS(db.Model):
     """Suivi du déblocage payant de la Déclaration Annuelle des Salaires par société
     et par année. La préparation/aperçu est gratuite ; l'édition finale est débloquée

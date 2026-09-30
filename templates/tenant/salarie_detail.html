@@ -282,6 +282,33 @@
       {% endif %}
     </div>
 
+    <!-- Historique des modifications (date d'embauche / fonction) -->
+    {% if historique_modifs %}
+    <div style="margin-top:1.5rem;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+      <div style="background:#f9fafb;padding:.7rem 1rem;font-weight:700;color:#0f3d36;font-size:.9rem;border-bottom:1px solid #e5e7eb">
+        🕓 Historique des modifications
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+        <tr style="text-align:left;color:#6b7280">
+          <th style="padding:.5rem .8rem;font-weight:600">Élément</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Ancienne</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Nouvelle</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Par</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Le</th>
+        </tr>
+        {% for h in historique_modifs %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:.5rem .8rem;font-weight:600">{{ h.champ_libelle }}</td>
+          <td style="padding:.5rem .8rem;color:#b91c1c">{{ h.ancienne_valeur }}</td>
+          <td style="padding:.5rem .8rem;color:#166534;font-weight:600">{{ h.nouvelle_valeur }}</td>
+          <td style="padding:.5rem .8rem;color:#6b7280">{{ h.modifie_par_nom or "—" }}</td>
+          <td style="padding:.5rem .8rem;color:#9ca3af;white-space:nowrap">{{ h.date_modification.strftime('%d/%m/%Y %H:%M') if h.date_modification else "—" }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    {% endif %}
+
     <!-- Zone danger — suppression -->
     {% if current_user.is_tenant_admin %}
     <div class="card p-5" style="border:1px solid #fca5a5;background:#fef2f2">

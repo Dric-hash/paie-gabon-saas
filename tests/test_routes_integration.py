@@ -805,3 +805,31 @@ class TestTelechargementsExports:
         for u in ["/salaries/pointage/importer", "/journaliers/pointage/importer"]:
             r = client.post(u, data={}, follow_redirects=False)
             assert r.status_code != 500, f"{u} renvoie 500 sans fichier"
+
+
+class TestHistoriqueSalarie:
+    """Modification date d'embauche / fonction + traçage de l'historique."""
+
+    def test_modif_embauche_fonction_tracee(self, client):
+        from models import db, Tenant, Salarie, HistoriqueSalarie
+        from datetime import date
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        s = Salarie(tenant_id=t.id, matricule="HIST1", nom="TEST", prenom="Hist",
+                    sexe="M", statut="ACTIF", date_embauche=date(2023, 1, 1),
+                    emploi="Ouvrier", situation_matrimoniale="CELIBATAIRE", nb_enfants=0)
+        db.session.add(s); db.session.commit(); sid = s.id
+        login(client, "admin@a.ga")
+        page = client.get(f"/salaries/{sid}/modifier")
+        token = _extract_csrf(page.data)
+        r = client.post(f"/salaries/{sid}/modifier", data={
+            "nom": "TEST", "prenom": "Hist", "sexe": "M", "nationalite": "GABONAISE",
+            "situation_matrimoniale": "CELIBATAIRE", "nb_enfants": "0", "statut": "ACTIF",
+            "date_embauche": "2023-06-15", "emploi": "Contremaître", "csrf_token": token,
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        s = Salarie.query.get(sid)
+        assert str(s.date_embauche) == "2023-06-15"
+        assert s.emploi == "Contremaître"
+        h = HistoriqueSalarie.query.filter_by(salarie_id=sid).all()
+        champs = {e.champ for e in h}
+        assert "date_embauche" in champs and "emploi" in champs

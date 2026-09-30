@@ -443,9 +443,13 @@ def salarie_detail(id):
     from models import DocumentSalarie
     documents = (DocumentSalarie.query.filter_by(tenant_id=t.id, salarie_id=id)
                  .order_by(DocumentSalarie.date_creation.desc()).all())
+    from models import HistoriqueSalarie
+    historique_modifs = (HistoriqueSalarie.query
+        .filter_by(tenant_id=t.id, salarie_id=s.id)
+        .order_by(HistoriqueSalarie.date_modification.desc()).all())
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
-        documents=documents,
+        documents=documents, historique_modifs=historique_modifs,
         modeles_contrat=ModeleContrat.query.filter_by(tenant_id=t.id, actif=True).order_by(ModeleContrat.nom).all(),
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
         total_irpp=total_irpp, nb_mois=nb_mois,
@@ -468,7 +472,11 @@ def salarie_modifier(id):
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     cats = CategorieEmploi.query.filter_by(tenant_id=t.id).all()
     if request.method=="POST":
+        # Capture des valeurs avant modification (pour l'historique embauche/fonction)
+        _old_embauche = s.date_embauche
+        _old_emploi   = s.emploi
         for f,v in [("nom",request.form["nom"].strip().upper()),("prenom",request.form["prenom"].strip()),
+            ("date_embauche",_pd(request.form.get("date_embauche")) or s.date_embauche),
             ("telephone",request.form.get("telephone")),
             ("email",request.form.get("email","").strip() or None),
             ("nationalite",request.form.get("nationalite")),
@@ -482,6 +490,19 @@ def salarie_modifier(id):
             ("mode_paiement",(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
+
+        # ── Historique des changements d'embauche / fonction ──────────────
+        from models import HistoriqueSalarie
+        def _log_hist(champ, ancien, nouveau):
+            if (ancien or None) != (nouveau or None):
+                db.session.add(HistoriqueSalarie(
+                    tenant_id=t.id, salarie_id=s.id, champ=champ,
+                    ancienne_valeur=str(ancien) if ancien else "—",
+                    nouvelle_valeur=str(nouveau) if nouveau else "—",
+                    modifie_par=current_user.id,
+                    modifie_par_nom=current_user.nom_complet))
+        _log_hist("date_embauche", _old_embauche, s.date_embauche)
+        _log_hist("emploi", _old_emploi, s.emploi)
 
         # ── Salaire de base : mise à jour du contrat actif ────────────────
         sb_raw = request.form.get("salaire_base")
