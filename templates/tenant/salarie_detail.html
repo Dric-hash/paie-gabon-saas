@@ -282,6 +282,80 @@
       {% endif %}
     </div>
 
+    <!-- Discipline / Sanctions -->
+    <div style="margin-top:1.5rem;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+      <div style="background:#f9fafb;padding:.7rem 1rem;font-weight:700;color:#0f3d36;font-size:.9rem;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between;align-items:center">
+        <span>⚠️ Discipline / Sanctions</span>
+        {% if current_user.can_edit %}
+        <button type="button" id="btnSanction" style="background:#0f3d36;color:#fff;border:none;padding:.3rem .7rem;border-radius:.4rem;font-weight:700;cursor:pointer;font-size:.78rem">+ Ajouter</button>
+        {% endif %}
+      </div>
+
+      {% if current_user.can_edit %}
+      <form method="POST" action="/salaries/{{ salarie.id }}/sanctions" id="formSanction" style="display:none;padding:1rem;background:#fcfcfc;border-bottom:1px solid #f0f0f0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem;margin-bottom:.6rem">
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.15rem">Type</label>
+            <select name="type" style="width:100%;padding:.45rem;border:1px solid #e5e7eb;border-radius:.4rem;font-size:.85rem">
+              <option value="AVERTISSEMENT">Avertissement</option>
+              <option value="BLAME">Blâme</option>
+              <option value="MISE_A_PIED">Mise à pied</option>
+              <option value="MUTATION">Mutation disciplinaire</option>
+              <option value="AUTRE">Autre</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.15rem">Date</label>
+            <input type="date" name="date_sanction" value="{{ today if today else '' }}" style="width:100%;padding:.45rem;border:1px solid #e5e7eb;border-radius:.4rem;font-size:.85rem;box-sizing:border-box">
+          </div>
+          <div>
+            <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.15rem">Durée (j, mise à pied)</label>
+            <input type="number" name="duree_jours" min="0" style="width:100%;padding:.45rem;border:1px solid #e5e7eb;border-radius:.4rem;font-size:.85rem;box-sizing:border-box">
+          </div>
+        </div>
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.15rem">Motif *</label>
+        <input type="text" name="motif" required placeholder="Ex. Retards répétés" style="width:100%;padding:.45rem;border:1px solid #e5e7eb;border-radius:.4rem;font-size:.85rem;box-sizing:border-box;margin-bottom:.6rem">
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.15rem">Description des faits</label>
+        <textarea name="description" rows="3" style="width:100%;padding:.45rem;border:1px solid #e5e7eb;border-radius:.4rem;font-size:.85rem;box-sizing:border-box;margin-bottom:.6rem"></textarea>
+        <button type="submit" style="background:#0f3d36;color:#fff;border:none;padding:.5rem 1.1rem;border-radius:.4rem;font-weight:700;cursor:pointer;font-size:.85rem">Enregistrer la sanction</button>
+      </form>
+      {% endif %}
+
+      {% if sanctions %}
+      <table style="width:100%;border-collapse:collapse;font-size:.82rem">
+        <tr style="text-align:left;color:#6b7280">
+          <th style="padding:.5rem .8rem;font-weight:600">Type</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Date</th>
+          <th style="padding:.5rem .8rem;font-weight:600">Motif</th>
+          <th style="padding:.5rem .8rem;font-weight:600;text-align:right">Actions</th>
+        </tr>
+        {% for sa in sanctions %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:.5rem .8rem"><span style="background:#fef3c7;color:#92400e;padding:.1rem .45rem;border-radius:999px;font-size:.72rem;font-weight:700">{{ sa.type_libelle }}{% if sa.duree_jours %} ({{ sa.duree_jours }}j){% endif %}</span></td>
+          <td style="padding:.5rem .8rem;color:#6b7280;white-space:nowrap">{{ sa.date_sanction.strftime('%d/%m/%Y') if sa.date_sanction else "—" }}</td>
+          <td style="padding:.5rem .8rem">{{ sa.motif }}</td>
+          <td style="padding:.5rem .8rem;text-align:right;white-space:nowrap">
+            <a href="/salaries/{{ salarie.id }}/sanctions/{{ sa.id }}/lettre" style="color:#0f3d36;font-weight:700;text-decoration:none;margin-right:.75rem">📄 Lettre</a>
+            {% if current_user.can_edit %}
+            <form method="POST" action="/salaries/{{ salarie.id }}/sanctions/{{ sa.id }}/supprimer" style="display:inline" onsubmit="return confirm('Supprimer cette sanction ?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <button type="submit" style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:.8rem;font-weight:700">✕</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="padding:1.25rem;text-align:center;color:#9ca3af;font-size:.85rem">Aucune sanction enregistrée.</div>
+      {% endif %}
+    </div>
+    <script nonce="{{ csp_nonce }}">
+      (function(){var b=document.getElementById("btnSanction"),f=document.getElementById("formSanction");
+       if(b&&f)b.addEventListener("click",function(){f.style.display=(f.style.display==="none"?"block":"none");});})();
+    </script>
+
     <!-- Historique des modifications (date d'embauche / fonction) -->
     {% if historique_modifs %}
     <div style="margin-top:1.5rem;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">

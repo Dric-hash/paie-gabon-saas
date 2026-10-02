@@ -301,7 +301,11 @@ def solde_tout_compte_pdf(salarie, tenant, solde, date_cessation=None) -> bytes:
                      f"{solde.get('preavis_jours', 0)} jour(s)",
                      _fmt_fcfa(solde.get("preavis_montant", 0))])
     if solde.get("indem_licenciement", 0) > 0:
-        data.append(["Indemnité de licenciement", "(exonérée)",
+        _type = solde.get("type_indemnite")
+        _lib = ("Indemnité de licenciement" if _type == "LICENCIEMENT"
+                else "Indemnité de services rendus" if _type == "SERVICES_RENDUS"
+                else "Indemnité de rupture")
+        data.append([_lib, "(exonérée)",
                      _fmt_fcfa(solde.get("indem_licenciement", 0))])
     data.append(["", "TOTAL BRUT",
                  _fmt_fcfa(solde.get("total_brut", 0))])
@@ -632,3 +636,39 @@ TRAMES_CONTRAT = {
         "[Précisez le lieu, les horaires et la nature des tâches.]\n"
         + _SIGN_FIN,
 }
+
+
+def generer_lettre_sanction_pdf(sanction, salarie, tenant) -> bytes:
+    """Génère la lettre de notification de sanction disciplinaire (PDF)."""
+    S = _styles()
+    el = _entete(tenant, S)
+    el.append(Paragraph(f"Objet : Notification de {sanction.type_libelle.lower()}",
+              ParagraphStyle("obj", parent=S["titre"], alignment=TA_CENTER, fontSize=13, spaceAfter=16)))
+    corps = ParagraphStyle("c_sanction", parent=S["corps"], alignment=TA_JUSTIFY, fontSize=10, leading=15, spaceAfter=8)
+    nom = salarie.nom_complet if hasattr(salarie, "nom_complet") else f"{salarie.nom} {salarie.prenom}"
+    el.append(Paragraph(f"{tenant.denomination}", ParagraphStyle("e", parent=S["corps"], fontSize=10, spaceAfter=4)))
+    el.append(Paragraph(f"À l'attention de : <b>{nom}</b>", corps))
+    if getattr(salarie, "emploi", None):
+        el.append(Paragraph(f"Fonction : {salarie.emploi}", corps))
+    el.append(Spacer(1, 10))
+    el.append(Paragraph(f"Fait le {_date_fr(sanction.date_sanction)},", corps))
+    el.append(Spacer(1, 6))
+    el.append(Paragraph("Madame, Monsieur,", corps))
+    intro = (f"Nous vous notifions par la présente un(e) <b>{sanction.type_libelle.lower()}</b>"
+             + (f" d'une durée de {sanction.duree_jours} jour(s)" if sanction.duree_jours else "") + ".")
+    el.append(Paragraph(intro, corps))
+    if sanction.motif:
+        el.append(Paragraph(f"<b>Motif :</b> {sanction.motif}", corps))
+    if sanction.description:
+        for bloc in str(sanction.description).split("\n"):
+            if bloc.strip():
+                el.append(Paragraph(bloc.strip().replace("&", "&amp;"), corps))
+    el.append(Spacer(1, 8))
+    el.append(Paragraph("Nous vous invitons à vous conformer à vos obligations professionnelles. "
+                        "La présente sanction est versée à votre dossier.", corps))
+    el.append(Spacer(1, 10))
+    el.append(Paragraph("[Précisez ici les voies de recours applicables selon la réglementation.]",
+              ParagraphStyle("note", parent=S["corps"], fontSize=9, textColor=HexColor("#888888"))))
+    el.append(Spacer(1, 24))
+    el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
+    return _build(el)

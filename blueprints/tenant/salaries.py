@@ -443,13 +443,15 @@ def salarie_detail(id):
     from models import DocumentSalarie
     documents = (DocumentSalarie.query.filter_by(tenant_id=t.id, salarie_id=id)
                  .order_by(DocumentSalarie.date_creation.desc()).all())
-    from models import HistoriqueSalarie
+    from models import HistoriqueSalarie, Sanction
     historique_modifs = (HistoriqueSalarie.query
         .filter_by(tenant_id=t.id, salarie_id=s.id)
         .order_by(HistoriqueSalarie.date_modification.desc()).all())
+    sanctions = (Sanction.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+        .order_by(Sanction.date_sanction.desc()).all())
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
-        documents=documents, historique_modifs=historique_modifs,
+        documents=documents, historique_modifs=historique_modifs, sanctions=sanctions,
         modeles_contrat=ModeleContrat.query.filter_by(tenant_id=t.id, actif=True).order_by(ModeleContrat.nom).all(),
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
         total_irpp=total_irpp, nb_mois=nb_mois,
@@ -1431,3 +1433,65 @@ def salarie_contrat_pdf(sal_id, modele_id):
     return _doc_response(pdf, nom)
 
 
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DISCIPLINE / SANCTIONS
+# ═══════════════════════════════════════════════════════════════════════════
+@bp.route("/salaries/<int:sal_id>/sanctions", methods=["POST"])
+@tenant_required
+@can_edit
+def salarie_sanction_ajouter(sal_id):
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    from models import Sanction
+    type_s = (request.form.get("type") or "AVERTISSEMENT").strip().upper()
+    if type_s not in Sanction.LIBELLES:
+        type_s = "AUTRE"
+    d = _pd(request.form.get("date_sanction")) or date.today()
+    motif = (request.form.get("motif") or "").strip()[:200]
+    if not motif:
+        flash("Veuillez indiquer le motif de la sanction.", "error")
+        return redirect(url_for("tenant.salarie_detail", id=sal_id))
+    sanc = Sanction(
+        tenant_id=t.id, salarie_id=s.id, type=type_s, date_sanction=d,
+        motif=motif, description=(request.form.get("description") or "").strip(),
+        duree_jours=request.form.get("duree_jours", type=int),
+        cree_par=current_user.id, cree_par_nom=current_user.nom_complet)
+    db.session.add(sanc); db.session.commit()
+    log_action("CREATE", "sanction", sanc.id,
+               f"Sanction ({sanc.type_libelle}) pour {s.nom_complet}",
+               user_id=current_user.id, tenant_id=t.id)
+    db.session.commit()
+    flash(f"{sanc.type_libelle} enregistré(e).", "success")
+    return redirect(url_for("tenant.salarie_detail", id=sal_id))
+
+
+@bp.route("/salaries/<int:sal_id>/sanctions/<int:sid>/supprimer", methods=["POST"])
+@tenant_required
+@can_edit
+def salarie_sanction_supprimer(sal_id, sid):
+    t = get_tenant()
+    from models import Sanction
+    sanc = Sanction.query.filter_by(id=sid, salarie_id=sal_id, tenant_id=t.id).first_or_404()
+    db.session.delete(sanc); db.session.commit()
+    flash("Sanction supprimée.", "success")
+    return redirect(url_for("tenant.salarie_detail", id=sal_id))
+
+
+@bp.route("/salaries/<int:sal_id>/sanctions/<int:sid>/lettre")
+@tenant_required
+def salarie_sanction_lettre(sal_id, sid):
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    from models import Sanction
+    sanc = Sanction.query.filter_by(id=sid, salarie_id=sal_id, tenant_id=t.id).first_or_404()
+    from documents_rh import generer_lettre_sanction_pdf
+    try:
+        pdf = generer_lettre_sanction_pdf(sanc, s, t)
+    except Exception as e:
+        logger.error(f"[LETTRE SANCTION] {e}")
+        flash("Erreur lors de la génération de la lettre.", "error")
+        return redirect(url_for("tenant.salarie_detail", id=sal_id))
+    nom = f"sanction_{s.nom}_{sanc.type}".replace(" ", "_") + ".pdf"
+    return _doc_response(pdf, nom)

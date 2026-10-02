@@ -84,7 +84,13 @@
         <td style="padding:.6rem 1.1rem;text-align:right;{{ 'font-weight:800;color:#0f3d36' if fort else 'font-weight:600' }}">{{ "{:,.0f}".format(val|float).replace(","," ") }} FCFA</td>
       </tr>
       {% endmacro %}
-      {{ ligne("Indemnité de licenciement", resultat.indem_licenciement) }}
+      {% if resultat.type_indemnite == "LICENCIEMENT" %}
+        {{ ligne("Indemnité de licenciement", resultat.indem_licenciement) }}
+      {% elif resultat.type_indemnite == "SERVICES_RENDUS" %}
+        {{ ligne("Indemnité de services rendus", resultat.indem_licenciement) }}
+      {% else %}
+        {{ ligne("Indemnité de rupture", 0) }}
+      {% endif %}
       {{ ligne("Indemnité de préavis (" ~ resultat.preavis_jours ~ " j)", resultat.preavis_montant) }}
       {{ ligne("Indemnité congés non pris (" ~ resultat.jours_restants ~ " j)", resultat.indemnite_conges) }}
       {{ ligne("Total brut", resultat.total_brut) }}

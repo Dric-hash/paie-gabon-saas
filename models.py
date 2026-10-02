@@ -1769,6 +1769,33 @@ class CollaborateurEntreprise(db.Model):
                                           name="uq_collab_entreprise"),)
 
 
+class Sanction(db.Model):
+    """Registre disciplinaire : sanctions prononcées à l'encontre d'un salarié
+    (avertissement, blâme, mise à pied…), consultable sur sa fiche."""
+    __tablename__ = "sanctions"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id    = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    type          = db.Column(db.String(30), nullable=False)   # AVERTISSEMENT | BLAME | MISE_A_PIED | MUTATION | AUTRE
+    date_sanction = db.Column(db.Date, nullable=False)
+    motif         = db.Column(db.String(200))                  # motif court
+    description   = db.Column(db.Text)                         # exposé des faits
+    duree_jours   = db.Column(db.Integer)                      # pour mise à pied
+    cree_par      = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    cree_par_nom  = db.Column(db.String(150))
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie", backref="sanctions")
+
+    LIBELLES = {
+        "AVERTISSEMENT": "Avertissement", "BLAME": "Blâme",
+        "MISE_A_PIED": "Mise à pied", "MUTATION": "Mutation disciplinaire",
+        "AUTRE": "Autre sanction",
+    }
+    @property
+    def type_libelle(self):
+        return self.LIBELLES.get(self.type, self.type)
+
+
 class HistoriqueSalarie(db.Model):
     """Historique des modifications de champs sensibles d'un salarié
     (date d'embauche, fonction) — consultable par le tenant."""

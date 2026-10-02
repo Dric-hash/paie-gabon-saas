@@ -900,3 +900,40 @@ class TestSimulateurDroits:
         # donne un net supérieur à la démission.
         assert lic["total_net"] != dem["total_net"]
         assert lic["preavis_montant"] > 0 and dem["preavis_montant"] == 0
+
+
+class TestSanctions:
+    """Module discipline : ajout, lettre PDF, suppression."""
+
+    def test_cycle_sanction(self, client):
+        from models import db, Tenant, Salarie, Sanction
+        from datetime import date
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        s = Salarie(tenant_id=t.id, matricule="SANC1", nom="DISC", prenom="Test",
+                    statut="ACTIF", date_embauche=date(2024, 1, 1), emploi="Ouvrier")
+        db.session.add(s); db.session.commit(); sid = s.id
+        login(client, "admin@a.ga")
+        page = client.get(f"/salaries/{sid}/modifier"); token = _extract_csrf(page.data)
+        # ajout
+        r = client.post(f"/salaries/{sid}/sanctions", data={
+            "type": "AVERTISSEMENT", "date_sanction": "2026-06-15",
+            "motif": "Retards", "description": "Faits.", "csrf_token": token,
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        sa = Sanction.query.filter_by(salarie_id=sid).first()
+        assert sa is not None and sa.type == "AVERTISSEMENT"
+        # lettre PDF
+        r = client.get(f"/salaries/{sid}/sanctions/{sa.id}/lettre")
+        assert r.status_code == 200 and r.data[:4] == b"%PDF"
+        # suppression
+        r = client.post(f"/salaries/{sid}/sanctions/{sa.id}/supprimer",
+                        data={"csrf_token": token}, follow_redirects=True)
+        assert Sanction.query.filter_by(salarie_id=sid).count() == 0
+
+    def test_demission_pas_indemnite_licenciement(self):
+        """Non-régression : une démission n'affiche jamais 'indemnité de licenciement'."""
+        from simulateur_droits import simuler_fin_contrat
+        from datetime import date
+        r = simuler_fin_contrat(salaire=250000, date_embauche=date(2021,1,1),
+                                convention="BTP", cause="DEMISSION", date_cessation=date(2026,6,30))
+        assert r["type_indemnite"] != "LICENCIEMENT"
