@@ -975,15 +975,21 @@ class TestProcedureRupture:
 class TestStatsLanding:
     """Comptage landing (agrégé, sans donnée perso) + page admin."""
 
+    _H = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"}
+
     def test_comptage_et_page(self, client):
         from models import StatLanding
-        # visites anonymes + clic CTA
-        client.get("/")
-        client.get("/", headers={"Referer": "https://www.google.com/"})
-        client.get("/?src=facebook")
-        client.get("/essai")
+        # visites humaines + clic CTA
+        client.get("/", headers=self._H)
+        client.get("/", headers={**self._H, "Referer": "https://www.google.com/"})
+        client.get("/?src=facebook", headers=self._H)
+        client.get("/essai", headers=self._H)
+        # bots : doivent être ignorés
+        client.get("/", headers={"User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1)"})
+        client.get("/", headers={"User-Agent": ""})
         rows = StatLanding.query.all()
-        assert sum(r.vues for r in rows) >= 3
+        assert sum(r.vues for r in rows) == 3     # 3 humains, 0 bot
         assert sum(r.clics_cta for r in rows) >= 1
         sources = {r.source for r in rows}
         assert "google" in sources and "facebook" in sources

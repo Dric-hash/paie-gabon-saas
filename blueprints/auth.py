@@ -60,9 +60,26 @@ def _source_visite():
     return host[:60]
 
 
+_BOT_SIGNATURES = (
+    "bot", "crawl", "spider", "slurp", "bingpreview", "facebookexternalhit",
+    "whatsapp", "telegrambot", "preview", "monitor", "uptime", "pingdom",
+    "headless", "python-requests", "curl", "wget", "scrapy", "phantomjs",
+    "lighthouse", "gptbot", "ahrefs", "semrush", "dataprovider", "feedfetcher", "werkzeug",
+)
+def _est_bot():
+    """Détecte un robot d'après le user-agent (lu à la volée, JAMAIS stocké).
+    Un user-agent vide est aussi traité comme suspect."""
+    ua = (request.headers.get("User-Agent") or "").lower()
+    if not ua:
+        return True
+    return any(sig in ua for sig in _BOT_SIGNATURES)
+
+
 def _incr_stat_landing(champ, source):
     """Incrémente un compteur agrégé (vues | clics_cta) pour aujourd'hui + source.
-    Best-effort : n'interrompt jamais la page en cas d'échec."""
+    Les robots sont ignorés. Best-effort : n'interrompt jamais la page en cas d'échec."""
+    if _est_bot():
+        return
     try:
         from models import StatLanding, utcnow
         jour = utcnow().date()

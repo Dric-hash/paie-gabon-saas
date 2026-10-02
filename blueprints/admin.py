@@ -1216,7 +1216,22 @@ def admin_landing_stats():
                         .distinct().count())
     taux_clic = round(total_clics / total_vues * 100, 1) if total_vues else 0
     taux_inscr = round(nb_inscrits / total_clics * 100, 1) if total_clics else 0
+    # Série par jour pour le graphique d'évolution (vues + clics)
+    from collections import OrderedDict
+    serie = OrderedDict()
+    for i in range(jours - 1, -1, -1):
+        j = utcnow().date() - timedelta(days=i)
+        serie[j] = {"vues": 0, "clics": 0}
+    for r in rows:
+        if r.jour in serie:
+            serie[r.jour]["vues"] += r.vues or 0
+            serie[r.jour]["clics"] += r.clics_cta or 0
+    max_vues = max([v["vues"] for v in serie.values()] + [1])
+    evolution = [{"jour": j.strftime("%d/%m"), "jour_court": j.strftime("%d/%m"),
+                  "vues": v["vues"], "clics": v["clics"],
+                  "h": round((v["vues"] / max_vues) * 100)} for j, v in serie.items()]
     return render_template("admin/landing_stats.html",
         jours=jours, total_vues=total_vues, total_clics=total_clics, taux_clic=taux_clic,
         par_source=par_source, nb_inscrits=nb_inscrits, nb_actifs=nb_actifs,
-        nb_avec_bulletin=nb_avec_bulletin, taux_inscr=taux_inscr, rows=rows[:60])
+        nb_avec_bulletin=nb_avec_bulletin, taux_inscr=taux_inscr, rows=rows[:60],
+        evolution=evolution, max_vues=max_vues)

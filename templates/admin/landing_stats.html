@@ -28,6 +28,31 @@
     </div>
   </div>
 
+  <!-- Graphique d'évolution -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.5rem">
+    <div style="background:#f9fafb;padding:.7rem 1.1rem;font-weight:700;color:#0f3d36;border-bottom:1px solid #e5e7eb">Évolution des visites (hors robots)</div>
+    {% if evolution and max_vues > 0 %}
+    <div style="padding:1.1rem">
+      <div style="display:flex;align-items:flex-end;gap:2px;height:140px;overflow-x:auto">
+        {% for d in evolution %}
+        <div style="flex:1;min-width:8px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%"
+             title="{{ d.jour }} — {{ d.vues }} visite(s), {{ d.clics }} clic(s)">
+          <div style="width:100%;background:#0f3d36;border-radius:2px 2px 0 0;height:{{ d.h if d.h > 0 else 1 }}%;min-height:1px"></div>
+        </div>
+        {% endfor %}
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-top:.4rem;font-size:.7rem;color:#9ca3af">
+        <span>{{ evolution[0].jour }}</span>
+        {% if evolution|length > 2 %}<span>{{ evolution[(evolution|length // 2)].jour }}</span>{% endif %}
+        <span>{{ evolution[-1].jour }}</span>
+      </div>
+      <div style="font-size:.72rem;color:#9ca3af;margin-top:.3rem">Pic : {{ max_vues }} visite(s)/jour · survolez une barre pour le détail.</div>
+    </div>
+    {% else %}
+    <div style="padding:1.25rem;text-align:center;color:#9ca3af;font-size:.85rem">Pas encore de visites sur la période.</div>
+    {% endif %}
+  </div>
+
   <!-- Tunnel -->
   <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.5rem">
     <div style="background:#0f3d36;color:#fff;padding:.7rem 1.1rem;font-weight:800">Tunnel de conversion</div>
