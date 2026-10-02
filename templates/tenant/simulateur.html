@@ -29,6 +29,7 @@
   <div>
     <h1 class="text-2xl font-black">🧮 Simulateur de paie</h1>
     <p class="text-gray-500 text-sm mt-1">Calculez un bulletin instantanément sans le sauvegarder — résultats en temps réel</p>
+    <a href="/simulateur/droits" style="display:inline-block;margin-top:.5rem;background:#eef4f2;color:#0f3d36;border:1px solid #0f3d36;padding:.4rem .9rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.82rem">⚖️ Simulateur de droits (fin de contrat) →</a>
   </div>
   <div style="display:flex;gap:.5rem">
     <button onclick="resetFormulaire()" style="background:#f3f4f6;color:#374151;padding:.5rem .875rem;border-radius:.75rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer">🔄 Réinitialiser</button>
@@ -244,7 +245,7 @@
 
   <!-- Onglets -->
   <div style="display:flex;gap:.375rem;margin-bottom:1rem;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem">
-    {% for tab_id, tab_label in [('tab-aug','📈 Augmentation'),('tab-net','🎯 Net → Brut'),('tab-comp','⚖️ Comparer scénarios')] %}
+    {% for tab_id, tab_label in [('tab-aug','📈 Augmentation'),('tab-net','🎯 Net → Brut'),('tab-comp','⚖️ Comparer scénarios'),('tab-droits','⚖️ Droits fin de contrat')] %}
     <button onclick="switchTab('{{ tab_id }}')" id="btn-{{ tab_id }}"
       style="padding:.375rem .875rem;border-radius:.5rem .5rem 0 0;font-size:.8rem;font-weight:700;border:none;cursor:pointer;
              background:{% if tab_id == 'tab-aug' %}#0f3d36;color:white{% else %}#f3f4f6;color:#374151{% endif %}">
@@ -359,6 +360,63 @@
       </div>
     </div>
   </div>
+
+  <!-- TAB 4 : Droits fin de contrat -->
+  <div id="tab-droits" class="adv-tab" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem;align-items:start">
+      <div>
+        <div style="display:flex;gap:.5rem;margin-bottom:.875rem">
+          <button type="button" id="dmode-existant" onclick="droitsMode('existant')" style="flex:1;padding:.45rem;border-radius:.5rem;border:none;cursor:pointer;font-size:.78rem;font-weight:700;background:#0f3d36;color:#fff">Salarié existant</button>
+          <button type="button" id="dmode-libre" onclick="droitsMode('libre')" style="flex:1;padding:.45rem;border-radius:.5rem;border:1px solid #e5e7eb;cursor:pointer;font-size:.78rem;font-weight:700;background:#f3f4f6;color:#374151">Saisie libre</button>
+        </div>
+
+        <div id="droits-existant">
+          <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Salarié</label>
+          <select id="d_salarie" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;margin-bottom:.75rem">
+            <option value="">— Choisir —</option>
+            {% for s in salaries %}<option value="{{ s.id }}">{{ s.nom }} {{ s.prenom }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div id="droits-libre" style="display:none">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.75rem">
+            <div><label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Salaire mensuel brut</label>
+              <input type="number" id="d_salaire" placeholder="300000" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box"></div>
+            <div><label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Ancienneté (années)</label>
+              <input type="number" id="d_anciennete" step="0.1" placeholder="5" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box"></div>
+          </div>
+          <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Statut</label>
+          <select id="d_statut" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;margin-bottom:.75rem">
+            <option value="EXECUTION">Exécution</option><option value="ENCADREMENT">Encadrement</option><option value="CADRE">Cadre</option>
+          </select>
+        </div>
+
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Motif de rupture</label>
+        <select id="d_cause" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;margin-bottom:.75rem">
+          <option value="LICENCIEMENT">Licenciement</option>
+          <option value="DEMISSION">Démission</option>
+          <option value="RETRAITE">Retraite</option>
+          <option value="FAUTE_LOURDE">Faute lourde</option>
+        </select>
+        <label style="display:block;font-size:.72rem;font-weight:700;color:#374151;margin-bottom:.25rem">Date de cessation</label>
+        <input type="date" id="d_date" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;margin-bottom:1rem;box-sizing:border-box">
+        <button type="button" onclick="simulerDroits()" style="width:100%;background:#0f3d36;color:#fff;padding:.7rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Calculer les droits</button>
+      </div>
+
+      <div id="droits-result" style="display:none;background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:1.1rem">
+        <h3 style="font-size:.875rem;font-weight:700;color:#0f3d36;margin:0 0 .25rem" id="dr-nom"></h3>
+        <p style="font-size:.72rem;color:#6b7280;margin:0 0 .875rem" id="dr-anc"></p>
+        <div id="dr-lignes" style="font-size:.85rem"></div>
+        <div style="border-top:2px solid #0f3d36;margin-top:.75rem;padding-top:.5rem">
+          <div style="display:flex;justify-content:space-between;font-weight:700;color:#0f3d36"><span>Total brut des droits</span><span id="dr-brut"></span></div>
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;color:#6b7280"><span>Cotisations (CNSS/CNAMGS)</span><span id="dr-cotis"></span></div>
+          <div style="display:flex;justify-content:space-between;font-weight:800;color:#166534;font-size:1.05rem;margin-top:.25rem"><span>Net estimé</span><span id="dr-net"></span></div>
+        </div>
+        <p style="font-size:.68rem;color:#9ca3af;margin:.875rem 0 0;font-style:italic">Estimation indicative — ne constitue ni un engagement ni un conseil juridique. Les montants officiels sont ceux du solde de tout compte validé.</p>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 {% endblock %}
@@ -726,5 +784,52 @@ async function comparerScenarios() {
   document.getElementById('comp-result-content').innerHTML = html;
   document.getElementById('comp-result').style.display = 'block';
 }
+
+// ── Simulateur de droits (fin de contrat) ──────────────────────────────
+function _fmtD(v){ return Math.round(v||0).toLocaleString('fr') + ' FCFA'; }
+function droitsMode(m){
+  var ex = m==='existant';
+  document.getElementById('droits-existant').style.display = ex?'block':'none';
+  document.getElementById('droits-libre').style.display   = ex?'none':'block';
+  document.getElementById('dmode-existant').style.background = ex?'#0f3d36':'#f3f4f6';
+  document.getElementById('dmode-existant').style.color = ex?'#fff':'#374151';
+  document.getElementById('dmode-libre').style.background = ex?'#f3f4f6':'#0f3d36';
+  document.getElementById('dmode-libre').style.color = ex?'#374151':'#fff';
+  document.getElementById('dmode-existant').dataset.mode = m;
+}
+async function simulerDroits(){
+  var mode = document.getElementById('droits-existant').style.display!=='none' ? 'existant':'libre';
+  var payload = { mode: mode, cause: document.getElementById('d_cause').value,
+                  date_cessation: document.getElementById('d_date').value };
+  if (mode==='existant'){
+    payload.salarie_id = document.getElementById('d_salarie').value;
+    if (!payload.salarie_id){ alert('Choisissez un salarié.'); return; }
+  } else {
+    payload.salaire = document.getElementById('d_salaire').value;
+    payload.anciennete = document.getElementById('d_anciennete').value;
+    payload.statut = document.getElementById('d_statut').value;
+    if (!payload.salaire){ alert('Saisissez un salaire mensuel.'); return; }
+  }
+  try {
+    var r = await fetch('/api/simuler-droits', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    var d = await r.json();
+    if (!r.ok || d.error){ alert(d.error || 'Erreur de simulation.'); return; }
+    document.getElementById('dr-nom').textContent = d.nom;
+    document.getElementById('dr-anc').textContent =
+      'Ancienneté : ' + (d.anciennete_annees||0) + ' an(s) ' + (d.anciennete_mois||0) + ' mois · Motif : ' + d.cause;
+    var L = '';
+    function ligne(lbl, val){ return '<div style="display:flex;justify-content:space-between;padding:.2rem 0"><span>'+lbl+'</span><span style="font-weight:600">'+_fmtD(val)+'</span></div>'; }
+    L += ligne(d.type_indemnite || 'Indemnité de rupture', d.indem_licenciement);
+    L += ligne('Préavis ('+(d.preavis_jours||0)+' j)', d.preavis_montant);
+    L += ligne('Congés non pris ('+(d.jours_conges_restants||0)+' j)', d.indemnite_conges);
+    document.getElementById('dr-lignes').innerHTML = L;
+    document.getElementById('dr-brut').textContent  = _fmtD(d.total_brut);
+    document.getElementById('dr-cotis').textContent = '- ' + _fmtD(d.cotisations);
+    document.getElementById('dr-net').textContent   = _fmtD(d.total_net_estime);
+    document.getElementById('droits-result').style.display = 'block';
+  } catch(e){ alert('Erreur réseau.'); }
+}
+
 </script>
 {% endblock %}

@@ -40,7 +40,15 @@ def app():
         "TESTING": True,
         "WTF_CSRF_ENABLED": True,
         "SERVER_NAME": "localhost",
+        "RATELIMIT_ENABLED": False,
     })
+    # Le limiter (mémoire) est partagé sur toute la session pytest : on le désactive
+    # pour que les nombreux logins de la suite n'épuisent pas la fenêtre 20/min.
+    try:
+        from app import limiter
+        limiter.enabled = False
+    except Exception:
+        pass
     with flask_app.app_context():
         db.drop_all()      # repartir d'une base vraiment vide
         db.create_all()
@@ -833,3 +841,62 @@ class TestHistoriqueSalarie:
         h = HistoriqueSalarie.query.filter_by(salarie_id=sid).all()
         champs = {e.champ for e in h}
         assert "date_embauche" in champs and "emploi" in champs
+
+
+class TestSimulateurDroits:
+    """Simulateur de droits de fin de contrat (API) — modes libre et existant."""
+
+    def test_simuler_droits_libre(self, client):
+        login(client, "admin@a.ga")
+        r = client.post("/api/simuler-droits", json={
+            "mode": "libre", "salaire": 300000, "anciennete": 5,
+            "statut": "EXECUTION", "cause": "LICENCIEMENT", "date_cessation": "2026-01-31",
+        })
+        assert r.status_code == 200
+        d = r.get_json()
+        assert d["indem_licenciement"] > 0
+        assert d["total_brut"] >= d["indem_licenciement"]
+        assert "total_net_estime" in d
+
+    def test_simuler_droits_sans_salaire_refuse(self, client):
+        login(client, "admin@a.ga")
+        r = client.post("/api/simuler-droits", json={"mode": "libre", "cause": "LICENCIEMENT"})
+        assert r.status_code == 400
+
+
+class TestSimulateurDroits:
+    """Simulateur de droits de fin de contrat (salarié existant + saisie libre)."""
+
+    def test_page_et_calculs(self, client):
+        from models import db, Tenant, Salarie, Contrat
+        from datetime import date
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        t.convention = "BTP"; t.jours_conge_par_mois = 2.0   # état déterministe
+        s = Salarie(tenant_id=t.id, matricule="SIMU1", nom="SIMU", prenom="Test",
+                    statut="ACTIF", date_embauche=date(2021, 1, 1), nb_enfants=2)
+        db.session.add(s); db.session.flush()
+        db.session.add(Contrat(tenant_id=t.id, salarie_id=s.id, type_contrat="CDI",
+                               date_debut=date(2021, 1, 1), salaire_base=250000, actif=True))
+        db.session.commit(); sid = s.id
+        login(client, "admin@a.ga")
+        assert client.get("/simulateur/droits").status_code == 200
+        # mode salarié
+        r = client.get(f"/simulateur/droits?go=1&mode=salarie&salarie_id={sid}"
+                       "&cause=LICENCIEMENT&date_cessation=2026-06-30")
+        assert r.status_code == 200 and "Total net à payer" in r.get_data(as_text=True)
+        # saisie libre
+        r = client.get("/simulateur/droits?go=1&mode=libre&salaire=300000"
+                       "&date_embauche=2020-01-01&nb_enfants=1&cause=DEMISSION&date_cessation=2026-06-30")
+        assert r.status_code == 200 and "Total net à payer" in r.get_data(as_text=True)
+
+    def test_helper_cause_change_resultat(self):
+        from simulateur_droits import simuler_fin_contrat
+        from datetime import date
+        lic = simuler_fin_contrat(salaire=250000, date_embauche=date(2021,1,1),
+                                  convention="BTP", cause="LICENCIEMENT", date_cessation=date(2026,6,30))
+        dem = simuler_fin_contrat(salaire=250000, date_embauche=date(2021,1,1),
+                                  convention="BTP", cause="DEMISSION", date_cessation=date(2026,6,30))
+        # Le motif change le résultat : le licenciement (avec préavis employeur)
+        # donne un net supérieur à la démission.
+        assert lic["total_net"] != dem["total_net"]
+        assert lic["preavis_montant"] > 0 and dem["preavis_montant"] == 0

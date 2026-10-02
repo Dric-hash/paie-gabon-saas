@@ -1,0 +1,115 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:860px;margin:0 auto;padding:1.5rem">
+  <a href="/simulateur" style="color:#6b7280;text-decoration:none;font-size:.9rem">← Simulateur de paie</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.5rem 0 .25rem">⚖️ Simulateur de droits — fin de contrat</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:0 0 1.25rem">
+    Estimez les droits dus à la fin d'un contrat (indemnités, préavis, congés, net) — à partir d'un salarié ou en saisie libre.
+  </p>
+
+  <form method="GET" action="/simulateur/droits" id="fdroits"
+        style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <input type="hidden" name="go" value="1"/>
+    <!-- Choix du mode -->
+    <div style="display:flex;gap:.5rem;margin-bottom:1rem">
+      <button type="button" class="modebtn" data-mode="salarie"
+        style="flex:1;padding:.6rem;border-radius:.5rem;border:1px solid #0f3d36;background:{{ '#0f3d36' if params.mode=='salarie' else '#fff' }};color:{{ '#fff' if params.mode=='salarie' else '#0f3d36' }};font-weight:700;cursor:pointer">Salarié existant</button>
+      <button type="button" class="modebtn" data-mode="libre"
+        style="flex:1;padding:.6rem;border-radius:.5rem;border:1px solid #0f3d36;background:{{ '#0f3d36' if params.mode=='libre' else '#fff' }};color:{{ '#fff' if params.mode=='libre' else '#0f3d36' }};font-weight:700;cursor:pointer">Saisie libre</button>
+    </div>
+    <input type="hidden" name="mode" id="modeInput" value="{{ params.mode }}"/>
+
+    <!-- Mode salarié -->
+    <div id="bloc-salarie" style="display:{{ 'block' if params.mode=='salarie' else 'none' }}">
+      <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Salarié</label>
+      <select name="salarie_id" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem">
+        <option value="">— Choisir —</option>
+        {% for s in salaries %}
+        <option value="{{ s.id }}" {% if params.salarie_id==s.id %}selected{% endif %}>{{ s.nom }} {{ s.prenom }} ({{ s.matricule }})</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Mode libre -->
+    <div id="bloc-libre" style="display:{{ 'block' if params.mode=='libre' else 'none' }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.75rem">
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Salaire mensuel (FCFA)</label>
+          <input type="number" name="salaire" value="{{ params.salaire or '' }}" min="0" step="1000" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Date d'embauche</label>
+          <input type="date" name="date_embauche" value="{{ params.date_embauche }}" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Nb d'enfants</label>
+          <input type="number" name="nb_enfants" value="{{ params.nb_enfants }}" min="0" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+
+    <!-- Commun -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Motif de rupture</label>
+        <select name="cause" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem">
+          {% for val,lib in [("LICENCIEMENT","Licenciement"),("DEMISSION","Démission"),("FIN_CDD","Fin de CDD"),("RETRAITE","Retraite"),("RUPTURE_ESSAI","Rupture période d'essai"),("FAUTE_LOURDE","Faute lourde")] %}
+          <option value="{{ val }}" {% if params.cause==val %}selected{% endif %}>{{ lib }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.2rem">Date de cessation</label>
+        <input type="date" name="date_cessation" value="{{ params.date_cessation }}" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+      </div>
+    </div>
+
+    <button type="submit" style="margin-top:1rem;background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Calculer les droits</button>
+  </form>
+
+  {% if erreur %}
+  <div style="background:#fee2e2;color:#991b1b;padding:.7rem 1rem;border-radius:.5rem;font-size:.9rem;margin-bottom:1rem">{{ erreur }}</div>
+  {% endif %}
+
+  {% if resultat %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <div style="background:#0f3d36;color:#fff;padding:.8rem 1.1rem;display:flex;justify-content:space-between;align-items:center">
+      <span style="font-weight:800">Droits estimés — {{ resultat.cause_cessation.replace('_',' ')|title }}</span>
+      <span style="font-size:.8rem;opacity:.85">Ancienneté : {{ resultat.anciennete_annees }} an(s)</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      {% macro ligne(lib, val, fort=false) %}
+      <tr style="border-top:1px solid #f3f4f6;{{ 'background:#eef4f2' if fort else '' }}">
+        <td style="padding:.6rem 1.1rem;{{ 'font-weight:800' if fort else '' }}">{{ lib }}</td>
+        <td style="padding:.6rem 1.1rem;text-align:right;{{ 'font-weight:800;color:#0f3d36' if fort else 'font-weight:600' }}">{{ "{:,.0f}".format(val|float).replace(","," ") }} FCFA</td>
+      </tr>
+      {% endmacro %}
+      {{ ligne("Indemnité de licenciement", resultat.indem_licenciement) }}
+      {{ ligne("Indemnité de préavis (" ~ resultat.preavis_jours ~ " j)", resultat.preavis_montant) }}
+      {{ ligne("Indemnité congés non pris (" ~ resultat.jours_restants ~ " j)", resultat.indemnite_conges) }}
+      {{ ligne("Total brut", resultat.total_brut) }}
+      {{ ligne("Cotisations salariales (CNSS/CNAMGS/TCS/IRPP)", -resultat.total_cotisations) }}
+      {{ ligne("Total net à payer", resultat.total_net, fort=true) }}
+    </table>
+  </div>
+  <p style="font-size:.78rem;color:#9ca3af;margin-top:.75rem;font-style:italic">
+    ⚠️ Simulation à titre indicatif, ne constitue ni un engagement ni un conseil juridique. Les montants officiels sont ceux du solde de tout compte validé.
+  </p>
+  {% endif %}
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  document.querySelectorAll(".modebtn").forEach(function(b){
+    b.addEventListener("click", function(){
+      var m=b.dataset.mode;
+      document.getElementById("modeInput").value=m;
+      document.getElementById("bloc-salarie").style.display = (m==="salarie"?"block":"none");
+      document.getElementById("bloc-libre").style.display   = (m==="libre"?"block":"none");
+      document.querySelectorAll(".modebtn").forEach(function(x){
+        var on=x.dataset.mode===m;
+        x.style.background=on?"#0f3d36":"#fff"; x.style.color=on?"#fff":"#0f3d36";
+      });
+    });
+  });
+</script>
+{% endblock %}

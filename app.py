@@ -417,6 +417,7 @@ _CSRF_EXEMPT_ENDPOINTS = [
     "tenant.api_simuler_scenarios",
     "tenant.api_simuler_net_vers_brut",
     "tenant.api_simuler_augmentation",
+    "tenant.api_simuler_droits",
     # api_cache_clear retiré de l'exemption : il modifie l'état (vide le cache) et
     # le front envoie déjà un en-tête X-CSRFToken — la protection CSRF s'applique.
     "prestataires.api_calculer_facture",

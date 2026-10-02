@@ -1503,3 +1503,75 @@ def api_acomptes_mois(id):
             .filter_by(tenant_id=t.id,salarie_id=id,mois=mois,annee=annee,statut="EN_ATTENTE").scalar() or 0
     return jsonify({"total":float(total)})
 
+
+
+@bp.route("/api/simuler-droits", methods=["POST"])
+@tenant_required
+def api_simuler_droits():
+    """Simulateur de droits de fin de contrat (indemnités licenciement/préavis/congés).
+    Deux modes : salarié existant (réutilise ses bulletins) ou saisie libre."""
+    if current_user.is_super_admin:
+        return jsonify({"error": "forbidden"}), 403
+    t = get_tenant()
+    d = request.get_json(silent=True) or {}
+    from conges_avance import calculer_solde_tout_compte
+    from datetime import date as _date, datetime as _dt, timedelta as _td
+    from types import SimpleNamespace
+
+    cause = (d.get("cause") or "LICENCIEMENT").upper()
+    try:
+        date_cess = _dt.strptime(d.get("date_cessation", ""), "%Y-%m-%d").date()
+    except (ValueError, TypeError):
+        date_cess = _date.today()
+    mode = d.get("mode", "existant")
+
+    try:
+        if mode == "existant":
+            s = Salarie.query.filter_by(id=int(d.get("salarie_id") or 0), tenant_id=t.id).first()
+            if not s:
+                return jsonify({"error": "Salarié introuvable"}), 404
+            bulletins = (BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+                         .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
+                         .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
+            nom_affiche = s.nom_complet
+        else:
+            brut = float(d.get("salaire") or 0)
+            annees = float(d.get("anciennete") or 0)
+            statut = (d.get("statut") or "EXECUTION").upper()
+            if brut <= 0:
+                return jsonify({"error": "Saisissez un salaire mensuel."}), 400
+            date_emb = date_cess - _td(days=int(annees * 365.25))
+            cat = SimpleNamespace(code={"CADRE": "9", "ENCADREMENT": "7"}.get(statut, "3"), libelle=statut)
+            s = SimpleNamespace(date_embauche=date_emb, date_cessation=date_cess, conges=[],
+                                contrats=[], tenant=t, categorie=cat, salaire_base=brut,
+                                nom_complet="Simulation", nom="Simulation", prenom="")
+            champs0 = dict(sursalaire=0, prime_anciennete=0, prime_panier=0, prime_transport=0,
+                           indem_transport=0, indem_logement=0, indem_representation=0,
+                           prime_responsabilite=0, prime_salisure=0, carburant=0)
+            bulletins = [SimpleNamespace(salaire_brut=brut, salaire_base=brut, **champs0) for _ in range(12)]
+            nom_affiche = "Simulation (saisie libre)"
+
+        solde = calculer_solde_tout_compte(s, bulletins, date_cess, convention=t.convention,
+                                           cause=cause, jours_conge_par_mois=t.jours_conge_par_mois)
+        g = lambda k: float(solde.get(k) or 0)
+        total_brut = g("indem_licenciement") + g("preavis_montant") + g("indemnite_conges")
+        cotis = g("stc_cnss_salarie") + g("stc_cnamgs_salarie")
+        return jsonify({
+            "nom": nom_affiche,
+            "cause": cause,
+            "anciennete_annees": solde.get("anciennete_annees"),
+            "anciennete_mois": solde.get("anciennete_mois"),
+            "dernier_brut": g("dernier_brut"),
+            "type_indemnite": solde.get("type_indemnite") or "Indemnité de rupture",
+            "indem_licenciement": g("indem_licenciement"),
+            "preavis_jours": solde.get("preavis_jours"),
+            "preavis_montant": g("preavis_montant"),
+            "jours_conges_restants": solde.get("jours_restants"),
+            "indemnite_conges": g("indemnite_conges"),
+            "cotisations": cotis,
+            "total_brut": total_brut,
+            "total_net_estime": total_brut - cotis,
+        })
+    except Exception as e:
+        current_app.logger.error(f"[SIMU DROITS] {e}")
+        return jsonify({"error": "Erreur lors de la simulation."}), 500

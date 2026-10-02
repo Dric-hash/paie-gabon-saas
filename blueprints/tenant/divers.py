@@ -1829,3 +1829,56 @@ def api_recherche_rapide():
             "lien": f"/bulletins/{b.id}", "categorie": "Bulletins"})
 
     return jsonify(resultats[:15])
+
+
+@bp.route("/simulateur/droits")
+@login_required
+def simulateur_droits():
+    """Simulateur de droits de fin de contrat (salarié existant ou saisie libre).
+    Simulation à titre indicatif — aucune donnée enregistrée."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    salaries_list = (Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")
+                     .order_by(Salarie.nom).all())
+    resultat = erreur = None
+    params = {
+        "mode": request.args.get("mode", "salarie"),
+        "salarie_id": request.args.get("salarie_id", type=int),
+        "salaire": request.args.get("salaire", type=float),
+        "date_embauche": request.args.get("date_embauche", ""),
+        "nb_enfants": request.args.get("nb_enfants", type=int) or 0,
+        "cause": request.args.get("cause", "LICENCIEMENT"),
+        "date_cessation": request.args.get("date_cessation", ""),
+    }
+    if request.args.get("go"):
+        try:
+            from simulateur_droits import simuler_fin_contrat
+            date_cess = parse_date(params["date_cessation"]) or date.today()
+            if params["mode"] == "salarie" and params["salarie_id"]:
+                s = Salarie.query.filter_by(id=params["salarie_id"], tenant_id=t.id).first()
+                if not s:
+                    raise ValueError("Salarié introuvable.")
+                bulletins_12 = (BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+                                .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
+                                .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
+                resultat = simuler_fin_contrat(
+                    salarie=s, bulletins_12=bulletins_12, convention=t.convention,
+                    cause=params["cause"], date_cessation=date_cess,
+                    jours_conge_par_mois=t.jours_conge_par_mois)
+            else:
+                if not params["salaire"] or not params["date_embauche"]:
+                    raise ValueError("Veuillez renseigner le salaire et la date d'embauche.")
+                resultat = simuler_fin_contrat(
+                    salaire=params["salaire"], date_embauche=parse_date(params["date_embauche"]),
+                    nb_enfants=params["nb_enfants"], convention=t.convention,
+                    cause=params["cause"], date_cessation=date_cess,
+                    jours_conge_par_mois=t.jours_conge_par_mois)
+        except Exception as e:
+            erreur = str(e)
+            logger.warning(f"[SIMU DROITS] {e}")
+    return render_template("tenant/simulateur_droits.html", tenant=t,
+                           salaries=salaries_list, params=params,
+                           resultat=resultat, erreur=erreur)
