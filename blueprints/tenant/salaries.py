@@ -1495,3 +1495,72 @@ def salarie_sanction_lettre(sal_id, sid):
         return redirect(url_for("tenant.salarie_detail", id=sal_id))
     nom = f"sanction_{s.nom}_{sanc.type}".replace(" ", "_") + ".pdf"
     return _doc_response(pdf, nom)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PROCÉDURE DE RUPTURE — workflow guidé (étapes + STC + documents)
+# ═══════════════════════════════════════════════════════════════════════════
+ETAPES_RUPTURE = {
+    "LICENCIEMENT": [
+        "Convoquer le salarié à un entretien préalable (par écrit, avec délai).",
+        "Tenir l'entretien préalable et recueillir ses explications.",
+        "Notifier le licenciement par écrit (lettre motivée).",
+        "Respecter le préavis (ou le payer) selon la catégorie.",
+        "Établir le solde de tout compte.",
+        "Remettre : certificat de travail, reçu pour solde de tout compte, attestation.",
+    ],
+    "DEMISSION": [
+        "Réceptionner la lettre de démission signée du salarié.",
+        "Vérifier le respect du préavis par le salarié.",
+        "Établir le solde de tout compte (indemnité de services rendus si ≥ 2 ans).",
+        "Remettre : certificat de travail, reçu pour solde de tout compte.",
+    ],
+    "FIN_CDD": [
+        "Vérifier l'arrivée du terme du contrat à durée déterminée.",
+        "Établir le solde de tout compte (indemnité de précarité éventuelle).",
+        "Remettre : certificat de travail, reçu pour solde de tout compte.",
+    ],
+    "RETRAITE": [
+        "Vérifier les conditions de départ à la retraite.",
+        "Établir le solde de tout compte (indemnité de services rendus).",
+        "Remettre : certificat de travail, reçu pour solde de tout compte.",
+    ],
+    "RUPTURE_ESSAI": [
+        "Notifier la rupture pendant la période d'essai (par écrit).",
+        "Établir le solde de tout compte (au prorata).",
+        "Remettre : certificat de travail.",
+    ],
+}
+LIBELLE_MOTIF = {
+    "LICENCIEMENT": "Licenciement", "DEMISSION": "Démission", "FIN_CDD": "Fin de CDD",
+    "RETRAITE": "Retraite", "RUPTURE_ESSAI": "Rupture période d'essai",
+}
+
+
+@bp.route("/salaries/<int:sal_id>/rupture")
+@tenant_required
+def salarie_rupture(sal_id):
+    """Procédure de rupture guidée : étapes, aperçu du STC, documents, finalisation."""
+    t = get_tenant()
+    s = Salarie.query.filter_by(id=sal_id, tenant_id=t.id).first_or_404()
+    contrat = next((c for c in s.contrats if c.actif), None)
+    motif = (request.args.get("motif") or s.type_rupture or "LICENCIEMENT").upper()
+    if motif not in ETAPES_RUPTURE:
+        motif = "LICENCIEMENT"
+    date_cessation = request.args.get("date_cessation", "")
+    # Aperçu du STC via le simulateur (réutilise le moteur)
+    apercu = None
+    try:
+        from simulateur_droits import simuler_fin_contrat
+        bulletins_12 = (BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+                        .filter(BulletinPaie.statut.in_(["VALIDÉ", "VALIDE", "PAYÉ"]))
+                        .order_by(BulletinPaie.date_creation.desc()).limit(12).all())
+        d = parse_date(date_cessation) or date.today()
+        apercu = simuler_fin_contrat(salarie=s, bulletins_12=bulletins_12,
+                                     convention=t.convention, cause=motif,
+                                     date_cessation=d, jours_conge_par_mois=t.jours_conge_par_mois)
+    except Exception as e:
+        logger.warning(f"[RUPTURE apercu] {e}")
+    return render_template("tenant/salarie_rupture.html", tenant=t, salarie=s,
+                           contrat=contrat, motif=motif, date_cessation=date_cessation,
+                           etapes=ETAPES_RUPTURE[motif], motifs=LIBELLE_MOTIF, apercu=apercu)

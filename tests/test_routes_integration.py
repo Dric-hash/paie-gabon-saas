@@ -937,3 +937,36 @@ class TestSanctions:
         r = simuler_fin_contrat(salaire=250000, date_embauche=date(2021,1,1),
                                 convention="BTP", cause="DEMISSION", date_cessation=date(2026,6,30))
         assert r["type_indemnite"] != "LICENCIEMENT"
+
+
+class TestProcedureRupture:
+    """Workflow de rupture : étapes selon motif + aperçu STC + finalisation."""
+
+    def test_page_et_finalisation(self, client):
+        from models import db, Tenant, Salarie, Contrat
+        from datetime import date
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        t.convention = "BTP"; t.jours_conge_par_mois = 2.0
+        s = Salarie(tenant_id=t.id, matricule="RUP1", nom="RUPT", prenom="Test",
+                    statut="ACTIF", date_embauche=date(2021, 1, 1), emploi="Maçon")
+        db.session.add(s); db.session.flush()
+        c = Contrat(tenant_id=t.id, salarie_id=s.id, type_contrat="CDI",
+                    date_debut=date(2021, 1, 1), salaire_base=250000, actif=True)
+        db.session.add(c); db.session.commit(); sid, cid = s.id, c.id
+        login(client, "admin@a.ga")
+        # page licenciement
+        r = client.get(f"/salaries/{sid}/rupture?motif=LICENCIEMENT&date_cessation=2026-06-30")
+        assert r.status_code == 200
+        html = r.get_data(as_text=True)
+        assert "Procédure de rupture" in html and "Total net à payer" in html
+        # démission → étapes adaptées
+        r = client.get(f"/salaries/{sid}/rupture?motif=DEMISSION")
+        assert "lettre de démission" in r.get_data(as_text=True)
+        # finalisation
+        page = client.get(f"/salaries/{sid}/modifier"); token = _extract_csrf(page.data)
+        r = client.post(f"/contrats/{cid}/terminer", data={
+            "type_rupture": "LICENCIEMENT", "date_arret": "2026-06-30", "csrf_token": token,
+        }, follow_redirects=True)
+        assert r.status_code == 200
+        s = Salarie.query.get(sid)
+        assert s.statut == "INACTIF" and str(s.date_cessation) == "2026-06-30"

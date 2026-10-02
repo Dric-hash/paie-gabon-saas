@@ -1,0 +1,97 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:820px;margin:0 auto;padding:1.5rem">
+  <a href="/salaries/{{ salarie.id }}" style="color:#6b7280;text-decoration:none;font-size:.9rem">← Fiche de {{ salarie.nom_complet }}</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.5rem 0 .25rem">🚪 Procédure de rupture</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:0 0 1.25rem">{{ salarie.nom_complet }}{% if salarie.emploi %} — {{ salarie.emploi }}{% endif %}</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Choix motif + date (recharge la procédure) -->
+  <form method="GET" action="/salaries/{{ salarie.id }}/rupture" style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;margin-bottom:1.25rem;display:grid;grid-template-columns:1fr 1fr auto;gap:.75rem;align-items:end">
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Motif de rupture</label>
+      <select name="motif" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem">
+        {% for val,lib in motifs.items() %}
+        <option value="{{ val }}" {% if motif==val %}selected{% endif %}>{{ lib }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label style="display:block;font-size:.75rem;font-weight:700;color:#374151;margin-bottom:.2rem">Date de cessation</label>
+      <input type="date" name="date_cessation" value="{{ date_cessation }}" style="width:100%;padding:.55rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+    </div>
+    <button type="submit" style="background:#0f3d36;color:#fff;padding:.55rem 1.1rem;border:none;border-radius:.5rem;font-weight:700;cursor:pointer">Actualiser</button>
+  </form>
+
+  <!-- Étapes -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.25rem">
+    <div style="background:#0f3d36;color:#fff;padding:.7rem 1.1rem;font-weight:800">Étapes — {{ motifs[motif] }}</div>
+    <div style="padding:.5rem 0">
+      {% for e in etapes %}
+      <div style="display:flex;gap:.7rem;padding:.55rem 1.1rem;border-top:1px solid #f3f4f6">
+        <span style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#eef4f2;color:#0f3d36;font-weight:800;font-size:.75rem;display:flex;align-items:center;justify-content:center">{{ loop.index }}</span>
+        <span style="font-size:.88rem;color:#374151">{{ e }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Aperçu du solde de tout compte -->
+  {% if apercu %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.25rem">
+    <div style="background:#f9fafb;padding:.7rem 1.1rem;font-weight:700;color:#0f3d36;border-bottom:1px solid #e5e7eb;display:flex;justify-content:space-between">
+      <span>💰 Aperçu du solde de tout compte</span>
+      <span style="font-size:.8rem;color:#6b7280">Ancienneté : {{ apercu.anciennete_annees }} an(s)</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      {% macro l(lib,val,fort=false) %}
+      <tr style="border-top:1px solid #f3f4f6;{{ 'background:#eef4f2' if fort else '' }}">
+        <td style="padding:.5rem 1.1rem;{{ 'font-weight:800' if fort else '' }}">{{ lib }}</td>
+        <td style="padding:.5rem 1.1rem;text-align:right;{{ 'font-weight:900;color:#0f3d36' if fort else 'font-weight:600' }}">{{ "{:,.0f}".format(val|float).replace(","," ") }} FCFA</td>
+      </tr>{% endmacro %}
+      {% if apercu.type_indemnite == "LICENCIEMENT" %}{{ l("Indemnité de licenciement", apercu.indem_licenciement) }}
+      {% elif apercu.type_indemnite == "SERVICES_RENDUS" %}{{ l("Indemnité de services rendus", apercu.indem_licenciement) }}{% endif %}
+      {{ l("Indemnité de préavis (" ~ apercu.preavis_jours ~ " j)", apercu.preavis_montant) }}
+      {{ l("Congés non pris (" ~ apercu.jours_restants ~ " j)", apercu.indemnite_conges) }}
+      {{ l("Total net à payer", apercu.total_net, fort=true) }}
+    </table>
+    <p style="font-size:.76rem;color:#9ca3af;padding:.5rem 1.1rem;font-style:italic;margin:0">Aperçu indicatif. Le montant officiel est celui du solde de tout compte validé.</p>
+  </div>
+  {% endif %}
+
+  <!-- Documents -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.25rem">
+    <div style="background:#f9fafb;padding:.7rem 1.1rem;font-weight:700;color:#0f3d36;border-bottom:1px solid #e5e7eb">📄 Documents à générer</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.6rem;padding:1rem">
+      <a href="/salaries/{{ salarie.id }}/document/solde-tout-compte?cause={{ motif }}{% if date_cessation %}&date_cessation={{ date_cessation }}{% endif %}" style="background:#0f3d36;color:#fff;padding:.5rem 1rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.85rem">Solde de tout compte</a>
+      <a href="/salaries/{{ salarie.id }}/document/certificat-travail" style="background:#fff;color:#0f3d36;border:1px solid #0f3d36;padding:.5rem 1rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.85rem">Certificat de travail</a>
+      <a href="/salaries/{{ salarie.id }}/document/attestation-travail" style="background:#fff;color:#0f3d36;border:1px solid #0f3d36;padding:.5rem 1rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.85rem">Attestation de travail</a>
+    </div>
+  </div>
+
+  <!-- Finalisation -->
+  {% if current_user.can_edit and contrat %}
+  <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:.85rem;padding:1.1rem">
+    <div style="font-weight:800;color:#991b1b;margin-bottom:.4rem">Finaliser la rupture</div>
+    <p style="font-size:.84rem;color:#7f1d1d;margin:0 0 .75rem">
+      Clôture le contrat : le salarié passe en <strong>INACTIF</strong>, la date de cessation et le motif sont enregistrés. À faire une fois les étapes ci-dessus effectuées.
+    </p>
+    <form method="POST" action="/contrats/{{ contrat.id }}/terminer" onsubmit="return confirm('Confirmer la fin de contrat de {{ salarie.nom_complet }} ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="type_rupture" value="{{ motif }}"/>
+      <input type="hidden" name="date_arret" value="{{ date_cessation }}"/>
+      <button type="submit" style="background:#b91c1c;color:#fff;padding:.6rem 1.3rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Clôturer le contrat ({{ motifs[motif] }})</button>
+    </form>
+  </div>
+  {% elif not contrat %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.6rem;padding:1rem;color:#6b7280;font-size:.85rem">Aucun contrat actif à clôturer pour ce salarié.</div>
+  {% endif %}
+
+  <p style="font-size:.76rem;color:#9ca3af;margin-top:1rem;font-style:italic">
+    ⚠️ Les étapes indiquées sont une aide ; les obligations légales exactes (délais, formalités, voies de recours) relèvent de votre responsabilité et, le cas échéant, d'un conseil juridique.
+  </p>
+</div>
+{% endblock %}
