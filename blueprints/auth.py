@@ -34,6 +34,58 @@ from werkzeug.security import generate_password_hash as _gph
 _DUMMY_PW_HASH = _gph(sec.token_hex(16))
 
 
+# ── Statistiques landing (agrégées, sans donnée personnelle) ───────────────────
+def _source_visite():
+    """Déduit la source d'une visite : paramètre utm_source/src, sinon domaine du
+    référent, sinon « direct ». Aucune donnée personnelle n'est lue ni stockée."""
+    src = (request.args.get("utm_source") or request.args.get("src") or "").strip().lower()
+    if src:
+        return src[:60]
+    ref = request.referrer or ""
+    if not ref:
+        return "direct"
+    try:
+        from urllib.parse import urlparse
+        host = (urlparse(ref).hostname or "").lower().replace("www.", "")
+    except Exception:
+        host = ""
+    if not host:
+        return "direct"
+    if "google" in host:   return "google"
+    if "facebook" in host or "fb." in host: return "facebook"
+    if "whatsapp" in host: return "whatsapp"
+    # Référent interne (notre propre site) → direct
+    if host in (request.host or "").lower():
+        return "direct"
+    return host[:60]
+
+
+def _incr_stat_landing(champ, source):
+    """Incrémente un compteur agrégé (vues | clics_cta) pour aujourd'hui + source.
+    Best-effort : n'interrompt jamais la page en cas d'échec."""
+    try:
+        from models import StatLanding, utcnow
+        jour = utcnow().date()
+        row = StatLanding.query.filter_by(jour=jour, source=source).first()
+        if row is None:
+            row = StatLanding(jour=jour, source=source, vues=0, clics_cta=0)
+            db.session.add(row)
+        setattr(row, champ, (getattr(row, champ) or 0) + 1)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.warning(f"[STAT LANDING] {e}")
+
+
+@bp.route("/essai")
+def essai():
+    """Point d'entrée des CTA « Essai gratuit » : compte le clic puis redirige
+    vers l'inscription (conserve la source éventuelle)."""
+    if not current_user.is_authenticated:
+        _incr_stat_landing("clics_cta", _source_visite())
+    return redirect(url_for("auth.inscription"))
+
+
 # ── Index ─────────────────────────────────────────────────────────────────────
 @bp.route("/")
 def index():
@@ -42,6 +94,7 @@ def index():
             url_for("admin.admin_dashboard") if current_user.is_super_admin
             else url_for("tenant.dashboard")
         )
+    _incr_stat_landing("vues", _source_visite())
     # Visiteurs non connectés : page de présentation
     from models import Plan, Avis
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()

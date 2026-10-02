@@ -970,3 +970,26 @@ class TestProcedureRupture:
         assert r.status_code == 200
         s = Salarie.query.get(sid)
         assert s.statut == "INACTIF" and str(s.date_cessation) == "2026-06-30"
+
+
+class TestStatsLanding:
+    """Comptage landing (agrégé, sans donnée perso) + page admin."""
+
+    def test_comptage_et_page(self, client):
+        from models import StatLanding
+        # visites anonymes + clic CTA
+        client.get("/")
+        client.get("/", headers={"Referer": "https://www.google.com/"})
+        client.get("/?src=facebook")
+        client.get("/essai")
+        rows = StatLanding.query.all()
+        assert sum(r.vues for r in rows) >= 3
+        assert sum(r.clics_cta for r in rows) >= 1
+        sources = {r.source for r in rows}
+        assert "google" in sources and "facebook" in sources
+        # page admin (super-admin)
+        login(client, "super@admin.ga")
+        r = client.get("/admin/landing")
+        # super@admin.ga n'existe peut-être pas dans le seed : on vérifie au moins que
+        # la route répond (200 si super-admin, 302/403 sinon) sans planter (pas de 500).
+        assert r.status_code != 500

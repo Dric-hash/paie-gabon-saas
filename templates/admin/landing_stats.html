@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:920px;margin:0 auto;padding:1.5rem">
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem">📈 Statistiques de la landing</h1>
+  <p style="color:#6b7280;font-size:.85rem;margin:0 0 1rem">
+    Données agrégées, hébergées chez nous — aucun cookie, aucune IP, aucun tiers. Sur les {{ jours }} derniers jours.
+  </p>
+
+  <div style="display:flex;gap:.5rem;margin-bottom:1.25rem">
+    {% for j in [7,30,90] %}
+    <a href="/admin/landing?jours={{ j }}" style="padding:.35rem .8rem;border-radius:.4rem;text-decoration:none;font-weight:700;font-size:.82rem;{% if jours==j %}background:#0f3d36;color:#fff{% else %}background:#eef4f2;color:#0f3d36{% endif %}">{{ j }} j</a>
+    {% endfor %}
+  </div>
+
+  <!-- Cartes clés -->
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-bottom:1.5rem">
+    <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#0f3d36">{{ total_vues }}</div>
+      <div style="font-size:.8rem;color:#6b7280">Visites de la landing</div>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#0f3d36">{{ total_clics }}</div>
+      <div style="font-size:.8rem;color:#6b7280">Clics « Essai gratuit » ({{ taux_clic }} %)</div>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-radius:.75rem;padding:1rem;text-align:center">
+      <div style="font-size:1.8rem;font-weight:900;color:#0f3d36">{{ nb_inscrits }}</div>
+      <div style="font-size:.8rem;color:#6b7280">Inscriptions ({{ taux_inscr }} % des clics)</div>
+    </div>
+  </div>
+
+  <!-- Tunnel -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.5rem">
+    <div style="background:#0f3d36;color:#fff;padding:.7rem 1.1rem;font-weight:800">Tunnel de conversion</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.6rem 1.1rem">👁️ Visites landing</td><td style="padding:.6rem 1.1rem;text-align:right;font-weight:700">{{ total_vues }}</td></tr>
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.6rem 1.1rem">🖱️ Clics « Essai gratuit »</td><td style="padding:.6rem 1.1rem;text-align:right;font-weight:700">{{ total_clics }}</td></tr>
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.6rem 1.1rem">✍️ Inscriptions</td><td style="padding:.6rem 1.1rem;text-align:right;font-weight:700">{{ nb_inscrits }}</td></tr>
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.6rem 1.1rem">📄 Ont créé un bulletin</td><td style="padding:.6rem 1.1rem;text-align:right;font-weight:700">{{ nb_avec_bulletin }}</td></tr>
+    </table>
+  </div>
+
+  <!-- Par source -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <div style="background:#f9fafb;padding:.7rem 1.1rem;font-weight:700;color:#0f3d36;border-bottom:1px solid #e5e7eb">D'où viennent les visiteurs</div>
+    {% if par_source %}
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <tr style="text-align:left;color:#6b7280"><th style="padding:.5rem 1.1rem;font-weight:600">Source</th><th style="padding:.5rem 1.1rem;font-weight:600;text-align:right">Visites</th><th style="padding:.5rem 1.1rem;font-weight:600;text-align:right">Clics</th></tr>
+      {% for src, d in par_source %}
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.5rem 1.1rem;font-weight:600">{{ src }}</td><td style="padding:.5rem 1.1rem;text-align:right">{{ d.vues }}</td><td style="padding:.5rem 1.1rem;text-align:right">{{ d.clics }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div style="padding:1.25rem;text-align:center;color:#9ca3af;font-size:.85rem">Aucune donnée sur la période.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

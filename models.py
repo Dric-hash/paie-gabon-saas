@@ -1769,6 +1769,19 @@ class CollaborateurEntreprise(db.Model):
                                           name="uq_collab_entreprise"),)
 
 
+class StatLanding(db.Model):
+    """Statistiques agrégées de la page de présentation publique.
+    Aucune donnée personnelle : seulement des compteurs par jour et par source
+    (pas d'IP, pas de cookie, pas de user-agent). Hébergé chez nous."""
+    __tablename__ = "stat_landing"
+    id        = db.Column(db.Integer, primary_key=True)
+    jour      = db.Column(db.Date, nullable=False)
+    source    = db.Column(db.String(60), default="direct")   # direct | google | facebook | <domaine>
+    vues      = db.Column(db.Integer, default=0)             # visites de la landing
+    clics_cta = db.Column(db.Integer, default=0)             # clics « Essai gratuit »
+    __table_args__ = (db.UniqueConstraint("jour", "source", name="uq_stat_landing_jour_source"),)
+
+
 class Sanction(db.Model):
     """Registre disciplinaire : sanctions prononcées à l'encontre d'un salarié
     (avertissement, blâme, mise à pied…), consultable sur sa fiche."""

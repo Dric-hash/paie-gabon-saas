@@ -1183,3 +1183,40 @@ def admin_messages_conversation(tenant_id):
                 .order_by(MessageSupport.date_creation.asc()).all())
     return render_template("admin/messages_conversation.html",
         tenant=t, messages=messages)
+
+
+@bp.route("/admin/landing")
+@login_required
+def admin_landing_stats():
+    """Statistiques de la landing (agrégées, sans donnée perso) + tunnel de conversion."""
+    if not current_user.is_super_admin:
+        from flask import abort; abort(403)
+    from models import StatLanding, Tenant, Utilisateur, BulletinPaie
+    from datetime import timedelta
+    jours = request.args.get("jours", type=int) or 30
+    depuis = utcnow().date() - timedelta(days=jours)
+    rows = (StatLanding.query.filter(StatLanding.jour >= depuis)
+            .order_by(StatLanding.jour.desc()).all())
+    total_vues = sum(r.vues or 0 for r in rows)
+    total_clics = sum(r.clics_cta or 0 for r in rows)
+    # par source
+    par_source = {}
+    for r in rows:
+        s = par_source.setdefault(r.source, {"vues": 0, "clics": 0})
+        s["vues"] += r.vues or 0; s["clics"] += r.clics_cta or 0
+    par_source = sorted(par_source.items(), key=lambda x: x[1]["vues"], reverse=True)
+    # tunnel de conversion (données internes, chez nous)
+    depuis_dt = utcnow() - timedelta(days=jours)
+    nb_inscrits = Tenant.query.filter(Tenant.date_inscription >= depuis_dt,
+                                      Tenant.est_cabinet == False).count()
+    nb_actifs = Tenant.query.filter(Tenant.date_inscription >= depuis_dt,
+                                    Tenant.statut == "ACTIF").count()
+    nb_avec_bulletin = (db.session.query(BulletinPaie.tenant_id)
+                        .filter(BulletinPaie.date_creation >= depuis_dt)
+                        .distinct().count())
+    taux_clic = round(total_clics / total_vues * 100, 1) if total_vues else 0
+    taux_inscr = round(nb_inscrits / total_clics * 100, 1) if total_clics else 0
+    return render_template("admin/landing_stats.html",
+        jours=jours, total_vues=total_vues, total_clics=total_clics, taux_clic=taux_clic,
+        par_source=par_source, nb_inscrits=nb_inscrits, nb_actifs=nb_actifs,
+        nb_avec_bulletin=nb_avec_bulletin, taux_inscr=taux_inscr, rows=rows[:60])
