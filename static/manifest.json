@@ -82,5 +82,20 @@
     "finance",
     "productivity"
   ],
-  "screenshots": []
+  "screenshots": [
+    {
+      "src": "/static/screenshots/mobile-1.png",
+      "sizes": "1080x1920",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "PaieGabon sur mobile"
+    },
+    {
+      "src": "/static/screenshots/wide-1.png",
+      "sizes": "1920x1080",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "PaieGabon"
+    }
+  ]
 }

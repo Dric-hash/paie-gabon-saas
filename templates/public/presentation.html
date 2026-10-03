@@ -708,5 +708,30 @@
 })();
 </script>
 
+<!-- Bouton flottant d'installation PWA (apparaît si installable) -->
+<button id="pwa-install-landing" style="display:none;position:fixed;bottom:1.1rem;right:1.1rem;z-index:60;background:#0f3d36;color:#fff;border:none;border-radius:999px;padding:.75rem 1.2rem;font-weight:700;font-size:.9rem;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;align-items:center;gap:.5rem">
+  📲 Installer l'application
+</button>
+<script nonce="{{ csp_nonce }}">
+// PWA — enregistrement du service worker (rend la landing installable)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function(){
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function(){});
+  });
+}
+// Invite d'installation + bouton flottant
+var _deferredInstallLanding = null;
+var _pwaBtn = document.getElementById('pwa-install-landing');
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault(); _deferredInstallLanding = e;
+  if (_pwaBtn) _pwaBtn.style.display = 'inline-flex';
+});
+if (_pwaBtn) _pwaBtn.addEventListener('click', function(){
+  if (!_deferredInstallLanding) return;
+  _deferredInstallLanding.prompt();
+  _deferredInstallLanding.userChoice.then(function(){ _deferredInstallLanding = null; _pwaBtn.style.display='none'; });
+});
+window.addEventListener('appinstalled', function(){ if (_pwaBtn) _pwaBtn.style.display='none'; });
+</script>
 </body>
 </html>
