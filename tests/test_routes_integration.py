@@ -999,3 +999,30 @@ class TestStatsLanding:
         # super@admin.ga n'existe peut-être pas dans le seed : on vérifie au moins que
         # la route répond (200 si super-admin, 302/403 sinon) sans planter (pas de 500).
         assert r.status_code != 500
+
+
+class TestValidationEmail:
+    """Vérification de l'email à l'inscription (format, typo, domaine)."""
+
+    def test_module_verification(self):
+        from email_validation import verifier_email, suggerer_correction
+        assert verifier_email("jean@gmail.com")[0] is True
+        assert verifier_email("nimportequoi")[0] is False          # format
+        assert verifier_email("test@mailinator.com")[0] is False   # jetable
+        assert suggerer_correction("paul@gmial.com") == "paul@gmail.com"  # typo
+
+    def test_inscription_rejette_email_douteux(self, client):
+        # faute de frappe → suggestion
+        r = client.get("/inscription"); tok = _extract_csrf(r.data)
+        r = client.post("/inscription", data={
+            "email": "paul@gmial.com", "password": "MotDePasse1",
+            "denomination": "TEST SARL", "nom": "P", "prenom": "Q", "csrf_token": tok,
+        }, follow_redirects=True)
+        assert "gmail.com" in r.get_data(as_text=True)
+        # format invalide
+        r = client.get("/inscription"); tok = _extract_csrf(r.data)
+        r = client.post("/inscription", data={
+            "email": "pasunemail", "password": "MotDePasse1",
+            "denomination": "T", "nom": "P", "prenom": "Q", "csrf_token": tok,
+        }, follow_redirects=True)
+        assert "format invalide" in r.get_data(as_text=True)

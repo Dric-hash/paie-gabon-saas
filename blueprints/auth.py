@@ -354,10 +354,13 @@ def inscription():
         email    = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
 
-        # ── Validation email ──────────────────────────────────────────────────
-        if not email or "@" not in email:
-            flash("Adresse email invalide.", "error")
-            return render_template("auth/inscription.html", plans=plans)
+        # ── Validation email (format + faute de frappe + domaine réel) ────────
+        from email_validation import verifier_email
+        _ok, _msg, _sugg = verifier_email(email)
+        if not _ok:
+            flash(_msg, "error")
+            return render_template("auth/inscription.html", plans=plans,
+                                   email_saisi=email, email_suggere=_sugg)
         if Utilisateur.query.filter_by(email=email).first():
             flash("Email déjà utilisé.", "error")
             return render_template("auth/inscription.html", plans=plans)
