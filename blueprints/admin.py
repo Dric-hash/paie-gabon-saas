@@ -1235,3 +1235,40 @@ def admin_landing_stats():
         par_source=par_source, nb_inscrits=nb_inscrits, nb_actifs=nb_actifs,
         nb_avec_bulletin=nb_avec_bulletin, taux_inscr=taux_inscr, rows=rows[:60],
         evolution=evolution, max_vues=max_vues)
+
+
+@bp.route("/admin/tarifs-das", methods=["GET", "POST"])
+@login_required
+def admin_tarifs_das():
+    """Super-admin : modifier les tarifs et réductions de la DAS (sans toucher au code)."""
+    if not current_user.is_super_admin:
+        from flask import abort; abort(403)
+    from models import TarifDAS
+    t = TarifDAS.get()
+    if request.method == "POST":
+        def _int(champ, defaut):
+            try: return max(0, int(request.form.get(champ, defaut)))
+            except (ValueError, TypeError): return defaut
+        t.prix_entreprise = _int("prix_entreprise", t.prix_entreprise)
+        t.prix_cabinet    = _int("prix_cabinet", t.prix_cabinet)
+        taux = _int("earlybird_taux", t.earlybird_taux)
+        t.earlybird_taux  = min(taux, 100)
+        mois = _int("earlybird_mois", t.earlybird_mois)
+        t.earlybird_mois  = min(max(mois, 1), 12)
+        jour = _int("earlybird_jour", t.earlybird_jour)
+        t.earlybird_jour  = min(max(jour, 1), 31)
+        db.session.commit()
+        log_action("UPDATE", "tarif_das", t.id, "Tarifs DAS modifiés",
+                   user_id=current_user.id)
+        db.session.commit()
+        flash("Tarifs DAS mis à jour.", "success")
+        return redirect(url_for("admin.admin_tarifs_das"))
+    # aperçu des prix appliqués
+    from das_facturation import DAS_PRIX_ENTREPRISE, DAS_PRIX_CABINET
+    apercu = {
+        "ent_normal": t.prix_entreprise,
+        "ent_early":  t.prix_entreprise - round(t.prix_entreprise * t.earlybird_taux / 100),
+        "cab_normal": t.prix_cabinet,
+        "cab_early":  t.prix_cabinet - round(t.prix_cabinet * t.earlybird_taux / 100),
+    }
+    return render_template("admin/tarifs_das.html", t=t, apercu=apercu)

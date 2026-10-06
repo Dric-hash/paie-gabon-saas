@@ -1769,6 +1769,28 @@ class CollaborateurEntreprise(db.Model):
                                           name="uq_collab_entreprise"),)
 
 
+class TarifDAS(db.Model):
+    """Tarification de l'édition de la DAS, modifiable par le super-admin
+    (ligne unique). Remplace les constantes codées en dur."""
+    __tablename__ = "tarif_das"
+    id              = db.Column(db.Integer, primary_key=True)
+    prix_entreprise = db.Column(db.Integer, default=200000)   # FCFA
+    prix_cabinet    = db.Column(db.Integer, default=100000)   # FCFA par société
+    earlybird_taux  = db.Column(db.Integer, default=20)       # % de réduction
+    earlybird_mois  = db.Column(db.Integer, default=3)        # avant le JJ/MM de l'année N+1
+    earlybird_jour  = db.Column(db.Integer, default=31)
+    date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+    @classmethod
+    def get(cls):
+        """Renvoie la config (crée la ligne par défaut au besoin)."""
+        row = cls.query.first()
+        if row is None:
+            row = cls()
+            db.session.add(row); db.session.commit()
+        return row
+
+
 class StatLanding(db.Model):
     """Statistiques agrégées de la page de présentation publique.
     Aucune donnée personnelle : seulement des compteurs par jour et par source

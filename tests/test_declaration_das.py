@@ -258,3 +258,20 @@ def test_das_documents_vides_ne_plantent_pas(client):
               "/declaration-das/annexes?annee=2099"]:
         r = client.get(u)
         assert r.status_code != 500, f"{u} plante sur données vides"
+
+
+def test_tarifs_das_editables_depuis_la_base(client):
+    """Les tarifs DAS viennent de la base et sont pris en compte immédiatement."""
+    from datetime import date
+    from models import db, TarifDAS, Tenant
+    from das_facturation import das_prix
+    t = Tenant.query.filter_by(est_cabinet=False).first() or Tenant.query.first()
+    t.cabinet_id = None
+    cfg = TarifDAS.get()
+    cfg.prix_entreprise = 300000
+    cfg.earlybird_taux = 25
+    db.session.commit()
+    p = das_prix(t, 2024, aujourd_hui=date(2025, 6, 1))
+    assert p["prix"] == 300000
+    pe = das_prix(t, 2024, aujourd_hui=date(2025, 2, 1))
+    assert pe["prix"] == 225000  # -25%

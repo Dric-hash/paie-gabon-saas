@@ -12,6 +12,7 @@ Réduction early-bird : -20 % si l'édition est débloquée avant la date limite
 """
 from datetime import date
 
+# Valeurs par défaut (repli si la table n'est pas encore initialisée)
 DAS_PRIX_ENTREPRISE   = 200_000
 DAS_PRIX_CABINET      = 100_000
 DAS_EARLYBIRD_TAUX    = 0.20          # -20 %
@@ -19,13 +20,33 @@ DAS_EARLYBIRD_MOIS    = 3             # avant le 31 mars…
 DAS_EARLYBIRD_JOUR    = 31            # … de l'année N+1 (exercice N)
 
 
+def _config():
+    """Tarifs courants : depuis la base si disponible, sinon les défauts ci-dessus."""
+    try:
+        from models import TarifDAS
+        t = TarifDAS.get()
+        return {
+            "prix_entreprise": t.prix_entreprise or DAS_PRIX_ENTREPRISE,
+            "prix_cabinet":    t.prix_cabinet or DAS_PRIX_CABINET,
+            "taux":            (t.earlybird_taux or 20) / 100.0,
+            "mois":            t.earlybird_mois or DAS_EARLYBIRD_MOIS,
+            "jour":            t.earlybird_jour or DAS_EARLYBIRD_JOUR,
+        }
+    except Exception:
+        return {
+            "prix_entreprise": DAS_PRIX_ENTREPRISE, "prix_cabinet": DAS_PRIX_CABINET,
+            "taux": DAS_EARLYBIRD_TAUX, "mois": DAS_EARLYBIRD_MOIS, "jour": DAS_EARLYBIRD_JOUR,
+        }
+
+
 def _est_gere_par_cabinet(tenant):
     return bool(getattr(tenant, "cabinet_id", None))
 
 
 def date_limite_earlybird(annee):
-    """Date limite early-bird pour l'exercice `annee` : 31/03 de l'année suivante."""
-    return date(annee + 1, DAS_EARLYBIRD_MOIS, DAS_EARLYBIRD_JOUR)
+    """Date limite early-bird pour l'exercice `annee` (année suivante)."""
+    c = _config()
+    return date(annee + 1, c["mois"], c["jour"])
 
 
 def est_periode_earlybird(annee, aujourd_hui=None):
@@ -35,10 +56,11 @@ def est_periode_earlybird(annee, aujourd_hui=None):
 
 def das_prix(tenant, annee, aujourd_hui=None):
     """Renvoie le détail tarifaire pour l'édition de la DAS d'une société/année."""
+    c = _config()
     cabinet = _est_gere_par_cabinet(tenant)
-    base = DAS_PRIX_CABINET if cabinet else DAS_PRIX_ENTREPRISE
+    base = c["prix_cabinet"] if cabinet else c["prix_entreprise"]
     early = est_periode_earlybird(annee, aujourd_hui)
-    reduction = round(base * DAS_EARLYBIRD_TAUX) if early else 0
+    reduction = round(base * c["taux"]) if early else 0
     prix = base - reduction
     return {
         "tarif_type":     "CABINET" if cabinet else "ENTREPRISE",
@@ -47,7 +69,7 @@ def das_prix(tenant, annee, aujourd_hui=None):
         "prix":           prix,
         "est_earlybird":  early,
         "date_limite":    date_limite_earlybird(annee),
-        "taux_reduction": int(DAS_EARLYBIRD_TAUX * 100),
+        "taux_reduction": int(c["taux"] * 100),
     }
 
 

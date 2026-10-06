@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto;padding:1.5rem">
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem">💰 Tarifs DAS</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 1.25rem">
+    Modifiez les prix et la réduction de l'édition de la DAS — pris en compte immédiatement, sans toucher au code.
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1rem">
+      <h2 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Prix (FCFA)</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem">Entreprise</label>
+          <input type="number" name="prix_entreprise" value="{{ t.prix_entreprise }}" min="0" step="5000" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem">Cabinet (par société)</label>
+          <input type="number" name="prix_cabinet" value="{{ t.prix_cabinet }}" min="0" step="5000" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+      </div>
+    </div>
+
+    <div style="border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1rem">
+      <h2 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Réduction anticipée (early-bird)</h2>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem">
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem">Réduction (%)</label>
+          <input type="number" name="earlybird_taux" value="{{ t.earlybird_taux }}" min="0" max="100" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem">Jour limite</label>
+          <input type="number" name="earlybird_jour" value="{{ t.earlybird_jour }}" min="1" max="31" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+        <div>
+          <label style="display:block;font-size:.78rem;font-weight:700;color:#374151;margin-bottom:.25rem">Mois limite</label>
+          <input type="number" name="earlybird_mois" value="{{ t.earlybird_mois }}" min="1" max="12" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem;box-sizing:border-box">
+        </div>
+      </div>
+      <p style="font-size:.75rem;color:#6b7280;margin:.6rem 0 0">La réduction s'applique si l'édition est débloquée avant le {{ t.earlybird_jour }}/{{ t.earlybird_mois }} de l'année suivant l'exercice.</p>
+    </div>
+
+    <button type="submit" style="background:#0f3d36;color:#fff;padding:.7rem 1.5rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Enregistrer</button>
+  </form>
+
+  <!-- Aperçu -->
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-top:1.5rem">
+    <div style="background:#f9fafb;padding:.7rem 1.1rem;font-weight:700;color:#0f3d36;border-bottom:1px solid #e5e7eb">Aperçu des prix appliqués</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <tr style="text-align:left;color:#6b7280"><th style="padding:.5rem 1.1rem">Formule</th><th style="padding:.5rem 1.1rem;text-align:right">Normal</th><th style="padding:.5rem 1.1rem;text-align:right">Early-bird</th></tr>
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.5rem 1.1rem;font-weight:600">Entreprise</td><td style="padding:.5rem 1.1rem;text-align:right">{{ "{:,}".format(apercu.ent_normal).replace(","," ") }} F</td><td style="padding:.5rem 1.1rem;text-align:right;color:#166534;font-weight:700">{{ "{:,}".format(apercu.ent_early).replace(","," ") }} F</td></tr>
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.5rem 1.1rem;font-weight:600">Cabinet / société</td><td style="padding:.5rem 1.1rem;text-align:right">{{ "{:,}".format(apercu.cab_normal).replace(","," ") }} F</td><td style="padding:.5rem 1.1rem;text-align:right;color:#166534;font-weight:700">{{ "{:,}".format(apercu.cab_early).replace(","," ") }} F</td></tr>
+    </table>
+  </div>
+</div>
+{% endblock %}
