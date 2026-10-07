@@ -14,6 +14,15 @@
     .badge { display:inline-block;font-size:.7rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px; }
     .nav-link { color:rgba(255,255,255,.6);text-decoration:none;font-size:.825rem;padding:.5rem .75rem;border-radius:.5rem;transition:.15s; }
     .nav-link:hover,.nav-link.active { color:white;background:rgba(255,255,255,.08); }
+    .nav-trigger { background:none;border:none;cursor:pointer;font:inherit; }
+    .nav-drop { position:relative; }
+    .nav-menu { display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:190px;
+      background:#1e293b;border:1px solid #334155;border-radius:.6rem;padding:.35rem;
+      box-shadow:0 10px 30px rgba(0,0,0,.4);z-index:60; }
+    .nav-drop.open .nav-menu { display:block; }
+    .nav-menu a { display:block;color:rgba(255,255,255,.82);text-decoration:none;font-size:.82rem;
+      padding:.5rem .7rem;border-radius:.45rem;white-space:nowrap; }
+    .nav-menu a:hover { background:rgba(255,255,255,.08);color:white; }
     ::-webkit-scrollbar { width:4px; } ::-webkit-scrollbar-thumb { background:#334155;border-radius:4px; }
     .score-bar { height:4px;border-radius:2px;background:#334155;overflow:hidden; }
     .score-fill { height:100%;border-radius:2px;transition:width .4s; }
@@ -33,16 +42,40 @@
     <a href="/admin"           class="nav-link active">🏠 Dashboard</a>
     <a href="/admin/tenants"   class="nav-link">🏢 Entreprises</a>
     <a href="/admin/messages"  class="nav-link">💬 Messages{% if messages_non_lus and messages_non_lus > 0 %} <span style="background:#dc2626;color:white;font-size:.6rem;font-weight:800;padding:.05rem .35rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}</a>
-    <a href="/admin/usage"     class="nav-link">📊 Usage</a>
-    <a href="/admin/paiements" class="nav-link">💳 Paiements</a>
-    <a href="/admin/plans"     class="nav-link">📋 Plans</a>
-    <a href="/admin/rubriques" class="nav-link">⚙️ Rubriques</a>
-    <a href="/admin/import"    class="nav-link">📊 Import</a>
-    <a href="/admin/stats"     class="nav-link">📈 Stats</a>
-    <a href="/admin/backups"   class="nav-link">💾 Sauvegardes</a>
-    <a href="/admin/das"       class="nav-link">🗂️ Déblocages DAS</a>
-    <a href="/admin/tarifs-das" class="nav-link">💰 Tarifs DAS</a>
-    <a href="/admin/landing"   class="nav-link">📈 Stats landing</a>
+
+    <div class="nav-drop">
+      <button class="nav-link nav-trigger" type="button">💳 Facturation ▾</button>
+      <div class="nav-menu">
+        <a href="/admin/paiements">💳 Paiements</a>
+        <a href="/admin/plans">📋 Plans</a>
+      </div>
+    </div>
+
+    <div class="nav-drop">
+      <button class="nav-link nav-trigger" type="button">🗂️ DAS ▾</button>
+      <div class="nav-menu">
+        <a href="/admin/das">🗂️ Déblocages DAS</a>
+        <a href="/admin/tarifs-das">💰 Tarifs DAS</a>
+      </div>
+    </div>
+
+    <div class="nav-drop">
+      <button class="nav-link nav-trigger" type="button">📈 Analytics ▾</button>
+      <div class="nav-menu">
+        <a href="/admin/usage">📊 Usage</a>
+        <a href="/admin/stats">📈 Stats</a>
+        <a href="/admin/landing">📈 Stats landing</a>
+      </div>
+    </div>
+
+    <div class="nav-drop">
+      <button class="nav-link nav-trigger" type="button">⚙️ Système ▾</button>
+      <div class="nav-menu">
+        <a href="/admin/rubriques">⚙️ Rubriques</a>
+        <a href="/admin/import">📊 Import</a>
+        <a href="/admin/backups">💾 Sauvegardes</a>
+      </div>
+    </div>
   </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:1rem">
     <span style="font-size:.75rem;color:#64748b">{{ now.strftime('%d/%m/%Y %H:%M') }}</span>
@@ -639,6 +672,21 @@ if (PL_LBL.length > 0) {
     }
   });
 }
+</script>
+<script nonce="{{ csp_nonce }}">
+  // Menus déroulants admin : ouvrir au clic, fermer si on clique ailleurs
+  document.querySelectorAll('.nav-trigger').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var drop = btn.closest('.nav-drop');
+      var deja = drop.classList.contains('open');
+      document.querySelectorAll('.nav-drop.open').forEach(function(d){ d.classList.remove('open'); });
+      if (!deja) drop.classList.add('open');
+    });
+  });
+  document.addEventListener('click', function(){
+    document.querySelectorAll('.nav-drop.open').forEach(function(d){ d.classList.remove('open'); });
+  });
 </script>
 </body>
 </html>
