@@ -42,6 +42,10 @@
             {% if l.aff.mode_facturation in ['TAUX_JOUR','TAUX_HEURE'] %}
               <input name="q_{{ l.aff.id }}" value="{{ '%g'%l.quantite }}" style="width:5rem;padding:.35rem;border:1px solid #d1d5db;border-radius:.4rem;text-align:center"/>
               <span style="color:#9ca3af;font-size:.78rem">{{ l.aff.unite }}</span>
+              <div style="font-size:.68rem;margin-top:.15rem">
+                {% if l.source=='pointage' %}<span style="color:#2f7d3c">● d'après le pointage</span>
+                {% else %}<span style="color:#b45309">○ jours ouvrés (aucun pointage)</span>{% endif %}
+              </div>
             {% else %}
               <input type="hidden" name="q_{{ l.aff.id }}" value="{{ l.quantite }}"/>
               <span style="color:#9ca3af">—</span>

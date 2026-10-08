@@ -15,7 +15,7 @@ from sqlalchemy import func
 from blueprints.tenant import bp, _doc_response
 from core import get_tenant, parse_date
 from audit import log_action
-from models import (db, Salarie, BulletinPaie, PeriodePaie,
+from models import (db, Salarie, BulletinPaie, PeriodePaie, Pointage,
                     ClientUtilisateur, AffectationMAD)
 
 _MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
@@ -51,6 +51,50 @@ def _cout_employeur_salarie(tenant_id, salarie_id, annee, mois):
     f = lambda x: float(x or 0)
     return (f(b.salaire_brut) + f(b.cnss_patronale) + f(b.cnamgs_patronale)
             + f(b.fnh) + f(b.cfp))
+
+
+def _pointage_reel(tenant_id, salarie_id, annee, mois):
+    """Pointage réel du salarié sur le mois : (jours travaillés, heures totales).
+    Renvoie (None, None) si aucun pointage n'existe pour ce salarié ce mois-là."""
+    debut = date(annee, mois, 1)
+    fin = date(annee + (mois // 12), (mois % 12) + 1, 1)  # 1er du mois suivant (exclu)
+    pts = (Pointage.query
+           .filter(Pointage.tenant_id == tenant_id,
+                   Pointage.salarie_id == salarie_id,
+                   Pointage.date_pointage >= debut,
+                   Pointage.date_pointage < fin).all())
+    if not pts:
+        return None, None
+    jours = 0
+    heures = 0.0
+    for p in pts:
+        if getattr(p, "absent", False):
+            continue
+        if not getattr(p, "present", True):
+            continue
+        jours += 1
+        f = lambda x: float(x or 0)
+        heures += (f(p.heures_normales) + f(p.heures_sup) + f(p.heures_sup_10)
+                   + f(p.heures_sup_30) + f(p.heures_sup_30b)
+                   + f(p.heures_sup_40) + f(p.heures_sup_70))
+    return jours, heures
+
+
+def _quantite_defaut(aff, tenant_id, annee, mois):
+    """Quantité facturable par défaut pour une affectation sur un mois, et sa source.
+    Priorité au pointage réel ; repli sur les jours ouvrés. Renvoie (quantite, source)
+    avec source ∈ {'forfait', 'pointage', 'ouvres'}."""
+    if aff.mode_facturation == "FORFAIT_MENSUEL":
+        return 1, "forfait"
+    jours_reels, heures_reelles = _pointage_reel(tenant_id, aff.salarie_id, annee, mois)
+    if aff.mode_facturation == "TAUX_HEURE":
+        if heures_reelles is not None:
+            return heures_reelles, "pointage"
+        return _jours_ouvres(annee, mois) * 8, "ouvres"
+    # TAUX_JOUR (et COEFFICIENT qui n'utilise pas la quantité)
+    if jours_reels is not None:
+        return jours_reels, "pointage"
+    return _jours_ouvres(annee, mois), "ouvres"
 
 
 def _resoudre_periode():
@@ -93,14 +137,9 @@ def mad_dashboard():
         fact_c = cout_c = 0.0
         for a in affs:
             cout = _cout_employeur_salarie(t.id, a.salarie_id, annee, mois)
-            if a.mode_facturation == "FORFAIT_MENSUEL":
-                q = 1
-            elif a.mode_facturation == "TAUX_HEURE":
-                q = _jours_ouvres(annee, mois) * 8
-            else:
-                q = _jours_ouvres(annee, mois)
+            q, _src = _quantite_defaut(a, t.id, annee, mois)
             fact_c += a.montant_facture(q, cout)
-            cout_c += cout if a.mode_facturation != "FORFAIT_MENSUEL" else cout
+            cout_c += cout
         lignes.append({"client": c, "nb_affectations": len(affs),
                        "facture": fact_c, "cout": cout_c, "marge": fact_c - cout_c})
         total_facture += fact_c
@@ -171,16 +210,16 @@ def mad_client_detail(client_id):
                 .order_by(Salarie.nom, Salarie.prenom).all())
 
     # aperçu facturation du mois en cours
-    jo = _jours_ouvres(annee, mois)
     apercu = []
     tot_f = tot_c = 0.0
     for a in affectations:
         if not a.est_active_sur(annee, mois):
             continue
         cout = _cout_employeur_salarie(t.id, a.salarie_id, annee, mois)
-        q = 1 if a.mode_facturation == "FORFAIT_MENSUEL" else (jo * 8 if a.mode_facturation == "TAUX_HEURE" else jo)
+        q, src = _quantite_defaut(a, t.id, annee, mois)
         f = a.montant_facture(q, cout)
-        apercu.append({"aff": a, "cout": cout, "facture": f, "marge": f - cout})
+        apercu.append({"aff": a, "cout": cout, "facture": f, "marge": f - cout,
+                       "quantite": q, "source": src})
         tot_f += f
         tot_c += cout
 
@@ -372,14 +411,9 @@ def mad_facture(client_id):
         if not a.est_active_sur(annee, mois):
             continue
         cout = _cout_employeur_salarie(t.id, a.salarie_id, annee, mois)
-        if a.mode_facturation == "FORFAIT_MENSUEL":
-            q = 1
-        elif a.mode_facturation == "TAUX_HEURE":
-            q = jo * 8
-        else:
-            q = jo
+        q, src = _quantite_defaut(a, t.id, annee, mois)
         lignes.append({
-            "aff": a, "salarie": a.salarie, "quantite": q,
+            "aff": a, "salarie": a.salarie, "quantite": q, "source": src,
             "cout": cout, "facture": a.montant_facture(q, cout),
         })
     total = sum(l["facture"] for l in lignes)
@@ -425,3 +459,35 @@ def mad_facture_pdf(client_id):
     pdf = generer_facture_mad_pdf(t, c, lignes, mois, annee, numero, _MOIS[mois])
     log_action("edition", "facture_mad", c.id, f"Facture MAD {numero}")
     return _doc_response(pdf, f"facture_{numero}.pdf")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Contrat de mise à disposition (PDF)
+# ─────────────────────────────────────────────────────────────────────────────
+@bp.route("/mise-a-disposition/affectations/<int:aff_id>/contrat")
+@login_required
+def mad_contrat(aff_id):
+    t = get_tenant()
+    a = AffectationMAD.query.filter_by(id=aff_id, tenant_id=t.id).first() if t else None
+    if not a:
+        flash("Affectation introuvable.", "error")
+        return redirect(url_for("tenant.mad_dashboard"))
+    client = ClientUtilisateur.query.filter_by(id=a.client_id, tenant_id=t.id).first()
+    if not client:
+        flash("Client introuvable.", "error")
+        return redirect(url_for("tenant.mad_dashboard"))
+    # Trame personnalisée du tenant si elle existe (ModeleContrat MISE_A_DISPOSITION)
+    modele = None
+    try:
+        from models import ModeleContrat
+        modele = (ModeleContrat.query
+                  .filter_by(tenant_id=t.id, type_contrat="MISE_A_DISPOSITION", actif=True)
+                  .order_by(ModeleContrat.id.desc()).first())
+    except Exception:
+        modele = None
+    from documents_rh import generer_contrat_mad_pdf
+    pdf = generer_contrat_mad_pdf(t, client, a, modele=modele)
+    log_action("edition", "contrat_mad", a.id,
+               f"Contrat de mise à disposition — {client.nom}")
+    nom = f"contrat_mad_{client.nom[:20].replace(' ', '_')}_{a.id}.pdf"
+    return _doc_response(pdf, nom)

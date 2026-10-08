@@ -1090,3 +1090,41 @@ class TestMiseADisposition:
         login(client, "admin@b.ga")
         r = client.get(f"/mise-a-disposition/clients/{cid}", follow_redirects=False)
         assert r.status_code == 302
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — MAD : contrat + pointage par client
+# ══════════════════════════════════════════════════════════════════════════════
+class TestMADContratEtPointage:
+    def _setup(self):
+        from models import db, Tenant, Salarie, ClientUtilisateur, AffectationMAD, Pointage
+        from datetime import date
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        s = Salarie.query.filter_by(matricule="EA001").first()
+        c = ClientUtilisateur(tenant_id=t.id, nom="UTILISATRICE SARL", nif="N9",
+                              adresse="Owendo", rccm="R1", contact_nom="M. DIALLO")
+        db.session.add(c); db.session.commit()
+        a = AffectationMAD(tenant_id=t.id, client_id=c.id, salarie_id=s.id, poste="Maçon",
+                           date_debut=date(2026, 6, 1), mode_facturation="TAUX_JOUR",
+                           valeur=25000, actif=True)
+        db.session.add(a); db.session.commit()
+        for d in range(1, 19):  # 18 jours pointés en juin 2026
+            db.session.add(Pointage(tenant_id=t.id, salarie_id=s.id,
+                                    date_pointage=date(2026, 6, d), present=True, heures_normales=8))
+        db.session.commit()
+        return c.id, a.id
+
+    def test_contrat_mad_pdf(self, client):
+        cid, aid = self._setup()
+        login(client, "admin@a.ga")
+        r = client.get(f"/mise-a-disposition/affectations/{aid}/contrat")
+        assert r.status_code == 200
+        assert r.headers["Content-Type"] == "application/pdf"
+        assert r.data[:5] == b"%PDF-"
+
+    def test_facture_prefill_depuis_pointage(self, client):
+        cid, aid = self._setup()
+        login(client, "admin@a.ga")
+        r = client.get(f"/mise-a-disposition/clients/{cid}/facture?mois=6&annee=2026")
+        assert r.status_code == 200
+        assert b'value="18"' in r.data  # jours réellement pointés, pas les jours ouvrés

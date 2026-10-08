@@ -672,3 +672,192 @@ def generer_lettre_sanction_pdf(sanction, salarie, tenant) -> bytes:
     el.append(Spacer(1, 24))
     el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
     return _build(el)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CONTRAT DE MISE À DISPOSITION DE PERSONNEL (inter-entreprises)
+# ───────────────────────────────────────────────────────────────────────────
+# Conclu entre l'Entreprise prestataire (le tenant, employeur juridique) et
+# l'Entreprise utilisatrice (le client). Trame neutre : le contenu entre [ ]
+# est à préciser par l'entreprise, sous sa responsabilité.
+# ═══════════════════════════════════════════════════════════════════════════
+
+BALISES_CONTRAT_MAD = [
+    ("{{entreprise}}",         "Entreprise prestataire (employeur)"),
+    ("{{entreprise_adresse}}", "Adresse du prestataire"),
+    ("{{entreprise_nif}}",     "NIF du prestataire"),
+    ("{{entreprise_cnss}}",    "N° CNSS du prestataire"),
+    ("{{representant}}",       "Représentant du prestataire"),
+    ("{{client}}",             "Entreprise utilisatrice (client)"),
+    ("{{client_adresse}}",     "Adresse du client"),
+    ("{{client_nif}}",         "NIF du client"),
+    ("{{client_rccm}}",        "RCCM du client"),
+    ("{{client_contact}}",     "Représentant / contact du client"),
+    ("{{nom_complet}}",        "Salarié mis à disposition"),
+    ("{{matricule}}",          "Matricule du salarié"),
+    ("{{poste}}",              "Poste occupé chez le client"),
+    ("{{mode_facturation}}",   "Mode de facturation"),
+    ("{{tarif}}",              "Tarif (chiffres)"),
+    ("{{tarif_lettres}}",      "Tarif en lettres"),
+    ("{{date_debut}}",         "Date de début"),
+    ("{{date_fin}}",           "Date de fin"),
+    ("{{date_jour}}",          "Date du jour"),
+    ("{{ville}}",              "Ville (signature)"),
+]
+
+TRAME_CONTRAT_MAD = (
+    "ENTRE LES SOUSSIGNÉS :\n\n"
+    "{{entreprise}}, sise à {{entreprise_adresse}}, NIF {{entreprise_nif}}, "
+    "immatriculée à la CNSS sous le n° {{entreprise_cnss}}, représentée par {{representant}},\n"
+    "ci-après dénommée « l'Entreprise prestataire », d'une part,\n\n"
+    "ET\n\n"
+    "{{client}}, sise à {{client_adresse}}, NIF {{client_nif}}, RCCM {{client_rccm}}, "
+    "représentée par {{client_contact}},\n"
+    "ci-après dénommée « l'Entreprise utilisatrice », d'autre part,\n\n"
+    "IL A ÉTÉ CONVENU CE QUI SUIT :\n\n"
+    "ARTICLE 1 - OBJET\n"
+    "L'Entreprise prestataire met à la disposition de l'Entreprise utilisatrice le salarié "
+    "{{nom_complet}} (matricule {{matricule}}), pour occuper le poste de {{poste}}.\n\n"
+    "ARTICLE 2 - DURÉE\n"
+    "La présente mise à disposition prend effet le {{date_debut}} et prend fin le {{date_fin}}. "
+    "[À préciser en cas de durée indéterminée ou de reconduction.]\n\n"
+    "ARTICLE 3 - STATUT DU SALARIÉ\n"
+    "Le salarié demeure lié à l'Entreprise prestataire par son contrat de travail. "
+    "L'Entreprise prestataire conserve la qualité d'employeur : elle assure le versement du salaire "
+    "et l'accomplissement des déclarations sociales (CNSS, CNAMGS) et fiscales afférentes.\n\n"
+    "ARTICLE 4 - CONDITIONS D'EXÉCUTION\n"
+    "L'Entreprise utilisatrice fournit au salarié le lieu de travail, les équipements et les moyens "
+    "nécessaires à l'exécution de sa mission. Elle exerce l'autorité fonctionnelle sur le salarié "
+    "pendant la durée de la mise à disposition et veille au respect des règles d'hygiène et de sécurité.\n\n"
+    "ARTICLE 5 - FACTURATION ET PAIEMENT\n"
+    "En contrepartie, l'Entreprise utilisatrice verse à l'Entreprise prestataire une rémunération "
+    "selon le mode « {{mode_facturation}} », au tarif de {{tarif}} ({{tarif_lettres}}). "
+    "La facturation est établie mensuellement. Le règlement intervient sous [délai à préciser] jours "
+    "à compter de la réception de la facture.\n\n"
+    "ARTICLE 6 - RESPONSABILITÉ ET ASSURANCES\n"
+    "La couverture des accidents du travail et maladies professionnelles est assurée par "
+    "[à préciser : l'Entreprise prestataire / l'Entreprise utilisatrice], conformément à la "
+    "réglementation en vigueur. Chaque partie souscrit les assurances de responsabilité civile "
+    "requises par son activité.\n\n"
+    "ARTICLE 7 - OBLIGATIONS DE L'ENTREPRISE UTILISATRICE\n"
+    "L'Entreprise utilisatrice s'engage à employer le salarié conformément à sa qualification, "
+    "à ne pas lui confier de tâches étrangères à l'objet du présent contrat, et à signaler sans délai "
+    "au prestataire tout incident, absence ou manquement.\n\n"
+    "ARTICLE 8 - CONFIDENTIALITÉ\n"
+    "Les parties s'engagent à préserver la confidentialité des informations échangées dans le cadre "
+    "de l'exécution du présent contrat.\n\n"
+    "ARTICLE 9 - RÉSILIATION\n"
+    "Chaque partie peut mettre fin au présent contrat moyennant un préavis de [durée à préciser], "
+    "notifié par écrit, sans préjudice des mises à disposition en cours.\n\n"
+    "ARTICLE 10 - DIFFÉRENDS\n"
+    "Le présent contrat est régi par le droit gabonais. Tout différend relatif à son interprétation "
+    "ou à son exécution sera soumis aux juridictions compétentes de [ville à préciser], à défaut de "
+    "règlement amiable.\n\n"
+    "Fait à {{ville}}, le {{date_jour}}, en deux exemplaires originaux.\n"
+)
+
+
+def _contexte_contrat_mad(tenant, client, affectation):
+    """Dictionnaire balise -> valeur pour un contrat de mise à disposition."""
+    sal = affectation.salarie
+    nom_complet = (sal.nom_complet if sal and hasattr(sal, "nom_complet")
+                   else (f"{sal.nom} {sal.prenom}" if sal else ""))
+    try:
+        from models import AffectationMAD
+        mode_lib = AffectationMAD.MODES.get(affectation.mode_facturation, affectation.mode_facturation)
+    except Exception:
+        mode_lib = affectation.mode_facturation
+    valeur = float(affectation.valeur or 0)
+    if affectation.mode_facturation == "COEFFICIENT":
+        tarif = f"coefficient {valeur:g}".replace(".", ",")
+        tarif_lettres = f"coefficient de {_nombre_en_lettres(int(valeur))}" if valeur == int(valeur) else ""
+    else:
+        suffixe = {"FORFAIT_MENSUEL": " par mois", "TAUX_JOUR": " par jour",
+                   "TAUX_HEURE": " par heure"}.get(affectation.mode_facturation, "")
+        tarif = f"{_fmt_fcfa(valeur)}{suffixe}"
+        tarif_lettres = f"{_nombre_en_lettres(valeur)} francs CFA{suffixe}"
+    return {
+        "entreprise":         tenant.denomination or "",
+        "entreprise_adresse": getattr(tenant, "adresse", "") or "",
+        "entreprise_nif":     getattr(tenant, "nif", "") or "",
+        "entreprise_cnss":    getattr(tenant, "numero_cnss", "") or "",
+        "representant":       getattr(tenant, "representant_nom", "") or "la Direction",
+        "client":             client.nom or "",
+        "client_adresse":     client.adresse or "",
+        "client_nif":         client.nif or "",
+        "client_rccm":        client.rccm or "",
+        "client_contact":     client.contact_nom or "",
+        "nom_complet":        nom_complet,
+        "matricule":          (sal.matricule if sal else "") or "",
+        "poste":              affectation.poste or (sal.emploi if sal else "") or "",
+        "mode_facturation":   mode_lib,
+        "tarif":              tarif,
+        "tarif_lettres":      tarif_lettres,
+        "date_debut":         _date_fr(affectation.date_debut) if affectation.date_debut else "",
+        "date_fin":           _date_fr(affectation.date_fin) if affectation.date_fin else "[durée indéterminée]",
+        "date_jour":          _date_fr(date.today()),
+        "ville":              getattr(tenant, "ville", "") or "Libreville",
+    }
+
+
+def _signature_mad(tenant, client, S, ville=None):
+    """Double bloc de signature : prestataire + entreprise utilisatrice."""
+    ville = ville or getattr(tenant, "ville", None) or "Libreville"
+    gauche = (f"Pour l'Entreprise prestataire,<br/>{tenant.denomination or ''}<br/><br/><br/>"
+              "_______________________<br/>Signature et cachet")
+    droite = (f"Pour l'Entreprise utilisatrice,<br/>{client.nom or ''}<br/><br/><br/>"
+              "_______________________<br/>Signature et cachet")
+    t = Table([[Paragraph(gauche, S["signature"]), Paragraph(droite, S["signature"])]],
+              colWidths=[None, None])
+    t.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+    ]))
+    return [
+        Spacer(1, 24),
+        Paragraph(f"Fait à {ville}, le {_date_fr(date.today())}", S["lieu_date"]),
+        Spacer(1, 16),
+        t,
+    ]
+
+
+def generer_contrat_mad_pdf(tenant, client, affectation, modele=None) -> bytes:
+    """Génère le PDF du contrat de mise à disposition. Utilise la trame du tenant
+    (ModeleContrat type MISE_A_DISPOSITION) si fournie, sinon la trame par défaut."""
+    S = _styles()
+    ctx = _contexte_contrat_mad(tenant, client, affectation)
+    contenu = (modele.contenu if modele and (modele.contenu or "").strip() else TRAME_CONTRAT_MAD)
+    texte = _remplir_balises(contenu, ctx)
+
+    el = _entete(tenant, S)
+    titre = ((modele.nom if modele and modele.nom else "CONTRAT DE MISE À DISPOSITION DE PERSONNEL")).upper()
+    el.append(Paragraph(titre, ParagraphStyle("tmad", parent=S["titre"], alignment=TA_CENTER,
+                                              fontSize=14, spaceAfter=16)))
+    corps = ParagraphStyle("corps_mad", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10, leading=15, spaceAfter=6)
+    article = ParagraphStyle("article_mad", parent=S["corps"], fontName="Helvetica-Bold",
+                             fontSize=10.5, leading=14, spaceBefore=10, spaceAfter=3, keepWithNext=1)
+    section = ParagraphStyle("section_mad", parent=S["corps"], fontName="Helvetica-Bold",
+                             fontSize=10, leading=14, spaceBefore=6, spaceAfter=4, keepWithNext=1)
+
+    def _esc(x):
+        return x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    for bloc in (texte or "").split("\n"):
+        bloc = bloc.strip()
+        if not bloc:
+            el.append(Spacer(1, 6)); continue
+        up = bloc.upper()
+        if up.startswith("ARTICLE") and (len(bloc) < 90):
+            el.append(Paragraph(_esc(bloc), article))
+        elif bloc == up and len(bloc) < 60 and any(ch.isalpha() for ch in bloc):
+            el.append(Paragraph(_esc(bloc), section))
+        else:
+            el.append(Paragraph(_esc(bloc), corps))
+    el.extend(_signature_mad(tenant, client, S, ville=ctx.get("ville")))
+    return _build(el)
+
+
+# Rend la trame de mise à disposition disponible dans l'éditeur de modèles.
+TRAMES_CONTRAT["MISE_A_DISPOSITION"] = TRAME_CONTRAT_MAD

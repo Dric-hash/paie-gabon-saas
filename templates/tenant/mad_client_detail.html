@@ -85,10 +85,11 @@
           {% else %}<span style="font-size:.72rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem">Terminée</span>{% endif %}
         </td>
         <td style="padding:.6rem .9rem;text-align:right;white-space:nowrap">
+          <a href="{{ url_for('tenant.mad_contrat', aff_id=a.id) }}" style="color:#17564c;font-weight:700;text-decoration:none;font-size:.85rem" title="Contrat de mise à disposition">Contrat</a>
           {% if a.actif %}
           <form method="POST" action="{{ url_for('tenant.mad_affectation_terminer', aff_id=a.id) }}" style="display:inline" onsubmit="return confirm('Terminer cette affectation aujourd\'hui ?')">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <button style="background:none;border:none;color:#17564c;font-weight:700;cursor:pointer;font-size:.85rem">Terminer</button>
+            <button style="background:none;border:none;color:#17564c;font-weight:700;cursor:pointer;font-size:.85rem;margin-left:.5rem">Terminer</button>
           </form>
           {% endif %}
           <form method="POST" action="{{ url_for('tenant.mad_affectation_supprimer', aff_id=a.id) }}" style="display:inline" onsubmit="return confirm('Supprimer cette affectation ?')">

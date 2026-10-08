@@ -19,7 +19,7 @@
         <div style="width:200px">
           <label style="display:block;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:.25rem">Type</label>
           <select name="type_contrat" style="width:100%;padding:.6rem;border:1px solid #e5e7eb;border-radius:.5rem">
-            {% for tc in ['CDI','CDD','CHANTIER','JOURNALIER','AUTRE'] %}
+            {% for tc in ['CDI','CDD','CHANTIER','JOURNALIER','MISE_A_DISPOSITION','AUTRE'] %}
             <option value="{{ tc }}" {% if modele and modele.type_contrat==tc %}selected{% endif %}>{{ tc }}</option>
             {% endfor %}
           </select>
@@ -36,6 +36,7 @@
             <option value="CDD">CDD (durée déterminée)</option>
             <option value="CHANTIER">Contrat de chantier</option>
             <option value="JOURNALIER">Contrat journalier</option>
+            <option value="MISE_A_DISPOSITION">Contrat de mise à disposition</option>
           </select>
           <button type="button" id="chargertrame" style="background:#0369a1;color:#fff;border:none;padding:.5rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer;font-size:.85rem">Charger la trame</button>
         </div>
