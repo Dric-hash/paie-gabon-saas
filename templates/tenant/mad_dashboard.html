@@ -1,0 +1,87 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1050px;margin:0 auto;padding:1.5rem">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">🤝 Mise à disposition</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">
+        Vos entreprises utilisatrices (clients), le personnel mis à disposition et la refacturation.
+      </p>
+    </div>
+    <a href="{{ url_for('tenant.mad_client_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Nouveau client</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Sélecteur de mois -->
+  <form method="get" style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
+    <select name="mois" style="padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:.5rem">
+      {% for i in range(1,13) %}<option value="{{ i }}" {{ 'selected' if i==mois }}>{{ mois_fr[i] }}</option>{% endfor %}
+    </select>
+    <input type="number" name="annee" value="{{ annee }}" style="width:5.5rem;padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+    <button style="background:#eef4f2;color:#17564c;border:none;padding:.5rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer">Afficher</button>
+  </form>
+
+  <!-- KPIs -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin-bottom:1.25rem">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.75rem;font-weight:700;text-transform:uppercase">Clients actifs</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#0f3d36">{{ nb_clients }}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.75rem;font-weight:700;text-transform:uppercase">Salariés mis à dispo.</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#0f3d36">{{ nb_sal_mad }}</div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.75rem;font-weight:700;text-transform:uppercase">Facturable — {{ mois_label }}</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#0f3d36">{{ '{:,.0f}'.format(total_facture).replace(',',' ') }} <span style="font-size:.8rem;color:#6b7280">F</span></div>
+    </div>
+    <div style="background:#0f3d36;border-radius:.85rem;padding:1rem;color:#fff">
+      <div style="color:#E9B043;font-size:.75rem;font-weight:700;text-transform:uppercase">Marge estimée</div>
+      <div style="font-size:1.6rem;font-weight:800">{{ '{:,.0f}'.format(total_marge).replace(',',' ') }} <span style="font-size:.8rem;opacity:.7">F</span></div>
+    </div>
+  </div>
+
+  {% if clients %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.7rem .9rem">Client</th>
+        <th style="padding:.7rem .9rem;text-align:center">Affectations</th>
+        <th style="padding:.7rem .9rem;text-align:right">Facturable</th>
+        <th style="padding:.7rem .9rem;text-align:right">Coût estimé</th>
+        <th style="padding:.7rem .9rem;text-align:right">Marge</th>
+        <th style="padding:.7rem .9rem"></th>
+      </tr>
+      {% for l in lignes %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.7rem .9rem;font-weight:600">
+          <a href="{{ url_for('tenant.mad_client_detail', client_id=l.client.id) }}" style="color:#0f3d36;text-decoration:none">{{ l.client.nom }}</a>
+          {% if not l.client.actif %}<span style="font-size:.7rem;background:#fbeae7;color:#b23b2e;padding:.1rem .4rem;border-radius:.4rem;margin-left:.4rem">inactif</span>{% endif %}
+          {% if l.client.secteur %}<div style="color:#9ca3af;font-size:.78rem">{{ l.client.secteur }}</div>{% endif %}
+        </td>
+        <td style="padding:.7rem .9rem;text-align:center">{{ l.nb_affectations }}</td>
+        <td style="padding:.7rem .9rem;text-align:right;font-variant-numeric:tabular-nums">{{ '{:,.0f}'.format(l.facture).replace(',',' ') }}</td>
+        <td style="padding:.7rem .9rem;text-align:right;color:#6b7280;font-variant-numeric:tabular-nums">{{ '{:,.0f}'.format(l.cout).replace(',',' ') }}</td>
+        <td style="padding:.7rem .9rem;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:{{ '#166534' if l.marge>=0 else '#b91c1c' }}">{{ '{:,.0f}'.format(l.marge).replace(',',' ') }}</td>
+        <td style="padding:.7rem .9rem;text-align:right">
+          <a href="{{ url_for('tenant.mad_facture', client_id=l.client.id, mois=mois, annee=annee) }}" style="color:#17564c;font-weight:700;text-decoration:none">Facturer →</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p style="color:#9ca3af;font-size:.8rem;margin-top:.75rem">
+    « Coût estimé » = brut + charges patronales (CNSS, CNAMGS, FNH, CFP) du dernier bulletin disponible. Indicatif.
+  </p>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2.5rem;text-align:center;color:#6b7280">
+    <p style="margin:0 0 1rem">Aucun client pour le moment.</p>
+    <a href="{{ url_for('tenant.mad_client_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Ajouter votre première entreprise utilisatrice</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1026,3 +1026,67 @@ class TestValidationEmail:
             "denomination": "T", "nom": "P", "prenom": "Q", "csrf_token": tok,
         }, follow_redirects=True)
         assert "format invalide" in r.get_data(as_text=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — MISE À DISPOSITION DE PERSONNEL
+# ══════════════════════════════════════════════════════════════════════════════
+class TestMiseADisposition:
+    def test_dashboard_accessible(self, client):
+        login(client, "admin@a.ga")
+        assert client.get("/mise-a-disposition").status_code == 200
+
+    def test_cycle_complet_client_affectation_facture(self, client):
+        from models import ClientUtilisateur, AffectationMAD, Salarie
+        login(client, "admin@a.ga")
+        # créer un client
+        page = client.get("/mise-a-disposition/clients/nouveau")
+        token = _extract_csrf(page.data)
+        r = client.post("/mise-a-disposition/clients/nouveau",
+                        data={"nom": "CLIENT MAD", "secteur": "BTP", "csrf_token": token},
+                        follow_redirects=False)
+        assert r.status_code == 302
+        with flask_app.app_context():
+            c = ClientUtilisateur.query.filter_by(nom="CLIENT MAD").first()
+            assert c is not None
+            cid = c.id
+            sid = Salarie.query.filter_by(matricule="EA001").first().id
+        # affecter un salarié (token depuis la fiche client)
+        page = client.get(f"/mise-a-disposition/clients/{cid}")
+        token = _extract_csrf(page.data)
+        r = client.post(f"/mise-a-disposition/clients/{cid}/affecter",
+                        data={"salarie_id": sid, "poste": "Maçon",
+                              "mode_facturation": "TAUX_JOUR", "valeur": "25000",
+                              "date_debut": "2026-06-01", "csrf_token": token})
+        assert r.status_code == 302
+        with flask_app.app_context():
+            a = AffectationMAD.query.filter_by(client_id=cid).first()
+            assert a is not None and float(a.valeur) == 25000.0
+            aid = a.id
+        # page facture
+        page = client.get(f"/mise-a-disposition/clients/{cid}/facture?mois=6&annee=2026")
+        assert page.status_code == 200 and b"TOTAL" in page.data
+        token = _extract_csrf(page.data)
+        # PDF
+        r = client.post(f"/mise-a-disposition/clients/{cid}/facture/pdf",
+                        data={"mois": "6", "annee": "2026", f"q_{aid}": "22",
+                              "csrf_token": token})
+        assert r.status_code == 200
+        assert r.headers["Content-Type"] == "application/pdf"
+        assert r.data[:5] == b"%PDF-"
+
+    def test_isolation_tenant(self, client):
+        """Un tenant ne peut pas accéder au client MAD d'un autre tenant."""
+        from models import ClientUtilisateur
+        login(client, "admin@a.ga")
+        page = client.get("/mise-a-disposition/clients/nouveau")
+        token = _extract_csrf(page.data)
+        client.post("/mise-a-disposition/clients/nouveau",
+                    data={"nom": "SECRET A", "csrf_token": token}, follow_redirects=False)
+        with flask_app.app_context():
+            cid = ClientUtilisateur.query.filter_by(nom="SECRET A").first().id
+        # tenant B tente d'y accéder → redirigé (introuvable)
+        client.get("/logout")
+        login(client, "admin@b.ga")
+        r = client.get(f"/mise-a-disposition/clients/{cid}", follow_redirects=False)
+        assert r.status_code == 302

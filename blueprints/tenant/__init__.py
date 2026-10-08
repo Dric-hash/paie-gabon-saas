@@ -698,3 +698,4 @@ from blueprints.tenant import bulletins  # noqa: E402,F401
 from blueprints.tenant import parametres  # noqa: E402,F401
 from blueprints.tenant import paiements  # noqa: E402,F401
 from blueprints.tenant import divers  # noqa: E402,F401
+from blueprints.tenant import mise_a_disposition  # noqa: E402,F401

@@ -1,0 +1,169 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1050px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.mad_dashboard') }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Mise à disposition</a>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin:.4rem 0 1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">{{ client.nom }}
+        {% if not client.actif %}<span style="font-size:.8rem;background:#fbeae7;color:#b23b2e;padding:.15rem .5rem;border-radius:.4rem;vertical-align:middle">inactif</span>{% endif %}
+      </h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">
+        {% if client.secteur %}{{ client.secteur }} · {% endif %}
+        {% if client.nif %}NIF {{ client.nif }} · {% endif %}
+        {% if client.contact_nom %}{{ client.contact_nom }}{% endif %}
+        {% if client.telephone %} · {{ client.telephone }}{% endif %}
+      </p>
+    </div>
+    <div style="display:flex;gap:.5rem">
+      <a href="{{ url_for('tenant.mad_facture', client_id=client.id, mois=mois, annee=annee) }}" style="background:#E9B043;color:#0f3d36;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">🧾 Facturer le mois</a>
+      <button onclick="document.getElementById('editClient').style.display='block'" style="background:#eef4f2;color:#17564c;border:none;padding:.55rem 1rem;border-radius:.6rem;font-weight:700;cursor:pointer">Modifier</button>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Formulaire édition client (caché) -->
+  <div id="editClient" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <form method="POST" action="{{ url_for('tenant.mad_client_modifier', client_id=client.id) }}" style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input name="nom" value="{{ client.nom }}" placeholder="Raison sociale" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="nif" value="{{ client.nif or '' }}" placeholder="NIF" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="secteur" value="{{ client.secteur or '' }}" placeholder="Secteur" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="contact_nom" value="{{ client.contact_nom or '' }}" placeholder="Contact" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="telephone" value="{{ client.telephone or '' }}" placeholder="Téléphone" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="email" value="{{ client.email or '' }}" placeholder="Email" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="rccm" value="{{ client.rccm or '' }}" placeholder="RCCM" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <input name="adresse" value="{{ client.adresse or '' }}" placeholder="Adresse" style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+      <label style="display:flex;align-items:center;gap:.4rem;font-size:.88rem"><input type="checkbox" name="actif" {{ 'checked' if client.actif }}/> Actif</label>
+      <div style="grid-column:1/-1;display:flex;gap:.5rem">
+        <button style="background:#0f3d36;color:#fff;border:none;padding:.55rem 1.2rem;border-radius:.5rem;font-weight:700;cursor:pointer">Enregistrer</button>
+        <button type="button" onclick="document.getElementById('editClient').style.display='none'" style="background:none;border:none;color:#6b7280;cursor:pointer">Annuler</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Aperçu facturation du mois -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Facturable — {{ mois_label }} {{ annee }}</div>
+      <div style="font-size:1.4rem;font-weight:800;color:#0f3d36">{{ '{:,.0f}'.format(total_facture).replace(',',' ') }} <span style="font-size:.75rem;color:#6b7280">F</span></div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Coût employeur estimé</div>
+      <div style="font-size:1.4rem;font-weight:800;color:#6b7280">{{ '{:,.0f}'.format(total_cout).replace(',',' ') }} <span style="font-size:.75rem">F</span></div>
+    </div>
+    <div style="background:#0f3d36;border-radius:.85rem;padding:1rem;color:#fff">
+      <div style="color:#E9B043;font-size:.72rem;font-weight:700;text-transform:uppercase">Marge estimée</div>
+      <div style="font-size:1.4rem;font-weight:800">{{ '{:,.0f}'.format(total_marge).replace(',',' ') }} <span style="font-size:.75rem;opacity:.7">F</span></div>
+    </div>
+  </div>
+
+  <!-- Affectations -->
+  <h2 style="font-size:1.1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Personnel mis à disposition</h2>
+  {% if affectations %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:1.25rem">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem">Poste</th>
+        <th style="padding:.6rem .9rem">Facturation</th>
+        <th style="padding:.6rem .9rem">Période</th>
+        <th style="padding:.6rem .9rem;text-align:center">Statut</th>
+        <th style="padding:.6rem .9rem;text-align:right">Actions</th>
+      </tr>
+      {% for a in affectations %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem .9rem;font-weight:600">{{ a.salarie.prenom }} {{ a.salarie.nom }}<div style="color:#9ca3af;font-size:.78rem">{{ a.salarie.matricule }}</div></td>
+        <td style="padding:.6rem .9rem">{{ a.poste or '—' }}</td>
+        <td style="padding:.6rem .9rem">{{ a.mode_libelle }}<div style="color:#17564c;font-weight:700">{{ '{:,.0f}'.format(a.valeur|float).replace(',',' ') }}{% if a.unite=='×' %} (×){% else %} F/{{ a.unite }}{% endif %}</div></td>
+        <td style="padding:.6rem .9rem;color:#6b7280">{{ a.date_debut.strftime('%d/%m/%Y') }}{% if a.date_fin %} → {{ a.date_fin.strftime('%d/%m/%Y') }}{% endif %}</td>
+        <td style="padding:.6rem .9rem;text-align:center">
+          {% if a.actif %}<span style="font-size:.72rem;background:#e9f6ec;color:#2f7d3c;padding:.15rem .5rem;border-radius:.4rem">En cours</span>
+          {% else %}<span style="font-size:.72rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem">Terminée</span>{% endif %}
+        </td>
+        <td style="padding:.6rem .9rem;text-align:right;white-space:nowrap">
+          {% if a.actif %}
+          <form method="POST" action="{{ url_for('tenant.mad_affectation_terminer', aff_id=a.id) }}" style="display:inline" onsubmit="return confirm('Terminer cette affectation aujourd\'hui ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="background:none;border:none;color:#17564c;font-weight:700;cursor:pointer;font-size:.85rem">Terminer</button>
+          </form>
+          {% endif %}
+          <form method="POST" action="{{ url_for('tenant.mad_affectation_supprimer', aff_id=a.id) }}" style="display:inline" onsubmit="return confirm('Supprimer cette affectation ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="background:none;border:none;color:#b91c1c;font-weight:700;cursor:pointer;font-size:.85rem;margin-left:.5rem">Suppr.</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:1.5rem;text-align:center;color:#6b7280;margin-bottom:1.25rem">
+    Aucun salarié affecté à ce client pour le moment.
+  </div>
+  {% endif %}
+
+  <!-- Nouvelle affectation -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem">
+    <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .9rem">+ Affecter un salarié</h3>
+    <form method="POST" action="{{ url_for('tenant.mad_affecter', client_id=client.id) }}" style="display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="grid-column:1/-1">
+        <label style="font-size:.8rem;font-weight:700;color:#374151">Salarié *</label>
+        <select name="salarie_id" required style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem">
+          <option value="">— Choisir —</option>
+          {% for s in salaries %}<option value="{{ s.id }}">{{ s.nom }} {{ s.prenom }} ({{ s.matricule }})</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#374151">Poste chez le client</label>
+        <input name="poste" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#374151">Mode de facturation</label>
+        <select name="mode_facturation" id="modeSel" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem">
+          {% for k,v in modes.items() %}<option value="{{ k }}" {{ 'selected' if k=='TAUX_JOUR' }}>{{ v }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#374151"><span id="valLabel">Taux (FCFA / jour)</span> *</label>
+        <input name="valeur" required type="text" inputmode="decimal" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#374151">Début *</label>
+        <input name="date_debut" type="date" required value="{{ annee }}-{{ '%02d'%mois }}-01" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/>
+      </div>
+      <div>
+        <label style="font-size:.8rem;font-weight:700;color:#374151">Fin (optionnel)</label>
+        <input name="date_fin" type="date" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/>
+      </div>
+      <div style="grid-column:1/-1">
+        <button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1.4rem;border-radius:.6rem;font-weight:700;cursor:pointer">Affecter</button>
+      </div>
+    </form>
+  </div>
+
+  {% if client.affectations|length == 0 and client.actif %}
+  <form method="POST" action="{{ url_for('tenant.mad_client_supprimer', client_id=client.id) }}" style="margin-top:1rem;text-align:right" onsubmit="return confirm('Supprimer définitivement ce client ?')">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <button style="background:none;border:none;color:#b91c1c;font-weight:700;cursor:pointer;font-size:.85rem">Supprimer ce client</button>
+  </form>
+  {% endif %}
+</div>
+
+<script>
+  var _labels = {
+    "FORFAIT_MENSUEL":"Montant forfaitaire (FCFA / mois)",
+    "TAUX_JOUR":"Taux (FCFA / jour)",
+    "TAUX_HEURE":"Taux (FCFA / heure)",
+    "COEFFICIENT":"Coefficient (ex. 2 = ×2 du coût)"
+  };
+  var sel = document.getElementById('modeSel');
+  if (sel) sel.addEventListener('change', function(){
+    document.getElementById('valLabel').textContent = _labels[this.value] || "Valeur";
+  });
+</script>
+{% endblock %}

@@ -107,6 +107,9 @@
       <a href="/journaliers/paie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journaliers_paie' in ep else 'text-white/80 hover:bg-white/10' }}">
         💵 <span>Paie journaliers</span>
       </a>
+      <a href="/mise-a-disposition" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'mad_' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🤝 <span>Mise à disposition</span>
+      </a>
       <div class="border-t border-white/10 my-2"></div>
       {% if current_user.is_tenant_admin %}
       <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">

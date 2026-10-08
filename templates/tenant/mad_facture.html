@@ -1,0 +1,75 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.mad_client_detail', client_id=client.id) }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← {{ client.nom }}</a>
+  <h1 style="font-size:1.4rem;font-weight:800;color:#0f3d36;margin:.4rem 0 .25rem">🧾 Facturation — {{ client.nom }}</h1>
+  <p style="color:#6b7280;font-size:.9rem;margin:0 0 1rem">Prestation de {{ mois_label }} {{ annee }}. Ajustez les quantités si besoin, puis éditez la facture.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- changer de mois -->
+  <form method="get" style="display:flex;gap:.5rem;align-items:center;margin-bottom:1rem">
+    <select name="mois" style="padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:.5rem">
+      {% for i in range(1,13) %}<option value="{{ i }}" {{ 'selected' if i==mois }}>{{ mois_fr[i] }}</option>{% endfor %}
+    </select>
+    <input type="number" name="annee" value="{{ annee }}" style="width:5.5rem;padding:.45rem .6rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+    <button style="background:#eef4f2;color:#17564c;border:none;padding:.5rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer">Afficher</button>
+  </form>
+
+  {% if lignes %}
+  <form method="POST" action="{{ url_for('tenant.mad_facture_pdf', client_id=client.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="mois" value="{{ mois }}"/>
+    <input type="hidden" name="annee" value="{{ annee }}"/>
+
+    <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+        <tr style="background:#0f3d36;color:#fff;text-align:left">
+          <th style="padding:.6rem .9rem">Salarié / Poste</th>
+          <th style="padding:.6rem .9rem">Mode</th>
+          <th style="padding:.6rem .9rem;text-align:right">P.U.</th>
+          <th style="padding:.6rem .9rem;text-align:center">Quantité</th>
+          <th style="padding:.6rem .9rem;text-align:right">Montant</th>
+        </tr>
+        {% for l in lignes %}
+        <tr style="border-top:1px solid #f3f4f6">
+          <td style="padding:.6rem .9rem;font-weight:600">{{ l.salarie.prenom }} {{ l.salarie.nom }}<div style="color:#9ca3af;font-size:.78rem">{{ l.aff.poste or l.salarie.emploi or '—' }}</div></td>
+          <td style="padding:.6rem .9rem;color:#6b7280">{{ l.aff.mode_libelle }}</td>
+          <td style="padding:.6rem .9rem;text-align:right">{% if l.aff.unite=='×' %}×{{ '{:,.2f}'.format(l.aff.valeur|float) }}{% else %}{{ '{:,.0f}'.format(l.aff.valeur|float).replace(',',' ') }}{% endif %}</td>
+          <td style="padding:.6rem .9rem;text-align:center">
+            {% if l.aff.mode_facturation in ['TAUX_JOUR','TAUX_HEURE'] %}
+              <input name="q_{{ l.aff.id }}" value="{{ '%g'%l.quantite }}" style="width:5rem;padding:.35rem;border:1px solid #d1d5db;border-radius:.4rem;text-align:center"/>
+              <span style="color:#9ca3af;font-size:.78rem">{{ l.aff.unite }}</span>
+            {% else %}
+              <input type="hidden" name="q_{{ l.aff.id }}" value="{{ l.quantite }}"/>
+              <span style="color:#9ca3af">—</span>
+            {% endif %}
+          </td>
+          <td style="padding:.6rem .9rem;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">{{ '{:,.0f}'.format(l.facture).replace(',',' ') }} F</td>
+        </tr>
+        {% endfor %}
+        <tr style="background:#f4f3ee;border-top:2px solid #0f3d36">
+          <td colspan="4" style="padding:.7rem .9rem;text-align:right;font-weight:800;color:#0f3d36">TOTAL À FACTURER</td>
+          <td style="padding:.7rem .9rem;text-align:right;font-weight:800;color:#0f3d36;font-size:1.05rem">{{ '{:,.0f}'.format(total).replace(',',' ') }} F</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-top:1rem">
+      <div style="color:#6b7280;font-size:.85rem">
+        Coût employeur estimé : <b>{{ '{:,.0f}'.format(total_cout).replace(',',' ') }} F</b> ·
+        Marge estimée : <b style="color:{{ '#166534' if marge>=0 else '#b91c1c' }}">{{ '{:,.0f}'.format(marge).replace(',',' ') }} F</b>
+        <div style="color:#9ca3af;font-size:.78rem;margin-top:.2rem">Jours ouvrés du mois : {{ jours_ouvres }} (valeur par défaut, modifiable ci-dessus).</div>
+      </div>
+      <button style="background:#E9B043;color:#0f3d36;border:none;padding:.7rem 1.6rem;border-radius:.6rem;font-weight:800;cursor:pointer">📄 Éditer la facture (PDF)</button>
+    </div>
+  </form>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2rem;text-align:center;color:#6b7280">
+    Aucune affectation active sur {{ mois_label }} {{ annee }} pour ce client.
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

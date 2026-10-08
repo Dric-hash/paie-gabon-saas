@@ -1,0 +1,79 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:700px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.mad_dashboard') }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Mise à disposition</a>
+  <h1 style="font-size:1.4rem;font-weight:800;color:#0f3d36;margin:.4rem 0 1rem">
+    {{ 'Modifier le client' if client else 'Nouveau client (entreprise utilisatrice)' }}
+  </h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="{{ url_for('tenant.mad_client_modifier', client_id=client.id) if client else url_for('tenant.mad_client_nouveau') }}"
+        style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.5rem;display:grid;gap:1rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Raison sociale *</label>
+      <input name="nom" required value="{{ client.nom if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">NIF</label>
+        <input name="nif" value="{{ client.nif or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">RCCM</label>
+        <input name="rccm" value="{{ client.rccm or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Secteur</label>
+        <input name="secteur" placeholder="BTP, pétrole, services…" value="{{ client.secteur or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Contact (nom)</label>
+        <input name="contact_nom" value="{{ client.contact_nom or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Téléphone</label>
+        <input name="telephone" value="{{ client.telephone or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Email</label>
+        <input name="email" type="email" value="{{ client.email or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+    </div>
+
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Adresse</label>
+      <input name="adresse" value="{{ client.adresse or '' if client else '' }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+    </div>
+
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Note interne</label>
+      <textarea name="note" rows="2" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem">{{ client.note or '' if client else '' }}</textarea>
+    </div>
+
+    {% if client %}
+    <label style="display:flex;align-items:center;gap:.5rem;font-size:.9rem">
+      <input type="checkbox" name="actif" {{ 'checked' if client.actif }}/> Client actif
+    </label>
+    {% endif %}
+
+    <div style="display:flex;gap:.75rem">
+      <button style="background:#0f3d36;color:#fff;padding:.65rem 1.4rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">
+        {{ 'Enregistrer' if client else 'Créer le client' }}
+      </button>
+      <a href="{{ url_for('tenant.mad_client_detail', client_id=client.id) if client else url_for('tenant.mad_dashboard') }}" style="padding:.65rem 1.2rem;color:#6b7280;text-decoration:none">Annuler</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

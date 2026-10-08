@@ -1872,3 +1872,94 @@ class EditionDAS(db.Model):
     @property
     def est_payee(self):
         return self.statut == "PAYEE"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# MISE À DISPOSITION DE PERSONNEL
+# ───────────────────────────────────────────────────────────────────────────
+# Le tenant est l'entreprise PRESTATAIRE : elle emploie, paie et déclare ses
+# salariés (rien ne change à la paie). Elle les met à disposition d'ENTREPRISES
+# UTILISATRICES (clients) et leur refacture la prestation.
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ClientUtilisateur(db.Model):
+    """Entreprise utilisatrice : le client chez qui des salariés du tenant sont
+    mis à disposition. Ce n'est PAS un tenant — juste un client refacturé."""
+    __tablename__ = "clients_utilisateurs"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    nom           = db.Column(db.String(200), nullable=False)   # raison sociale
+    nif           = db.Column(db.String(30))                    # NIF de l'utilisatrice
+    rccm          = db.Column(db.String(50))
+    contact_nom   = db.Column(db.String(150))
+    telephone     = db.Column(db.String(30))
+    email         = db.Column(db.String(200))
+    adresse       = db.Column(db.String(300))
+    secteur       = db.Column(db.String(120))                   # BTP, pétrole, etc.
+    note          = db.Column(db.Text)
+    actif         = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    tenant = db.relationship("Tenant", backref="clients_utilisateurs")
+
+
+class AffectationMAD(db.Model):
+    """Mise à disposition d'un salarié chez une entreprise utilisatrice, sur une
+    période donnée, avec son mode de facturation."""
+    __tablename__ = "affectations_mad"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    client_id     = db.Column(db.Integer, db.ForeignKey("clients_utilisateurs.id"), nullable=False)
+    salarie_id    = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    poste         = db.Column(db.String(200))                   # poste occupé chez le client
+    date_debut    = db.Column(db.Date, nullable=False)
+    date_fin      = db.Column(db.Date)                          # NULL = en cours
+    mode_facturation = db.Column(db.String(20), default="TAUX_JOUR")
+    # FORFAIT_MENSUEL | TAUX_JOUR | TAUX_HEURE | COEFFICIENT
+    valeur        = db.Column(db.Numeric(14, 4), default=0)     # montant forfait / taux / coefficient
+    actif         = db.Column(db.Boolean, default=True)
+    note          = db.Column(db.String(300))
+    date_creation = db.Column(db.DateTime, default=utcnow)
+
+    client  = db.relationship("ClientUtilisateur", backref="affectations")
+    salarie = db.relationship("Salarie", backref="affectations_mad")
+
+    MODES = {
+        "FORFAIT_MENSUEL": "Forfait mensuel",
+        "TAUX_JOUR":       "Taux journalier",
+        "TAUX_HEURE":      "Taux horaire",
+        "COEFFICIENT":     "Coefficient sur coût employeur",
+    }
+    UNITES = {
+        "FORFAIT_MENSUEL": "mois", "TAUX_JOUR": "jour",
+        "TAUX_HEURE": "heure", "COEFFICIENT": "×",
+    }
+
+    @property
+    def mode_libelle(self):
+        return self.MODES.get(self.mode_facturation, self.mode_facturation)
+
+    @property
+    def unite(self):
+        return self.UNITES.get(self.mode_facturation, "")
+
+    def est_active_sur(self, annee, mois):
+        """L'affectation couvre-t-elle (au moins en partie) le mois donné ?"""
+        from datetime import date as _date
+        debut_mois = _date(annee, mois, 1)
+        fin_mois = _date(annee + (mois // 12), (mois % 12) + 1, 1)  # 1er du mois suivant
+        if self.date_debut and self.date_debut >= fin_mois:
+            return False
+        if self.date_fin and self.date_fin < debut_mois:
+            return False
+        return True
+
+    def montant_facture(self, quantite, cout_employeur=0):
+        """Montant facturé au client pour ce mois, selon le mode."""
+        v = float(self.valeur or 0)
+        q = float(quantite or 0)
+        if self.mode_facturation == "FORFAIT_MENSUEL":
+            return v
+        if self.mode_facturation == "COEFFICIENT":
+            return float(cout_employeur or 0) * v
+        # TAUX_JOUR / TAUX_HEURE
+        return v * q
