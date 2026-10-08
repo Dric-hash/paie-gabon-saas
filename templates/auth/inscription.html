@@ -110,14 +110,31 @@
         </div>
         {% endif %}
 
-        {# ── Mode cabinet (plan-indépendant) ── #}
-        <label class="plan" style="cursor:pointer;margin-top:.2rem">
-          <input type="checkbox" name="mode_cabinet" value="1">
-          <div>
-            <div class="p-name">🏢 Je suis un cabinet comptable</div>
-            <div class="p-desc">Gérez la paie de plusieurs entreprises depuis un seul compte. Vous pourrez ajouter vos sociétés clientes et basculer de l'une à l'autre dès la connexion.</div>
-          </div>
-        </label>
+        {# ── Profil d'usage (oriente l'interface) ── #}
+        <div style="margin-top:.2rem">
+          <div style="font-weight:700;font-size:.9rem;color:#0f3d36;margin-bottom:.4rem">Quel est votre profil ?</div>
+          <label class="plan" style="cursor:pointer;margin-bottom:.4rem">
+            <input type="radio" name="type_compte" value="ENTREPRISE" checked>
+            <div>
+              <div class="p-name">🏢 Entreprise</div>
+              <div class="p-desc">Vous gérez la paie de votre propre personnel.</div>
+            </div>
+          </label>
+          <label class="plan" style="cursor:pointer;margin-bottom:.4rem">
+            <input type="radio" name="type_compte" value="CABINET">
+            <div>
+              <div class="p-name">📊 Cabinet comptable</div>
+              <div class="p-desc">Vous gérez la paie de plusieurs entreprises clientes depuis un seul compte, et basculez de l'une à l'autre.</div>
+            </div>
+          </label>
+          <label class="plan" style="cursor:pointer">
+            <input type="radio" name="type_compte" value="MISE_A_DISPOSITION">
+            <div>
+              <div class="p-name">🤝 Entreprise de mise à disposition</div>
+              <div class="p-desc">Vous mettez du personnel à disposition d'autres entreprises et refacturez la prestation.</div>
+            </div>
+          </label>
+        </div>
 
         {% if doublon %}
         <label class="plan" style="cursor:pointer;margin-top:.2rem;border:1px solid #e9a13b;background:#fff8ec">

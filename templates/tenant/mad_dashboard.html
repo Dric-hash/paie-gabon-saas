@@ -9,7 +9,10 @@
         Vos entreprises utilisatrices (clients), le personnel mis à disposition et la refacturation.
       </p>
     </div>
-    <a href="{{ url_for('tenant.mad_client_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Nouveau client</a>
+    <div style="display:flex;gap:.5rem;align-items:center">
+      <a href="{{ url_for('tenant.mad_relations') }}" style="position:relative;background:#eef4f2;color:#17564c;padding:.6rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">🔗 Mise en relation{% if nb_relations_attente %}<span style="position:absolute;top:-.4rem;right:-.4rem;background:#E9B043;color:#0f3d36;font-size:.68rem;font-weight:800;padding:.1rem .4rem;border-radius:.6rem">{{ nb_relations_attente }}</span>{% endif %}</a>
+      <a href="{{ url_for('tenant.mad_client_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Nouveau client</a>
+    </div>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}

@@ -114,6 +114,10 @@ class Tenant(db.Model):
     # le cabinet ne fait que les regrouper et permettre d'y accéder.
     est_cabinet = db.Column(db.Boolean, default=False, nullable=False)
     cabinet_id  = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+    # Profil d'usage choisi à l'inscription (oriente l'interface, n'impose rien) :
+    # ENTREPRISE (gère sa paie) | CABINET (gère plusieurs clients) |
+    # MISE_A_DISPOSITION (met du personnel à disposition d'autres entreprises).
+    type_compte = db.Column(db.String(20), default="ENTREPRISE")
     # Nombre maximum d'entreprises qu'un cabinet a le droit de gérer (palier
     # tarifaire souscrit). NULL/0 = palier par défaut. Voir paliers_cabinet.py.
     limite_entreprises = db.Column(db.Integer, nullable=True)
@@ -127,6 +131,20 @@ class Tenant(db.Model):
     salaries     = db.relationship("Salarie", backref="tenant", lazy=True)
     periodes     = db.relationship("PeriodePaie", backref="tenant", lazy=True)
     categories   = db.relationship("CategorieEmploi", backref="tenant", lazy=True)
+
+    TYPES_COMPTE = {
+        "ENTREPRISE":        "Entreprise",
+        "CABINET":           "Cabinet comptable",
+        "MISE_A_DISPOSITION":"Entreprise de mise à disposition",
+    }
+
+    @property
+    def type_compte_libelle(self):
+        return self.TYPES_COMPTE.get(self.type_compte or "ENTREPRISE", "Entreprise")
+
+    @property
+    def est_mise_a_disposition(self):
+        return (self.type_compte or "") == "MISE_A_DISPOSITION"
 
     @property
     def est_entreprise_geree(self):
@@ -1963,3 +1981,28 @@ class AffectationMAD(db.Model):
             return float(cout_employeur or 0) * v
         # TAUX_JOUR / TAUX_HEURE
         return v * q
+
+
+class MiseEnRelation(db.Model):
+    """Demande de mise en relation entre deux tenants, initiée par identifiant (NIF).
+    Confidentialité : l'existence d'un tenant cible n'est jamais révélée au demandeur
+    tant que la cible n'a pas accepté."""
+    __tablename__ = "mises_en_relation"
+    id                 = db.Column(db.Integer, primary_key=True)
+    tenant_demandeur_id = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    tenant_cible_id    = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=True)
+    nif_recherche      = db.Column(db.String(50), nullable=False)   # NIF saisi par le demandeur
+    statut             = db.Column(db.String(12), default="EN_ATTENTE")  # EN_ATTENTE | ACCEPTEE | REFUSEE
+    message            = db.Column(db.Text)                          # mot du demandeur
+    client_cree_id     = db.Column(db.Integer, db.ForeignKey("clients_utilisateurs.id"))  # client créé à l'acceptation
+    date_creation      = db.Column(db.DateTime, default=utcnow)
+    date_reponse       = db.Column(db.DateTime)
+
+    demandeur = db.relationship("Tenant", foreign_keys=[tenant_demandeur_id])
+    cible     = db.relationship("Tenant", foreign_keys=[tenant_cible_id])
+
+    STATUTS = {"EN_ATTENTE": "En attente", "ACCEPTEE": "Acceptée", "REFUSEE": "Refusée"}
+
+    @property
+    def statut_libelle(self):
+        return self.STATUTS.get(self.statut, self.statut)

@@ -16,7 +16,7 @@ from blueprints.tenant import bp, _doc_response
 from core import get_tenant, parse_date
 from audit import log_action
 from models import (db, Salarie, BulletinPaie, PeriodePaie, Pointage,
-                    ClientUtilisateur, AffectationMAD)
+                    ClientUtilisateur, AffectationMAD, Tenant, MiseEnRelation)
 
 _MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet",
          "Août", "Septembre", "Octobre", "Novembre", "Décembre"]
@@ -154,7 +154,8 @@ def mad_dashboard():
         annee=annee, mois=mois, mois_label=_MOIS[mois], mois_fr=_MOIS,
         total_facture=total_facture, total_cout=total_cout,
         total_marge=total_facture - total_cout,
-        nb_clients=len([c for c in clients if c.actif]), nb_sal_mad=nb_sal_mad)
+        nb_clients=len([c for c in clients if c.actif]), nb_sal_mad=nb_sal_mad,
+        nb_relations_attente=_nb_relations_en_attente(t.id))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -491,3 +492,132 @@ def mad_contrat(aff_id):
                f"Contrat de mise à disposition — {client.nom}")
     nom = f"contrat_mad_{client.nom[:20].replace(' ', '_')}_{a.id}.pdf"
     return _doc_response(pdf, nom)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mise en relation par identifiant (NIF)
+# ───────────────────────────────────────────────────────────────────────────
+# Confidentialité : on ne révèle JAMAIS au demandeur si une entreprise est
+# enregistrée. La cible reçoit la demande ; tant qu'elle n'a pas accepté,
+# le demandeur ne voit ni le nom ni les coordonnées de la cible.
+# ─────────────────────────────────────────────────────────────────────────────
+def _nb_relations_en_attente(tenant_id):
+    """Nombre de demandes reçues en attente (pour le badge)."""
+    return (MiseEnRelation.query
+            .filter_by(tenant_cible_id=tenant_id, statut="EN_ATTENTE").count())
+
+
+@bp.route("/mise-a-disposition/relations")
+@login_required
+def mad_relations():
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    envoyees = (MiseEnRelation.query.filter_by(tenant_demandeur_id=t.id)
+                .order_by(MiseEnRelation.date_creation.desc()).all())
+    recues = (MiseEnRelation.query.filter_by(tenant_cible_id=t.id)
+              .order_by(MiseEnRelation.date_creation.desc()).all())
+    return render_template("tenant/mad_relations.html",
+        tenant=t, envoyees=envoyees, recues=recues,
+        nb_attente=_nb_relations_en_attente(t.id))
+
+
+@bp.route("/mise-a-disposition/relations/envoyer", methods=["POST"])
+@login_required
+def mad_relation_envoyer():
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        flash("Vous n'avez pas les droits pour cette action.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+
+    nif = (request.form.get("nif") or "").strip()
+    message = (request.form.get("message") or "").strip() or None
+    # Message volontairement neutre, quelle que soit l'issue (anti-énumération).
+    neutre = ("Si une entreprise est enregistrée avec ce NIF, elle recevra votre "
+              "demande de mise en relation.")
+    if not nif:
+        flash("Veuillez saisir un NIF.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+
+    cibles = Tenant.query.filter(Tenant.nif == nif, Tenant.id != t.id).all()
+    for cible in cibles:
+        # Pas de doublon : une demande active (en attente ou acceptée) suffit.
+        existe = (MiseEnRelation.query
+                  .filter_by(tenant_demandeur_id=t.id, tenant_cible_id=cible.id)
+                  .filter(MiseEnRelation.statut.in_(("EN_ATTENTE", "ACCEPTEE")))
+                  .first())
+        if existe:
+            continue
+        db.session.add(MiseEnRelation(
+            tenant_demandeur_id=t.id, tenant_cible_id=cible.id,
+            nif_recherche=nif, statut="EN_ATTENTE", message=message))
+    db.session.commit()
+    log_action("creation", "mise_en_relation", None, f"Demande de mise en relation (NIF {nif})")
+    flash(neutre, "success")
+    return redirect(url_for("tenant.mad_relations"))
+
+
+@bp.route("/mise-a-disposition/relations/<int:rel_id>/accepter", methods=["POST"])
+@login_required
+def mad_relation_accepter(rel_id):
+    t = get_tenant()
+    rel = MiseEnRelation.query.filter_by(id=rel_id, tenant_cible_id=t.id).first() if t else None
+    if not rel:
+        flash("Demande introuvable.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+    if not current_user.can_edit:
+        flash("Vous n'avez pas les droits pour cette action.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+    if rel.statut != "EN_ATTENTE":
+        flash("Cette demande a déjà été traitée.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+
+    from datetime import datetime as _dt
+    rel.statut = "ACCEPTEE"
+    rel.date_reponse = _dt.utcnow()
+
+    # Côté demandeur (le prestataire) : on crée automatiquement le client
+    # « entreprise utilisatrice » à partir des infos de la cible (nous).
+    demandeur_id = rel.tenant_demandeur_id
+    deja = ClientUtilisateur.query.filter_by(tenant_id=demandeur_id, nif=(t.nif or "")).first() if t.nif else None
+    if not deja:
+        c = ClientUtilisateur(
+            tenant_id=demandeur_id, nom=t.denomination or "Entreprise",
+            nif=t.nif or None, telephone=t.telephone or None,
+            adresse=getattr(t, "adresse", None),
+            secteur=getattr(t, "secteur", None) or getattr(t, "activite", None),
+            note="Ajouté via mise en relation.")
+        db.session.add(c)
+        db.session.flush()
+        rel.client_cree_id = c.id
+    else:
+        rel.client_cree_id = deja.id
+    db.session.commit()
+    log_action("modification", "mise_en_relation", rel.id, "Mise en relation acceptée")
+    flash("Demande acceptée. Vos coordonnées ont été partagées avec le demandeur.", "success")
+    return redirect(url_for("tenant.mad_relations"))
+
+
+@bp.route("/mise-a-disposition/relations/<int:rel_id>/refuser", methods=["POST"])
+@login_required
+def mad_relation_refuser(rel_id):
+    t = get_tenant()
+    rel = MiseEnRelation.query.filter_by(id=rel_id, tenant_cible_id=t.id).first() if t else None
+    if not rel:
+        flash("Demande introuvable.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+    if not current_user.can_edit:
+        flash("Vous n'avez pas les droits pour cette action.", "error")
+        return redirect(url_for("tenant.mad_relations"))
+    if rel.statut == "EN_ATTENTE":
+        from datetime import datetime as _dt
+        rel.statut = "REFUSEE"
+        rel.date_reponse = _dt.utcnow()
+        db.session.commit()
+        log_action("modification", "mise_en_relation", rel.id, "Mise en relation refusée")
+    flash("Demande refusée.", "success")
+    return redirect(url_for("tenant.mad_relations"))

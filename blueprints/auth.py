@@ -406,10 +406,15 @@ def inscription():
             pays="Gabon", plan_id=plan.id if plan else None,
             statut="ESSAI",
             date_expiration=utcnow() + timedelta(days=30),
-            # Mode cabinet choisi à l'inscription (indépendant du plan) : le tenant
-            # peut alors gérer plusieurs entreprises dès la connexion.
-            est_cabinet=(request.form.get("mode_cabinet") in ("1", "on", "true")),
         )
+        # Profil d'usage choisi à l'inscription (oriente l'interface, n'impose rien).
+        _tc = (request.form.get("type_compte") or "").strip().upper()
+        if _tc not in ("ENTREPRISE", "CABINET", "MISE_A_DISPOSITION"):
+            # Rétro-compat : ancienne case à cocher « mode_cabinet ».
+            _tc = "CABINET" if request.form.get("mode_cabinet") in ("1", "on", "true") else "ENTREPRISE"
+        t.type_compte = _tc
+        # Le mode cabinet (plan-indépendant) reste piloté par le profil.
+        t.est_cabinet = (_tc == "CABINET")
         t.generate_token()
         db.session.add(t)
         db.session.flush()

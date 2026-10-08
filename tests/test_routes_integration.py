@@ -1128,3 +1128,65 @@ class TestMADContratEtPointage:
         r = client.get(f"/mise-a-disposition/clients/{cid}/facture?mois=6&annee=2026")
         assert r.status_code == 200
         assert b'value="18"' in r.data  # jours réellement pointés, pas les jours ouvrés
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — Profil d'inscription (type_compte) + mise en relation par NIF
+# ══════════════════════════════════════════════════════════════════════════════
+class TestProfilEtRelations:
+    def test_type_compte_inscription(self, client):
+        from models import Tenant
+        page = client.get("/inscription")
+        tok = _extract_csrf(page.data)
+        r = client.post("/inscription", data={
+            "denomination": "MAD CORP", "nom": "P", "prenom": "Q",
+            "email": "madcorp.paie@gmail.com", "password": "MotDePasse1",
+            "type_compte": "MISE_A_DISPOSITION", "csrf_token": tok,
+        }, follow_redirects=False)
+        t = Tenant.query.filter_by(denomination="MAD CORP").first()
+        assert t is not None, "tenant non créé"
+        assert t.type_compte == "MISE_A_DISPOSITION" and t.est_cabinet is False
+
+    def test_envoyer_et_confidentialite(self, client):
+        from models import db, Tenant, MiseEnRelation
+        b = Tenant.query.filter_by(slug="entreprise-b").first()
+        b.nif = "NIF-B-123"; db.session.commit()
+        auth_session(client, "admin@a.ga")
+        page = client.get("/mise-a-disposition/relations"); tok = _extract_csrf(page.data)
+        r = client.post("/mise-a-disposition/relations/envoyer",
+                        data={"nif": "NIF-B-123", "message": "Bonjour", "csrf_token": tok})
+        assert r.status_code == 302
+        rel = MiseEnRelation.query.filter_by(nif_recherche="NIF-B-123").first()
+        assert rel is not None and rel.statut == "EN_ATTENTE" and rel.tenant_cible_id == b.id
+        # A (demandeur) ne voit pas le nom de B tant que c'est en attente
+        page = client.get("/mise-a-disposition/relations")
+        assert b"ENTREPRISE B" not in page.data and "confidentiel".encode() in page.data
+
+    def test_accepter_cree_client_chez_demandeur(self, client):
+        from models import db, Tenant, MiseEnRelation, ClientUtilisateur
+        a = Tenant.query.filter_by(slug="entreprise-a").first()
+        b = Tenant.query.filter_by(slug="entreprise-b").first()
+        b.nif = "NIF-B-999"
+        rel = MiseEnRelation(tenant_demandeur_id=a.id, tenant_cible_id=b.id,
+                             nif_recherche="NIF-B-999", statut="EN_ATTENTE", message="Hello")
+        db.session.add(rel); db.session.commit()
+        rid, a_id = rel.id, a.id
+        # B (la cible) accepte
+        auth_session(client, "admin@b.ga")
+        page = client.get("/mise-a-disposition/relations"); tok = _extract_csrf(page.data)
+        assert b"ENTREPRISE A" in page.data and "Accepter".encode() in page.data
+        r = client.post(f"/mise-a-disposition/relations/{rid}/accepter",
+                        data={"csrf_token": tok})
+        assert r.status_code == 302
+        rel = MiseEnRelation.query.get(rid)
+        assert rel.statut == "ACCEPTEE" and rel.client_cree_id is not None
+        c = ClientUtilisateur.query.filter_by(tenant_id=a_id, nif="NIF-B-999").first()
+        assert c is not None and "ENTREPRISE B" in (c.nom or "").upper()
+
+    def test_anti_enumeration(self, client):
+        auth_session(client, "admin@a.ga")
+        page = client.get("/mise-a-disposition/relations"); tok = _extract_csrf(page.data)
+        r = client.post("/mise-a-disposition/relations/envoyer",
+                        data={"nif": "NIF-INEXISTANT-999", "csrf_token": tok},
+                        follow_redirects=True)
+        assert "recevra votre demande".encode() in r.data
