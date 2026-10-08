@@ -1263,3 +1263,35 @@ class TestPrestataireCSS:
         lignes, tot = dd.agreger_honoraires(t, 2026, db=db, models=M)
         assert tot["css"] == 20000  # 1% de 2 000 000
         assert any(l["css"] == 20000 for l in lignes)
+
+
+class TestDASExcelCSS:
+    def test_excel_das_inclut_css(self, client):
+        from models import (db, Tenant, Salarie, PeriodePaie, BulletinPaie,
+                            Prestataire, FacturePrestataire)
+        from datetime import date
+        import declaration_das as dd, models as M
+        import openpyxl, io
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        s = Salarie(tenant_id=t.id, matricule="DX", nom="X", prenom="Y",
+                    date_embauche=date(2020, 1, 1), statut="ACTIF")
+        db.session.add(s); db.session.commit()
+        per = PeriodePaie(tenant_id=t.id, mois=1, annee=2026, libelle_mois="JANVIER", statut="VALIDÉ")
+        db.session.add(per); db.session.commit()
+        db.session.add(BulletinPaie(tenant_id=t.id, salarie_id=s.id, periode_id=per.id,
+                       salaire_base=500000, salaire_brut=500000, net_a_payer=400000, statut="VALIDÉ"))
+        p = Prestataire(tenant_id=t.id, code="PCX", categorie="SOUS_TRAITANT",
+                        raison_sociale="BTP SARL", regime_fiscal="CSS",
+                        assujetti_tva=False, assujetti_css=True, resident=True)
+        db.session.add(p); db.session.commit()
+        f = FacturePrestataire(tenant_id=t.id, prestataire_id=p.id, numero="FX",
+                               date_facture=date(2026, 4, 1), montant_ht=2000000,
+                               taux_tva=0, taux_css=1, taux_retenue=0, statut="PAYEE")
+        f.lignes = []; f.calculer(); db.session.add(f); db.session.commit()
+        content = dd.generer_das_excel(t, 2026, models=M)
+        wb = openpyxl.load_workbook(io.BytesIO(content))
+        ws = wb["ID23-24 - Honoraires"]
+        hdr = [ws.cell(4, c).value for c in range(1, ws.max_column + 1)]
+        assert "CSS (1%)" in hdr
+        ci = hdr.index("CSS (1%)") + 1
+        assert ws.cell(5, ci).value == 20000  # 1% de 2 000 000
