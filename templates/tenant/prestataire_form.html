@@ -141,23 +141,46 @@
           style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
       </div>
       <div>
-        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Taux retenue à la source (%)</label>
-        <input type="number" name="taux_retenue_source" step="0.01" min="0" max="100"
-          value="{{ p.taux_retenue_source if p else '0' }}"
-          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem"/>
+        <label style="font-size:.75rem;color:#6b7280;font-weight:700;display:block;margin-bottom:.3rem">Régime fiscal</label>
+        <select name="regime_fiscal" id="regimeSel"
+          style="width:100%;border:1px solid #e5e7eb;border-radius:.625rem;padding:.5rem .75rem;font-size:.85rem">
+          <option value="TVA_CSS"   {% if not p or p.regime_fiscal=='TVA_CSS' %}selected{% endif %}>TVA 18 % + CSS 1 %</option>
+          <option value="CSS"       {% if p and p.regime_fiscal=='CSS' %}selected{% endif %}>CSS 1 % seule</option>
+          <option value="PRECOMPTE" {% if p and p.regime_fiscal=='PRECOMPTE' %}selected{% endif %}>Précompte 9,5 %</option>
+        </select>
       </div>
     </div>
-    <div style="display:flex;gap:1.5rem;margin-top:1rem">
-      <label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:#374151;cursor:pointer">
-        <input type="checkbox" name="assujetti_tva" {% if not p or p.assujetti_tva %}checked{% endif %}/>
-        Assujetti à la TVA (18%)
+    <div style="display:flex;gap:1.5rem;margin-top:1rem;flex-wrap:wrap">
+      <label id="cssBox" style="display:{{ 'flex' if (p and p.regime_fiscal=='PRECOMPTE') else 'none' }};align-items:center;gap:.5rem;font-size:.82rem;color:#374151;cursor:pointer">
+        <input type="checkbox" name="assujetti_css" {% if p and p.assujetti_css %}checked{% endif %}/>
+        Soumis aussi à la CSS (1 %)
       </label>
       <label style="display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:#374151;cursor:pointer">
         <input type="checkbox" name="resident" {% if not p or p.resident %}checked{% endif %}/>
         Résident fiscal au Gabon
       </label>
     </div>
+    <p style="font-size:.73rem;color:#9ca3af;margin-top:.5rem" id="regimeHint"></p>
   </div>
+
+  <script>
+    (function(){
+      var sel = document.getElementById('regimeSel');
+      var box = document.getElementById('cssBox');
+      var hint = document.getElementById('regimeHint');
+      var H = {
+        'TVA_CSS':   'TVA 18 % + CSS 1 % collectées sur la facture.',
+        'CSS':       'CSS 1 % seule, pas de TVA.',
+        'PRECOMPTE': 'Précompte 9,5 % retenu sur le net versé, pas de TVA. Cochez la CSS si applicable.'
+      };
+      function sync(){
+        if (!sel) return;
+        box.style.display = (sel.value === 'PRECOMPTE') ? 'flex' : 'none';
+        hint.textContent = H[sel.value] || '';
+      }
+      if (sel){ sel.addEventListener('change', sync); sync(); }
+    })();
+  </script>
 
   <!-- Notes -->
   <div class="card p-5 mb-4">

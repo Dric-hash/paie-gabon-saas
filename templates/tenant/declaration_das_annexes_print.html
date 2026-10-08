@@ -182,7 +182,9 @@
       <tr>
         <th style="text-align:left">Nom / raison sociale du prestataire</th>
         <th>NIF du prestataire</th>
-        <th>Montant versé</th>
+        <th>Montant HT</th>
+        <th>TVA</th>
+        <th>CSS</th>
         <th>Retenue à la source</th>
       </tr>
     </thead>
@@ -192,6 +194,8 @@
         <td class="l">{{ h.raison_sociale }}{% if h.activite %} <span style="color:#777">— {{ h.activite }}</span>{% endif %}</td>
         <td class="c" style="font-family:monospace">{{ h.nif }}</td>
         <td class="r">{{ h.montant_ht|int|fcfa }}</td>
+        <td class="r">{{ h.tva|int|fcfa }}</td>
+        <td class="r">{{ h.css|int|fcfa }}</td>
         <td class="r">{{ h.retenue_total|int|fcfa }}</td>
       </tr>
       {% endfor %}
@@ -201,6 +205,8 @@
         <td class="l">TOTAL — {{ lignes_hono|length }} prestataire(s)</td>
         <td></td>
         <td class="r">{{ lignes_hono|sum(attribute='montant_ht')|int|fcfa }}</td>
+        <td class="r">{{ lignes_hono|sum(attribute='tva')|int|fcfa }}</td>
+        <td class="r">{{ lignes_hono|sum(attribute='css')|int|fcfa }}</td>
         <td class="r">{{ lignes_hono|sum(attribute='retenue_total')|int|fcfa }}</td>
       </tr>
     </tfoot>

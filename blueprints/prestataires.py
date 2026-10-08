@@ -29,6 +29,31 @@ logger = logging.getLogger("paiegalon")
 
 bp = Blueprint("prestataires", __name__)
 
+# Précompte / retenue à la source d'un prestataire résident (régime PRECOMPTE)
+TAUX_PRECOMPTE = 9.5
+
+
+def _appliquer_regime_fiscal(p, form):
+    """Applique le régime fiscal choisi et en dérive les taxes du prestataire :
+    assujetti_tva, taux_retenue_source (précompte) et assujetti_css."""
+    regime = (form.get("regime_fiscal") or "TVA_CSS").upper()
+    if regime not in ("TVA_CSS", "CSS", "PRECOMPTE"):
+        regime = "TVA_CSS"
+    p.regime_fiscal = regime
+    if regime == "TVA_CSS":
+        p.assujetti_tva = True
+        p.taux_retenue_source = 0
+        p.assujetti_css = True
+    elif regime == "CSS":
+        p.assujetti_tva = False
+        p.taux_retenue_source = 0
+        p.assujetti_css = True
+    else:  # PRECOMPTE
+        p.assujetti_tva = False
+        p.taux_retenue_source = TAUX_PRECOMPTE
+        # CSS optionnelle sous ce régime (cochable au besoin)
+        p.assujetti_css = form.get("assujetti_css") == "on"
+
 
 def _guard():
     """Vérifie l'accès tenant. Retourne (tenant, redirect_or_None)."""
@@ -257,10 +282,9 @@ def prestataire_nouveau():
             banque=request.form.get("banque", "").strip(),
             numero_mobile_money=request.form.get("numero_mobile_money", "").strip(),
             resident=request.form.get("resident") == "on",
-            assujetti_tva=request.form.get("assujetti_tva") == "on",
-            taux_retenue_source=float(request.form.get("taux_retenue_source", 0) or 0),
             notes=request.form.get("notes", "").strip(),
         )
+        _appliquer_regime_fiscal(p, request.form)
         db.session.add(p)
         db.session.commit()
         log_action("CREATE", "prestataire", p.id,
@@ -299,8 +323,7 @@ def prestataire_modifier(id):
         p.banque         = request.form.get("banque", "").strip()
         p.numero_mobile_money = request.form.get("numero_mobile_money", "").strip()
         p.resident       = request.form.get("resident") == "on"
-        p.assujetti_tva  = request.form.get("assujetti_tva") == "on"
-        p.taux_retenue_source = float(request.form.get("taux_retenue_source", 0) or 0)
+        _appliquer_regime_fiscal(p, request.form)
         p.statut         = request.form.get("statut", p.statut)
         p.notes          = request.form.get("notes", "").strip()
         db.session.commit()
@@ -401,6 +424,7 @@ def facture_nouvelle(id):
         return redirect(url_for("prestataires.prestataire_detail", id=id))
 
     taux_tva     = 18 if p.assujetti_tva else 0
+    taux_css     = 1 if getattr(p, "assujetti_css", False) else 0
     taux_retenue = float(p.taux_retenue_source or 0)
     devise = (request.form.get("devise") or "XAF").upper()
     if devise not in DEVISES:
@@ -420,6 +444,7 @@ def facture_nouvelle(id):
         pourcentage_realisation=request.form.get("pourcentage_realisation", type=float) or 0,
         montant_ht=float(request.form.get("montant_ht", 0) or 0),
         taux_tva=float(request.form.get("taux_tva", taux_tva) or 0),
+        taux_css=float(request.form.get("taux_css", taux_css) or 0),
         taux_retenue=float(request.form.get("taux_retenue", taux_retenue) or 0),
         devise=devise, taux_change=taux_ch,
         statut="BROUILLON",
@@ -512,6 +537,7 @@ def facture_modifier(fid):
     f.pourcentage_realisation = request.form.get("pourcentage_realisation", type=float) or 0
     f.montant_ht    = float(request.form.get("montant_ht", f.montant_ht) or 0)
     f.taux_tva      = float(request.form.get("taux_tva", f.taux_tva) or 0)
+    f.taux_css      = float(request.form.get("taux_css", f.taux_css or 0) or 0)
     f.taux_retenue  = float(request.form.get("taux_retenue", f.taux_retenue) or 0)
     f.devise        = devise
     f.taux_change   = taux_ch
@@ -881,13 +907,15 @@ def api_calculer_facture():
     data = request.get_json(force=True) or {}
     ht = float(data.get("montant_ht", 0) or 0)
     taux_tva = float(data.get("taux_tva", 18) or 0)
+    taux_css = float(data.get("taux_css", 0) or 0)
     taux_retenue = float(data.get("taux_retenue", 0) or 0)
     tva = round(ht * taux_tva / 100, 2)
-    ttc = round(ht + tva, 2)
+    css = round(ht * taux_css / 100, 2)
+    ttc = round(ht + tva + css, 2)
     retenue = round(ht * taux_retenue / 100, 2)
     net = round(ttc - retenue, 2)
     return jsonify({
-        "montant_tva": tva, "montant_ttc": ttc,
+        "montant_tva": tva, "montant_css": css, "montant_ttc": ttc,
         "montant_retenue": retenue, "montant_net_a_payer": net,
     })
 

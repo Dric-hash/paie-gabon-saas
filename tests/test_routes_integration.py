@@ -1190,3 +1190,76 @@ class TestProfilEtRelations:
                         data={"nif": "NIF-INEXISTANT-999", "csrf_token": tok},
                         follow_redirects=True)
         assert "recevra votre demande".encode() in r.data
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# TESTS — Régime fiscal prestataire + CSS
+# ══════════════════════════════════════════════════════════════════════════════
+class TestPrestataireCSS:
+    def _login_edit(self, client):
+        # admin@a.ga a le rôle TENANT_ADMIN (can_edit)
+        auth_session(client, "admin@a.ga")
+
+    def test_regime_precompte_css(self, client):
+        from models import Prestataire, FacturePrestataire
+        self._login_edit(client)
+        page = client.get("/prestataires/nouveau"); tok = _extract_csrf(page.data)
+        r = client.post("/prestataires/nouveau", data={
+            "code": "PX", "type_personne": "MORALE", "categorie": "SOUS_TRAITANT",
+            "raison_sociale": "BTP SARL", "regime_fiscal": "PRECOMPTE",
+            "assujetti_css": "on", "resident": "on", "ville": "Libreville",
+            "csrf_token": tok})
+        assert r.status_code == 302
+        p = Prestataire.query.filter_by(raison_sociale="BTP SARL").first()
+        assert p is not None
+        assert p.regime_fiscal == "PRECOMPTE" and p.assujetti_tva is False
+        assert float(p.taux_retenue_source) == 9.5 and p.assujetti_css is True
+        # facture HT=1 000 000 → CSS 10 000, précompte 95 000, net 915 000
+        page = client.get(f"/prestataires/{p.id}"); tok = _extract_csrf(page.data)
+        r = client.post(f"/prestataires/{p.id}/factures/nouvelle", data={
+            "numero": "F001", "date_facture": "2026-03-10", "montant_ht": "1000000",
+            "csrf_token": tok})
+        assert r.status_code == 302
+        f = FacturePrestataire.query.filter_by(numero="F001").first()
+        assert float(f.montant_css) == 10000 and float(f.montant_retenue) == 95000
+        assert float(f.montant_ttc) == 1010000 and float(f.montant_net_a_payer) == 915000
+
+    def test_regime_tva_css(self, client):
+        from models import Prestataire, FacturePrestataire
+        self._login_edit(client)
+        page = client.get("/prestataires/nouveau"); tok = _extract_csrf(page.data)
+        client.post("/prestataires/nouveau", data={
+            "code": "PY", "type_personne": "MORALE", "categorie": "FREELANCE",
+            "raison_sociale": "CONSEIL SA", "regime_fiscal": "TVA_CSS",
+            "resident": "on", "ville": "Libreville", "csrf_token": tok})
+        p = Prestataire.query.filter_by(raison_sociale="CONSEIL SA").first()
+        assert p.regime_fiscal == "TVA_CSS" and p.assujetti_tva is True and p.assujetti_css is True
+        page = client.get(f"/prestataires/{p.id}"); tok = _extract_csrf(page.data)
+        client.post(f"/prestataires/{p.id}/factures/nouvelle", data={
+            "numero": "F002", "date_facture": "2026-03-11", "montant_ht": "1000000",
+            "csrf_token": tok})
+        f = FacturePrestataire.query.filter_by(numero="F002").first()
+        # TVA 180 000 + CSS 10 000 → TTC 1 190 000, pas de retenue
+        assert float(f.montant_tva) == 180000 and float(f.montant_css) == 10000
+        assert float(f.montant_ttc) == 1190000 and float(f.montant_net_a_payer) == 1190000
+
+    def test_das_honoraires_inclut_css(self, client):
+        from models import db, Tenant, Prestataire, FacturePrestataire
+        import declaration_das as dd, models as M
+        self._login_edit(client)
+        page = client.get("/prestataires/nouveau"); tok = _extract_csrf(page.data)
+        client.post("/prestataires/nouveau", data={
+            "code": "PZ", "type_personne": "MORALE", "categorie": "SOUS_TRAITANT",
+            "raison_sociale": "MACON SARL", "regime_fiscal": "CSS",
+            "resident": "on", "ville": "Libreville", "csrf_token": tok})
+        p = Prestataire.query.filter_by(raison_sociale="MACON SARL").first()
+        page = client.get(f"/prestataires/{p.id}"); tok = _extract_csrf(page.data)
+        client.post(f"/prestataires/{p.id}/factures/nouvelle", data={
+            "numero": "F003", "date_facture": "2026-05-10", "montant_ht": "2000000",
+            "csrf_token": tok})
+        f = FacturePrestataire.query.filter_by(numero="F003").first()
+        f.statut = "PAYEE"; db.session.commit()
+        t = Tenant.query.filter_by(slug="entreprise-a").first()
+        lignes, tot = dd.agreger_honoraires(t, 2026, db=db, models=M)
+        assert tot["css"] == 20000  # 1% de 2 000 000
+        assert any(l["css"] == 20000 for l in lignes)

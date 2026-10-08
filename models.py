@@ -1330,6 +1330,12 @@ class Prestataire(db.Model):
     resident      = db.Column(db.Boolean, default=True)   # résident fiscal Gabon ?
     assujetti_tva = db.Column(db.Boolean, default=True)
     taux_retenue_source = db.Column(db.Numeric(5,2), default=0)  # % retenue à la source
+    # Régime fiscal (pilote les taxes par défaut des factures) :
+    #   TVA_CSS   → TVA 18 % + CSS 1 %
+    #   CSS       → CSS 1 % seule (pas de TVA)
+    #   PRECOMPTE → précompte 9,5 % (retenue), pas de TVA, CSS optionnelle
+    regime_fiscal = db.Column(db.String(12), default="TVA_CSS")
+    assujetti_css = db.Column(db.Boolean, default=True)  # soumis à la CSS (1 %)
 
     statut        = db.Column(db.String(20), default="ACTIF")  # ACTIF | INACTIF
     notes         = db.Column(db.Text)
@@ -1344,6 +1350,16 @@ class Prestataire(db.Model):
         db.Index("idx_prestataires_tenant_statut", "tenant_id", "statut"),
         db.Index("idx_prestataires_tenant_cat", "tenant_id", "categorie"),
     )
+
+    REGIMES_FISCAUX = {
+        "TVA_CSS":   "TVA 18 % + CSS 1 %",
+        "CSS":       "CSS 1 % seule",
+        "PRECOMPTE": "Précompte 9,5 % (+ CSS optionnelle)",
+    }
+
+    @property
+    def regime_libelle(self):
+        return self.REGIMES_FISCAUX.get(self.regime_fiscal or "TVA_CSS", self.regime_fiscal)
 
     @property
     def nom_affiche(self):
@@ -1429,9 +1445,11 @@ class FacturePrestataire(db.Model):
     montant_ht     = db.Column(db.Numeric(15,2), nullable=False)
     taux_tva       = db.Column(db.Numeric(5,2), default=18)     # TVA Gabon = 18%
     montant_tva    = db.Column(db.Numeric(15,2), default=0)
-    taux_retenue   = db.Column(db.Numeric(5,2), default=0)      # retenue à la source
+    taux_css       = db.Column(db.Numeric(5,2), default=1)      # CSS Gabon = 1%
+    montant_css    = db.Column(db.Numeric(15,2), default=0)
+    taux_retenue   = db.Column(db.Numeric(5,2), default=0)      # retenue à la source / précompte
     montant_retenue = db.Column(db.Numeric(15,2), default=0)
-    montant_ttc    = db.Column(db.Numeric(15,2), default=0)     # HT + TVA
+    montant_ttc    = db.Column(db.Numeric(15,2), default=0)     # HT + TVA + CSS
     montant_net_a_payer = db.Column(db.Numeric(15,2), default=0)  # TTC - retenue
 
     # Multi-devises
@@ -1467,7 +1485,10 @@ class FacturePrestataire(db.Model):
             self.montant_ht = round(float(self.surface_m2) * float(self.prix_unitaire_m2), 2)
         ht = float(self.montant_ht or 0)
         self.montant_tva = round(ht * float(self.taux_tva or 0) / 100, 2)
-        self.montant_ttc = round(ht + float(self.montant_tva), 2)
+        self.montant_css = round(ht * float(self.taux_css or 0) / 100, 2)
+        # TTC = HT + TVA + CSS (la CSS est collectée sur la facture, comme la TVA)
+        self.montant_ttc = round(ht + float(self.montant_tva) + float(self.montant_css), 2)
+        # Précompte / retenue à la source : calculé sur le HT, déduit du net à payer
         self.montant_retenue = round(ht * float(self.taux_retenue or 0) / 100, 2)
         self.montant_net_a_payer = round(float(self.montant_ttc) - float(self.montant_retenue), 2)
         # Équivalent XAF (devise étrangère → FCFA au taux du jour)

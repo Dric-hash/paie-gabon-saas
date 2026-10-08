@@ -123,6 +123,7 @@
     <div class="totaux">
       <div class="row"><span>Total HT</span><span>{{ "{:,.0f}".format(f.montant_ht|float).replace(",", " ") }} {{ f.devise }}</span></div>
       <div class="row"><span>TVA ({{ f.taux_tva }} %)</span><span>{{ "{:,.0f}".format(f.montant_tva|float).replace(",", " ") }} {{ f.devise }}</span></div>
+      {% if f.montant_css and f.montant_css|float > 0 %}<div class="row"><span>CSS ({{ f.taux_css }} %)</span><span>{{ "{:,.0f}".format(f.montant_css|float).replace(",", " ") }} {{ f.devise }}</span></div>{% endif %}
       <div class="row"><span>TTC</span><span>{{ "{:,.0f}".format(f.montant_ttc|float).replace(",", " ") }} {{ f.devise }}</span></div>
       {% if f.montant_retenue and f.montant_retenue|float > 0 %}<div class="row"><span>Retenue à la source ({{ f.taux_retenue }} %)</span><span>- {{ "{:,.0f}".format(f.montant_retenue|float).replace(",", " ") }} {{ f.devise }}</span></div>{% endif %}
       <div class="row net"><span>NET À PAYER</span><span>{{ "{:,.0f}".format(f.montant_net_a_payer|float).replace(",", " ") }} {{ f.devise }}</span></div>

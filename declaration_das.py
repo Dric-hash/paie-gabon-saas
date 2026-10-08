@@ -334,11 +334,12 @@ def agreger_honoraires(tenant, annee: int, db=None, models=None):
 
         ht = sum(float(fa.montant_ht or 0) for fa in facs)
         tva = sum(float(fa.montant_tva or 0) for fa in facs)
+        css = sum(float(getattr(fa, "montant_css", 0) or 0) for fa in facs)
         retenue = sum(float(fa.montant_retenue or 0) for fa in facs)
         resident = bool(p.resident)
         retenue_local = retenue if resident else 0.0
         retenue_etranger = 0.0 if resident else retenue
-        total = ht + tva
+        total = ht + tva + css
 
         # Période couverte par les factures de l'exercice
         dates = sorted(fa.date_facture for fa in facs if fa.date_facture)
@@ -363,9 +364,11 @@ def agreger_honoraires(tenant, annee: int, db=None, models=None):
             "presence_pj": deb.day, "presence_pm": deb.month,
             "presence_fj": fin.day, "presence_fm": fin.month,
             "assujetti_tva":  "Oui" if p.assujetti_tva else "Non",
+            "regime":         getattr(p, "regime_libelle", ""),
             "resident":       resident,
             "montant_ht":     round(ht, 0),
             "tva":            round(tva, 0),
+            "css":            round(css, 0),
             "retenue_local":  round(retenue_local, 0),
             "retenue_etranger": round(retenue_etranger, 0),
             "retenue_total":  round(retenue, 0),
@@ -382,6 +385,7 @@ def _totaux_honoraires(lignes):
         "nb_prestataires":  len(lignes),
         "montant_ht":       sum(l["montant_ht"] for l in lignes),
         "tva":              sum(l["tva"] for l in lignes),
+        "css":              sum(l.get("css", 0) for l in lignes),
         "retenue_local":    sum(l["retenue_local"] for l in lignes),
         "retenue_etranger": sum(l["retenue_etranger"] for l in lignes),
         "retenue_total":    sum(l["retenue_total"] for l in lignes),

@@ -304,6 +304,8 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-top:.75rem">
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">TVA (%)</label>
           <input type="number" name="taux_tva" id="f_tva" value="{{ 18 if p.assujetti_tva else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
+        <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">CSS (%)</label>
+          <input type="number" name="taux_css" id="f_css" value="{{ 1 if p.assujetti_css else 0 }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div><label style="font-size:.73rem;color:#6b7280;font-weight:700">Retenue source (%)</label>
           <input type="number" name="taux_retenue" id="f_ret" value="{{ p.taux_retenue_source }}" step="0.01" oninput="calculerFacture()" style="width:100%;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.83rem"/></div>
         <div style="grid-column:span 2"><label style="font-size:.73rem;color:#6b7280;font-weight:700">Description / objet</label>
@@ -314,6 +316,7 @@
       <div id="f_recap" style="background:#f9fafb;border-radius:.5rem;padding:.75rem;margin-top:.75rem;font-size:.8rem;display:none">
         <div style="display:flex;justify-content:space-between"><span>Total HT :</span><strong id="r_ht">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>TVA :</span><strong id="r_tva">0</strong></div>
+        <div style="display:flex;justify-content:space-between"><span>CSS :</span><strong id="r_css">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>TTC :</span><strong id="r_ttc">0</strong></div>
         <div style="display:flex;justify-content:space-between"><span>Retenue :</span><strong id="r_ret" style="color:#dc2626">0</strong></div>
         <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;margin-top:.4rem;padding-top:.4rem"><span style="font-weight:700">Net à payer :</span><strong id="r_net" style="font-size:1rem">0</strong></div>
@@ -493,17 +496,20 @@ function majLignes(){
 function calculerFacture() {
   var ht  = parseFloat(document.getElementById('f_ht').value) || 0;
   var tva = parseFloat(document.getElementById('f_tva').value) || 0;
+  var css = parseFloat(document.getElementById('f_css').value) || 0;
   var ret = parseFloat(document.getElementById('f_ret').value) || 0;
   var dev = document.getElementById('f_devise').value;
   var taux = parseFloat(document.getElementById('f_taux').value) || 1;
   if (ht <= 0) { document.getElementById('f_recap').style.display = 'none'; return; }
   var mtva = Math.round(ht * tva) / 100;
-  var ttc = ht + mtva;
+  var mcss = Math.round(ht * css) / 100;
+  var ttc = ht + mtva + mcss;
   var mret = Math.round(ht * ret) / 100;
   var net = ttc - mret;
   var sym = dev;
   document.getElementById('r_ht').textContent  = facFmt(ht) + ' ' + sym;
   document.getElementById('r_tva').textContent = facFmt(mtva) + ' ' + sym;
+  document.getElementById('r_css').textContent = facFmt(mcss) + ' ' + sym;
   document.getElementById('r_ttc').textContent = facFmt(ttc) + ' ' + sym;
   document.getElementById('r_ret').textContent = '- ' + facFmt(mret) + ' ' + sym;
   document.getElementById('r_net').textContent = facFmt(net) + ' ' + sym;
@@ -544,6 +550,7 @@ function ouvrirEditFacture(fac, lignes){
   document.getElementById('fac_site').value = fac.site_id || '';
   document.getElementById('fac_desc').value = fac.description || '';
   document.getElementById('f_tva').value = fac.taux_tva || 0;
+  document.getElementById('f_css').value = (fac.taux_css != null ? fac.taux_css : 0);
   document.getElementById('f_ret').value = fac.taux_retenue || 0;
   document.getElementById('f_devise').value = fac.devise || 'XAF';
   document.getElementById('fac_lignes').innerHTML = '';

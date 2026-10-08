@@ -253,7 +253,7 @@ def _facture(client, **extra):
     pid = client._ids["prest_a"]
     data = {
         "numero": extra.pop("numero", "F-001"),
-        "date_facture": "2026-06-12", "taux_tva": "0", "taux_retenue": "0",
+        "date_facture": "2026-06-12", "taux_tva": "0", "taux_css": "0", "taux_retenue": "0",
         "ligne_designation": ["Dalle béton", "Carrelage"],
         "ligne_quantite": ["100", "50"],
         "ligne_unite": ["m²", "m²"],
