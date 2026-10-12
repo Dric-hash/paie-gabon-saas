@@ -108,6 +108,9 @@
           </td>
           <td style="text-align:center">
             <div style="display:flex;gap:.375rem;justify-content:center;flex-wrap:wrap">
+              {% if a.statut != 'ANNULE' %}
+              <a href="/acomptes/{{ a.id }}/recu" target="_blank" style="font-size:.72rem;font-weight:600;background:#eef4f2;color:#17564c;padding:.3rem .6rem;border-radius:.375rem;text-decoration:none;white-space:nowrap" title="Télécharger le reçu d'acompte">📄 Reçu</a>
+              {% endif %}
               {% if a.statut == 'EN_ATTENTE' %}
               <form method="POST" action="/acomptes/{{ a.id }}/valider" style="margin:0">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>

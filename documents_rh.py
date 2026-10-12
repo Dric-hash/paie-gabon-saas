@@ -861,3 +861,139 @@ def generer_contrat_mad_pdf(tenant, client, affectation, modele=None) -> bytes:
 
 # Rend la trame de mise à disposition disponible dans l'éditeur de modèles.
 TRAMES_CONTRAT["MISE_A_DISPOSITION"] = TRAME_CONTRAT_MAD
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# REÇU DE PRÊT AU PERSONNEL
+# ═══════════════════════════════════════════════════════════════════════════
+def generer_recu_pret_pdf(tenant, pret, echeancier) -> bytes:
+    """Reconnaissance de prêt + échéancier indicatif, à signer par le salarié."""
+    S = _styles()
+    sal = pret.salarie
+    nom = (sal.nom_complet if sal and hasattr(sal, "nom_complet")
+           else (f"{sal.nom} {sal.prenom}" if sal else ""))
+    el = _entete(tenant, S)
+    el.append(Paragraph("RECONNAISSANCE DE PRÊT", S["titre"]))
+    el.append(Spacer(1, 18))
+
+    corps = ParagraphStyle("corps_pret", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=16, spaceAfter=8)
+    montant = float(pret.montant_total or 0)
+    nb = int(pret.nb_echeances or 1)
+    mens = pret.montant_echeance
+    MOIS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+            "août", "septembre", "octobre", "novembre", "décembre"]
+
+    el.append(Paragraph(
+        f"Je soussigné(e) <b>{nom}</b>, salarié(e) de {tenant.denomination or ''}, "
+        f"reconnais avoir reçu de mon employeur un prêt sans intérêt d'un montant de "
+        f"<b>{_fmt_fcfa(montant)}</b> ({_nombre_en_lettres(montant)} francs CFA), "
+        f"accordé le {_date_fr(pret.date_octroi)}.", corps))
+    if pret.motif:
+        el.append(Paragraph(f"Motif : {pret.motif}.", corps))
+    el.append(Paragraph(
+        f"Je m'engage à rembourser cette somme en <b>{nb} mensualité(s)</b> "
+        f"d'environ <b>{_fmt_fcfa(mens)}</b> chacune, par retenue sur mon salaire, "
+        f"jusqu'au remboursement intégral du capital.", corps))
+    el.append(Spacer(1, 10))
+
+    # Tableau échéancier
+    data = [["N°", "Mois", "Mensualité (FCFA)", "Capital restant (FCFA)"]]
+    for e in echeancier:
+        data.append([str(e["num"]), f"{MOIS[e['mois']].capitalize()} {e['annee']}",
+                     _fmt_fcfa(e["montant"]), _fmt_fcfa(e["restant"])])
+    tbl = Table(data, colWidths=[20*mm, 55*mm, 45*mm, 45*mm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), C_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#FFFFFF")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 9),
+        ("ALIGN", (2, 0), (-1, -1), "RIGHT"),
+        ("ALIGN", (0, 0), (0, -1), "CENTER"),
+        ("GRID", (0, 0), (-1, -1), 0.4, C_GRAY),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [HexColor("#FFFFFF"), HexColor("#f7f6f2")]),
+    ]))
+    el.append(tbl)
+    el.append(Spacer(1, 8))
+    el.append(Paragraph(
+        "Échéancier indicatif : les montants et dates de retenue peuvent varier "
+        "selon les salaires versés, dans la limite du capital prêté.", S["entete_det"]))
+    el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
+    return _build(el)
+
+
+def generer_recu_acompte_pdf(tenant, acompte) -> bytes:
+    """Reçu d'acompte sur salaire (reconnaissance), signé par le salarié.
+
+    Document individuel attestant qu'un acompte a été versé au salarié et qu'il
+    sera déduit du salaire du mois. À signer par le bénéficiaire (décharge)."""
+    S = _styles()
+    sal = acompte.salarie
+    nom = (sal.nom_complet if sal and hasattr(sal, "nom_complet")
+           else (f"{sal.nom} {sal.prenom}" if sal else ""))
+    matricule = getattr(sal, "matricule", None) if sal else None
+    emploi = getattr(sal, "emploi", None) if sal else None
+    montant = float(acompte.montant or 0)
+    MOIS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+            "août", "septembre", "octobre", "novembre", "décembre"]
+    mois_lib = f"{MOIS[acompte.mois].capitalize()} {acompte.annee}" if acompte.mois else str(acompte.annee or "")
+
+    el = _entete(tenant, S)
+    el.append(Paragraph("REÇU D'ACOMPTE SUR SALAIRE", S["titre"]))
+    el.append(Spacer(1, 18))
+
+    corps = ParagraphStyle("corps_ac", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=16, spaceAfter=8)
+
+    # Bandeau d'identification
+    ident = [["Bénéficiaire", nom]]
+    if matricule: ident.append(["Matricule", matricule])
+    if emploi: ident.append(["Emploi", emploi])
+    ident.append(["Date de versement", _date_fr(acompte.date_acompte)])
+    ident.append(["Imputé sur la paie de", mois_lib])
+    tid = Table(ident, colWidths=[55*mm, 110*mm])
+    tid.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 9.5),
+        ("TEXTCOLOR", (0, 0), (0, -1), C_GRAY),
+        ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+        ("FONTNAME", (1, 0), (1, -1), "Helvetica"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LINEBELOW", (0, 0), (-1, -2), 0.3, HexColor("#e5e2da")),
+    ]))
+    el.append(tid)
+    el.append(Spacer(1, 16))
+
+    el.append(Paragraph(
+        f"Je soussigné(e) <b>{nom}</b>, salarié(e) de "
+        f"{tenant.denomination or ''}, reconnais avoir reçu de mon employeur "
+        f"la somme de <b>{_fmt_fcfa(montant)}</b> "
+        f"({_nombre_en_lettres(montant)} francs CFA) à titre d'acompte sur mon "
+        f"salaire du mois de <b>{mois_lib}</b>.", corps))
+    if acompte.motif:
+        el.append(Paragraph(f"Motif : {acompte.motif}.", corps))
+    el.append(Paragraph(
+        "Je reconnais que cette somme sera intégralement déduite de mon salaire "
+        "net du mois correspondant.", corps))
+    el.append(Spacer(1, 26))
+
+    # Deux signatures : salarié (décharge) + employeur
+    ville = getattr(tenant, "ville", None) or "Libreville"
+    el.append(Paragraph(f"Fait à {ville}, le {_date_fr(date.today())}", S["lieu_date"]))
+    el.append(Spacer(1, 24))
+    rep_nom = (getattr(tenant, "representant_nom", None) or "").strip()
+    sign = Table([
+        [Paragraph("<b>Le salarié</b> (lu et approuvé)", S["corps"]),
+         Paragraph("<b>Pour l'entreprise</b>" + (f"<br/>{rep_nom}" if rep_nom else ""), S["corps"])],
+        [Paragraph("_______________________", S["corps"]),
+         Paragraph("_______________________", S["corps"])],
+    ], colWidths=[82*mm, 82*mm])
+    sign.setStyle(TableStyle([
+        ("TOPPADDING", (0, 0), (-1, 0), 2),
+        ("TOPPADDING", (0, 1), (-1, 1), 34),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    el.append(sign)
+    return _build(el)

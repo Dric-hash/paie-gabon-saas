@@ -1,0 +1,74 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1000px;margin:0 auto;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">💳 Prêts au personnel</h1>
+      <p style="color:#6b7280;font-size:.9rem;margin:.25rem 0 0">Avances remboursables sans intérêt, étalées sur plusieurs mois.</p>
+    </div>
+    <a href="{{ url_for('tenant.pret_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Nouveau prêt</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1.25rem">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Prêts en cours</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#0f3d36">{{ nb_encours }}</div>
+    </div>
+    <div style="background:#0f3d36;border-radius:.85rem;padding:1rem;color:#fff">
+      <div style="color:#E9B043;font-size:.72rem;font-weight:700;text-transform:uppercase">Capital restant dû</div>
+      <div style="font-size:1.6rem;font-weight:800">{{ '{:,.0f}'.format(total_encours).replace(',',' ') }} <span style="font-size:.8rem;opacity:.7">F</span></div>
+    </div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem">
+      <div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Total prêté</div>
+      <div style="font-size:1.6rem;font-weight:800;color:#0f3d36">{{ '{:,.0f}'.format(total_prete).replace(',',' ') }} <span style="font-size:.8rem;color:#6b7280">F</span></div>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:.4rem;margin-bottom:1rem">
+    {% for s,lbl in [(None,'Tous'),('EN_COURS','En cours'),('SOLDE','Soldés'),('ANNULE','Annulés')] %}
+    <a href="{{ url_for('tenant.prets', statut=s) }}" style="padding:.4rem .9rem;border-radius:.5rem;text-decoration:none;font-size:.85rem;font-weight:700;{% if statut==s %}background:#0f3d36;color:#fff{% else %}background:#eef4f2;color:#17564c{% endif %}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+
+  {% if liste %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem;text-align:right">Montant</th>
+        <th style="padding:.6rem .9rem;text-align:center">Mensualité</th>
+        <th style="padding:.6rem .9rem;text-align:right">Restant dû</th>
+        <th style="padding:.6rem .9rem">Avancement</th>
+        <th style="padding:.6rem .9rem;text-align:center">Statut</th>
+      </tr>
+      {% for p in liste %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem .9rem;font-weight:600"><a href="{{ url_for('tenant.pret_detail', id=p.id) }}" style="color:#0f3d36;text-decoration:none">{{ p.salarie.prenom }} {{ p.salarie.nom }}</a><div style="color:#9ca3af;font-size:.78rem">{{ p.date_octroi.strftime('%d/%m/%Y') }}{% if p.motif %} · {{ p.motif }}{% endif %}</div></td>
+        <td style="padding:.6rem .9rem;text-align:right;font-variant-numeric:tabular-nums">{{ '{:,.0f}'.format(p.montant_total|float).replace(',',' ') }}</td>
+        <td style="padding:.6rem .9rem;text-align:center;color:#6b7280">{{ '{:,.0f}'.format(p.montant_echeance).replace(',',' ') }} × {{ p.nb_echeances }}</td>
+        <td style="padding:.6rem .9rem;text-align:right;font-weight:700;font-variant-numeric:tabular-nums">{{ '{:,.0f}'.format(p.montant_restant).replace(',',' ') }}</td>
+        <td style="padding:.6rem .9rem">
+          <div style="background:#eef4f2;border-radius:9999px;height:8px;width:90px;overflow:hidden"><div style="background:#E9B043;height:8px;width:{{ p.progression_pct }}%"></div></div>
+          <span style="font-size:.72rem;color:#9ca3af">{{ p.progression_pct }}%</span>
+        </td>
+        <td style="padding:.6rem .9rem;text-align:center">
+          {% if p.statut=='EN_COURS' %}<span style="font-size:.72rem;background:#fef3c7;color:#92400e;padding:.15rem .5rem;border-radius:.4rem">En cours</span>
+          {% elif p.statut=='SOLDE' %}<span style="font-size:.72rem;background:#e9f6ec;color:#2f7d3c;padding:.15rem .5rem;border-radius:.4rem">Soldé</span>
+          {% else %}<span style="font-size:.72rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem">Annulé</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.85rem;padding:2.5rem;text-align:center;color:#6b7280">
+    <p style="margin:0 0 1rem">Aucun prêt pour le moment.</p>
+    <a href="{{ url_for('tenant.pret_nouveau') }}" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">+ Accorder un prêt</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

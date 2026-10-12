@@ -15,7 +15,8 @@ from audit import log_action
 from calculs_paie import (calculer_bulletin, calculer_masse_salariale,
                           calculer_taux_horaire, calculer_heures_sup_btp)
 from models import (db, BulletinPaie, BulletinComposant, PeriodePaie, ComposantPaie,
-                    Salarie, Contrat, Acompte, Pointage, Site, AffectationSite)
+                    Salarie, Contrat, Acompte, Pointage, Site, AffectationSite,
+                    PretPersonnel, RemboursementPret)
 
 
 import os, io
@@ -186,6 +187,7 @@ def api_simuler_paie():
             {"label": f"TCS (5% / base {int(result['base_tcs']):,} FCFA)",             "montant": result["tcs"]},
             {"label": f"IRPP ({nb_parts} part(s))",                                    "montant": result["irpp"]},
             {"label": "Acompte",                                                        "montant": result["acompte"]},
+            {"label": "Retenue prêt",                                                   "montant": result.get("retenue_pret", 0)},
             {"label": "Retenue absences",                                               "montant": result["absences"]},
         ]
         result["retenues_detail"] = [r for r in result["retenues_detail"] if r["montant"] > 0]
@@ -692,7 +694,49 @@ def bulletin_saisie():
                 base=cs.get("base"), taux=cs.get("taux"),
                 soumis_cnss=cs["soumis_cnss"], soumis_cnamgs=cs["soumis_cnamgs"],
                 soumis_irpp=cs["soumis_irpp"]))
+
+        # ── Remboursement de prêt : imputation sur les prêts du salarié ────────
+        # La retenue prêt saisie est imputée sur les prêts EN_COURS (plus anciens
+        # d'abord), uniquement quand le bulletin est validé. On nettoie d'abord
+        # toute imputation précédente liée à ce bulletin (re-sauvegarde).
+        _rp = float(getattr(b, "retenue_pret", 0) or 0)
+        for _old in RemboursementPret.query.filter_by(bulletin_id=b.id).all():
+            _pr = db.session.get(PretPersonnel, _old.pret_id)
+            if _pr:
+                _pr.montant_rembourse = max(float(_pr.montant_rembourse or 0) - float(_old.montant or 0), 0)
+                _pr.recalculer_statut()
+            db.session.delete(_old)
+        if _rp > 0 and b.statut in ("VALIDÉ", "VALIDE"):
+            _restant = _rp
+            _actifs = (PretPersonnel.query
+                       .filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_COURS")
+                       .order_by(PretPersonnel.date_octroi).all())
+            for _pr in _actifs:
+                if _restant <= 0:
+                    break
+                _imput = min(_restant, _pr.montant_restant)
+                if _imput <= 0:
+                    continue
+                db.session.add(RemboursementPret(
+                    tenant_id=t.id, pret_id=_pr.id, montant=_imput,
+                    mois=periode.mois, annee=periode.annee, bulletin_id=b.id,
+                    note="Retenue sur bulletin"))
+                _pr.montant_rembourse = float(_pr.montant_rembourse or 0) + _imput
+                _pr.recalculer_statut()
+                _restant -= _imput
+
         db.session.commit()
+
+        # ── Alerte quotité cessible (non bloquante) ────────────────────────────
+        _quot = float(getattr(t, "quotite_cessible_pct", 50) or 50)
+        _brut = float(res.get("salaire_brut") or 0)
+        _tot_ret = float(res.get("acompte", 0) or 0) + _rp
+        if _brut > 0 and _quot > 0 and _tot_ret > _brut * _quot / 100:
+            flash(("⚠️ Les retenues du mois ({ret} F) dépassent {q:.0f} % du salaire brut "
+                   "({lim} F). Vérifiez la quotité cessible.").format(
+                   ret=f"{int(_tot_ret):,}".replace(",", " "), q=_quot,
+                   lim=f"{int(_brut*_quot/100):,}".replace(",", " ")), "info")
+
         if total_acomptes > 0:
             flash(f"Bulletin sauvegardé. Acompte de {int(total_acomptes):,} FCFA déduit automatiquement.".replace(",", " "), "success")
         else:
@@ -723,10 +767,13 @@ def bulletin_saisie():
     c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
     acomptes_attente = Acompte.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_ATTENTE").all() if sid else []
     total_acomptes = sum(float(a.montant) for a in acomptes_attente)
+    prets_actifs = (PretPersonnel.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_COURS")
+                    .order_by(PretPersonnel.date_octroi).all() if sid else [])
     composants_actifs = ComposantPaie.query.filter_by(tenant_id=t.id, actif=True).order_by(
         ComposantPaie.ordre, ComposantPaie.libelle).all()
     return render_template("tenant/bulletin_saisie.html", salaries=sals, periodes=pers, salarie_sel=ss, contrat=c, tenant=t,
         acomptes_attente=acomptes_attente, total_acomptes=total_acomptes,
+        prets_actifs=prets_actifs,
         composants_actifs=composants_actifs,
         bulletin_edit=bulletin_edit, valeurs_edit=valeurs_edit,
         periode_sel_id=(bulletin_edit.periode_id if bulletin_edit else None))

@@ -464,6 +464,20 @@
             <td class="pf-cell"><input type="text" name="taux_acompte" id="taux_acompte" placeholder="1" oninput="calcMontant('acompte')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="acompte" id="f_acompte" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
+          <tr style="border-bottom:1px solid #f3f4f6">
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#991b1b">Retenue prêt
+              {% if prets_actifs %}<span style="font-size:.68rem;color:#92400e;font-weight:500"> · reste dû {{ (prets_actifs|sum(attribute='montant_restant'))|int }} F</span>{% endif %}
+            </td>
+            <td class="pf-cell"></td>
+            <td style="text-align:center;font-size:.8rem;color:#9ca3af"></td>
+            <td class="pf-cell"></td>
+            <td class="pf-cell"><input type="number" name="retenue_pret" id="f_retenue_pret" value="0" step="any" min="0" class="champ-calcul pf-amt" oninput="recalculer()"/></td>
+          </tr>
+          {% if prets_actifs %}
+          <tr><td colspan="5" style="padding:.1rem .5rem .4rem">
+            {% for p in prets_actifs %}<span style="font-size:.7rem;color:#78350f;margin-right:.6rem">• Prêt {{ p.montant_total|int }} F — mensualité {{ p.montant_echeance|int }} F (<a href="#" onclick="document.getElementById('f_retenue_pret').value={{ p.montant_echeance|int }};recalculer();return false;" style="color:#17564c;font-weight:700">appliquer</a>)</span>{% endfor %}
+          </td></tr>
+          {% endif %}
         </tbody>
       </table></div>
     </div>

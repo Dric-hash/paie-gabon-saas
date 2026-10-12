@@ -1,0 +1,57 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:640px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.prets') }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Prêts au personnel</a>
+  <h1 style="font-size:1.4rem;font-weight:800;color:#0f3d36;margin:.4rem 0 1rem">Nouveau prêt</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <form method="POST" action="{{ url_for('tenant.pret_nouveau') }}" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.5rem;display:grid;gap:1rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Salarié *</label>
+      <select name="salarie_id" required style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem">
+        <option value="">— Choisir —</option>
+        {% for s in salaries %}<option value="{{ s.id }}">{{ s.nom }} {{ s.prenom }} ({{ s.matricule }})</option>{% endfor %}
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem">
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Montant du prêt (FCFA) *</label>
+        <input name="montant_total" id="pm" required type="text" inputmode="decimal" oninput="calc()" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+      <div>
+        <label style="font-weight:700;font-size:.85rem;color:#374151">Nombre de mensualités *</label>
+        <input name="nb_echeances" id="pn" required type="number" min="1" value="3" oninput="calc()" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+      </div>
+    </div>
+    <div id="mensbox" style="display:none;background:#eef4f2;border-radius:.5rem;padding:.6rem .9rem;font-size:.88rem;color:#17564c">
+      Mensualité estimée : <b id="mens">—</b> FCFA / mois
+    </div>
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Date d'octroi *</label>
+      <input name="date_octroi" type="date" required value="{{ now.strftime('%Y-%m-%d') }}" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+    </div>
+    <div>
+      <label style="font-weight:700;font-size:.85rem;color:#374151">Motif</label>
+      <input name="motif" placeholder="Ex. frais médicaux, scolarité…" style="width:100%;padding:.6rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.25rem"/>
+    </div>
+    <div style="display:flex;gap:.75rem">
+      <button style="background:#0f3d36;color:#fff;padding:.65rem 1.4rem;border:none;border-radius:.6rem;font-weight:700;cursor:pointer">Enregistrer le prêt</button>
+      <a href="{{ url_for('tenant.prets') }}" style="padding:.65rem 1.2rem;color:#6b7280;text-decoration:none">Annuler</a>
+    </div>
+  </form>
+  <p style="color:#9ca3af;font-size:.82rem;margin-top:1rem">Prêt sans intérêt. Le remboursement se fait par retenue sur salaire, que vous appliquez chaque mois (manuellement) sur le bulletin ou directement ici.</p>
+</div>
+<script>
+  function calc(){
+    var m = parseFloat((document.getElementById('pm').value||'0').replace(/\s/g,'').replace(',','.'))||0;
+    var n = parseInt(document.getElementById('pn').value||'0')||0;
+    var box = document.getElementById('mensbox');
+    if (m>0 && n>0){ document.getElementById('mens').textContent = Math.round(m/n).toLocaleString('fr-FR'); box.style.display='block'; }
+    else box.style.display='none';
+  }
+</script>
+{% endblock %}

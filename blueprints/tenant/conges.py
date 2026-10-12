@@ -5,7 +5,7 @@ from flask import render_template, request, redirect, url_for, flash, session, a
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import func, desc
-from blueprints.tenant import bp
+from blueprints.tenant import bp, _doc_response
 from core import tenant_required, get_tenant, _parse_date
 from audit import log_action
 from models import db, Acompte, BulletinPaie, Conge, Contrat, Salarie, PeriodePaie
@@ -56,6 +56,21 @@ def acomptes_imprimer():
     return render_template("tenant/acomptes_print.html",
         tenant=t, liste=liste, total=total, mois=mois, annee=annee,
         MOIS_NOMS=PeriodePaie.MOIS_NOMS, now=datetime.now())
+
+
+@bp.route("/acomptes/<int:id>/recu")
+@login_required
+def acompte_recu(id):
+    """Reçu d'acompte individuel (PDF) à faire signer par le salarié."""
+    if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    a = Acompte.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    from documents_rh import generer_recu_acompte_pdf
+    pdf = generer_recu_acompte_pdf(t, a)
+    log_action("EXPORT", "acompte", a.id, "Reçu d'acompte édité")
+    nom = f"recu_acompte_{(a.salarie.nom if a.salarie else 'salarie')}_{a.id}.pdf"
+    return _doc_response(pdf, nom)
 
 
 @bp.route("/acomptes/nouveau", methods=["GET","POST"])

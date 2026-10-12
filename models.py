@@ -99,6 +99,8 @@ class Tenant(db.Model):
     # Taux d'acquisition des congés (jours ouvrables / mois travaillé, Art. 222).
     # Minimum légal adulte = 2.0 ; défaut historique de l'app = 2.5 (avantage).
     jours_conge_par_mois = db.Column(db.Numeric(3, 1), default=2.5)
+    # Quotité cessible : % du salaire au-delà duquel on alerte (acompte + prêt). Indicatif.
+    quotite_cessible_pct = db.Column(db.Numeric(5, 2), default=50)
     # Seuil hebdomadaire de déclenchement des heures supplémentaires (en heures).
     # La loi fixe le seuil légal à 40h/semaine. Certaines entreprises bénéficient
     # d'une dérogation portant ce seuil à 45h ou 48h : en deçà, les heures restent
@@ -752,6 +754,7 @@ class BulletinPaie(db.Model):
     indem_representation  = db.Column(db.Numeric(15,2), default=0)
     prime_salisure        = db.Column(db.Numeric(15,2), default=0)
     acompte               = db.Column(db.Numeric(15,2), default=0)
+    retenue_pret          = db.Column(db.Numeric(15,2), default=0)  # remboursement prêt du mois
     net_a_payer           = db.Column(db.Numeric(15,2), nullable=False)
     # Ajustement d'arrondi saisi par l'admin pour obtenir un net rond.
     # Le net affiché = net calculé + ajustement_arrondi. Une ligne dédiée
@@ -2027,3 +2030,78 @@ class MiseEnRelation(db.Model):
     @property
     def statut_libelle(self):
         return self.STATUTS.get(self.statut, self.statut)
+
+
+class PretPersonnel(db.Model):
+    """Prêt au personnel (sans intérêt) : une avance remboursable étalée sur
+    plusieurs mois. Les remboursements sont saisis manuellement (ou appliqués
+    depuis le bulletin), et le capital restant dû est suivi jusqu'au solde."""
+    __tablename__ = "prets_personnel"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id     = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    montant_total  = db.Column(db.Numeric(15, 2), nullable=False)   # capital prêté
+    date_octroi    = db.Column(db.Date, nullable=False)
+    nb_echeances   = db.Column(db.Integer, nullable=False, default=1)  # nombre de mensualités
+    motif          = db.Column(db.String(200))
+    statut         = db.Column(db.String(12), default="EN_COURS")    # EN_COURS | SOLDE | ANNULE
+    montant_rembourse = db.Column(db.Numeric(15, 2), default=0)
+    cree_par       = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    cree_par_nom   = db.Column(db.String(150))
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+
+    salarie = db.relationship("Salarie", backref="prets")
+    remboursements = db.relationship("RemboursementPret", backref="pret",
+                                     cascade="all, delete-orphan", lazy=True)
+
+    STATUTS = {"EN_COURS": "En cours", "SOLDE": "Soldé", "ANNULE": "Annulé"}
+
+    @property
+    def statut_libelle(self):
+        return self.STATUTS.get(self.statut, self.statut)
+
+    @property
+    def montant_echeance(self):
+        """Mensualité théorique = capital / nombre d'échéances (arrondi)."""
+        n = int(self.nb_echeances or 1) or 1
+        return round(float(self.montant_total or 0) / n, 2)
+
+    @property
+    def montant_restant(self):
+        return max(float(self.montant_total or 0) - float(self.montant_rembourse or 0), 0)
+
+    @property
+    def nb_echeances_reglees(self):
+        return len([r for r in self.remboursements]) if self.remboursements else 0
+
+    @property
+    def progression_pct(self):
+        tot = float(self.montant_total or 0)
+        if tot <= 0:
+            return 0
+        return round(min(float(self.montant_rembourse or 0) / tot * 100, 100), 1)
+
+    def recalculer_statut(self):
+        """Repasse à SOLDE si tout est remboursé (ne touche pas à ANNULE)."""
+        if self.statut == "ANNULE":
+            return
+        if self.montant_restant <= 0.5:
+            self.statut = "SOLDE"
+        else:
+            self.statut = "EN_COURS"
+
+
+class RemboursementPret(db.Model):
+    """Un remboursement (mensualité) imputé sur un prêt, éventuellement rattaché
+    au bulletin du mois où il a été prélevé."""
+    __tablename__ = "remboursements_pret"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    pret_id       = db.Column(db.Integer, db.ForeignKey("prets_personnel.id"), nullable=False)
+    montant       = db.Column(db.Numeric(15, 2), nullable=False)
+    mois          = db.Column(db.Integer)
+    annee         = db.Column(db.Integer)
+    bulletin_id   = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id"))  # si prélevé sur un bulletin
+    note          = db.Column(db.String(200))
+    date_remboursement = db.Column(db.Date, default=date.today)
+    date_creation = db.Column(db.DateTime, default=utcnow)

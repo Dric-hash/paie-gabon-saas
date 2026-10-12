@@ -1,0 +1,86 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.prets') }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Prêts au personnel</a>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin:.4rem 0 1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">{{ pret.salarie.prenom }} {{ pret.salarie.nom }}
+        {% if pret.statut=='EN_COURS' %}<span style="font-size:.78rem;background:#fef3c7;color:#92400e;padding:.15rem .5rem;border-radius:.4rem;vertical-align:middle">En cours</span>
+        {% elif pret.statut=='SOLDE' %}<span style="font-size:.78rem;background:#e9f6ec;color:#2f7d3c;padding:.15rem .5rem;border-radius:.4rem;vertical-align:middle">Soldé</span>
+        {% else %}<span style="font-size:.78rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem;vertical-align:middle">Annulé</span>{% endif %}
+      </h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">Prêt du {{ pret.date_octroi.strftime('%d/%m/%Y') }} · {{ pret.nb_echeances }} mensualités{% if pret.motif %} · {{ pret.motif }}{% endif %}</p>
+    </div>
+    <a href="{{ url_for('tenant.pret_recu', id=pret.id) }}" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">📄 Reçu de prêt</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.75rem;margin-bottom:1.25rem">
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem"><div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Montant prêté</div><div style="font-size:1.4rem;font-weight:800;color:#0f3d36">{{ '{:,.0f}'.format(pret.montant_total|float).replace(',',' ') }} <span style="font-size:.75rem;color:#6b7280">F</span></div></div>
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1rem"><div style="color:#6b7280;font-size:.72rem;font-weight:700;text-transform:uppercase">Déjà remboursé</div><div style="font-size:1.4rem;font-weight:800;color:#2f7d3c">{{ '{:,.0f}'.format(pret.montant_rembourse|float).replace(',',' ') }} <span style="font-size:.75rem;color:#6b7280">F</span></div></div>
+    <div style="background:#0f3d36;border-radius:.85rem;padding:1rem;color:#fff"><div style="color:#E9B043;font-size:.72rem;font-weight:700;text-transform:uppercase">Restant dû</div><div style="font-size:1.4rem;font-weight:800">{{ '{:,.0f}'.format(pret.montant_restant).replace(',',' ') }} <span style="font-size:.75rem;opacity:.7">F</span></div></div>
+  </div>
+
+  {% if pret.statut=='EN_COURS' %}
+  <!-- Enregistrer un remboursement -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Enregistrer un remboursement</h3>
+    <form method="POST" action="{{ url_for('tenant.pret_rembourser', id=pret.id) }}" style="display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;align-items:end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="grid-column:span 1"><label style="font-size:.78rem;font-weight:700;color:#374151">Montant *</label><input name="montant" required type="text" inputmode="decimal" value="{{ '%g'% pret.montant_echeance }}" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Mois</label><input name="mois" type="number" min="1" max="12" value="{{ now.month }}" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Année</label><input name="annee" type="number" value="{{ now.year }}" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1rem;border-radius:.5rem;font-weight:700;cursor:pointer;width:100%">Enregistrer</button></div>
+    </form>
+    <p style="color:#9ca3af;font-size:.78rem;margin:.6rem 0 0">Astuce : tu peux aussi prélever la mensualité directement sur le bulletin du salarié (champ « Retenue prêt »).</p>
+  </div>
+  {% endif %}
+
+  <!-- Échéancier indicatif -->
+  <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .5rem">Échéancier indicatif</h3>
+  <div style="border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden;margin-bottom:1.5rem">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <tr style="background:#f9fafb;text-align:left"><th style="padding:.5rem .8rem">N°</th><th style="padding:.5rem .8rem">Mois</th><th style="padding:.5rem .8rem;text-align:right">Mensualité</th><th style="padding:.5rem .8rem;text-align:right">Restant après</th></tr>
+      {% set MOIS = ['','Janv','Févr','Mars','Avr','Mai','Juin','Juil','Août','Sept','Oct','Nov','Déc'] %}
+      {% for e in echeancier %}
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.45rem .8rem">{{ e.num }}</td><td style="padding:.45rem .8rem">{{ MOIS[e.mois] }} {{ e.annee }}</td><td style="padding:.45rem .8rem;text-align:right">{{ '{:,.0f}'.format(e.montant).replace(',',' ') }}</td><td style="padding:.45rem .8rem;text-align:right;color:#6b7280">{{ '{:,.0f}'.format(e.restant).replace(',',' ') }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <!-- Remboursements effectués -->
+  <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .5rem">Remboursements effectués</h3>
+  {% if remboursements %}
+  <div style="border:1px solid #e5e7eb;border-radius:.75rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <tr style="background:#f9fafb;text-align:left"><th style="padding:.5rem .8rem">Date</th><th style="padding:.5rem .8rem">Période</th><th style="padding:.5rem .8rem;text-align:right">Montant</th><th style="padding:.5rem .8rem">Note</th></tr>
+      {% for r in remboursements %}
+      <tr style="border-top:1px solid #f3f4f6"><td style="padding:.45rem .8rem">{{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}</td><td style="padding:.45rem .8rem">{% if r.mois %}{{ '%02d'%r.mois }}/{{ r.annee }}{% else %}—{% endif %}{% if r.bulletin_id %} <span style="font-size:.7rem;background:#eef4f2;color:#17564c;padding:.05rem .35rem;border-radius:.3rem">bulletin</span>{% endif %}</td><td style="padding:.45rem .8rem;text-align:right;font-weight:600">{{ '{:,.0f}'.format(r.montant|float).replace(',',' ') }}</td><td style="padding:.45rem .8rem;color:#6b7280">{{ r.note or '' }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:1.25rem;text-align:center;color:#6b7280">Aucun remboursement enregistré.</div>
+  {% endif %}
+
+  <!-- Actions -->
+  <div style="display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.25rem">
+    {% if pret.statut=='EN_COURS' %}
+    <form method="POST" action="{{ url_for('tenant.pret_annuler', id=pret.id) }}" onsubmit="return confirm('Annuler ce prêt ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button style="background:none;border:1px solid #e5e7eb;color:#b45309;padding:.5rem 1rem;border-radius:.5rem;font-weight:700;cursor:pointer">Annuler le prêt</button>
+    </form>
+    {% endif %}
+    {% if not remboursements %}
+    <form method="POST" action="{{ url_for('tenant.pret_supprimer', id=pret.id) }}" onsubmit="return confirm('Supprimer définitivement ce prêt ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button style="background:none;border:none;color:#b91c1c;font-weight:700;cursor:pointer">Supprimer</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

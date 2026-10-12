@@ -389,6 +389,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
     indem_representation  = g("indem_representation")
     prime_salisure        = g("prime_salisure")
     acompte               = g("acompte")
+    retenue_pret          = g("retenue_pret")
 
     # ── Prime de nuit automatique (convention Hôtellerie, Art. 39.2) ─────────
     # 20 % du salaire de base pour un poste de nuit (21h-6h). Distincte des
@@ -549,6 +550,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         salaire_net
         + net_hors_brut          # panier, transport, représentation, salisure, composants hors brut
         - acompte
+        - retenue_pret           # remboursement de prêt au personnel (retenue sur salaire)
     )
 
     return {
@@ -603,6 +605,7 @@ def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
         "indem_representation":        round(indem_representation, 2),
         "prime_salisure":              round(prime_salisure, 2),
         "acompte":                     round(acompte, 2),
+        "retenue_pret":                round(retenue_pret, 2),
         "composants":                  composants_detail,
         "total_composants_gains":      round(total_composants_gains, 2),
         "total_composants_retenues":   round(total_composants_retenues, 2),
