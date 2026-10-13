@@ -1037,6 +1037,7 @@ class Pointage(db.Model):
     longitude       = db.Column(db.Numeric(9, 6))
     geo_hors_zone   = db.Column(db.Boolean, default=False)   # alerte RH, jamais bloquant
     heure_serveur   = db.Column(db.DateTime)   # horodatage serveur de réception (anti-triche)
+    signature       = db.Column(db.Text)       # signature tactile du travailleur (data URL PNG), optionnelle
     salarie = db.relationship("Salarie", backref="pointages", foreign_keys=[salarie_id])
     site    = db.relationship("Site", backref="pointages", foreign_keys=[site_id])
     __table_args__ = (
@@ -2175,3 +2176,27 @@ class PointeurChantier(db.Model):
                 return code
         # extrêmement improbable : rallonge
         return prefixe + secrets.token_hex(5).upper()
+
+
+class FeuillePresence(db.Model):
+    """Feuille de présence d'un chantier pour une date : porte la signature du
+    chef de chantier (pointeur) attestant la présence de l'équipe du jour.
+    Une feuille par (tenant, pointeur, date, chantier)."""
+    __tablename__ = "feuilles_presence"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    pointeur_id    = db.Column(db.Integer, db.ForeignKey("pointeurs_chantier.id"), nullable=True)
+    site_id        = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=True)
+    date_pointage  = db.Column(db.Date, nullable=False)
+    signature_chef = db.Column(db.Text)        # data URL PNG de la signature du chef
+    chef_nom       = db.Column(db.String(150)) # libellé du pointeur au moment de la signature
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+
+    pointeur = db.relationship("PointeurChantier")
+    site     = db.relationship("Site")
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "pointeur_id", "date_pointage", "site_id",
+                            name="uix_feuille_presence"),
+        db.Index("idx_feuille_tenant_date", "tenant_id", "date_pointage"),
+    )

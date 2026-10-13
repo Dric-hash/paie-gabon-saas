@@ -49,6 +49,15 @@
   .motif{margin-top:.4rem}
   a.lien{color:var(--teal2);font-size:.8rem}
   .center{min-height:100vh;display:flex;flex-direction:column;justify-content:center;padding:1.5rem}
+  .filtres{display:flex;gap:.4rem;margin-bottom:.6rem}
+  .filtres button{flex:1;border:1px solid var(--line);background:#fff;color:var(--mute);padding:.4rem;border-radius:.5rem;font-weight:700;font-size:.8rem;cursor:pointer}
+  .filtres button.actif{background:var(--teal);color:#fff;border-color:var(--teal)}
+  .sig-btn{border:1px solid var(--line);background:#fff;border-radius:.5rem;padding:.3rem .5rem;font-size:.85rem;cursor:pointer}
+  .sig-btn.ok{background:#e9f6ec;border-color:#2f7d3c;color:#2f7d3c}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:100;display:flex;align-items:center;justify-content:center;padding:1rem}
+  .modal .box{background:#fff;border-radius:1rem;padding:1rem;width:100%;max-width:460px}
+  .modal h3{margin:.1rem 0 .6rem;color:var(--teal);font-size:1.05rem}
+  #sig-canvas{width:100%;height:200px;border:2px dashed var(--line);border-radius:.6rem;touch-action:none;background:#fff}
 </style>
 </head>
 <body>
@@ -99,9 +108,14 @@
       </div>
 
       <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.4rem">
           <strong style="color:var(--teal)">Équipe du chantier</strong>
           <span style="font-size:.8rem;color:var(--mute)"><span id="cnt-p">0</span> présents · <span id="cnt-a">0</span> absents</span>
+        </div>
+        <div class="filtres">
+          <button data-f="T" class="actif">Tous</button>
+          <button data-f="S">Salariés</button>
+          <button data-f="J">Journaliers</button>
         </div>
         <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
           <button class="btn ghost" style="padding:.45rem" onclick="App.tousPresents(true)">Tous présents</button>
@@ -116,6 +130,7 @@
       </div>
     </main>
     <div class="foot">
+      <button class="sig-btn" id="btn-sig-chef" style="width:100%;margin-bottom:.5rem;padding:.6rem">✍️ Signer la feuille (chef de chantier)</button>
       <div style="display:flex;gap:.6rem;align-items:center">
         <button class="btn primary" style="flex:2" id="btn-save">Enregistrer le pointage</button>
         <button class="btn ghost" style="flex:1" id="btn-sync">Sync <span id="pend" class="pill"></span></button>
@@ -123,6 +138,19 @@
       <div style="text-align:center;margin-top:.4rem"><a class="lien" href="#" id="btn-logout">Changer de pointeur</a></div>
     </div>
   </section>
+
+  <!-- Modale de signature (chef ou travailleur) -->
+  <div id="modal-sig" class="modal hidden">
+    <div class="box">
+      <h3 id="sig-titre">Signature</h3>
+      <canvas id="sig-canvas"></canvas>
+      <div style="display:flex;gap:.6rem;margin-top:.7rem">
+        <button class="btn ghost" style="flex:1" id="sig-effacer">Effacer</button>
+        <button class="btn primary" style="flex:2" id="sig-valider">Valider</button>
+      </div>
+      <div style="text-align:center;margin-top:.4rem"><a class="lien" href="#" id="sig-annuler">Annuler</a></div>
+    </div>
+  </div>
 
   <div class="toast" id="toast"></div>
 </div>
@@ -134,6 +162,8 @@ const App = (function(){
   let roster = null, token = null, etat = {};  // etat[wkey] = {present, absent, motif, hn, hs}
   let selSite = null;              // chantier sélectionné (id)
   let ajoutes = new Set();         // wkey des travailleurs ajoutés manuellement (permutés)
+  let filtreType = "T";            // T | S | J
+  let signatureChef = null;        // data URL de la signature du chef (feuille)
 
   // ───────── IndexedDB (meta + file de pointages) ─────────
   function db(){
@@ -180,6 +210,7 @@ const App = (function(){
     let np=0,na=0;
     (roster.salaries||[]).forEach(s=>{
       if(!dansEquipe(s)) return;
+      if(filtreType!=="T" && s.type!==filtreType) return;
       const k=wkey(s), e=etat[k]; if(!e) return; if(e.present)np++; if(e.absent)na++;
       const nom=(s.nom+" "+(s.prenom||"")).toLowerCase();
       if(q && nom.indexOf(q)<0) return;
@@ -190,8 +221,10 @@ const App = (function(){
       d.innerHTML =
         '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+perm+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
           '<div class="motif hidden" data-m="'+k+'"></div></div>'+
-        '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
-          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div>';
+        '<div style="display:flex;gap:.35rem;align-items:center">'+
+          '<button class="sig-btn'+(e.signature?' ok':'')+'" data-sig="'+k+'" title="Signature du travailleur">✍️</button>'+
+          '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
+          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div></div>';
       box.appendChild(d);
       if(e.absent){ const m=d.querySelector('[data-m="'+k+'"]'); m.classList.remove("hidden");
         m.innerHTML='<select data-motif="'+k+'" style="margin-top:.4rem">'+
@@ -202,14 +235,55 @@ const App = (function(){
 
   function bindListe(){
     $("#liste").addEventListener("click",(ev)=>{
-      const p=ev.target.getAttribute("data-p"), a=ev.target.getAttribute("data-a");
+      const p=ev.target.getAttribute("data-p"), a=ev.target.getAttribute("data-a"), sg=ev.target.getAttribute("data-sig");
       if(p){ etat[p].present=true; etat[p].absent=false; render(); }
       if(a){ etat[a].present=false; etat[a].absent=true; if(!etat[a].motif)etat[a].motif="Congé"; render(); }
+      if(sg){ const nom=sg; ouvrirSignature("Signature du travailleur",(url)=>{ etat[nom].signature=url; render(); }); }
     });
     $("#liste").addEventListener("change",(ev)=>{
       const m=ev.target.getAttribute("data-motif"); if(m) etat[m].motif=ev.target.value;
     });
     $("#in-rech").addEventListener("input",render);
+    document.querySelectorAll(".filtres button").forEach(b=>b.addEventListener("click",()=>{
+      filtreType=b.getAttribute("data-f");
+      document.querySelectorAll(".filtres button").forEach(x=>x.classList.toggle("actif",x===b));
+      render();
+    }));
+  }
+
+  // ───────── Signature tactile (canvas) ─────────
+  let sigCtx=null, sigDraw=false, sigVide=true, sigDone=null;
+  function ouvrirSignature(titre, onDone){
+    sigDone=onDone; sigVide=true;
+    $("#sig-titre").textContent=titre||"Signature";
+    $("#modal-sig").classList.remove("hidden");
+    const cv=$("#sig-canvas");
+    // Dimension réelle du canvas (une fois visible) pour un trait net.
+    const r=cv.getBoundingClientRect(); cv.width=r.width; cv.height=r.height;
+    sigCtx=cv.getContext("2d"); sigCtx.lineWidth=2.5; sigCtx.lineCap="round"; sigCtx.strokeStyle="#0f3d36";
+    sigCtx.clearRect(0,0,cv.width,cv.height);
+  }
+  function fermerSignature(){ $("#modal-sig").classList.add("hidden"); sigDone=null; }
+  function sigPos(ev){ const cv=$("#sig-canvas"), r=cv.getBoundingClientRect();
+    const t=ev.touches?ev.touches[0]:ev; return {x:t.clientX-r.left, y:t.clientY-r.top}; }
+  function bindSignature(){
+    const cv=$("#sig-canvas");
+    const down=(ev)=>{ ev.preventDefault(); sigDraw=true; sigVide=false; const p=sigPos(ev); sigCtx.beginPath(); sigCtx.moveTo(p.x,p.y); };
+    const move=(ev)=>{ if(!sigDraw)return; ev.preventDefault(); const p=sigPos(ev); sigCtx.lineTo(p.x,p.y); sigCtx.stroke(); };
+    const up=()=>{ sigDraw=false; };
+    cv.addEventListener("mousedown",down); cv.addEventListener("mousemove",move); window.addEventListener("mouseup",up);
+    cv.addEventListener("touchstart",down,{passive:false}); cv.addEventListener("touchmove",move,{passive:false}); cv.addEventListener("touchend",up);
+    $("#sig-effacer").addEventListener("click",()=>{ const c=$("#sig-canvas"); sigCtx.clearRect(0,0,c.width,c.height); sigVide=true; });
+    $("#sig-annuler").addEventListener("click",(e)=>{ e.preventDefault(); fermerSignature(); });
+    $("#sig-valider").addEventListener("click",()=>{
+      if(sigVide){ toast("Signez d'abord dans le cadre."); return; }
+      const url=$("#sig-canvas").toDataURL("image/png");
+      if(sigDone) sigDone(url);
+      fermerSignature();
+    });
+    $("#btn-sig-chef").addEventListener("click",()=>ouvrirSignature("Signature du chef de chantier",(url)=>{
+      signatureChef=url; const b=$("#btn-sig-chef"); b.classList.add("ok"); b.textContent="✅ Feuille signée (chef)";
+    }));
   }
   function tousPresents(){ (roster.salaries||[]).forEach(s=>{ if(dansEquipe(s)){ const e=etat[wkey(s)]; if(e){e.present=true;e.absent=false;} } }); render(); }
 
@@ -260,6 +334,7 @@ const App = (function(){
   async function enregistrer(){
     const d=$("#in-date").value; if(!d){ toast("Choisissez une date."); return; }
     if(selSite==null){ toast("Choisissez un chantier."); return; }
+    if(!signatureChef){ toast("Le chef doit signer la feuille avant d'enregistrer."); return; }
     const hn=parseFloat($("#in-hn").value||"8")||0, hs=parseFloat($("#in-hs").value||"0")||0;
     $("#btn-save").disabled=true; $("#btn-save").textContent="Localisation…";
     const pos=await position();
@@ -273,10 +348,15 @@ const App = (function(){
         motif_absence:e.absent?e.motif:null,
         heures_normales:e.absent?0:(e.hn!=null?e.hn:hn),
         heures_sup_10:e.absent?0:(e.hs!=null?e.hs:hs),
+        signature:e.signature||null, signature_chef:signatureChef,
         latitude:pos.latitude!=null?pos.latitude:null, longitude:pos.longitude!=null?pos.longitude:null };
       await idbSet("queue",null,item); n++;
     }
     $("#btn-save").disabled=false; $("#btn-save").textContent="Enregistrer le pointage";
+    // Nouvelle feuille : on réinitialise la signature du chef et les signatures individuelles.
+    signatureChef=null; const b=$("#btn-sig-chef"); b.classList.remove("ok"); b.textContent="✍️ Signer la feuille (chef de chantier)";
+    Object.keys(etat).forEach(k=>{ etat[k].signature=null; });
+    render();
     toast(n+" pointage(s) enregistré(s) sur l'appareil.");
     await majPending();
     if(navigator.onLine) sync();
@@ -336,10 +416,55 @@ const App = (function(){
     $("#vue-login").classList.add("hidden"); $("#vue-app").classList.remove("hidden");
     $("#h-ent").textContent = roster.entreprise||"";
     if(!$("#in-date").value) $("#in-date").value = new Date().toISOString().slice(0,10);
-    ajoutes = new Set();
+    ajoutes = new Set(); signatureChef=null;
+    const b=$("#btn-sig-chef"); b.classList.remove("ok"); b.textContent="✍️ Signer la feuille (chef de chantier)";
     remplirSites(); initEtat(); render(); majPending(); majReseau();
     rafraichirRoster().then(()=>{ remplirSites(); initEtat(); render(); });
     if(navigator.onLine) sync();
+    offrirVerrou();   // propose le verrou biométrique une fois
+  }
+
+  // ───────── Verrou biométrique du chef (WebAuthn, best-effort, non bloquant) ─────────
+  function b64(buf){ return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+  function unb64(s){ return Uint8Array.from(atob(s), c=>c.charCodeAt(0)); }
+  async function bioDispo(){
+    try{ return !!window.PublicKeyCredential &&
+      await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable(); }catch(e){ return false; }
+  }
+  async function offrirVerrou(){
+    try{
+      if(localStorage.getItem("pg-bio-demande")) return;          // déjà proposé
+      if(!(await bioDispo())) return;                             // pas de capteur
+      localStorage.setItem("pg-bio-demande","1");
+      if(!confirm("Protéger l'ouverture de l'app par votre empreinte ?")) return;
+      const cred=await navigator.credentials.create({publicKey:{
+        challenge:crypto.getRandomValues(new Uint8Array(32)),
+        rp:{name:"PaieGabon Pointage"},
+        user:{id:crypto.getRandomValues(new Uint8Array(16)), name:(roster.pointeur&&roster.pointeur.code)||"chef", displayName:"Chef"},
+        pubKeyCredParams:[{type:"public-key",alg:-7},{type:"public-key",alg:-257}],
+        authenticatorSelection:{authenticatorAttachment:"platform",userVerification:"required"},
+        timeout:60000 }});
+      localStorage.setItem("pg-bio-id", b64(cred.rawId));
+      localStorage.setItem("pg-bio","on");
+      toast("Verrou par empreinte activé.");
+    }catch(e){ /* annulé ou non supporté : on ignore */ }
+  }
+  async function verrouSiActif(){
+    try{
+      if(localStorage.getItem("pg-bio")!=="on") return true;
+      const id=localStorage.getItem("pg-bio-id"); if(!id) return true;
+      if(!(await bioDispo())) return true;                        // capteur indisponible → non bloquant
+      for(let i=0;i<3;i++){
+        try{
+          await navigator.credentials.get({publicKey:{
+            challenge:crypto.getRandomValues(new Uint8Array(32)),
+            allowCredentials:[{type:"public-key", id:unb64(id)}],
+            userVerification:"required", timeout:60000 }});
+          return true;
+        }catch(e){ if(!confirm("Empreinte requise pour ouvrir l'app. Réessayer ?")) return true; }
+      }
+      return true;
+    }catch(e){ return true; }
   }
 
   // ───────── Démarrage ─────────
@@ -352,9 +477,9 @@ const App = (function(){
     $("#btn-save").addEventListener("click",enregistrer);
     $("#btn-sync").addEventListener("click",sync);
     $("#btn-logout").addEventListener("click",(e)=>{e.preventDefault(); if(confirm("Changer de pointeur ?")) deconnexion();});
-    bindListe(); bindAjout();
+    bindListe(); bindAjout(); bindSignature();
     token=await idbGet("meta","token"); roster=await idbGet("meta","roster");
-    if(token&&roster){ demarrer(); } else { $("#vue-login").classList.remove("hidden"); }
+    if(token&&roster){ await verrouSiActif(); demarrer(); } else { $("#vue-login").classList.remove("hidden"); }
     if("serviceWorker" in navigator){
       try{ await navigator.serviceWorker.register("/m/sw.js",{scope:"/m"});
         navigator.serviceWorker.addEventListener("message",ev=>{ if(ev.data&&ev.data.type==="sync-pointages") sync(); });

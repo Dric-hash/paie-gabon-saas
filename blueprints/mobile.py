@@ -17,7 +17,7 @@ from flask import (Blueprint, request, jsonify, render_template,
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
 from models import (db, utcnow, Tenant, Salarie, Journalier, Site,
-                    AffectationSite, Pointage, PointeurChantier)
+                    AffectationSite, Pointage, PointeurChantier, FeuillePresence)
 
 logger = logging.getLogger("paiegalon")
 
@@ -191,6 +191,7 @@ def api_sync():
     # Chantiers valides de l'entreprise (le chantier est choisi à chaque pointage).
     sites_map = {s.id: s for s in Site.query.filter_by(tenant_id=p.tenant_id).all()}
     resultats = []
+    feuilles = {}   # (date, site_id) -> signature_chef (data URL) à enregistrer
 
     for it in items:
         uuid = (it.get("uuid") or "").strip()
@@ -273,8 +274,12 @@ def api_sync():
             pointeur_id=p.id,
             latitude=lat, longitude=lng, geo_hors_zone=hors_zone,
             heure_serveur=utcnow(),
+            signature=(it.get("signature") or None),   # signature individuelle (optionnelle)
         )
         db.session.add(pt)
+        # Signature du chef : au niveau de la feuille (date + chantier).
+        if it.get("signature_chef"):
+            feuilles[(d, site_id)] = it.get("signature_chef")
         try:
             db.session.flush()
             resultats.append({"uuid": uuid, "etat": "cree", "id": pt.id,
@@ -282,6 +287,17 @@ def api_sync():
         except Exception as e:                       # pragma: no cover
             db.session.rollback()
             resultats.append({"uuid": uuid, "etat": "erreur", "motif": str(e)[:80]})
+
+    # Signatures de feuille (chef de chantier) : une par (date, chantier).
+    for (d, site_id), sig in feuilles.items():
+        f = FeuillePresence.query.filter_by(tenant_id=p.tenant_id, pointeur_id=p.id,
+                                            date_pointage=d, site_id=site_id).first()
+        if not f:
+            f = FeuillePresence(tenant_id=p.tenant_id, pointeur_id=p.id,
+                                date_pointage=d, site_id=site_id)
+            db.session.add(f)
+        f.signature_chef = sig
+        f.chef_nom = p.nom
 
     db.session.commit()
     nb_crees = sum(1 for r in resultats if r["etat"] == "cree")

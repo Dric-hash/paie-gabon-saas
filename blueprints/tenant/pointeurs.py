@@ -8,10 +8,11 @@ from flask import render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 
-from blueprints.tenant import bp
-from core import get_tenant
+from blueprints.tenant import bp, _doc_response
+from core import get_tenant, _parse_date
 from audit import log_action
-from models import db, Site, Salarie, Journalier, Pointage, PointeurChantier
+from models import (db, Site, Salarie, Journalier, Pointage, PointeurChantier,
+                    FeuillePresence)
 
 
 def _pin_aleatoire():
@@ -151,14 +152,19 @@ def pointages_mobiles():
            .options(joinedload(Pointage.salarie), joinedload(Pointage.journalier),
                     joinedload(Pointage.site))
            .order_by(Pointage.date_pointage.desc(), Pointage.site_id).all())
-    # Regroupement par (date, site) pour une validation par chantier/jour.
+    # Regroupement par (date, chantier) pour une validation par chantier/jour.
     groupes = {}
     for p in pts:
-        cle = (p.date_pointage, p.site.nom if p.site else "—")
+        cle = (p.date_pointage, p.site_id, p.site.nom if p.site else "—")
         groupes.setdefault(cle, []).append(p)
-    groupes = [{"date": d, "site": s, "pointages": lst,
-                "nb_hors_zone": sum(1 for x in lst if x.geo_hors_zone)}
-               for (d, s), lst in sorted(groupes.items(), key=lambda kv: (kv[0][0], kv[0][1]), reverse=True)]
+    # Feuilles signées (chef) pour savoir où afficher la signature.
+    feuilles = {(f.date_pointage, f.site_id): f for f in
+                FeuillePresence.query.filter_by(tenant_id=t.id).all()}
+    groupes = [{"date": d, "site_id": sid, "site": s, "pointages": lst,
+                "nb_hors_zone": sum(1 for x in lst if x.geo_hors_zone),
+                "nb_signes": sum(1 for x in lst if x.signature),
+                "feuille_signee": (d, sid) in feuilles}
+               for (d, sid, s), lst in sorted(groupes.items(), key=lambda kv: (kv[0][0], kv[0][2]), reverse=True)]
     nb_soumis = Pointage.query.filter_by(tenant_id=t.id, source="MOBILE", statut="SOUMIS").count()
     return render_template("tenant/pointages_mobiles.html", tenant=t,
                            groupes=groupes, statut=statut, nb_soumis=nb_soumis)
@@ -171,6 +177,35 @@ def _ids_cibles(t):
     return (Pointage.query.filter(Pointage.tenant_id == t.id,
                                   Pointage.id.in_(ids),
                                   Pointage.source == "MOBILE").all())
+
+
+@bp.route("/pointages-mobiles/feuille")
+@login_required
+def pointages_mobiles_feuille():
+    """Feuille de présence PDF d'un chantier pour une date (signatures incluses)."""
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    d = _parse_date(request.args.get("date"))
+    site_id = request.args.get("site_id", type=int)
+    if not d:
+        flash("Date manquante.", "error")
+        return redirect(url_for("tenant.pointages_mobiles"))
+    pts = (Pointage.query.filter_by(tenant_id=t.id, source="MOBILE", date_pointage=d)
+           .filter(Pointage.site_id == site_id if site_id else Pointage.site_id.is_(None))
+           .options(joinedload(Pointage.salarie), joinedload(Pointage.journalier)).all())
+    if not pts:
+        flash("Aucun pointage mobile pour cette feuille.", "error")
+        return redirect(url_for("tenant.pointages_mobiles"))
+    site = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
+    feuille = FeuillePresence.query.filter_by(
+        tenant_id=t.id, date_pointage=d, site_id=site_id).first()
+    from documents_rh import generer_feuille_presence_pdf
+    pts.sort(key=lambda p: ((p.salarie or p.journalier).nom if (p.salarie or p.journalier) else ""))
+    pdf = generer_feuille_presence_pdf(t, site, d, pts, feuille)
+    log_action("EXPORT", "feuille_presence", 0, f"Feuille {d} / {(site.nom if site else '—')}")
+    nom = f"feuille_presence_{(site.code if site and site.code else 'chantier')}_{d}.pdf"
+    return _doc_response(pdf, nom)
 
 
 @bp.route("/pointages-mobiles/valider", methods=["POST"])

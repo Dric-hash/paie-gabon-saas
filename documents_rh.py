@@ -997,3 +997,82 @@ def generer_recu_acompte_pdf(tenant, acompte) -> bytes:
     ]))
     el.append(sign)
     return _build(el)
+
+
+def _signature_img(data_url, max_w=38*mm, max_h=16*mm):
+    """Construit une image reportlab depuis une data URL base64 (signature tactile).
+    Renvoie None si absente/illisible — le document ne casse jamais."""
+    if not data_url or "base64," not in data_url:
+        return None
+    try:
+        import base64
+        raw = base64.b64decode(data_url.split("base64,", 1)[1])
+        try:
+            from PIL import Image as PILImage
+            iw, ih = PILImage.open(io.BytesIO(raw)).size
+            ratio = min(max_w / iw, max_h / ih)
+            w, h = iw * ratio, ih * ratio
+        except Exception:
+            w, h = max_w, max_h
+        return Image(io.BytesIO(raw), width=w, height=h)
+    except Exception:
+        return None
+
+
+def generer_feuille_presence_pdf(tenant, site, date_p, pointages, feuille) -> bytes:
+    """Feuille de présence d'un chantier pour une date : liste des travailleurs
+    pointés (présence, heures, signature individuelle) + signature du chef."""
+    S = _styles()
+    MOIS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+            "août", "septembre", "octobre", "novembre", "décembre"]
+    el = _entete(tenant, S)
+    el.append(Paragraph("FEUILLE DE PRÉSENCE", S["titre"]))
+    el.append(Spacer(1, 10))
+    d_lib = f"{date_p.day} {MOIS[date_p.month]} {date_p.year}" if date_p else ""
+    el.append(Paragraph(f"<b>Chantier :</b> {(site.nom if site else '—')} &nbsp;&nbsp; "
+                        f"<b>Date :</b> {d_lib}", S["corps"]))
+    el.append(Spacer(1, 10))
+
+    data = [["#", "Nom", "Type", "Présence", "Heures", "Signature"]]
+    for i, p in enumerate(pointages, 1):
+        trav = p.salarie or p.journalier
+        nom = (f"{trav.nom} {trav.prenom}" if trav else "—")
+        typ = "Journalier" if p.journalier_id else "Salarié"
+        if p.absent:
+            pres = "Absent" + (f" ({p.motif_absence})" if p.motif_absence else "")
+            heures = "—"
+        else:
+            pres = "Présent"
+            hs = (float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0)
+                  + float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0))
+            heures = f"{float(p.heures_normales or 0):g} h" + (f" +{hs:g} sup" if hs else "")
+        sig = _signature_img(getattr(p, "signature", None)) or Paragraph("", S["corps"])
+        data.append([str(i), nom, typ, pres, heures, sig])
+
+    tbl = Table(data, colWidths=[8*mm, 50*mm, 22*mm, 32*mm, 26*mm, 28*mm])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), C_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), HexColor("#FFFFFF")),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8.5),
+        ("GRID", (0, 0), (-1, -1), 0.4, C_GRAY),
+        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [HexColor("#FFFFFF"), HexColor("#f7f6f2")]),
+    ]))
+    el.append(tbl)
+    el.append(Spacer(1, 18))
+
+    # Signature du chef de chantier
+    chef_sig = _signature_img(getattr(feuille, "signature_chef", None), max_w=55*mm, max_h=24*mm) if feuille else None
+    chef_nom = (getattr(feuille, "chef_nom", None) if feuille else None) or "Chef de chantier"
+    bloc = [[Paragraph(f"<b>Le chef de chantier</b><br/>{chef_nom}", S["corps"])],
+            [chef_sig or Paragraph("_______________________", S["corps"])]]
+    t2 = Table(bloc, colWidths=[90*mm])
+    t2.setStyle(TableStyle([("TOPPADDING", (0, 1), (0, 1), 6)]))
+    el.append(t2)
+    el.append(Spacer(1, 6))
+    el.append(Paragraph("Document établi via l'application de pointage mobile PaieGabon. "
+                        "Horodatage et géolocalisation conservés côté serveur.", S["entete_det"]))
+    return _build(el)

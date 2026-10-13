@@ -2,7 +2,7 @@
    Rôle : rendre l'app disponible hors-ligne (cache du shell) et réveiller la
    synchronisation. Toute la logique de file d'attente/sync vit dans la page
    (IndexedDB), le SW ne fait que servir le shell et notifier la page. */
-const CACHE = "pg-pointage-v3";
+const CACHE = "pg-pointage-v4";
 const SHELL = [
   "/m",
   "/static/icons/icon-192.png",

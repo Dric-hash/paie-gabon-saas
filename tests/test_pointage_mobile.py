@@ -22,7 +22,11 @@ from datetime import date
 
 from app import app as flask_app
 from models import (db, Plan, Tenant, Utilisateur, Salarie, Journalier, Site,
-                    AffectationSite, Pointage, PointeurChantier)
+                    AffectationSite, Pointage, PointeurChantier, FeuillePresence)
+
+# Petite image PNG 1x1 en data URL, suffisante pour tester le stockage/PDF.
+_SIG = ("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAA"
+        "C0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC")
 
 # Pointage mobile d'un salarié ciblé, hors équipe pour un autre.
 PIN = "4321"
@@ -355,6 +359,37 @@ def test_rh_cree_pointeur_relie_journalier(client):
         assert p is not None
         assert p.journalier_id == client._ids["j1"]
         assert p.salarie_id is None
+
+
+def test_signatures_individuelle_et_chef(client):
+    """La signature individuelle est stockée sur le pointage ; la signature du
+    chef crée une feuille de présence pour (date, chantier)."""
+    token, _ = _login(client)
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-sig", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s1"], "site_id": client._ids["site"],
+        "present": True, "heures_normales": 8,
+        "signature": _SIG, "signature_chef": _SIG}]}, headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "cree"
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-sig").first()
+        assert pt.signature == _SIG
+        f = FeuillePresence.query.filter_by(tenant_id=client._ids["tenant"],
+                                            date_pointage=date(2026, 6, 10),
+                                            site_id=client._ids["site"]).first()
+        assert f is not None and f.signature_chef == _SIG
+
+
+def test_feuille_presence_pdf(client):
+    token, _ = _login(client)
+    client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-f1", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s1"], "site_id": client._ids["site"],
+        "present": True, "heures_normales": 8,
+        "signature": _SIG, "signature_chef": _SIG}]}, headers=_auth(token))
+    r = client.get("/pointages-mobiles/feuille?date=2026-06-10&site_id=%d" % client._ids["site"])
+    assert r.status_code == 200
+    assert r.data[:4] == b"%PDF"
 
 
 def test_rh_page_validation_affiche_soumis(client):
