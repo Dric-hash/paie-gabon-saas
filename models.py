@@ -1038,6 +1038,7 @@ class Pointage(db.Model):
     geo_hors_zone   = db.Column(db.Boolean, default=False)   # alerte RH, jamais bloquant
     heure_serveur   = db.Column(db.DateTime)   # horodatage serveur de réception (anti-triche)
     signature       = db.Column(db.Text)       # signature tactile du travailleur (data URL PNG), optionnelle
+    photo           = db.Column(db.Text)       # photo du travailleur pointé (data URL JPEG compressé), optionnelle
     salarie = db.relationship("Salarie", backref="pointages", foreign_keys=[salarie_id])
     site    = db.relationship("Site", backref="pointages", foreign_keys=[site_id])
     __table_args__ = (

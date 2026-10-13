@@ -197,7 +197,7 @@ const App = (function(){
   function wkey(s){ return (s.type||"S")+":"+s.id; }
   function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{
     etat[wkey(s)]={present:true,absent:false,motif:"",hn:null,
-      s10:0,s30:0,s30b:0,s40:0,s70:0,sj:0, signature:null, open:false}; }); }
+      s10:0,s30:0,s30b:0,s40:0,s70:0,sj:0, signature:null, photo:null, open:false}; }); }
   const MOTIFS=["MALADIE","CONGE","AUTORISATION","SANS_MOTIF"];
   // Travailleur visible dans l'équipe du chantier : affecté au chantier choisi,
   // ou ajouté manuellement (permuté).
@@ -224,8 +224,9 @@ const App = (function(){
       d.innerHTML =
         '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+perm+'<small>'+(s.emploi||s.matricule||'')+'</small></div>'+
         '<div style="display:flex;gap:.35rem;align-items:center">'+
+          '<button class="sig-btn'+(e.photo?' ok':'')+'" data-photo="'+k+'" title="Photo du travailleur">📷</button>'+
           '<button class="sig-btn'+(e.signature?' ok':'')+'" data-sig="'+k+'" title="Signature du travailleur">✍️</button>'+
-          '<button class="sig-btn" data-open="'+k+'" title="Heures / motif">⚙ heures</button>'+
+          '<button class="sig-btn" data-open="'+k+'" title="Heures / motif">⚙</button>'+
           '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
           '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div></div>'+
         '<div class="detail" data-det="'+k+'" style="flex-basis:100%;margin-top:.5rem;'+(e.open?'':'display:none')+'"></div>';
@@ -269,6 +270,8 @@ const App = (function(){
       if(a){ etat[a].present=false; etat[a].absent=true; render(); }
       if(op){ etat[op].open=!etat[op].open; render(); }
       if(sg){ const nom=sg; ouvrirSignature("Signature du travailleur",(url)=>{ etat[nom].signature=url; render(); }); }
+      const ph=ev.target.getAttribute("data-photo");
+      if(ph){ prendrePhoto(ph); }
     });
     $("#liste").addEventListener("change",(ev)=>{
       const fld=ev.target.getAttribute("data-fld"), k=ev.target.getAttribute("data-k");
@@ -282,6 +285,33 @@ const App = (function(){
       document.querySelectorAll(".filtres button").forEach(x=>x.classList.toggle("actif",x===b));
       render();
     }));
+  }
+
+  // ───────── Photo du travailleur (appareil photo natif + compression) ─────────
+  function prendrePhoto(k){
+    const inp=document.createElement("input");
+    inp.type="file"; inp.accept="image/*"; inp.capture="environment";
+    inp.onchange=()=>{
+      const f=inp.files&&inp.files[0]; if(!f) return;
+      const rd=new FileReader();
+      rd.onload=()=>{
+        const img=new Image();
+        img.onload=()=>{
+          // Compression : max 480 px sur le grand côté, JPEG qualité 0.55
+          const max=480; let w=img.width, h=img.height;
+          if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
+          else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
+          const cv=document.createElement("canvas"); cv.width=w; cv.height=h;
+          cv.getContext("2d").drawImage(img,0,0,w,h);
+          try{ etat[k].photo=cv.toDataURL("image/jpeg",0.55); }catch(e){ etat[k].photo=rd.result; }
+          render(); toast("Photo ajoutée.");
+        };
+        img.onerror=()=>toast("Photo illisible.");
+        img.src=rd.result;
+      };
+      rd.readAsDataURL(f);
+    };
+    inp.click();
   }
 
   // ───────── Signature tactile (canvas) ─────────
@@ -382,7 +412,7 @@ const App = (function(){
         date:d, site_id:selSite, type:s.type, worker_id:s.id, present:e.present, absent:e.absent,
         motif_absence:e.absent?(e.motif||null):null,
         heures_normales:hn,
-        signature:e.signature||null, signature_chef:signatureChef,
+        signature:e.signature||null, photo:e.photo||null, signature_chef:signatureChef,
         latitude:pos.latitude!=null?pos.latitude:null, longitude:pos.longitude!=null?pos.longitude:null };
       if(!e.absent){
         if(s.type==="J"){ item.heures_sup = e.sj||0; }
@@ -394,7 +424,7 @@ const App = (function(){
     $("#btn-save").disabled=false; $("#btn-save").textContent="Enregistrer le pointage";
     // Nouvelle feuille : on réinitialise la signature du chef et les signatures individuelles.
     signatureChef=null; const b=$("#btn-sig-chef"); b.classList.remove("ok"); b.textContent="✍️ Signer la feuille (chef de chantier)";
-    Object.keys(etat).forEach(k=>{ etat[k].signature=null; });
+    Object.keys(etat).forEach(k=>{ etat[k].signature=null; etat[k].photo=null; });
     render();
     toast(n+" pointage(s) enregistré(s) sur l'appareil.");
     await majPending();

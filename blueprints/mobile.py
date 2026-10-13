@@ -287,6 +287,7 @@ def api_sync():
             latitude=lat, longitude=lng, geo_hors_zone=hors_zone,
             heure_serveur=utcnow(),
             signature=(it.get("signature") or None),   # signature individuelle (optionnelle)
+            photo=(it.get("photo") or None),            # photo du travailleur (optionnelle)
         )
         db.session.add(pt)
         # Signature du chef : au niveau de la feuille (date + chantier).

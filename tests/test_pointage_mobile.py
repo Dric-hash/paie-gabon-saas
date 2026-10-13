@@ -422,6 +422,19 @@ def test_structure_heures_journalier(client):
         assert float(pt.heures_sup_10 or 0) == 0   # pas de ventilation pour un journalier
 
 
+def test_photo_travailleur(client):
+    """La photo du travailleur pointé est stockée sur le pointage."""
+    token, _ = _login(client)
+    client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-photo", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s1"], "site_id": client._ids["site"],
+        "present": True, "heures_normales": 8,
+        "photo": _SIG, "signature_chef": _SIG}]}, headers=_auth(token))
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-photo").first()
+        assert pt.photo == _SIG
+
+
 def test_rh_page_validation_affiche_soumis(client):
     token, _ = _login(client)
     client.post("/m/api/sync", json={"pointages": [{
