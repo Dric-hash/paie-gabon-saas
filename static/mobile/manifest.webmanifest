@@ -1,5 +1,6 @@
 {
-  "name": "PaieGabon — Pointage chantier",
+  "id": "/m",
+  "name": "PaieGabon Pointage",
   "short_name": "Pointage",
   "description": "Pointage des équipes sur chantier, même hors-ligne.",
   "start_url": "/m",
@@ -9,13 +10,14 @@
   "background_color": "#0f3d36",
   "theme_color": "#0f3d36",
   "lang": "fr",
+  "categories": ["business", "productivity"],
   "icons": [
-    { "src": "/static/icons/icon-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/icon-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/icon-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/icon-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable any" },
-    { "src": "/static/icons/icon-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
-    { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable any" }
+    { "src": "/static/mobile/icons/pt-96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any" },
+    { "src": "/static/mobile/icons/pt-128.png", "sizes": "128x128", "type": "image/png", "purpose": "any" },
+    { "src": "/static/mobile/icons/pt-144.png", "sizes": "144x144", "type": "image/png", "purpose": "any" },
+    { "src": "/static/mobile/icons/pt-152.png", "sizes": "152x152", "type": "image/png", "purpose": "any" },
+    { "src": "/static/mobile/icons/pt-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable any" },
+    { "src": "/static/mobile/icons/pt-384.png", "sizes": "384x384", "type": "image/png", "purpose": "any" },
+    { "src": "/static/mobile/icons/pt-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable any" }
   ]
 }
