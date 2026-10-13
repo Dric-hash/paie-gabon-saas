@@ -892,6 +892,7 @@ def api_pointage_semaine():
     except: date_sel = datetime.now().date()
     lundi=date_sel-timedelta(days=date_sel.weekday()); samedi=lundi+timedelta(days=5)
     pts = Pointage.query.filter_by(tenant_id=t.id).filter(Pointage.date_pointage>=lundi,Pointage.date_pointage<=samedi).all()
+    pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
     stats={}
     for p in pts:
         key=str(p.date_pointage)
@@ -952,6 +953,8 @@ def rapport_mensuel_site():
         pts_sal  = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.salarie_id.in_(ids_sal),
                     Pointage.date_pointage >= mois_debut,
                     Pointage.date_pointage <= mois_fin).all() if ids_sal else []
+        # Pointages mobiles non validés exclus du rapport (comme de la paie).
+        pts_sal = [p for p in pts_sal if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
         pts_jour = Pointage.query.filter_by(tenant_id=t.id)            .filter(Pointage.journalier_id.in_(ids_jour),
                     Pointage.date_pointage >= mois_debut,
                     Pointage.date_pointage <= mois_fin).all() if ids_jour else []

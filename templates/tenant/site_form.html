@@ -88,6 +88,32 @@
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;resize:none;font-family:inherit">{{ site.description if site else '' }}</textarea>
       </div>
 
+      <!-- Géolocalisation du chantier (pour l'alerte géo du pointage mobile) -->
+      <div style="border:1px dashed #e5e7eb;border-radius:.75rem;padding:.9rem 1rem;background:#fafafa">
+        <div style="font-size:.8rem;font-weight:800;color:#0f3d36;margin-bottom:.15rem">📍 Géolocalisation du chantier <span style="font-weight:600;color:#9ca3af">(facultatif)</span></div>
+        <p style="font-size:.76rem;color:#9ca3af;margin:0 0 .6rem">Si renseignée, le pointage mobile hors de ce périmètre déclenche une simple alerte au RH (jamais bloquant).</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem">
+          <div>
+            <label style="font-size:.72rem;font-weight:700;color:#374151">Latitude</label>
+            <input type="text" name="latitude" inputmode="decimal" placeholder="-1.6333"
+              value="{{ site.latitude if site and site.latitude is not none else '' }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.6rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+          </div>
+          <div>
+            <label style="font-size:.72rem;font-weight:700;color:#374151">Longitude</label>
+            <input type="text" name="longitude" inputmode="decimal" placeholder="13.5833"
+              value="{{ site.longitude if site and site.longitude is not none else '' }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.6rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+          </div>
+          <div>
+            <label style="font-size:.72rem;font-weight:700;color:#374151">Rayon (m)</label>
+            <input type="number" name="rayon_m" min="20" step="10" placeholder="200"
+              value="{{ site.rayon_m if site and site.rayon_m else 200 }}"
+              style="width:100%;border:1px solid #e5e7eb;border-radius:.6rem;padding:.5rem;font-size:.85rem;box-sizing:border-box"/>
+          </div>
+        </div>
+      </div>
+
       <div style="display:flex;gap:.75rem;padding-top:.5rem">
         <a href="/sites"
           style="flex:1;text-align:center;border:1px solid #e5e7eb;color:#6b7280;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">

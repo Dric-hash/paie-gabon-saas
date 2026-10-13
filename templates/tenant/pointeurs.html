@@ -1,0 +1,87 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:980px;margin:0 auto;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">Pointeurs de chantier</h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">Codes de connexion de l'application mobile de pointage (chefs de chantier, pointeuses).</p>
+    </div>
+    <a href="{{ url_for('tenant.pointages_mobiles') }}" style="background:#eef4f2;color:#17564c;padding:.6rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700;white-space:nowrap">
+      📥 Pointages à valider{% if nb_soumis %} <span style="background:#E9B043;color:#3a2a00;border-radius:9999px;padding:.05rem .5rem;font-size:.78rem">{{ nb_soumis }}</span>{% endif %}
+    </a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Créer un pointeur -->
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Créer un code pointeur</h3>
+    <form method="POST" action="{{ url_for('tenant.pointeur_nouveau') }}" style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:.6rem;align-items:end">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:#374151">Nom du pointeur *</label>
+        <input name="nom" required placeholder="Ex : Jean — chef chantier Akanda" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;box-sizing:border-box"/>
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:#374151">Chantier</label>
+        <select name="site_id" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;box-sizing:border-box">
+          <option value="">— Tous / non précisé —</option>
+          {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:#374151">PIN</label>
+        <input name="pin" inputmode="numeric" placeholder="auto" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;box-sizing:border-box"/>
+      </div>
+      <button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1.1rem;border-radius:.5rem;font-weight:700;cursor:pointer;white-space:nowrap">Créer</button>
+    </form>
+    <p style="color:#9ca3af;font-size:.78rem;margin:.6rem 0 0">Le code et le PIN s'affichent une seule fois à la création. Le pointeur se connecte sur <strong>{{ request.host_url }}m</strong> avec ce code + PIN.</p>
+  </div>
+
+  <!-- Liste -->
+  {% if liste %}
+  <div style="border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <tr style="background:#f9fafb;text-align:left">
+        <th style="padding:.6rem .9rem">Pointeur</th><th style="padding:.6rem .9rem">Code</th>
+        <th style="padding:.6rem .9rem">Chantier</th><th style="padding:.6rem .9rem">Dernière connexion</th>
+        <th style="padding:.6rem .9rem;text-align:center">Statut</th><th style="padding:.6rem .9rem;text-align:right">Actions</th>
+      </tr>
+      {% for p in liste %}
+      <tr style="border-top:1px solid #f3f4f6{% if not p.actif %};opacity:.55{% endif %}">
+        <td style="padding:.55rem .9rem;font-weight:600">{{ p.nom }}</td>
+        <td style="padding:.55rem .9rem"><span style="font-family:monospace;font-weight:800;letter-spacing:.5px">{{ p.code }}</span></td>
+        <td style="padding:.55rem .9rem;color:#6b7280">{{ p.site.nom if p.site else '—' }}</td>
+        <td style="padding:.55rem .9rem;color:#6b7280">{{ p.derniere_connexion.strftime('%d/%m/%Y %H:%M') if p.derniere_connexion else 'jamais' }}</td>
+        <td style="padding:.55rem .9rem;text-align:center">
+          {% if p.actif %}<span style="font-size:.75rem;background:#e9f6ec;color:#2f7d3c;padding:.15rem .5rem;border-radius:.4rem">Actif</span>
+          {% else %}<span style="font-size:.75rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem">Inactif</span>{% endif %}
+        </td>
+        <td style="padding:.55rem .9rem;text-align:right;white-space:nowrap">
+          <form method="POST" action="{{ url_for('tenant.pointeur_pin', id=p.id) }}" style="display:inline" onsubmit="return confirm('Générer un nouveau PIN pour {{ p.nom }} ?')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="font-size:.72rem;font-weight:600;background:#eef4f2;color:#17564c;padding:.3rem .6rem;border-radius:.4rem;border:none;cursor:pointer">Nouveau PIN</button>
+          </form>
+          <form method="POST" action="{{ url_for('tenant.pointeur_toggle', id=p.id) }}" style="display:inline">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="font-size:.72rem;font-weight:600;background:none;border:1px solid #e5e7eb;color:#6b7280;padding:.3rem .6rem;border-radius:.4rem;cursor:pointer">{{ 'Désactiver' if p.actif else 'Activer' }}</button>
+          </form>
+          <form method="POST" action="{{ url_for('tenant.pointeur_supprimer', id=p.id) }}" style="display:inline" onsubmit="return confirm('Supprimer ce pointeur ? (l''historique des pointages est conservé)')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="font-size:.72rem;font-weight:600;background:none;border:none;color:#b91c1c;padding:.3rem .5rem;cursor:pointer">Suppr.</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:2rem;text-align:center;color:#6b7280">
+    <div style="font-size:2rem">📱</div>
+    <p style="font-size:.9rem;margin:.5rem 0 0">Aucun pointeur. Créez-en un pour qu'un chef de chantier puisse pointer son équipe depuis son téléphone.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

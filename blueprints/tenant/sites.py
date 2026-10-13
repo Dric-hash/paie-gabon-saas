@@ -17,6 +17,26 @@ def sites():
     sites_list = Site.query.filter_by(tenant_id=t.id).order_by(Site.nom).all()
     return render_template("tenant/sites.html", tenant=t, sites=sites_list)
 
+def _appliquer_geo_site(s, form):
+    """Lit latitude/longitude/rayon_m du formulaire (utilisés par l'alerte géo
+    du pointage mobile). Vides = pas de géolocalisation → aucune alerte."""
+    def _f(k):
+        v = (form.get(k) or "").strip().replace(",", ".")
+        if not v:
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
+    s.latitude  = _f("latitude")
+    s.longitude = _f("longitude")
+    r = (form.get("rayon_m") or "").strip()
+    try:
+        s.rayon_m = int(r) if r else 200
+    except ValueError:
+        s.rayon_m = 200
+
+
 @bp.route("/sites/nouveau", methods=["GET","POST"])
 @tenant_required
 def site_nouveau():
@@ -32,6 +52,7 @@ def site_nouveau():
             telephone   = request.form.get("telephone","").strip() or None,
             description = request.form.get("description","").strip() or None,
         )
+        _appliquer_geo_site(s, request.form)
         db.session.add(s)
         db.session.commit()
         flash(f"Site « {s.nom} » créé avec succès.", "success")
@@ -51,6 +72,7 @@ def site_modifier(id):
         s.responsable = request.form.get("responsable","").strip() or None
         s.telephone   = request.form.get("telephone","").strip() or None
         s.description = request.form.get("description","").strip() or None
+        _appliquer_geo_site(s, request.form)
         db.session.commit()
         flash(f"Site « {s.nom} » modifié.", "success")
         return redirect(url_for("tenant.sites"))

@@ -381,12 +381,14 @@ from blueprints.admin  import bp as admin_bp
 from blueprints.tenant import bp as tenant_bp
 from blueprints.api_v1 import bp as api_v1_bp
 from blueprints.prestataires import bp as prestataires_bp
+from blueprints.mobile import bp as mobile_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(admin_bp)
 app.register_blueprint(tenant_bp)
 app.register_blueprint(api_v1_bp)
 app.register_blueprint(prestataires_bp)
+app.register_blueprint(mobile_bp)
 import models_sso
 from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
 app.register_blueprint(sso_bp)
@@ -394,6 +396,7 @@ app.register_blueprint(sso_api_bp)
 csrf.exempt(sso_bp)      # flux SSO /authorize : POST cross-origin, protege par state + client_secret
 csrf.exempt(sso_api_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
+csrf.exempt(mobile_bp)   # PWA pointage : API JSON authentifiée par jeton signé, pas CSRF
 
 # ── Rate limiting de l'API REST ───────────────────────────────────────────────
 # L'API étant exemptée de CSRF, le rate-limit est la principale barrière contre

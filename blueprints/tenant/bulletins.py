@@ -1485,6 +1485,9 @@ def api_pointage_mois(id):
     debut = date(annee, mois, 1)
     fin   = date(annee, mois, dernier_jour)
     pts = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin).all()
+    # Quarantaine : un pointage mobile non validé (SOUMIS/REJETÉ) ne doit pas
+    # alimenter le bulletin tant que le RH ne l'a pas validé.
+    pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
     pts_travailles = [p for p in pts if p.present and not p.absent]
     if not pts_travailles:
         return jsonify({"nb_jours": 0, "nb_absences": 0,
@@ -1522,6 +1525,7 @@ def api_pointage_mois(id):
         detail_semaines = []
     pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
                 Pointage.absent == True).all()
+    pts_absents = [p for p in pts_absents if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
     return jsonify({
         "nb_jours":              nb_jours,
         "nb_absences":           len(pts_absents),

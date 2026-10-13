@@ -193,6 +193,9 @@ def _recap_sites_salarie_periode(t, salarie_id, annee, mois):
            .all())
     agg = {}
     for p in pts:
+        # Pointage mobile non validé : exclu du récap (comme de la paie).
+        if (getattr(p, "statut", None) or "VALIDE") != "VALIDE":
+            continue
         h = (float(p.heures_normales or 0) + float(p.heures_sup or 0)
              + float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0)
              + float(getattr(p, "heures_sup_30b", 0) or 0)
@@ -700,3 +703,4 @@ from blueprints.tenant import paiements  # noqa: E402,F401
 from blueprints.tenant import divers  # noqa: E402,F401
 from blueprints.tenant import mise_a_disposition  # noqa: E402,F401
 from blueprints.tenant import prets  # noqa: E402,F401
+from blueprints.tenant import pointeurs  # noqa: E402,F401

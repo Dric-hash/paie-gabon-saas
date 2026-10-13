@@ -1,0 +1,200 @@
+# -*- coding: utf-8 -*-
+"""Gestion des pointeurs de chantier (codes de connexion de la PWA) et
+validation des pointages mobiles arrivés en quarantaine (statut SOUMIS)."""
+import secrets
+from datetime import datetime, date
+
+from flask import render_template, request, redirect, url_for, flash, abort
+from flask_login import login_required, current_user
+from sqlalchemy.orm import joinedload
+
+from blueprints.tenant import bp
+from core import get_tenant
+from audit import log_action
+from models import db, Site, Salarie, Pointage, PointeurChantier
+
+
+def _pin_aleatoire():
+    """PIN à 4 chiffres (non commençant par 0 pour rester à 4 positions)."""
+    return str(secrets.randbelow(9000) + 1000)
+
+
+# ─────────────────────────── Pointeurs (codes) ────────────────────────────
+
+@bp.route("/pointeurs")
+@login_required
+def pointeurs():
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    liste = (PointeurChantier.query.filter_by(tenant_id=t.id)
+             .options(joinedload(PointeurChantier.site))
+             .order_by(PointeurChantier.actif.desc(), PointeurChantier.nom).all())
+    sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    nb_soumis = Pointage.query.filter_by(tenant_id=t.id, statut="SOUMIS").count()
+    return render_template("tenant/pointeurs.html", tenant=t, liste=liste,
+                           sites=sites, nb_soumis=nb_soumis)
+
+
+@bp.route("/pointeurs/nouveau", methods=["POST"])
+@login_required
+def pointeur_nouveau():
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    nom = (request.form.get("nom") or "").strip()
+    site_id = request.form.get("site_id", type=int)
+    pin = (request.form.get("pin") or "").strip() or _pin_aleatoire()
+    if not nom:
+        flash("Le nom du pointeur est requis.", "error")
+        return redirect(url_for("tenant.pointeurs"))
+    site = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
+    p = PointeurChantier(
+        tenant_id=t.id, site_id=(site.id if site else None), nom=nom,
+        code=PointeurChantier.generer_code(), actif=True,
+        cree_par=getattr(current_user, "email", None),
+    )
+    p.set_pin(pin)
+    db.session.add(p)
+    db.session.commit()
+    log_action("CREATE", "pointeur", p.id, f"Pointeur « {nom} » — code {p.code}")
+    # Le PIN n'est montré qu'ici (il est haché ensuite) : on l'affiche au RH.
+    flash(f"Pointeur créé. Code : {p.code} — PIN : {pin} "
+          f"(notez-les, le PIN ne sera plus affiché).", "success")
+    return redirect(url_for("tenant.pointeurs"))
+
+
+@bp.route("/pointeurs/<int:id>/pin", methods=["POST"])
+@login_required
+def pointeur_pin(id):
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    p = PointeurChantier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    pin = _pin_aleatoire()
+    p.set_pin(pin)
+    db.session.commit()
+    log_action("UPDATE", "pointeur", p.id, "Nouveau PIN généré")
+    flash(f"Nouveau PIN pour « {p.nom} » (code {p.code}) : {pin}", "success")
+    return redirect(url_for("tenant.pointeurs"))
+
+
+@bp.route("/pointeurs/<int:id>/toggle", methods=["POST"])
+@login_required
+def pointeur_toggle(id):
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    p = PointeurChantier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    p.actif = not p.actif
+    db.session.commit()
+    log_action("UPDATE", "pointeur", p.id, "Activé" if p.actif else "Désactivé")
+    flash(f"Pointeur « {p.nom} » {'activé' if p.actif else 'désactivé'}.", "success")
+    return redirect(url_for("tenant.pointeurs"))
+
+
+@bp.route("/pointeurs/<int:id>/supprimer", methods=["POST"])
+@login_required
+def pointeur_supprimer(id):
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    p = PointeurChantier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # On conserve l'historique : les pointages gardent pointeur_id même après
+    # suppression du compte, donc on délie proprement.
+    Pointage.query.filter_by(pointeur_id=p.id).update({"pointeur_id": None})
+    db.session.delete(p)
+    db.session.commit()
+    log_action("DELETE", "pointeur", id, f"Pointeur « {p.nom} » supprimé")
+    flash("Pointeur supprimé.", "success")
+    return redirect(url_for("tenant.pointeurs"))
+
+
+# ─────────────────── Validation des pointages mobiles ─────────────────────
+
+@bp.route("/pointages-mobiles")
+@login_required
+def pointages_mobiles():
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    statut = request.args.get("statut", "SOUMIS")
+    if statut not in ("SOUMIS", "VALIDE", "REJETE"):
+        statut = "SOUMIS"
+    pts = (Pointage.query.filter_by(tenant_id=t.id, source="MOBILE", statut=statut)
+           .options(joinedload(Pointage.salarie), joinedload(Pointage.site))
+           .order_by(Pointage.date_pointage.desc(), Pointage.site_id).all())
+    # Regroupement par (date, site) pour une validation par chantier/jour.
+    groupes = {}
+    for p in pts:
+        cle = (p.date_pointage, p.site.nom if p.site else "—")
+        groupes.setdefault(cle, []).append(p)
+    groupes = [{"date": d, "site": s, "pointages": lst,
+                "nb_hors_zone": sum(1 for x in lst if x.geo_hors_zone)}
+               for (d, s), lst in sorted(groupes.items(), key=lambda kv: (kv[0][0], kv[0][1]), reverse=True)]
+    nb_soumis = Pointage.query.filter_by(tenant_id=t.id, source="MOBILE", statut="SOUMIS").count()
+    return render_template("tenant/pointages_mobiles.html", tenant=t,
+                           groupes=groupes, statut=statut, nb_soumis=nb_soumis)
+
+
+def _ids_cibles(t):
+    ids = [int(i) for i in request.form.getlist("pointage_ids") if str(i).isdigit()]
+    if not ids:
+        return []
+    return (Pointage.query.filter(Pointage.tenant_id == t.id,
+                                  Pointage.id.in_(ids),
+                                  Pointage.source == "MOBILE").all())
+
+
+@bp.route("/pointages-mobiles/valider", methods=["POST"])
+@login_required
+def pointages_mobiles_valider():
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    cibles = _ids_cibles(t)
+    n = 0
+    for p in cibles:
+        if p.statut != "SOUMIS":
+            continue
+        p.statut = "VALIDE"      # entre désormais dans la paie et la facturation
+        n += 1
+    db.session.commit()
+    log_action("VALIDATE", "pointage_mobile", 0, f"{n} pointage(s) mobile(s) validé(s)")
+    flash(f"✅ {n} pointage(s) validé(s) — ils entrent maintenant dans la paie.", "success")
+    return redirect(url_for("tenant.pointages_mobiles"))
+
+
+@bp.route("/pointages-mobiles/rejeter", methods=["POST"])
+@login_required
+def pointages_mobiles_rejeter():
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    if not current_user.can_edit:
+        abort(403)
+    cibles = _ids_cibles(t)
+    n = 0
+    for p in cibles:
+        if p.statut != "SOUMIS":
+            continue
+        p.statut = "REJETE"
+        n += 1
+    db.session.commit()
+    log_action("REJECT", "pointage_mobile", 0, f"{n} pointage(s) mobile(s) rejeté(s)")
+    flash(f"{n} pointage(s) rejeté(s).", "success")
+    return redirect(url_for("tenant.pointages_mobiles"))

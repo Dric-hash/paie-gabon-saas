@@ -68,6 +68,10 @@ def _pointage_reel(tenant_id, salarie_id, annee, mois):
     jours = 0
     heures = 0.0
     for p in pts:
+        # Quarantaine : un pointage mobile non validé (SOUMIS) ou rejeté n'est
+        # jamais facturé. Seuls VALIDE (ou legacy sans statut) comptent.
+        if (getattr(p, "statut", None) or "VALIDE") != "VALIDE":
+            continue
         if getattr(p, "absent", False):
             continue
         if not getattr(p, "present", True):

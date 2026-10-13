@@ -531,6 +531,10 @@ class Site(db.Model):
     description = db.Column(db.Text)
     actif       = db.Column(db.Boolean, default=True)
     date_creation = db.Column(db.DateTime, default=utcnow)
+    # ── Géolocalisation du chantier (pour l'alerte géo du pointage mobile) ──
+    latitude    = db.Column(db.Numeric(9, 6))
+    longitude   = db.Column(db.Numeric(9, 6))
+    rayon_m     = db.Column(db.Integer, default=200)   # rayon de tolérance en mètres
 
     tenant       = db.relationship("Tenant", backref="sites")
     affectations = db.relationship("AffectationSite", backref="site", lazy=True,
@@ -1022,6 +1026,17 @@ class Pointage(db.Model):
     entree_sup      = db.Column(db.String(5))   # ex: "17:00"
     sortie_sup      = db.Column(db.String(5))   # ex: "18:00"
     site_id         = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=True)
+    # ── Pointage mobile (PWA chantier) ────────────────────────────────────────
+    # Les pointages mobiles arrivent en quarantaine (statut SOUMIS) et ne sont
+    # JAMAIS comptés en paie/facturation tant que le RH ne les a pas validés.
+    uuid_client     = db.Column(db.String(36))   # idempotence sync (généré sur le téléphone)
+    source          = db.Column(db.String(10), default="WEB")   # WEB | MOBILE
+    statut          = db.Column(db.String(10), default="VALIDE")  # VALIDE | SOUMIS | REJETE
+    pointeur_id     = db.Column(db.Integer, db.ForeignKey("pointeurs_chantier.id"), nullable=True)
+    latitude        = db.Column(db.Numeric(9, 6))
+    longitude       = db.Column(db.Numeric(9, 6))
+    geo_hors_zone   = db.Column(db.Boolean, default=False)   # alerte RH, jamais bloquant
+    heure_serveur   = db.Column(db.DateTime)   # horodatage serveur de réception (anti-triche)
     salarie = db.relationship("Salarie", backref="pointages", foreign_keys=[salarie_id])
     site    = db.relationship("Site", backref="pointages", foreign_keys=[site_id])
     __table_args__ = (
@@ -2105,3 +2120,46 @@ class RemboursementPret(db.Model):
     note          = db.Column(db.String(200))
     date_remboursement = db.Column(db.Date, default=date.today)
     date_creation = db.Column(db.DateTime, default=utcnow)
+
+
+class PointeurChantier(db.Model):
+    """Compte de pointage léger (sans email) pour un chef de chantier ou une
+    pointeuse. Le RH génère un code court + un PIN et le rattache à un site.
+    L'authentification de la PWA se fait par code + PIN ; aucun mot de passe ni
+    adresse e-mail n'est requis — adapté au personnel de terrain."""
+    __tablename__ = "pointeurs_chantier"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    site_id       = db.Column(db.Integer, db.ForeignKey("sites.id"), nullable=True)
+    nom           = db.Column(db.String(150), nullable=False)   # ex: "Jean (chef de chantier Akanda)"
+    code          = db.Column(db.String(20), nullable=False, unique=True)  # code de connexion (unique global)
+    pin_hash      = db.Column(db.String(256), nullable=False)   # PIN haché
+    actif         = db.Column(db.Boolean, default=True)
+    derniere_connexion = db.Column(db.DateTime)
+    cree_par      = db.Column(db.String(200))
+    date_creation = db.Column(db.DateTime, default=utcnow)
+
+    tenant  = db.relationship("Tenant", backref="pointeurs")
+    site    = db.relationship("Site", backref="pointeurs")
+
+    __table_args__ = (
+        db.Index("idx_pointeurs_tenant", "tenant_id"),
+    )
+
+    def set_pin(self, pin):
+        self.pin_hash = generate_password_hash(str(pin))
+
+    def check_pin(self, pin):
+        return check_password_hash(self.pin_hash, str(pin))
+
+    @staticmethod
+    def generer_code(prefixe="PT"):
+        """Code court lisible, unique : préfixe + 6 caractères alphanumériques
+        sans ambiguïté (sans 0/O/1/I/L)."""
+        alphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+        for _ in range(20):
+            code = prefixe + "".join(secrets.choice(alphabet) for _ in range(6))
+            if not PointeurChantier.query.filter_by(code=code).first():
+                return code
+        # extrêmement improbable : rallonge
+        return prefixe + secrets.token_hex(5).upper()
