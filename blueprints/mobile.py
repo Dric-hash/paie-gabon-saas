@@ -54,34 +54,34 @@ def _pointeur_depuis_token():
 
 
 def _roster(pointeur):
-    """Équipe pointable (pour l'offline) : salariés ET journaliers actifs affectés
-    au site du pointeur, plus le pointeur lui-même s'il est relié à une fiche."""
+    """Données pour l'offline. Pour gérer la permutation (un travailleur change
+    de chantier d'un jour à l'autre), on télécharge TOUS les travailleurs actifs
+    et TOUS les chantiers de l'entreprise, plus la carte des affectations : le
+    mobile affiche par défaut l'équipe du chantier choisi, et peut ajouter
+    n'importe quel autre travailleur présent ce jour-là. La sécurité reste au
+    niveau de l'entreprise."""
     t = pointeur.tenant
     tid = pointeur.tenant_id
 
-    # Salariés
-    qs = Salarie.query.filter_by(tenant_id=tid, statut="ACTIF")
-    qj = Journalier.query.filter_by(tenant_id=tid, statut="ACTIF")
-    if pointeur.site_id:
-        affs = AffectationSite.query.filter_by(tenant_id=tid, site_id=pointeur.site_id, actif=True).all()
-        sal_ids = [a.salarie_id for a in affs if a.salarie_id]
-        jour_ids = [a.journalier_id for a in affs if a.journalier_id]
-        # Le pointeur relié est toujours inclus dans sa propre équipe.
-        if pointeur.salarie_id:
-            sal_ids.append(pointeur.salarie_id)
-        if pointeur.journalier_id:
-            jour_ids.append(pointeur.journalier_id)
-        qs = qs.filter(Salarie.id.in_(sal_ids or [-1]))
-        qj = qj.filter(Journalier.id.in_(jour_ids or [-1]))
-    salaries = qs.order_by(Salarie.nom, Salarie.prenom).all()
-    journaliers = qj.order_by(Journalier.nom, Journalier.prenom).all()
-    site = pointeur.site
+    salaries = Salarie.query.filter_by(tenant_id=tid, statut="ACTIF").order_by(Salarie.nom, Salarie.prenom).all()
+    journaliers = Journalier.query.filter_by(tenant_id=tid, statut="ACTIF").order_by(Journalier.nom, Journalier.prenom).all()
+    sites = Site.query.filter_by(tenant_id=tid, actif=True).order_by(Site.nom).all()
+
+    # Carte des affectations actives : (type,id) → liste de site_ids habituels.
+    aff_map = {}
+    for a in AffectationSite.query.filter_by(tenant_id=tid, actif=True).all():
+        if a.salarie_id:
+            aff_map.setdefault(("S", a.salarie_id), []).append(a.site_id)
+        elif a.journalier_id:
+            aff_map.setdefault(("J", a.journalier_id), []).append(a.site_id)
 
     equipe = [{"type": "S", "id": s.id, "nom": s.nom, "prenom": s.prenom,
                "matricule": s.matricule, "emploi": s.emploi,
+               "site_ids": aff_map.get(("S", s.id), []),
                "est_pointeur": s.id == pointeur.salarie_id} for s in salaries]
     equipe += [{"type": "J", "id": j.id, "nom": j.nom, "prenom": j.prenom,
                 "matricule": None, "emploi": j.profession,
+                "site_ids": aff_map.get(("J", j.id), []),
                 "est_pointeur": j.id == pointeur.journalier_id} for j in journaliers]
     equipe.sort(key=lambda e: (e["nom"] or "", e["prenom"] or ""))
 
@@ -90,12 +90,13 @@ def _roster(pointeur):
                      "type": ("J" if pointeur.journalier_id else ("S" if pointeur.salarie_id else None)),
                      "worker_id": pointeur.journalier_id or pointeur.salarie_id},
         "entreprise": t.denomination if t else "",
-        "site": ({"id": site.id, "nom": site.nom,
-                  "latitude": float(site.latitude) if site.latitude is not None else None,
-                  "longitude": float(site.longitude) if site.longitude is not None else None,
-                  "rayon_m": site.rayon_m or 200} if site else None),
+        "default_site_id": pointeur.site_id,
+        "sites": [{"id": s.id, "nom": s.nom,
+                   "latitude": float(s.latitude) if s.latitude is not None else None,
+                   "longitude": float(s.longitude) if s.longitude is not None else None,
+                   "rayon_m": s.rayon_m or 200} for s in sites],
         "convention": (t.convention if t else None),
-        "salaries": equipe,   # salariés + journaliers, champ 'type' = S|J
+        "salaries": equipe,   # TOUS les travailleurs actifs (champ 'type' S|J, 'site_ids')
         "serveur": utcnow().isoformat(),
     }
 
@@ -182,12 +183,13 @@ def api_sync():
     if not isinstance(items, list):
         return jsonify({"ok": False, "erreur": "Format invalide."}), 400
 
-    # Travailleurs autorisés pour ce pointeur (sécurité : il ne pointe que son
-    # équipe) — distingués par type S (salarié) / J (journalier).
-    equipe = _roster(p)["salaries"]
-    ok_sal = {e["id"] for e in equipe if e["type"] == "S"}
-    ok_jour = {e["id"] for e in equipe if e["type"] == "J"}
-    site = p.site
+    # Travailleurs autorisés = tous les actifs de l'entreprise (permutation :
+    # un travailleur peut être sur n'importe quel chantier un jour donné).
+    r = _roster(p)
+    ok_sal = {e["id"] for e in r["salaries"] if e["type"] == "S"}
+    ok_jour = {e["id"] for e in r["salaries"] if e["type"] == "J"}
+    # Chantiers valides de l'entreprise (le chantier est choisi à chaque pointage).
+    sites_map = {s.id: s for s in Site.query.filter_by(tenant_id=p.tenant_id).all()}
     resultats = []
 
     for it in items:
@@ -213,7 +215,13 @@ def api_sync():
         jour_id = wid if kind == "J" else None
         if (kind == "S" and sal_id not in ok_sal) or (kind == "J" and jour_id not in ok_jour) \
                 or kind not in ("S", "J"):
-            resultats.append({"uuid": uuid, "etat": "erreur", "motif": "travailleur hors équipe"})
+            resultats.append({"uuid": uuid, "etat": "erreur", "motif": "travailleur inconnu"})
+            continue
+        # Chantier du pointage (choisi sur le mobile) ; défaut = chantier du pointeur.
+        site_id = it.get("site_id") or p.site_id
+        site = sites_map.get(site_id)
+        if site_id and site is None:
+            resultats.append({"uuid": uuid, "etat": "erreur", "motif": "chantier inconnu"})
             continue
         try:
             d = datetime.strptime(it.get("date"), "%Y-%m-%d").date()
@@ -250,7 +258,7 @@ def api_sync():
 
         pt = Pointage(
             tenant_id=p.tenant_id, salarie_id=sal_id, journalier_id=jour_id,
-            date_pointage=d, site_id=p.site_id,
+            date_pointage=d, site_id=site_id,
             present=(not absent), absent=absent,
             motif_absence=(it.get("motif_absence") or None) if absent else None,
             heures_normales=_num("heures_normales", 0 if absent else 8),

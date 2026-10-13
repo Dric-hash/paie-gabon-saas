@@ -114,16 +114,28 @@ def _auth(token):
 
 # ─────────────────────────────── Connexion ────────────────────────────────
 
-def test_login_ok_et_roster_limite_au_site(client):
+def test_login_roster_complet_avec_affectations(client):
+    """Le roster contient tous les actifs de l'entreprise (permutation) et la
+    carte des affectations par chantier, avec le chantier par défaut du pointeur."""
     token, data = _login(client)
     assert token
+    with flask_app.app_context():
+        site_akanda = client._ids["site"]
+    # Chantier par défaut = celui du pointeur ; liste des chantiers présente
+    assert data["default_site_id"] == site_akanda
+    assert any(s["id"] == site_akanda for s in data["sites"])
+    # Tous les actifs sont téléchargés (s1, s2, s3 + j1), pour gérer la permutation
     sal = {e["id"] for e in data["salaries"] if e["type"] == "S"}
     jour = {e["id"] for e in data["salaries"] if e["type"] == "J"}
-    # Salariés du chantier Akanda (pas celui d'Owendo) + le journalier affecté
-    assert sal == {client._ids["s1"], client._ids["s2"]}
-    assert jour == {client._ids["j1"]}
-    assert data["site"]["nom"] == "Chantier Akanda"
-    # Le pointeur est relié au salarié s2 → marqué "moi" dans sa propre équipe
+    assert {client._ids["s1"], client._ids["s2"], client._ids["s3"]} <= sal
+    assert client._ids["j1"] in jour
+    # L'équipe habituelle d'Akanda (via site_ids) = s1, s2, j1 ; s3 est sur Owendo
+    by = {(e["type"], e["id"]): e for e in data["salaries"]}
+    assert site_akanda in by[("S", client._ids["s1"])]["site_ids"]
+    assert site_akanda in by[("S", client._ids["s2"])]["site_ids"]
+    assert site_akanda in by[("J", client._ids["j1"])]["site_ids"]
+    assert site_akanda not in by[("S", client._ids["s3"])]["site_ids"]
+    # Le pointeur relié au salarié s2 est marqué "moi"
     moi = [e for e in data["salaries"] if e.get("est_pointeur")]
     assert len(moi) == 1 and moi[0]["id"] == client._ids["s2"]
 
@@ -177,14 +189,38 @@ def test_sync_idempotente_pas_de_doublon(client):
         assert Pointage.query.filter_by(uuid_client="uuid-dup").count() == 1
 
 
-def test_sync_refuse_salarie_hors_equipe(client):
+def test_permutation_pointer_travailleur_autre_chantier(client):
+    """Permutation : un salarié d'un autre chantier (s3/Owendo) peut être pointé
+    sur Akanda ce jour-là ; le pointage enregistre le chantier choisi."""
     token, _ = _login(client)
     r = client.post("/m/api/sync", json={"pointages": [{
-        "uuid": "uuid-hors", "date": "2026-06-10", "salarie_id": client._ids["s3"],
-        "present": True}]}, headers=_auth(token))
+        "uuid": "uuid-perm", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s3"], "site_id": client._ids["site"],
+        "present": True, "heures_normales": 8}]}, headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "cree"
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-perm").first()
+        assert pt.salarie_id == client._ids["s3"]
+        assert pt.site_id == client._ids["site"]   # heures attribuées à Akanda
+
+
+def test_sync_refuse_travailleur_inconnu(client):
+    token, _ = _login(client)
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-x", "date": "2026-06-10", "type": "S",
+        "worker_id": 999999, "present": True}]}, headers=_auth(token))
     assert r.get_json()["resultats"][0]["etat"] == "erreur"
     with flask_app.app_context():
-        assert Pointage.query.filter_by(uuid_client="uuid-hors").count() == 0
+        assert Pointage.query.filter_by(uuid_client="uuid-x").count() == 0
+
+
+def test_sync_refuse_chantier_inconnu(client):
+    token, _ = _login(client)
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-cx", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s1"], "site_id": 999999, "present": True}]},
+        headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "erreur"
 
 
 def test_alerte_geo_hors_zone(client):

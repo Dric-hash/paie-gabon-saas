@@ -77,7 +77,7 @@
     <header>
       <div class="ligne">
         <div>
-          <h1 id="h-site">Chantier</h1>
+          <h1>Pointage chantier</h1>
           <div class="sub" id="h-ent">—</div>
         </div>
         <span class="net off" id="net">hors-ligne</span>
@@ -85,8 +85,12 @@
     </header>
     <main>
       <div class="card">
-        <label>Date du pointage</label>
-        <input type="date" id="in-date"/>
+        <label>Chantier</label>
+        <select id="in-site"></select>
+        <div class="row" style="margin-top:.7rem">
+          <div><label>Date du pointage</label><input type="date" id="in-date"/></div>
+          <div></div>
+        </div>
         <div class="row" style="margin-top:.7rem">
           <div><label>Heures normales (équipe)</label><input id="in-hn" inputmode="decimal" value="8"/></div>
           <div><label>Heures sup. (équipe)</label><input id="in-hs" inputmode="decimal" value="0"/></div>
@@ -96,7 +100,7 @@
 
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
-          <strong style="color:var(--teal)">Équipe</strong>
+          <strong style="color:var(--teal)">Équipe du chantier</strong>
           <span style="font-size:.8rem;color:var(--mute)"><span id="cnt-p">0</span> présents · <span id="cnt-a">0</span> absents</span>
         </div>
         <div style="display:flex;gap:.5rem;margin-bottom:.5rem">
@@ -104,6 +108,11 @@
           <input id="in-rech" placeholder="Rechercher…" style="flex:1"/>
         </div>
         <div id="liste"></div>
+        <button class="btn ghost" style="margin-top:.6rem" id="btn-ajouter">➕ Ajouter un travailleur (permuté)</button>
+        <div id="panel-ajout" class="hidden" style="margin-top:.6rem;border-top:1px solid var(--line);padding-top:.6rem">
+          <input id="in-rech-ajout" placeholder="Rechercher dans toute l'entreprise…"/>
+          <div id="liste-ajout" style="max-height:40vh;overflow:auto;margin-top:.5rem"></div>
+        </div>
       </div>
     </main>
     <div class="foot">
@@ -122,7 +131,9 @@
 const App = (function(){
   "use strict";
   const API = "/m/api";
-  let roster = null, token = null, etat = {};  // etat[salarie_id] = {present, absent, motif, hn, hs}
+  let roster = null, token = null, etat = {};  // etat[wkey] = {present, absent, motif, hn, hs}
+  let selSite = null;              // chantier sélectionné (id)
+  let ajoutes = new Set();         // wkey des travailleurs ajoutés manuellement (permutés)
 
   // ───────── IndexedDB (meta + file de pointages) ─────────
   function db(){
@@ -155,19 +166,29 @@ const App = (function(){
   // Clé composite type+id (un salarié et un journalier peuvent avoir le même id).
   function wkey(s){ return (s.type||"S")+":"+s.id; }
   function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{ etat[wkey(s)]={present:true,absent:false,motif:"",hn:null,hs:null}; }); }
+  // Travailleur visible dans l'équipe du chantier : affecté au chantier choisi,
+  // ou ajouté manuellement (permuté).
+  function dansEquipe(s){
+    if(ajoutes.has(wkey(s))) return true;
+    const ids=s.site_ids||[];
+    if(selSite==null) return ids.length===0;   // pas de chantier choisi : les non-affectés
+    return ids.indexOf(selSite)>=0;
+  }
   function render(){
     const q=($("#in-rech").value||"").toLowerCase();
     const box=$("#liste"); box.innerHTML="";
     let np=0,na=0;
     (roster.salaries||[]).forEach(s=>{
+      if(!dansEquipe(s)) return;
       const k=wkey(s), e=etat[k]; if(!e) return; if(e.present)np++; if(e.absent)na++;
       const nom=(s.nom+" "+(s.prenom||"")).toLowerCase();
       if(q && nom.indexOf(q)<0) return;
       const badge = s.type==="J" ? ' <span style="font-size:.62rem;background:#eef4f2;color:#17564c;padding:.05rem .35rem;border-radius:.3rem;vertical-align:middle">journalier</span>' : '';
       const moi = s.est_pointeur ? ' <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:.05rem .35rem;border-radius:.3rem">moi</span>' : '';
+      const perm = (ajoutes.has(k) && (s.site_ids||[]).indexOf(selSite)<0) ? ' <span style="font-size:.62rem;background:#e0e7ff;color:#3730a3;padding:.05rem .35rem;border-radius:.3rem">permuté</span>' : '';
       const d=document.createElement("div"); d.className="sal";
       d.innerHTML =
-        '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
+        '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+perm+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
           '<div class="motif hidden" data-m="'+k+'"></div></div>'+
         '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
           '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div>';
@@ -190,7 +211,42 @@ const App = (function(){
     });
     $("#in-rech").addEventListener("input",render);
   }
-  function tousPresents(){ Object.keys(etat).forEach(k=>{etat[k].present=true;etat[k].absent=false;}); render(); }
+  function tousPresents(){ (roster.salaries||[]).forEach(s=>{ if(dansEquipe(s)){ const e=etat[wkey(s)]; if(e){e.present=true;e.absent=false;} } }); render(); }
+
+  // ───────── Chantier sélectionné ─────────
+  function remplirSites(){
+    const sel=$("#in-site"); sel.innerHTML="";
+    (roster.sites||[]).forEach(s=>{ const o=document.createElement("option"); o.value=s.id; o.textContent=s.nom; sel.appendChild(o); });
+    if(!(roster.sites||[]).length){ const o=document.createElement("option"); o.value=""; o.textContent="Aucun chantier"; sel.appendChild(o); }
+    selSite = roster.default_site_id || ((roster.sites||[])[0]||{}).id || null;
+    if(selSite!=null) sel.value=selSite;
+    sel.addEventListener("change",()=>{ selSite=parseInt(sel.value)||null; render(); });
+  }
+
+  // ───────── Ajouter un travailleur permuté ─────────
+  function renderAjout(){
+    const q=($("#in-rech-ajout").value||"").toLowerCase();
+    const box=$("#liste-ajout"); box.innerHTML="";
+    (roster.salaries||[]).forEach(s=>{
+      if(dansEquipe(s)) return;                       // déjà dans l'équipe du chantier
+      const nom=(s.nom+" "+(s.prenom||"")).toLowerCase();
+      if(q && nom.indexOf(q)<0) return;
+      const d=document.createElement("div"); d.className="sal";
+      const tj = s.type==="J" ? ' <span style="font-size:.62rem;background:#eef4f2;color:#17564c;padding:.05rem .35rem;border-radius:.3rem">journalier</span>' : '';
+      d.innerHTML='<div class="nom">'+s.nom+' '+(s.prenom||'')+tj+'<small>'+(s.emploi||'')+'</small></div>'+
+        '<button class="btn ghost" style="width:auto;padding:.4rem .8rem" data-add="'+wkey(s)+'">Ajouter</button>';
+      box.appendChild(d);
+    });
+  }
+  function bindAjout(){
+    $("#btn-ajouter").addEventListener("click",()=>{ $("#panel-ajout").classList.toggle("hidden"); renderAjout(); });
+    $("#in-rech-ajout").addEventListener("input",renderAjout);
+    $("#liste-ajout").addEventListener("click",(ev)=>{
+      const k=ev.target.getAttribute("data-add"); if(!k) return;
+      ajoutes.add(k); if(!etat[k]) etat[k]={present:true,absent:false,motif:"",hn:null,hs:null};
+      renderAjout(); render(); toast("Travailleur ajouté au chantier.");
+    });
+  }
 
   // ───────── GPS (une capture par enregistrement) ─────────
   function position(){ return new Promise((res)=>{
@@ -203,14 +259,17 @@ const App = (function(){
   // ───────── Enregistrer le pointage du jour (→ file locale) ─────────
   async function enregistrer(){
     const d=$("#in-date").value; if(!d){ toast("Choisissez une date."); return; }
+    if(selSite==null){ toast("Choisissez un chantier."); return; }
     const hn=parseFloat($("#in-hn").value||"8")||0, hs=parseFloat($("#in-hs").value||"0")||0;
     $("#btn-save").disabled=true; $("#btn-save").textContent="Localisation…";
     const pos=await position();
     let n=0;
+    // On n'enregistre que l'équipe visible du chantier choisi.
     for(const s of (roster.salaries||[])){
+      if(!dansEquipe(s)) continue;
       const e=etat[wkey(s)]; if(!e) continue;
       const item={ uuid:(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+s.type+s.id+"-"+Math.random().toString(16).slice(2))),
-        date:d, type:s.type, worker_id:s.id, present:e.present, absent:e.absent,
+        date:d, site_id:selSite, type:s.type, worker_id:s.id, present:e.present, absent:e.absent,
         motif_absence:e.absent?e.motif:null,
         heures_normales:e.absent?0:(e.hn!=null?e.hn:hn),
         heures_sup_10:e.absent?0:(e.hs!=null?e.hs:hs),
@@ -275,11 +334,11 @@ const App = (function(){
 
   function demarrer(){
     $("#vue-login").classList.add("hidden"); $("#vue-app").classList.remove("hidden");
-    $("#h-site").textContent = (roster.site&&roster.site.nom)?roster.site.nom:"Pointage";
     $("#h-ent").textContent = roster.entreprise||"";
     if(!$("#in-date").value) $("#in-date").value = new Date().toISOString().slice(0,10);
-    initEtat(); render(); majPending(); majReseau();
-    rafraichirRoster().then(()=>{ initEtat(); render(); });
+    ajoutes = new Set();
+    remplirSites(); initEtat(); render(); majPending(); majReseau();
+    rafraichirRoster().then(()=>{ remplirSites(); initEtat(); render(); });
     if(navigator.onLine) sync();
   }
 
@@ -293,7 +352,7 @@ const App = (function(){
     $("#btn-save").addEventListener("click",enregistrer);
     $("#btn-sync").addEventListener("click",sync);
     $("#btn-logout").addEventListener("click",(e)=>{e.preventDefault(); if(confirm("Changer de pointeur ?")) deconnexion();});
-    bindListe();
+    bindListe(); bindAjout();
     token=await idbGet("meta","token"); roster=await idbGet("meta","roster");
     if(token&&roster){ demarrer(); } else { $("#vue-login").classList.remove("hidden"); }
     if("serviceWorker" in navigator){
