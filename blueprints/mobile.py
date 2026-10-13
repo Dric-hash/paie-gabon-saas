@@ -16,8 +16,8 @@ from flask import (Blueprint, request, jsonify, render_template,
                    current_app, send_from_directory)
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 
-from models import (db, utcnow, Tenant, Salarie, Site, AffectationSite,
-                    Pointage, PointeurChantier)
+from models import (db, utcnow, Tenant, Salarie, Journalier, Site,
+                    AffectationSite, Pointage, PointeurChantier)
 
 logger = logging.getLogger("paiegalon")
 
@@ -54,26 +54,48 @@ def _pointeur_depuis_token():
 
 
 def _roster(pointeur):
-    """Équipe pointable : salariés actifs affectés au site du pointeur (pour l'offline)."""
+    """Équipe pointable (pour l'offline) : salariés ET journaliers actifs affectés
+    au site du pointeur, plus le pointeur lui-même s'il est relié à une fiche."""
     t = pointeur.tenant
-    q = Salarie.query.filter_by(tenant_id=pointeur.tenant_id, statut="ACTIF")
+    tid = pointeur.tenant_id
+
+    # Salariés
+    qs = Salarie.query.filter_by(tenant_id=tid, statut="ACTIF")
+    qj = Journalier.query.filter_by(tenant_id=tid, statut="ACTIF")
     if pointeur.site_id:
-        ids = [a.salarie_id for a in AffectationSite.query.filter_by(
-                   tenant_id=pointeur.tenant_id, site_id=pointeur.site_id, actif=True
-               ).filter(AffectationSite.salarie_id.isnot(None)).all()]
-        q = q.filter(Salarie.id.in_(ids or [-1]))
-    salaries = q.order_by(Salarie.nom, Salarie.prenom).all()
+        affs = AffectationSite.query.filter_by(tenant_id=tid, site_id=pointeur.site_id, actif=True).all()
+        sal_ids = [a.salarie_id for a in affs if a.salarie_id]
+        jour_ids = [a.journalier_id for a in affs if a.journalier_id]
+        # Le pointeur relié est toujours inclus dans sa propre équipe.
+        if pointeur.salarie_id:
+            sal_ids.append(pointeur.salarie_id)
+        if pointeur.journalier_id:
+            jour_ids.append(pointeur.journalier_id)
+        qs = qs.filter(Salarie.id.in_(sal_ids or [-1]))
+        qj = qj.filter(Journalier.id.in_(jour_ids or [-1]))
+    salaries = qs.order_by(Salarie.nom, Salarie.prenom).all()
+    journaliers = qj.order_by(Journalier.nom, Journalier.prenom).all()
     site = pointeur.site
+
+    equipe = [{"type": "S", "id": s.id, "nom": s.nom, "prenom": s.prenom,
+               "matricule": s.matricule, "emploi": s.emploi,
+               "est_pointeur": s.id == pointeur.salarie_id} for s in salaries]
+    equipe += [{"type": "J", "id": j.id, "nom": j.nom, "prenom": j.prenom,
+                "matricule": None, "emploi": j.profession,
+                "est_pointeur": j.id == pointeur.journalier_id} for j in journaliers]
+    equipe.sort(key=lambda e: (e["nom"] or "", e["prenom"] or ""))
+
     return {
-        "pointeur": {"id": pointeur.id, "nom": pointeur.nom, "code": pointeur.code},
+        "pointeur": {"id": pointeur.id, "nom": pointeur.nom, "code": pointeur.code,
+                     "type": ("J" if pointeur.journalier_id else ("S" if pointeur.salarie_id else None)),
+                     "worker_id": pointeur.journalier_id or pointeur.salarie_id},
         "entreprise": t.denomination if t else "",
         "site": ({"id": site.id, "nom": site.nom,
                   "latitude": float(site.latitude) if site.latitude is not None else None,
                   "longitude": float(site.longitude) if site.longitude is not None else None,
                   "rayon_m": site.rayon_m or 200} if site else None),
         "convention": (t.convention if t else None),
-        "salaries": [{"id": s.id, "nom": s.nom, "prenom": s.prenom,
-                      "matricule": s.matricule, "emploi": s.emploi} for s in salaries],
+        "salaries": equipe,   # salariés + journaliers, champ 'type' = S|J
         "serveur": utcnow().isoformat(),
     }
 
@@ -160,8 +182,11 @@ def api_sync():
     if not isinstance(items, list):
         return jsonify({"ok": False, "erreur": "Format invalide."}), 400
 
-    # Salariés autorisés pour ce pointeur (sécurité : il ne pointe que son équipe).
-    roster_ids = {s["id"] for s in _roster(p)["salaries"]}
+    # Travailleurs autorisés pour ce pointeur (sécurité : il ne pointe que son
+    # équipe) — distingués par type S (salarié) / J (journalier).
+    equipe = _roster(p)["salaries"]
+    ok_sal = {e["id"] for e in equipe if e["type"] == "S"}
+    ok_jour = {e["id"] for e in equipe if e["type"] == "J"}
     site = p.site
     resultats = []
 
@@ -175,9 +200,20 @@ def api_sync():
         if existant:
             resultats.append({"uuid": uuid, "etat": "doublon", "id": existant.id})
             continue
-        sid = it.get("salarie_id")
-        if sid not in roster_ids:
-            resultats.append({"uuid": uuid, "etat": "erreur", "motif": "salarié hors équipe"})
+
+        # Routage salarié / journalier. On accepte type+worker_id, ou les clés
+        # explicites salarie_id / journalier_id (compatibilité).
+        kind = (it.get("type") or "").upper()
+        wid = it.get("worker_id")
+        if it.get("journalier_id") is not None:
+            kind, wid = "J", it.get("journalier_id")
+        elif it.get("salarie_id") is not None:
+            kind, wid = "S", it.get("salarie_id")
+        sal_id = wid if kind == "S" else None
+        jour_id = wid if kind == "J" else None
+        if (kind == "S" and sal_id not in ok_sal) or (kind == "J" and jour_id not in ok_jour) \
+                or kind not in ("S", "J"):
+            resultats.append({"uuid": uuid, "etat": "erreur", "motif": "travailleur hors équipe"})
             continue
         try:
             d = datetime.strptime(it.get("date"), "%Y-%m-%d").date()
@@ -185,10 +221,12 @@ def api_sync():
             resultats.append({"uuid": uuid, "etat": "erreur", "motif": "date invalide"})
             continue
 
-        # Un seul pointage par salarié/jour (contrainte unique) : si un pointage
-        # web existe déjà ce jour-là, on ne l'écrase pas — on signale le conflit.
-        deja = Pointage.query.filter_by(tenant_id=p.tenant_id, salarie_id=sid,
-                                        date_pointage=d).first()
+        # Un seul pointage par travailleur/jour (contrainte unique) : si un
+        # pointage existe déjà ce jour-là, on ne l'écrase pas — on signale le conflit.
+        if kind == "S":
+            deja = Pointage.query.filter_by(tenant_id=p.tenant_id, salarie_id=sal_id, date_pointage=d).first()
+        else:
+            deja = Pointage.query.filter_by(tenant_id=p.tenant_id, journalier_id=jour_id, date_pointage=d).first()
         if deja:
             resultats.append({"uuid": uuid, "etat": "conflit", "id": deja.id,
                               "motif": "pointage déjà existant ce jour"})
@@ -211,8 +249,8 @@ def api_sync():
                 return defaut
 
         pt = Pointage(
-            tenant_id=p.tenant_id, salarie_id=sid, date_pointage=d,
-            site_id=p.site_id,
+            tenant_id=p.tenant_id, salarie_id=sal_id, journalier_id=jour_id,
+            date_pointage=d, site_id=p.site_id,
             present=(not absent), absent=absent,
             motif_absence=(it.get("motif_absence") or None) if absent else None,
             heures_normales=_num("heures_normales", 0 if absent else 8),

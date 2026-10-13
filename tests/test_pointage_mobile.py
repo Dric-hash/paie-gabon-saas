@@ -21,8 +21,8 @@ import pytest
 from datetime import date
 
 from app import app as flask_app
-from models import (db, Plan, Tenant, Utilisateur, Salarie, Site, AffectationSite,
-                    Pointage, PointeurChantier)
+from models import (db, Plan, Tenant, Utilisateur, Salarie, Journalier, Site,
+                    AffectationSite, Pointage, PointeurChantier)
 
 # Pointage mobile d'un salarié ciblé, hors équipe pour un autre.
 PIN = "4321"
@@ -64,23 +64,30 @@ def client():
                      date_embauche=date(2023, 1, 1), emploi="Chef", statut="ACTIF")
         db.session.add_all([s1, s2, s3])
         db.session.flush()
+        # Un journalier affecté au chantier Akanda
+        j1 = Journalier(tenant_id=t.id, nom="OYONO", prenom="Marc",
+                        profession="Manœuvre", taux_horaire=1500, statut="ACTIF")
+        db.session.add(j1)
+        db.session.flush()
         db.session.add_all([
             AffectationSite(tenant_id=t.id, site_id=site.id, salarie_id=s1.id,
                             date_debut=date(2026, 1, 1), actif=True),
             AffectationSite(tenant_id=t.id, site_id=site.id, salarie_id=s2.id,
                             date_debut=date(2026, 1, 1), actif=True),
+            AffectationSite(tenant_id=t.id, site_id=site.id, journalier_id=j1.id,
+                            date_debut=date(2026, 1, 1), actif=True),
             AffectationSite(tenant_id=t.id, site_id=site2.id, salarie_id=s3.id,
                             date_debut=date(2026, 1, 1), actif=True),
         ])
-        # Pointeur rattaché au chantier Akanda
+        # Pointeur rattaché au chantier Akanda, ET lui-même le salarié s2
         p = PointeurChantier(tenant_id=t.id, site_id=site.id,
-                             nom="Jean — chef Akanda",
+                             nom="Luc — chef Akanda", salarie_id=s2.id,
                              code="PTTEST1", actif=True)
         p.set_pin(PIN)
         db.session.add(p)
         db.session.commit()
         ids = {"tenant": t.id, "admin": admin.id, "site": site.id,
-               "s1": s1.id, "s2": s2.id, "s3": s3.id, "code": p.code}
+               "s1": s1.id, "s2": s2.id, "s3": s3.id, "j1": j1.id, "code": p.code}
         cli = flask_app.test_client()
         # Session RH établie d'emblée (les appels mobiles utilisent le jeton Bearer,
         # pas la session, donc cohabiter avec une session admin est sans effet).
@@ -110,10 +117,15 @@ def _auth(token):
 def test_login_ok_et_roster_limite_au_site(client):
     token, data = _login(client)
     assert token
-    ids = {s["id"] for s in data["salaries"]}
-    # Seuls les 2 salariés du chantier Akanda, pas celui d'Owendo
-    assert ids == {client._ids["s1"], client._ids["s2"]}
+    sal = {e["id"] for e in data["salaries"] if e["type"] == "S"}
+    jour = {e["id"] for e in data["salaries"] if e["type"] == "J"}
+    # Salariés du chantier Akanda (pas celui d'Owendo) + le journalier affecté
+    assert sal == {client._ids["s1"], client._ids["s2"]}
+    assert jour == {client._ids["j1"]}
     assert data["site"]["nom"] == "Chantier Akanda"
+    # Le pointeur est relié au salarié s2 → marqué "moi" dans sa propre équipe
+    moi = [e for e in data["salaries"] if e.get("est_pointeur")]
+    assert len(moi) == 1 and moi[0]["id"] == client._ids["s2"]
 
 
 def test_login_mauvais_pin(client):
@@ -256,6 +268,57 @@ def test_rh_cree_pointeur(client):
     assert r.status_code == 200
     with flask_app.app_context():
         assert PointeurChantier.query.filter_by(nom="Pointeuse Owendo").count() == 1
+
+
+def test_sync_journalier_cree_et_quarantaine(client):
+    """Un journalier du chantier peut être pointé depuis le mobile (type J)."""
+    token, _ = _login(client)
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-jour", "date": "2026-06-10", "type": "J",
+        "worker_id": client._ids["j1"], "present": True, "heures_normales": 8}]},
+        headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "cree"
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-jour").first()
+        assert pt.journalier_id == client._ids["j1"]
+        assert pt.salarie_id is None
+        assert pt.statut == "SOUMIS"       # quarantaine aussi pour les journaliers
+
+
+def test_sync_journalier_hors_equipe_refuse(client):
+    """Un journalier d'id inconnu (ou non affecté) est refusé."""
+    token, _ = _login(client)
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-jx", "date": "2026-06-10", "type": "J",
+        "worker_id": 999999, "present": True}]}, headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "erreur"
+
+
+def test_pointeur_peut_se_pointer_lui_meme(client):
+    """Le pointeur (relié au salarié s2) figure dans son équipe et se pointe."""
+    token, data = _login(client)
+    assert any(e.get("est_pointeur") for e in data["salaries"])
+    r = client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-moi", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s2"], "present": True, "heures_normales": 8}]},
+        headers=_auth(token))
+    assert r.get_json()["resultats"][0]["etat"] == "cree"
+    with flask_app.app_context():
+        assert Pointage.query.filter_by(uuid_client="uuid-moi",
+                                        salarie_id=client._ids["s2"]).count() == 1
+
+
+def test_rh_cree_pointeur_relie_journalier(client):
+    _auth_session(client)
+    client.post("/pointeurs/nouveau", data={
+        "nom": "Pointeur journalier", "site_id": str(client._ids["site"]),
+        "travailleur": "J:%d" % client._ids["j1"], "pin": "1234"},
+        follow_redirects=True)
+    with flask_app.app_context():
+        p = PointeurChantier.query.filter_by(nom="Pointeur journalier").first()
+        assert p is not None
+        assert p.journalier_id == client._ids["j1"]
+        assert p.salarie_id is None
 
 
 def test_rh_page_validation_affiche_soumis(client):

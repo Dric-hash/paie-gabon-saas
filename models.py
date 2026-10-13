@@ -2135,16 +2135,28 @@ class PointeurChantier(db.Model):
     code          = db.Column(db.String(20), nullable=False, unique=True)  # code de connexion (unique global)
     pin_hash      = db.Column(db.String(256), nullable=False)   # PIN haché
     actif         = db.Column(db.Boolean, default=True)
+    # Le pointeur EST souvent lui-même un travailleur du chantier (salarié ou
+    # journalier) : on relie son compte à sa fiche pour qu'il figure dans sa
+    # propre équipe et se pointe lui-même. Un seul des deux est renseigné.
+    salarie_id    = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=True)
+    journalier_id = db.Column(db.Integer, db.ForeignKey("journaliers.id"), nullable=True)
     derniere_connexion = db.Column(db.DateTime)
     cree_par      = db.Column(db.String(200))
     date_creation = db.Column(db.DateTime, default=utcnow)
 
-    tenant  = db.relationship("Tenant", backref="pointeurs")
-    site    = db.relationship("Site", backref="pointeurs")
+    tenant     = db.relationship("Tenant", backref="pointeurs")
+    site       = db.relationship("Site", backref="pointeurs")
+    salarie    = db.relationship("Salarie", foreign_keys=[salarie_id])
+    journalier = db.relationship("Journalier", foreign_keys=[journalier_id])
 
     __table_args__ = (
         db.Index("idx_pointeurs_tenant", "tenant_id"),
     )
+
+    @property
+    def travailleur(self):
+        """Fiche travailleur reliée (salarié ou journalier), ou None."""
+        return self.salarie or self.journalier
 
     def set_pin(self, pin):
         self.pin_hash = generate_password_hash(str(pin))

@@ -152,24 +152,28 @@ const App = (function(){
     n.textContent=on?"en ligne":"hors-ligne"; n.className="net "+(on?"on":"off"); }
 
   // ───────── Rendu de l'équipe ─────────
-  function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{ etat[s.id]={present:true,absent:false,motif:"",hn:null,hs:null}; }); }
+  // Clé composite type+id (un salarié et un journalier peuvent avoir le même id).
+  function wkey(s){ return (s.type||"S")+":"+s.id; }
+  function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{ etat[wkey(s)]={present:true,absent:false,motif:"",hn:null,hs:null}; }); }
   function render(){
     const q=($("#in-rech").value||"").toLowerCase();
     const box=$("#liste"); box.innerHTML="";
     let np=0,na=0;
     (roster.salaries||[]).forEach(s=>{
-      const e=etat[s.id]; if(e.present)np++; if(e.absent)na++;
+      const k=wkey(s), e=etat[k]; if(!e) return; if(e.present)np++; if(e.absent)na++;
       const nom=(s.nom+" "+(s.prenom||"")).toLowerCase();
       if(q && nom.indexOf(q)<0) return;
+      const badge = s.type==="J" ? ' <span style="font-size:.62rem;background:#eef4f2;color:#17564c;padding:.05rem .35rem;border-radius:.3rem;vertical-align:middle">journalier</span>' : '';
+      const moi = s.est_pointeur ? ' <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:.05rem .35rem;border-radius:.3rem">moi</span>' : '';
       const d=document.createElement("div"); d.className="sal";
       d.innerHTML =
-        '<div class="nom">'+s.nom+' '+(s.prenom||'')+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
-          '<div class="motif hidden" data-m="'+s.id+'"></div></div>'+
-        '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+s.id+'">Présent</button>'+
-          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+s.id+'">Absent</button></div>';
+        '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
+          '<div class="motif hidden" data-m="'+k+'"></div></div>'+
+        '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
+          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div>';
       box.appendChild(d);
-      if(e.absent){ const m=d.querySelector('[data-m="'+s.id+'"]'); m.classList.remove("hidden");
-        m.innerHTML='<select data-motif="'+s.id+'" style="margin-top:.4rem">'+
+      if(e.absent){ const m=d.querySelector('[data-m="'+k+'"]'); m.classList.remove("hidden");
+        m.innerHTML='<select data-motif="'+k+'" style="margin-top:.4rem">'+
           ['Congé','Maladie','Absence non justifiée','Permission','Repos'].map(x=>'<option'+(e.motif===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'; }
     });
     $("#cnt-p").textContent=np; $("#cnt-a").textContent=na;
@@ -204,9 +208,9 @@ const App = (function(){
     const pos=await position();
     let n=0;
     for(const s of (roster.salaries||[])){
-      const e=etat[s.id];
-      const item={ uuid:(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+s.id+"-"+Math.random().toString(16).slice(2))),
-        date:d, salarie_id:s.id, present:e.present, absent:e.absent,
+      const e=etat[wkey(s)]; if(!e) continue;
+      const item={ uuid:(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+s.type+s.id+"-"+Math.random().toString(16).slice(2))),
+        date:d, type:s.type, worker_id:s.id, present:e.present, absent:e.absent,
         motif_absence:e.absent?e.motif:null,
         heures_normales:e.absent?0:(e.hn!=null?e.hn:hn),
         heures_sup_10:e.absent?0:(e.hs!=null?e.hs:hs),

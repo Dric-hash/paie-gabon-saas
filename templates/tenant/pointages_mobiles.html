@@ -47,9 +47,10 @@
         <th style="padding:.4rem .9rem">Heures</th><th style="padding:.4rem .9rem">Géo</th>
       </tr>
       {% for p in g.pointages %}
+      {% set trav = p.salarie or p.journalier %}
       <tr style="border-top:1px solid #f3f4f6">
         {% if statut=='SOUMIS' %}<td style="padding:.45rem .9rem"><input class="ck" type="checkbox" name="pointage_ids" value="{{ p.id }}" checked/></td>{% endif %}
-        <td style="padding:.45rem .9rem;font-weight:600">{{ p.salarie.nom }} {{ p.salarie.prenom }}<div style="font-size:.72rem;color:#9ca3af;font-weight:400">{{ p.salarie.matricule or '' }}</div></td>
+        <td style="padding:.45rem .9rem;font-weight:600">{{ trav.nom if trav else '—' }} {{ trav.prenom if trav else '' }}<div style="font-size:.72rem;color:#9ca3af;font-weight:400">{% if p.journalier_id %}journalier{% else %}{{ p.salarie.matricule or '' if p.salarie else '' }}{% endif %}</div></td>
         <td style="padding:.45rem .9rem">{% if p.absent %}<span style="color:#b91c1c">Absent{% if p.motif_absence %} · {{ p.motif_absence }}{% endif %}</span>{% else %}<span style="color:#2f7d3c">Présent</span>{% endif %}</td>
         <td style="padding:.45rem .9rem;color:#6b7280">
           {% if not p.absent %}{{ '%g'% (p.heures_normales|float) }}h{% set hs = (p.heures_sup_10|float)+(p.heures_sup_30|float)+(p.heures_sup_40|float)+(p.heures_sup_70|float) %}{% if hs %} <span style="color:#b45309">+{{ '%g'% hs }}h sup</span>{% endif %}{% else %}—{% endif %}

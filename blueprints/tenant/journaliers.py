@@ -737,6 +737,7 @@ def journaliers_paie_generer():
         else:
             pts = Pointage.query.filter_by(tenant_id=t.id, journalier_id=j.id)                  .filter(Pointage.date_pointage>=date_debut, Pointage.date_pointage<=date_fin,
                           Pointage.present==True).all()
+            pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
             h_norm   = sum(float(p.heures_normales or 0) for p in pts)
             h_sup    = sum(float(p.heures_sup or 0) for p in pts)
             total_h  = h_norm + h_sup
@@ -792,6 +793,7 @@ def journaliers_paie_generer_mois():
             Pointage.date_pointage >= date_debut,
             Pointage.date_pointage <= date_fin,
             Pointage.present == True).all()
+        pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
         total_h  = sum(float(p.heures_normales or 0) + float(p.heures_sup or 0) for p in pts)
         h_norm   = sum(float(p.heures_normales or 0) for p in pts)
         h_sup    = sum(float(p.heures_sup or 0) for p in pts)
@@ -1933,6 +1935,7 @@ def journalier_pointages_imprimer(id):
            .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin)
            .options(joinedload(Pointage.site))
            .order_by(Pointage.date_pointage).all())
+    pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
     # Les journaliers ne relèvent pas de la ventilation conventionnelle BTP :
     # on cumule directement les colonnes pointées.
     ctx = _pointages_mois_contexte(t, pts, convention=None)

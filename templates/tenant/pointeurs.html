@@ -18,7 +18,7 @@
   <!-- Créer un pointeur -->
   <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
     <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .75rem">Créer un code pointeur</h3>
-    <form method="POST" action="{{ url_for('tenant.pointeur_nouveau') }}" style="display:grid;grid-template-columns:2fr 1.5fr 1fr auto;gap:.6rem;align-items:end">
+    <form method="POST" action="{{ url_for('tenant.pointeur_nouveau') }}" style="display:grid;grid-template-columns:1.6fr 1.2fr 1.6fr .8fr auto;gap:.6rem;align-items:end">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div>
         <label style="font-size:.78rem;font-weight:700;color:#374151">Nom du pointeur *</label>
@@ -29,6 +29,14 @@
         <select name="site_id" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;box-sizing:border-box">
           <option value="">— Tous / non précisé —</option>
           {% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.78rem;font-weight:700;color:#374151">Est le travailleur <span style="font-weight:500;color:#9ca3af">(il se pointe lui-même)</span></label>
+        <select name="travailleur" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;box-sizing:border-box">
+          <option value="">— Non précisé —</option>
+          {% if salaries %}<optgroup label="Salariés">{% for s in salaries %}<option value="S:{{ s.id }}">{{ s.nom }} {{ s.prenom }}</option>{% endfor %}</optgroup>{% endif %}
+          {% if journaliers %}<optgroup label="Journaliers">{% for j in journaliers %}<option value="J:{{ j.id }}">{{ j.nom }} {{ j.prenom }}</option>{% endfor %}</optgroup>{% endif %}
         </select>
       </div>
       <div>
@@ -51,7 +59,9 @@
       </tr>
       {% for p in liste %}
       <tr style="border-top:1px solid #f3f4f6{% if not p.actif %};opacity:.55{% endif %}">
-        <td style="padding:.55rem .9rem;font-weight:600">{{ p.nom }}</td>
+        <td style="padding:.55rem .9rem;font-weight:600">{{ p.nom }}
+          {% if p.travailleur %}<div style="font-size:.72rem;font-weight:400;color:#17564c">↳ {{ p.travailleur.nom }} {{ p.travailleur.prenom }}{% if p.journalier_id %} (journalier){% endif %}</div>{% endif %}
+        </td>
         <td style="padding:.55rem .9rem"><span style="font-family:monospace;font-weight:800;letter-spacing:.5px">{{ p.code }}</span></td>
         <td style="padding:.55rem .9rem;color:#6b7280">{{ p.site.nom if p.site else '—' }}</td>
         <td style="padding:.55rem .9rem;color:#6b7280">{{ p.derniere_connexion.strftime('%d/%m/%Y %H:%M') if p.derniere_connexion else 'jamais' }}</td>

@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS pointeurs_chantier (
 );
 CREATE INDEX IF NOT EXISTS idx_pointeurs_tenant ON pointeurs_chantier(tenant_id);
 
+-- Lien du pointeur vers sa propre fiche travailleur (salarié OU journalier),
+-- pour qu'il figure dans son équipe et se pointe lui-même.
+ALTER TABLE pointeurs_chantier ADD COLUMN IF NOT EXISTS salarie_id    INTEGER REFERENCES salaries(id);
+ALTER TABLE pointeurs_chantier ADD COLUMN IF NOT EXISTS journalier_id INTEGER REFERENCES journaliers(id);
+
 -- FK pointeur sur pointages (ajoutée après création de la table pointeurs)
 DO $$
 BEGIN

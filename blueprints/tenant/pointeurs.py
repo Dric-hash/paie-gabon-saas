@@ -11,7 +11,7 @@ from sqlalchemy.orm import joinedload
 from blueprints.tenant import bp
 from core import get_tenant
 from audit import log_action
-from models import db, Site, Salarie, Pointage, PointeurChantier
+from models import db, Site, Salarie, Journalier, Pointage, PointeurChantier
 
 
 def _pin_aleatoire():
@@ -33,9 +33,12 @@ def pointeurs():
              .options(joinedload(PointeurChantier.site))
              .order_by(PointeurChantier.actif.desc(), PointeurChantier.nom).all())
     sites = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
+    salaries = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
+    journaliers = Journalier.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Journalier.nom).all()
     nb_soumis = Pointage.query.filter_by(tenant_id=t.id, statut="SOUMIS").count()
     return render_template("tenant/pointeurs.html", tenant=t, liste=liste,
-                           sites=sites, nb_soumis=nb_soumis)
+                           sites=sites, salaries=salaries, journaliers=journaliers,
+                           nb_soumis=nb_soumis)
 
 
 @bp.route("/pointeurs/nouveau", methods=["POST"])
@@ -53,9 +56,20 @@ def pointeur_nouveau():
         flash("Le nom du pointeur est requis.", "error")
         return redirect(url_for("tenant.pointeurs"))
     site = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
+    # Travailleur relié : valeur "S:<id>" ou "J:<id>" (le pointeur est lui-même
+    # un salarié ou un journalier du chantier).
+    sal_id = jour_id = None
+    trav = (request.form.get("travailleur") or "").strip()
+    if trav.startswith("S:"):
+        _s = Salarie.query.filter_by(id=int(trav[2:]), tenant_id=t.id).first() if trav[2:].isdigit() else None
+        sal_id = _s.id if _s else None
+    elif trav.startswith("J:"):
+        _j = Journalier.query.filter_by(id=int(trav[2:]), tenant_id=t.id).first() if trav[2:].isdigit() else None
+        jour_id = _j.id if _j else None
     p = PointeurChantier(
         tenant_id=t.id, site_id=(site.id if site else None), nom=nom,
         code=PointeurChantier.generer_code(), actif=True,
+        salarie_id=sal_id, journalier_id=jour_id,
         cree_par=getattr(current_user, "email", None),
     )
     p.set_pin(pin)
@@ -134,7 +148,8 @@ def pointages_mobiles():
     if statut not in ("SOUMIS", "VALIDE", "REJETE"):
         statut = "SOUMIS"
     pts = (Pointage.query.filter_by(tenant_id=t.id, source="MOBILE", statut=statut)
-           .options(joinedload(Pointage.salarie), joinedload(Pointage.site))
+           .options(joinedload(Pointage.salarie), joinedload(Pointage.journalier),
+                    joinedload(Pointage.site))
            .order_by(Pointage.date_pointage.desc(), Pointage.site_id).all())
     # Regroupement par (date, site) pour une validation par chantier/jour.
     groupes = {}
