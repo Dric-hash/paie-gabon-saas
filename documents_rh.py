@@ -1043,8 +1043,12 @@ def generer_feuille_presence_pdf(tenant, site, date_p, pointages, feuille) -> by
             heures = "—"
         else:
             pres = "Présent"
-            hs = (float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0)
-                  + float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0))
+            if p.journalier_id:
+                hs = float(p.heures_sup or 0)            # journalier : H.sup simple
+            else:
+                hs = (float(p.heures_sup_10 or 0) + float(p.heures_sup_30 or 0)
+                      + float(getattr(p, "heures_sup_30b", 0) or 0)
+                      + float(p.heures_sup_40 or 0) + float(p.heures_sup_70 or 0))
             heures = f"{float(p.heures_normales or 0):g} h" + (f" +{hs:g} sup" if hs else "")
         sig = _signature_img(getattr(p, "signature", None)) or Paragraph("", S["corps"])
         data.append([str(i), nom, typ, pres, heures, sig])

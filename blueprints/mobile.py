@@ -81,6 +81,7 @@ def _roster(pointeur):
                "est_pointeur": s.id == pointeur.salarie_id} for s in salaries]
     equipe += [{"type": "J", "id": j.id, "nom": j.nom, "prenom": j.prenom,
                 "matricule": None, "emploi": j.profession,
+                "taux_horaire": float(j.taux_horaire or 0),
                 "site_ids": aff_map.get(("J", j.id), []),
                 "est_pointeur": j.id == pointeur.journalier_id} for j in journaliers]
     equipe.sort(key=lambda e: (e["nom"] or "", e["prenom"] or ""))
@@ -257,14 +258,25 @@ def api_sync():
             except (TypeError, ValueError):
                 return defaut
 
+        # Structure des heures sup selon le type (mêmes champs que le pointage web) :
+        #  - Salarié  : ventilées +10/+30/+30b/+40/+70
+        #  - Journalier : une seule H. sup (sans majoration) → heures_sup
+        hn = 0 if absent else _num("heures_normales", 8)
+        if kind == "J":
+            h = dict(heures_sup=0 if absent else _num("heures_sup"))
+        else:
+            h = dict(
+                heures_sup_10=0 if absent else _num("heures_sup_10"),
+                heures_sup_30=0 if absent else _num("heures_sup_30"),
+                heures_sup_30b=0 if absent else _num("heures_sup_30b"),
+                heures_sup_40=0 if absent else _num("heures_sup_40"),
+                heures_sup_70=0 if absent else _num("heures_sup_70"))
         pt = Pointage(
             tenant_id=p.tenant_id, salarie_id=sal_id, journalier_id=jour_id,
             date_pointage=d, site_id=site_id,
             present=(not absent), absent=absent,
             motif_absence=(it.get("motif_absence") or None) if absent else None,
-            heures_normales=_num("heures_normales", 0 if absent else 8),
-            heures_sup_10=_num("heures_sup_10"), heures_sup_30=_num("heures_sup_30"),
-            heures_sup_40=_num("heures_sup_40"), heures_sup_70=_num("heures_sup_70"),
+            heures_normales=hn, **h,
             entree_matin=(it.get("entree_matin") or None),
             sortie_matin=(it.get("sortie_matin") or None),
             entree_apmidi=(it.get("entree_apmidi") or None),

@@ -392,6 +392,36 @@ def test_feuille_presence_pdf(client):
     assert r.data[:4] == b"%PDF"
 
 
+def test_structure_heures_salarie(client):
+    """Salarié : les heures sup sont ventilées (+10/+30/+30b/+40/+70)."""
+    token, _ = _login(client)
+    client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-hsal", "date": "2026-06-10", "type": "S",
+        "worker_id": client._ids["s1"], "site_id": client._ids["site"], "present": True,
+        "heures_normales": 8, "heures_sup_10": 1, "heures_sup_30": 2,
+        "heures_sup_30b": 0.5, "heures_sup_40": 1.5, "heures_sup_70": 1}]},
+        headers=_auth(token))
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-hsal").first()
+        assert float(pt.heures_sup_10) == 1 and float(pt.heures_sup_30) == 2
+        assert float(pt.heures_sup_30b) == 0.5 and float(pt.heures_sup_40) == 1.5
+        assert float(pt.heures_sup_70) == 1
+        assert float(pt.heures_sup or 0) == 0   # pas de H.sup « simple » pour un salarié
+
+
+def test_structure_heures_journalier(client):
+    """Journalier : une seule H.sup (sans majoration) → champ heures_sup."""
+    token, _ = _login(client)
+    client.post("/m/api/sync", json={"pointages": [{
+        "uuid": "uuid-hjour", "date": "2026-06-10", "type": "J",
+        "worker_id": client._ids["j1"], "site_id": client._ids["site"], "present": True,
+        "heures_normales": 8, "heures_sup": 3}]}, headers=_auth(token))
+    with flask_app.app_context():
+        pt = Pointage.query.filter_by(uuid_client="uuid-hjour").first()
+        assert float(pt.heures_sup) == 3
+        assert float(pt.heures_sup_10 or 0) == 0   # pas de ventilation pour un journalier
+
+
 def test_rh_page_validation_affiche_soumis(client):
     token, _ = _login(client)
     client.post("/m/api/sync", json={"pointages": [{

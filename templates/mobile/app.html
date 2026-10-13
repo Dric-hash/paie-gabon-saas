@@ -102,9 +102,9 @@
         </div>
         <div class="row" style="margin-top:.7rem">
           <div><label>Heures normales (équipe)</label><input id="in-hn" inputmode="decimal" value="8"/></div>
-          <div><label>Heures sup. (équipe)</label><input id="in-hs" inputmode="decimal" value="0"/></div>
+          <div></div>
         </div>
-        <p style="font-size:.74rem;color:var(--mute);margin:.5rem 0 0">Valeurs appliquées à tous les présents. Ajustables par salarié plus bas si besoin.</p>
+        <p style="font-size:.74rem;color:var(--mute);margin:.5rem 0 0">Heures normales appliquées à tous les présents. Les heures supplémentaires se saisissent par personne (bouton « heures »), selon le type.</p>
       </div>
 
       <div class="card">
@@ -195,7 +195,10 @@ const App = (function(){
   // ───────── Rendu de l'équipe ─────────
   // Clé composite type+id (un salarié et un journalier peuvent avoir le même id).
   function wkey(s){ return (s.type||"S")+":"+s.id; }
-  function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{ etat[wkey(s)]={present:true,absent:false,motif:"",hn:null,hs:null}; }); }
+  function initEtat(){ etat={}; (roster.salaries||[]).forEach(s=>{
+    etat[wkey(s)]={present:true,absent:false,motif:"",hn:null,
+      s10:0,s30:0,s30b:0,s40:0,s70:0,sj:0, signature:null, open:false}; }); }
+  const MOTIFS=["MALADIE","CONGE","AUTORISATION","SANS_MOTIF"];
   // Travailleur visible dans l'équipe du chantier : affecté au chantier choisi,
   // ou ajouté manuellement (permuté).
   function dansEquipe(s){
@@ -217,31 +220,61 @@ const App = (function(){
       const badge = s.type==="J" ? ' <span style="font-size:.62rem;background:#eef4f2;color:#17564c;padding:.05rem .35rem;border-radius:.3rem;vertical-align:middle">journalier</span>' : '';
       const moi = s.est_pointeur ? ' <span style="font-size:.62rem;background:#fef3c7;color:#92400e;padding:.05rem .35rem;border-radius:.3rem">moi</span>' : '';
       const perm = (ajoutes.has(k) && (s.site_ids||[]).indexOf(selSite)<0) ? ' <span style="font-size:.62rem;background:#e0e7ff;color:#3730a3;padding:.05rem .35rem;border-radius:.3rem">permuté</span>' : '';
-      const d=document.createElement("div"); d.className="sal";
+      const d=document.createElement("div"); d.className="sal"; d.style.flexWrap="wrap";
       d.innerHTML =
-        '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+perm+'<small>'+(s.emploi||s.matricule||'')+'</small>'+
-          '<div class="motif hidden" data-m="'+k+'"></div></div>'+
+        '<div class="nom">'+s.nom+' '+(s.prenom||'')+badge+moi+perm+'<small>'+(s.emploi||s.matricule||'')+'</small></div>'+
         '<div style="display:flex;gap:.35rem;align-items:center">'+
           '<button class="sig-btn'+(e.signature?' ok':'')+'" data-sig="'+k+'" title="Signature du travailleur">✍️</button>'+
+          '<button class="sig-btn" data-open="'+k+'" title="Heures / motif">⚙ heures</button>'+
           '<div class="seg"><button class="p '+(e.present?'actif':'')+'" data-p="'+k+'">Présent</button>'+
-          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div></div>';
+          '<button class="a '+(e.absent?'actif':'')+'" data-a="'+k+'">Absent</button></div></div>'+
+        '<div class="detail" data-det="'+k+'" style="flex-basis:100%;margin-top:.5rem;'+(e.open?'':'display:none')+'"></div>';
       box.appendChild(d);
-      if(e.absent){ const m=d.querySelector('[data-m="'+k+'"]'); m.classList.remove("hidden");
-        m.innerHTML='<select data-motif="'+k+'" style="margin-top:.4rem">'+
-          ['Congé','Maladie','Absence non justifiée','Permission','Repos'].map(x=>'<option'+(e.motif===x?' selected':'')+'>'+x+'</option>').join('')+'</select>'; }
+      if(e.open) d.querySelector('[data-det="'+k+'"]').innerHTML = detailHTML(s,k,e);
     });
     $("#cnt-p").textContent=np; $("#cnt-a").textContent=na;
   }
 
+  // Panneau de détail d'une ligne : heures (structure selon le type) ou motif.
+  function detailHTML(s,k,e){
+    const tn = parseFloat($("#in-hn").value||"8")||0;
+    const hn = (e.hn!=null?e.hn:tn);
+    if(e.absent){
+      return '<label style="font-size:.72rem;font-weight:700;color:#374151">Motif d\'absence</label>'+
+        '<select data-fld="motif" data-k="'+k+'" style="margin-top:.2rem">'+
+        '<option value=""'+(!e.motif?' selected':'')+'>— Motif —</option>'+
+        MOTIFS.map(x=>'<option'+(e.motif===x?' selected':'')+'>'+x+'</option>').join('')+'</select>';
+    }
+    const champ=(lbl,fld,val,col)=>'<div><label style="font-size:.6rem;font-weight:700;display:block;text-align:center;color:'+(col||'#6b7280')+'">'+lbl+'</label>'+
+      '<input inputmode="decimal" data-fld="'+fld+'" data-k="'+k+'" value="'+val+'" style="padding:.4rem;text-align:center"/></div>';
+    let html='<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:.3rem">'+champ("Normales","hn",hn);
+    if(s.type==="J"){
+      html+=champ("H. sup","sj",e.sj||0);
+      html+='</div><div style="font-size:.72rem;color:#059669;font-weight:800;margin-top:.35rem;text-align:right">Gain du jour : '+
+        fcfa((hn+(parseFloat(e.sj||0)||0))*(s.taux_horaire||0))+'</div>';
+    } else {
+      html+=champ("+10%","s10",e.s10||0,"#f59e0b")+champ("+30%","s30",e.s30||0,"#f97316")+
+            champ("+30b","s30b",e.s30b||0,"#ea580c")+champ("+40%","s40",e.s40||0,"#dc2626")+
+            champ("+70%","s70",e.s70||0,"#7c3aed")+'</div>';
+    }
+    return html;
+  }
+  function fcfa(n){ return (Math.round(n)||0).toLocaleString("fr-FR").replace(/ |,/g," ")+" F"; }
+
   function bindListe(){
     $("#liste").addEventListener("click",(ev)=>{
-      const p=ev.target.getAttribute("data-p"), a=ev.target.getAttribute("data-a"), sg=ev.target.getAttribute("data-sig");
+      const p=ev.target.getAttribute("data-p"), a=ev.target.getAttribute("data-a"),
+            sg=ev.target.getAttribute("data-sig"), op=ev.target.getAttribute("data-open");
       if(p){ etat[p].present=true; etat[p].absent=false; render(); }
-      if(a){ etat[a].present=false; etat[a].absent=true; if(!etat[a].motif)etat[a].motif="Congé"; render(); }
+      if(a){ etat[a].present=false; etat[a].absent=true; render(); }
+      if(op){ etat[op].open=!etat[op].open; render(); }
       if(sg){ const nom=sg; ouvrirSignature("Signature du travailleur",(url)=>{ etat[nom].signature=url; render(); }); }
     });
     $("#liste").addEventListener("change",(ev)=>{
-      const m=ev.target.getAttribute("data-motif"); if(m) etat[m].motif=ev.target.value;
+      const fld=ev.target.getAttribute("data-fld"), k=ev.target.getAttribute("data-k");
+      if(!fld||!k) return;
+      if(fld==="motif"){ etat[k].motif=ev.target.value; }
+      else { let v=parseFloat((ev.target.value||"0").replace(",",".")); if(isNaN(v))v=0; etat[k][fld]=v; }
     });
     $("#in-rech").addEventListener("input",render);
     document.querySelectorAll(".filtres button").forEach(b=>b.addEventListener("click",()=>{
@@ -335,21 +368,27 @@ const App = (function(){
     const d=$("#in-date").value; if(!d){ toast("Choisissez une date."); return; }
     if(selSite==null){ toast("Choisissez un chantier."); return; }
     if(!signatureChef){ toast("Le chef doit signer la feuille avant d'enregistrer."); return; }
-    const hn=parseFloat($("#in-hn").value||"8")||0, hs=parseFloat($("#in-hs").value||"0")||0;
+    const tn=parseFloat($("#in-hn").value||"8")||0;
     $("#btn-save").disabled=true; $("#btn-save").textContent="Localisation…";
     const pos=await position();
     let n=0;
-    // On n'enregistre que l'équipe visible du chantier choisi.
+    // On n'enregistre que l'équipe visible du chantier choisi. Structure des
+    // heures selon le type (comme le pointage web) : salarié = 4 taux HS, journalier = H.sup simple.
     for(const s of (roster.salaries||[])){
       if(!dansEquipe(s)) continue;
       const e=etat[wkey(s)]; if(!e) continue;
+      const hn = e.absent?0:(e.hn!=null?e.hn:tn);
       const item={ uuid:(crypto.randomUUID?crypto.randomUUID():(Date.now()+"-"+s.type+s.id+"-"+Math.random().toString(16).slice(2))),
         date:d, site_id:selSite, type:s.type, worker_id:s.id, present:e.present, absent:e.absent,
-        motif_absence:e.absent?e.motif:null,
-        heures_normales:e.absent?0:(e.hn!=null?e.hn:hn),
-        heures_sup_10:e.absent?0:(e.hs!=null?e.hs:hs),
+        motif_absence:e.absent?(e.motif||null):null,
+        heures_normales:hn,
         signature:e.signature||null, signature_chef:signatureChef,
         latitude:pos.latitude!=null?pos.latitude:null, longitude:pos.longitude!=null?pos.longitude:null };
+      if(!e.absent){
+        if(s.type==="J"){ item.heures_sup = e.sj||0; }
+        else { item.heures_sup_10=e.s10||0; item.heures_sup_30=e.s30||0; item.heures_sup_30b=e.s30b||0;
+               item.heures_sup_40=e.s40||0; item.heures_sup_70=e.s70||0; }
+      }
       await idbSet("queue",null,item); n++;
     }
     $("#btn-save").disabled=false; $("#btn-save").textContent="Enregistrer le pointage";
