@@ -2260,3 +2260,41 @@ class EvenementCarriere(db.Model):
     @property
     def icone(self):
         return self.ICONES.get(self.type, "•")
+
+
+class PalierMedaille(db.Model):
+    """Palier de la médaille du travail (distinction nationale, Gabon).
+
+    Paramétrable par entreprise : chaque tenant dispose de ses propres paliers.
+    Les valeurs par défaut reprennent la Loi N° 021/2010 du 27/07/2010
+    (modifiant le Code du Travail), art. 11 : bronze 10 ans, argent 20 ans,
+    or 30 ans — pour un service continu dans la même entreprise. Le tenant peut
+    ajuster les seuils, renommer ou désactiver un palier si un décret
+    d'application vient préciser les conditions.
+    """
+    __tablename__ = "paliers_medaille"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    code           = db.Column(db.String(30), nullable=False)   # BRONZE / ARGENT / OR / ...
+    libelle        = db.Column(db.String(100), nullable=False)   # "Médaille de bronze"
+    annees_requises = db.Column(db.Integer, nullable=False)      # ancienneté continue requise
+    ordre          = db.Column(db.Integer, default=0)            # tri d'affichage
+    actif          = db.Column(db.Boolean, default=True)
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "code", name="uq_palier_medaille_tenant_code"),
+        db.Index("idx_paliers_medaille_tenant", "tenant_id", "actif"),
+    )
+
+    # Valeurs par défaut (Loi N° 021/2010, art. 11). Pastille pour l'affichage.
+    DEFAUTS = [
+        {"code": "BRONZE", "libelle": "Médaille de bronze", "annees_requises": 10, "ordre": 1},
+        {"code": "ARGENT", "libelle": "Médaille d'argent",  "annees_requises": 20, "ordre": 2},
+        {"code": "OR",     "libelle": "Médaille d'or",       "annees_requises": 30, "ordre": 3},
+    ]
+    ICONES = {"BRONZE": "🥉", "ARGENT": "🥈", "OR": "🥇"}
+
+    @property
+    def icone(self):
+        return self.ICONES.get((self.code or "").upper(), "🏅")

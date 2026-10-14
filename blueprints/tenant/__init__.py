@@ -705,3 +705,4 @@ from blueprints.tenant import mise_a_disposition  # noqa: E402,F401
 from blueprints.tenant import prets  # noqa: E402,F401
 from blueprints.tenant import pointeurs  # noqa: E402,F401
 from blueprints.tenant import carriere  # noqa: E402,F401
+from blueprints.tenant import medailles  # noqa: E402,F401

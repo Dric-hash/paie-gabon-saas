@@ -224,6 +224,9 @@
       <a href="/prets" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'pret' in ep else 'text-white/80 hover:bg-white/10' }}">
         💳 <span>{{ "Prêts" if lang == "fr" else "Loans" }}</span>
       </a>
+      <a href="/medailles" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'medaille' in ep else 'text-white/80 hover:bg-white/10' }}">
+        🏅 <span>{{ "Médailles du travail" if lang == "fr" else "Work medals" }}</span>
+      </a>
       <div class="border-t border-white/10 my-2"></div>
       <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">{{ "Terrain" if lang == "fr" else "Field" }}</p>
       <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">

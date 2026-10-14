@@ -1,0 +1,112 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:1.5rem">
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">🏅 Médaille du travail</h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">
+        Distinction nationale récompensant l'ancienneté (service continu dans l'entreprise).
+      </p>
+    </div>
+    <a href="{{ url_for('tenant.medailles_parametres') }}" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">⚙️ Paramétrer les seuils</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Rappel des paliers actifs -->
+  <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.5rem">
+    {% for p in paliers if p.actif %}
+    <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.7rem;padding:.6rem .9rem;font-size:.85rem">
+      <span style="font-size:1.1rem">{{ p.icone }}</span>
+      <strong style="color:#0f3d36"> {{ p.libelle }}</strong>
+      <span style="color:#6b7280"> — {{ p.annees_requises }} ans</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Salariés éligibles -->
+  <h2 style="font-size:1.1rem;font-weight:800;color:#0f3d36;margin:0 0 .6rem">Salariés éligibles
+    <span style="background:#d99e0b;color:#0f3d36;border-radius:9999px;padding:.05rem .55rem;font-size:.8rem;margin-left:.3rem">{{ eligibles|length }}</span>
+  </h2>
+  {% if eligibles %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden;margin-bottom:2rem">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead><tr style="background:#f9fafb;text-align:left;color:#6b7280">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem">Ancienneté</th>
+        <th style="padding:.6rem .9rem">Médaille</th>
+        <th style="padding:.6rem .9rem;text-align:right">Action</th>
+      </tr></thead>
+      <tbody>
+      {% for e in eligibles %}
+        <tr style="border-top:1px solid #f0f0f0">
+          <td style="padding:.6rem .9rem">
+            <a href="{{ url_for('tenant.carriere', id=e.salarie.id) }}" style="color:#0f3d36;font-weight:700;text-decoration:none">{{ e.salarie.nom_complet }}</a>
+            <div style="color:#9ca3af;font-size:.78rem">{{ e.salarie.matricule }}{% if e.salarie.emploi %} · {{ e.salarie.emploi }}{% endif %}</div>
+          </td>
+          <td style="padding:.6rem .9rem">{{ e.anciennete_ans }} ans</td>
+          <td style="padding:.6rem .9rem">{{ e.palier.icone }} {{ e.palier.libelle }} <span style="color:#9ca3af">({{ e.palier.annees_requises }} ans)</span></td>
+          <td style="padding:.6rem .9rem;text-align:right">
+            <form method="POST" action="{{ url_for('tenant.medailles_attribuer', salarie_id=e.salarie.id, palier_id=e.palier.id) }}" style="display:inline"
+                  onsubmit="return confirm('Attribuer la {{ e.palier.libelle }} à {{ e.salarie.nom_complet }} ?')">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+              <input type="hidden" name="date_effet" value="{{ now.strftime('%Y-%m-%d') }}"/>
+              <button style="background:#0f3d36;color:#fff;border:none;padding:.45rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer">Attribuer</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:1.5rem;text-align:center;color:#6b7280;margin-bottom:2rem">
+    <p style="font-size:.9rem;margin:0">Aucun salarié éligible à une nouvelle médaille pour l'instant.</p>
+  </div>
+  {% endif %}
+
+  <!-- Historique des attributions -->
+  <h2 style="font-size:1.1rem;font-weight:800;color:#0f3d36;margin:0 0 .6rem">Médailles décernées
+    <span style="background:#eef4f2;color:#17564c;border-radius:9999px;padding:.05rem .55rem;font-size:.8rem;margin-left:.3rem">{{ historique|length }}</span>
+  </h2>
+  {% if historique %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead><tr style="background:#f9fafb;text-align:left;color:#6b7280">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem">Médaille</th>
+        <th style="padding:.6rem .9rem">Date d'effet</th>
+        <th style="padding:.6rem .9rem;text-align:right">Attestation</th>
+      </tr></thead>
+      <tbody>
+      {% set MOIS = ['','janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'] %}
+      {% for h in historique %}
+        <tr style="border-top:1px solid #f0f0f0">
+          <td style="padding:.6rem .9rem">
+            {% if h.salarie %}<a href="{{ url_for('tenant.carriere', id=h.salarie.id) }}" style="color:#0f3d36;font-weight:700;text-decoration:none">{{ h.salarie.nom_complet }}</a>{% else %}—{% endif %}
+          </td>
+          <td style="padding:.6rem .9rem">🏅 {{ h.palier_libelle }}</td>
+          <td style="padding:.6rem .9rem">{% if h.evt.date_effet %}{{ h.evt.date_effet.day }} {{ MOIS[h.evt.date_effet.month] }} {{ h.evt.date_effet.year }}{% endif %}</td>
+          <td style="padding:.6rem .9rem;text-align:right">
+            <a href="{{ url_for('tenant.medailles_attestation', id=h.evt.id) }}" target="_blank" style="color:#17564c;font-weight:700;text-decoration:none">📄 Éditer</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:1.5rem;text-align:center;color:#6b7280">
+    <p style="font-size:.9rem;margin:0">Aucune médaille décernée pour l'instant.</p>
+  </div>
+  {% endif %}
+
+  <p style="color:#9ca3af;font-size:.76rem;margin-top:1.5rem">
+    Seuils par défaut : Loi N° 021/2010 du 27/07/2010 (art. 11) — bronze 10 ans, argent 20 ans, or 30 ans,
+    pour un service continu dans la même entreprise. Modifiables dans « Paramétrer les seuils ».
+  </p>
+</div>
+{% endblock %}

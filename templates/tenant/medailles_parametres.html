@@ -1,0 +1,71 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:760px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.medailles') }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Médailles</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.3rem 0 .25rem">Paramétrer la médaille du travail</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 1rem">
+    Ajustez les seuils d'ancienneté de chaque échelon. Valeurs par défaut : Loi N° 021/2010 (art. 11).
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div style="background:#eef4f2;border:1px solid #d9e6e2;border-radius:.7rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.84rem;color:#17564c">
+    ℹ️ L'ancienneté est calculée en service continu depuis la date d'embauche dans l'entreprise.
+    Un palier désactivé n'apparaît plus dans les éligibilités ni dans les alertes.
+  </div>
+
+  <!-- Paliers existants -->
+  <form method="POST" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem;margin-bottom:1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="action" value="maj"/>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead><tr style="text-align:left;color:#6b7280">
+        <th style="padding:.4rem .5rem"></th>
+        <th style="padding:.4rem .5rem">Libellé</th>
+        <th style="padding:.4rem .5rem;width:130px">Années requises</th>
+        <th style="padding:.4rem .5rem;width:70px;text-align:center">Actif</th>
+      </tr></thead>
+      <tbody>
+      {% for p in paliers %}
+        <tr style="border-top:1px solid #f0f0f0">
+          <td style="padding:.5rem .5rem;font-size:1.3rem">{{ p.icone }}</td>
+          <td style="padding:.5rem .5rem">
+            <input name="libelle_{{ p.id }}" value="{{ p.libelle }}" style="width:100%;padding:.45rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+            <div style="color:#9ca3af;font-size:.72rem;margin-top:.15rem">Code : {{ p.code }}</div>
+          </td>
+          <td style="padding:.5rem .5rem">
+            <input name="annees_{{ p.id }}" type="number" min="1" value="{{ p.annees_requises }}" style="width:100%;padding:.45rem;border:1px solid #d1d5db;border-radius:.5rem"/>
+          </td>
+          <td style="padding:.5rem .5rem;text-align:center">
+            <input type="checkbox" name="actif_{{ p.id }}" value="1" {% if p.actif %}checked{% endif %} style="width:1.1rem;height:1.1rem"/>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-top:1rem;display:flex;justify-content:flex-end">
+      <button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1.3rem;border-radius:.6rem;font-weight:800;cursor:pointer">Enregistrer</button>
+    </div>
+  </form>
+
+  <!-- Ajouter un palier -->
+  <form method="POST" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="action" value="ajouter"/>
+    <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .6rem">Ajouter un palier</h3>
+    <div style="display:grid;grid-template-columns:1fr 2fr 1fr;gap:.6rem">
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Code</label>
+        <input name="code" placeholder="GRAND_OR" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Libellé</label>
+        <input name="libelle" placeholder="Médaille grand or" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Années</label>
+        <input name="annees_requises" type="number" min="1" placeholder="35" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+    </div>
+    <div style="margin-top:.8rem;display:flex;justify-content:flex-end">
+      <button style="background:#eef4f2;color:#17564c;border:none;padding:.55rem 1.1rem;border-radius:.6rem;font-weight:700;cursor:pointer">+ Ajouter</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

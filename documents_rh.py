@@ -1117,3 +1117,37 @@ def generer_attestation_carriere_pdf(tenant, salarie, evt) -> bytes:
         "valoir ce que de droit.", corps))
     el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
     return _build(el)
+
+
+def generer_attestation_medaille_pdf(tenant, salarie, evt, palier=None) -> bytes:
+    """Attestation d'attribution de la médaille du travail (distinction
+    nationale — Loi N° 021/2010), sur papier à en-tête, signée par la direction."""
+    S = _styles()
+    nom = (salarie.nom_complet if salarie and hasattr(salarie, "nom_complet")
+           else (f"{salarie.nom} {salarie.prenom}" if salarie else ""))
+    echelon = evt.titre or "Médaille du travail"
+    el = _entete(tenant, S)
+    el.append(Paragraph("ATTESTATION — MÉDAILLE DU TRAVAIL", S["titre"]))
+    el.append(Paragraph("Distinction nationale (Loi N° 021/2010 du 27/07/2010)", S["soustitre"]))
+    corps = ParagraphStyle("corps_med", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=16, spaceAfter=8)
+    el.append(Paragraph(
+        f"Nous, soussignés {tenant.denomination or ''}, attestons par la présente que "
+        f"<b>{nom}</b>"
+        + (f", matricule {salarie.matricule}" if getattr(salarie, "matricule", None) else "")
+        + (f", embauché(e) le <b>{_date_fr(salarie.date_embauche)}</b>"
+           if getattr(salarie, "date_embauche", None) else "")
+        + f", s'est vu décerner la <b>{echelon}</b>, avec effet au "
+        f"<b>{_date_fr(evt.date_effet)}</b>.", corps))
+    if palier is not None:
+        el.append(Paragraph(
+            f"Cette distinction récompense un service continu dans l'entreprise d'au moins "
+            f"<b>{palier.annees_requises} ans</b>, conformément aux seuils en vigueur.", corps))
+    if getattr(evt, "details", None):
+        el.append(Paragraph(f"Précisions : {evt.details}".replace("\n", "<br/>"), corps))
+    el.append(Spacer(1, 8))
+    el.append(Paragraph(
+        "La présente attestation est délivrée à l'intéressé(e) pour servir et valoir "
+        "ce que de droit.", corps))
+    el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
+    return _build(el)

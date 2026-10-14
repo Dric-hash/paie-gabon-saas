@@ -282,6 +282,39 @@ def dashboard():
             "msg":"Certains salariés ont accumulé 24 jours ou plus de congés non pris. Pensez à planifier leurs congés.",
             "lien":"/conges","lien_texte":"Voir les congés"})
 
+    # ── Médaille du travail : salariés éligibles non encore décorés ───────────
+    try:
+        from blueprints.tenant.medailles import _ensure_paliers_defaut, medailles_eligibles
+        _ensure_paliers_defaut(t)
+        _elig = medailles_eligibles(t)
+        if _elig:
+            _ex = ", ".join(e["salarie"].nom_complet for e in _elig[:3])
+            if len(_elig) > 3:
+                _ex += f" et {len(_elig)-3} autre(s)"
+            alertes.append({"type":"info","icone":"🏅",
+                "titre":f"{len(_elig)} salarié(s) éligible(s) à une médaille du travail",
+                "msg":f"{_ex}. Vous pouvez attribuer la distinction et éditer l'attestation.",
+                "lien":"/medailles","lien_texte":"Voir les médailles"})
+    except Exception as _e:
+        logger.warning(f"[Alertes médaille] indisponible : {_e}")
+
+    # ── Anniversaires d'ancienneté ce mois ────────────────────────────────────
+    _anniv = []
+    for s in Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").filter(
+            Salarie.date_embauche.isnot(None)).all():
+        de = s.date_embauche
+        if de and de.month == now.month and de.year < now.year:
+            _anniv.append((s, now.year - de.year))
+    if _anniv:
+        _anniv.sort(key=lambda x: -x[1])
+        _ex = ", ".join(f"{s.nom_complet} ({n} an{'s' if n>1 else ''})" for s, n in _anniv[:3])
+        if len(_anniv) > 3:
+            _ex += f" et {len(_anniv)-3} autre(s)"
+        alertes.append({"type":"info","icone":"🎂",
+            "titre":f"{len(_anniv)} anniversaire(s) d'ancienneté ce mois",
+            "msg":f"{_ex}.",
+            "lien":"/salaries","lien_texte":"Voir les salariés"})
+
     # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
     exp_date = t.date_expiration
     jours_restants = (exp_date.date() - now.date()).days if exp_date else None
