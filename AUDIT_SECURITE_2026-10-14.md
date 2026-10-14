@@ -26,7 +26,7 @@ Le socle reste sérieux (SQL paramétré, CSRF, en-têtes de sécurité, `SECRET
 | M1 | `blueprints/tenant.py` (10 742 lignes) : code mort masqué par le package `blueprints/tenant/` | Maintenance | ✅ Supprimé |
 | R1 | Webhook Airtel accepté sans signature si secret absent et environnement non marqué « production » | 🟡 Config | ✅ Supprimé (API inutilisée) |
 | R2 | Le super-admin peut supprimer un bulletin VALIDÉ | Gouvernance | ⚠️ Décision à prendre |
-| R3 | Taux d'acquisition des congés unifié sur la constante du code (2,5 j/mois) | Réglementaire | ⚠️ À valider |
+| R3 | Taux d'acquisition des congés : 2,5 j/mois appliqué par défaut au lieu de 2 j (Art. 222) | 🟠 Moyenne (paie) | ✅ Corrigé + migration |
 
 ---
 
@@ -81,7 +81,7 @@ Le webhook sautait le contrôle de montant si le montant vérifié était absent
 
 **R2 — Suppression d'un bulletin validé par le super-admin.** Possible aujourd'hui (support). Un bulletin validé est un document officiel numéroté : à garder, journaliser davantage, ou interdire — ta décision.
 
-**R3 — Taux d'acquisition des congés.** Le code définit `JOURS_PAR_MOIS = 2.5` (30 j/an) dans `conges_avance.py`, utilisé par le bilan et le solde de tout compte ; la création de congé utilisait 2,0 en dur. J'ai unifié sur la constante du code **sans trancher la règle légale** : merci de valider la valeur au regard du Code du travail gabonais (et de la convention applicable).
+**R3 — Taux d'acquisition des congés → corrigé.** Art. 222 (Loi n° 022/2021, vérifié au Journal Officiel) : **2 jours ouvrables par mois** de service effectif, **2,5 jours pour les moins de 18 ans**, sauf contrat plus favorable. L'application appliquait 2,5 j par défaut à tous (paramètre non modifiable), ce qui gonflait les jours acquis et l'indemnité compensatrice de congés au départ (~+25 %). Correctif : calcul unique `conges_avance.taux_acquisition()` (taux de l'entreprise, plancher légal 2,0, 2,5 pour les < 18 ans) utilisé par le bilan, les soldes et le solde de tout compte ; champ « Congés payés acquis par mois » dans Paramètres (2,0 à 2,5) ; migration unique `migration_conges_taux_legal.sql` (toutes les entreprises à 2,0 sauf Hydrocarbures à 2,5, Art. 42 de la convention). Bug annexe corrigé : la page Congés plantait pour un salarié né un 29 février.
 
 **Données existantes.** `migrations/diagnostic_audit_2026_10.sql` (lecture seule, validé sur PostgreSQL 16) liste : congés aux jours erronés, demandes ayant hérité de jours, **bulletins du mois concerné** (allocation de congé possiblement gonflée), bulletins payés sans numéro, références croisées, noms piégés. Aucune correction automatique : chaque cas touche l'historique de paie.
 

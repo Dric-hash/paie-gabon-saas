@@ -216,6 +216,26 @@
               admise : 40 à 48 h. <em>Appliqué à la ventilation hebdomadaire (convention BTP).</em>
             </p>
           </div>
+
+          <!-- Taux d'acquisition des congés payés (Art. 222) -->
+          <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid #f3f4f6">
+            <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">
+              Congés payés acquis par mois
+            </label>
+            <div style="display:flex;align-items:center;gap:.5rem">
+              <input type="number" name="jours_conge_par_mois"
+                     min="2" max="2.5" step="0.5"
+                     value="{{ '%g'|format((tenant.jours_conge_par_mois or 2)|float) }}"
+                     style="width:7rem;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem;box-sizing:border-box;background:white"/>
+              <span style="font-size:.875rem;color:#374151;font-weight:600">jours ouvrables / mois</span>
+            </div>
+            <p style="font-size:.7rem;color:#9ca3af;margin-top:.375rem">
+              Code du travail, art. 222 : <strong>2 jours</strong> par mois de service effectif
+              (24 j/an). Saisissez <strong>2,5</strong> (30 j/an) seulement si un contrat ou votre
+              convention collective est plus favorable. Les salariés de <strong>moins de 18 ans</strong>
+              bénéficient automatiquement de 2,5 jours.
+            </p>
+          </div>
           <!-- Champs cachés pour ne pas écraser les autres infos -->
           <input type="hidden" name="denomination" value="{{ tenant.denomination or '' }}"/>
           <input type="hidden" name="sigle" value="{{ tenant.sigle or '' }}"/>

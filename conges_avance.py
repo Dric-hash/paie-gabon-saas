@@ -8,8 +8,10 @@ Fonctionnalités :
   4. Planning des absences (données pour affichage calendrier)
 
 Règles légales gabonaises (Code du Travail) :
-  - 2,5 jours ouvrables de congé par mois de travail effectif
-  - Maximum 30 jours ouvrables par an (12 mois × 2,5)
+  - 2 jours ouvrables de congé par mois de service effectif (Art. 222) ;
+    2,5 jours pour les moins de 18 ans ; taux contractuel plus favorable
+    possible (paramètre de l'entreprise)
+  - Maximum 30 jours ouvrables par an
   - Période de référence : 1er juin → 31 mai (N→N+1)
   - Indemnité compensatrice = (salaire brut / 26 jours ouvrables) × jours non pris
   - Ancienneté > 5 ans : +1 jour / an supplémentaire (max +5j)
@@ -21,7 +23,13 @@ import math
 
 
 # ── Constantes légales Gabon ──────────────────────────────────────────────────
-JOURS_PAR_MOIS          = 2.5    # jours ouvrables / mois travaillé
+# Code du travail, Loi n° 022/2021 du 19/11/2021, Art. 222 : « Sauf dispositions
+# contractuelles plus favorables, […] deux (2) jours ouvrables par mois de service
+# effectif. Les travailleurs âgés de moins de dix-huit (18) ans ont droit à deux
+# jours et demi (2,5) ouvrables. »
+JOURS_PAR_MOIS          = 2.0    # minimum légal adulte (jours ouvrables / mois)
+JOURS_PAR_MOIS_MINEUR   = 2.5    # moins de 18 ans
+AGE_MINEUR              = 18
 JOURS_MAX_PAR_AN        = 30.0   # plafond annuel
 JOURS_ANCIENNETE_PALIER1 = 5     # ans → +1 jour/an jusqu'à 5 ans
 JOURS_ANCIENNETE_PALIER2 = 10    # ans → +1 jour/an au-delà
@@ -116,6 +124,34 @@ def _bonus_conge_enfants(salarie) -> int:
         return 0
 
 
+def taux_acquisition(tenant=None, salarie=None, date_ref=None, taux_mensuel=None):
+    """Taux d'acquisition des congés (jours ouvrables / mois), Art. 222.
+
+    Taux de l'entreprise (taux contractuel/conventionnel, jamais sous le minimum
+    légal de 2 j), porté à 2,5 j pour un salarié de moins de 18 ans à date_ref.
+    Point d'entrée UNIQUE : bilan, soldes, solde de tout compte."""
+    base = taux_mensuel
+    if base is None and tenant is None and salarie is not None:
+        tenant = getattr(salarie, "tenant", None)
+    if base is None and tenant is not None:
+        base = getattr(tenant, "jours_conge_par_mois", None)
+    try:
+        base = float(base) if base is not None else JOURS_PAR_MOIS
+    except (TypeError, ValueError):
+        base = JOURS_PAR_MOIS
+    base = max(base, JOURS_PAR_MOIS)   # jamais sous le minimum légal
+    naissance = getattr(salarie, "date_naissance", None) if salarie is not None else None
+    if naissance:
+        ref = date_ref or date.today()
+        try:
+            age = ref.year - naissance.year - ((ref.month, ref.day) < (naissance.month, naissance.day))
+            if age < AGE_MINEUR:
+                base = max(base, JOURS_PAR_MOIS_MINEUR)
+        except (TypeError, ValueError, AttributeError):
+            pass
+    return base
+
+
 def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None,
                           salarie=None, taux_mensuel=None, convention=None) -> dict:
     """
@@ -162,16 +198,9 @@ def calculer_jours_acquis(date_embauche, date_ref=None, annee_ref=None,
     delta_jours   = (fin_effectif - debut_effectif).days + 1
     mois_travailles = delta_jours / 30.4375  # 365.25 / 12
 
-    # Taux mensuel d'acquisition (Art. 222). Défaut historique : 2,5 j/mois.
-    # Les moins de 18 ans ont droit à 2,5 j/mois au minimum (Art. 222).
-    taux = float(taux_mensuel) if taux_mensuel else JOURS_PAR_MOIS
-    if salarie is not None and getattr(salarie, "date_naissance", None):
-        try:
-            age = (date_ref - salarie.date_naissance).days // 365
-            if age < 18:
-                taux = max(taux, 2.5)
-        except (TypeError, ValueError):
-            pass
+    # Taux mensuel d'acquisition (Art. 222) : taux de l'entreprise (2 j minimum),
+    # 2,5 j pour les moins de 18 ans.
+    taux = taux_acquisition(salarie=salarie, date_ref=date_ref, taux_mensuel=taux_mensuel)
 
     # Jours acquis sur la période
     jours_periode = round(min(mois_travailles * taux, JOURS_MAX_PAR_AN), 1)
@@ -427,7 +456,8 @@ def bilan_conges_tenant(salaries, annee=None) -> list:
         if s.statut != "ACTIF" or not s.date_embauche:
             continue
 
-        calc    = calculer_jours_acquis(s.date_embauche, convention=getattr(s.tenant, "convention", None))
+        calc    = calculer_jours_acquis(s.date_embauche, salarie=s,
+                                        convention=getattr(s.tenant, "convention", None))
         acquis  = calc["jours_acquis_total"]
 
         # Jours pris cette année

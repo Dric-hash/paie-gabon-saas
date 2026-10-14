@@ -223,21 +223,16 @@ def conges():
     q     = request.args.get("q", "")
 
     # ── Calcul du solde — Code du Travail gabonais ───────────────────────────
-    # Art. 213 : 2 j/mois pour ≥ 18 ans | 2,5 j/mois pour < 18 ans
+    # Art. 222 : 2 j/mois (≥ 18 ans) | 2,5 j/mois (< 18 ans) | taux contractuel plus favorable
     # Allocation = max(Σ bruts 12 mois, dernier brut×12) / 288 × jours acquis
     # Exclusion : prime de transport (Art. 213 al. 3)
 
-    def age_au_31_dec(salarie, annee_ref):
-        """Âge du salarié au 31 décembre de l'année de référence."""
-        if not salarie.date_naissance:
-            return 99  # inconnu → adulte par défaut
-        return annee_ref - salarie.date_naissance.year - (
-            1 if salarie.date_naissance.replace(year=annee_ref) > datetime(annee_ref,12,31).date() else 0
-        )
-
     def taux_conge(salarie, annee_ref):
-        """2.5 j/mois si < 18 ans, sinon 2 j/mois."""
-        return 2.5 if age_au_31_dec(salarie, annee_ref) < 18 else 2.0
+        """Taux de l'entreprise (2 j/mois minimum légal, Art. 222), porté à
+        2,5 j/mois pour un salarié de moins de 18 ans au 31/12 de l'année."""
+        from conges_avance import taux_acquisition
+        return taux_acquisition(tenant=t, salarie=salarie,
+                                date_ref=date(annee_ref, 12, 31))
 
     def calculer_solde_auto(salarie, annee_ref):
         """Jours acquis proratisés selon le taux applicable."""
@@ -387,15 +382,16 @@ def _jours_demande(dep, ret):
 
 
 def _solde_annuel(t, salarie, annee):
-    """Ligne de solde annuel (créée au besoin). Taux d'acquisition : la constante
-    légale unique du logiciel (conges_avance.JOURS_PAR_MOIS)."""
-    from conges_avance import JOURS_PAR_MOIS
+    """Ligne de solde annuel (créée au besoin). Taux d'acquisition : le calcul
+    unique du logiciel (conges_avance.taux_acquisition, Art. 222)."""
+    from conges_avance import taux_acquisition
     solde = (Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie.id, annee=annee)
              .filter(Conge.date_depart.is_(None)).first())
     if not solde:
         mois = max(1, (date.today() - salarie.date_embauche).days // 30) if salarie.date_embauche else 12
         solde = Conge(tenant_id=t.id, salarie_id=salarie.id, annee=annee,
-                      jours_acquis=round(min(mois, 12) * JOURS_PAR_MOIS, 1),
+                      jours_acquis=round(min(mois, 12) * taux_acquisition(
+                          tenant=t, salarie=salarie, date_ref=date(annee, 12, 31)), 1),
                       jours_pris=0, statut="SOLDE")
         db.session.add(solde)
     elif solde.statut in (None, "DEMANDÉ", "DEMANDE"):

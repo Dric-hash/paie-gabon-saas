@@ -316,6 +316,16 @@ def parametres_societe():
             t.seuil_heures_sup_hebdo = max(40.0, min(seuil, 48.0))
         except (ValueError, TypeError):
             flash("Seuil d'heures supplémentaires invalide — valeur inchangée.", "error")
+    # Taux d'acquisition des congés (Art. 222) : 2 j/mois minimum légal ; un
+    # contrat ou une convention plus favorable peut le relever (plafond 2,5 =
+    # 30 j/an). Les moins de 18 ans ont toujours 2,5, quel que soit ce réglage.
+    taux_raw = request.form.get("jours_conge_par_mois")
+    if taux_raw is not None and str(taux_raw).strip() != "":
+        try:
+            taux = float(str(taux_raw).replace(",", "."))
+            t.jours_conge_par_mois = max(2.0, min(taux, 2.5))
+        except (ValueError, TypeError):
+            flash("Taux d'acquisition des congés invalide — valeur inchangée.", "error")
     # Langue de l'interface — idem, seulement si le champ est soumis.
     langue = request.form.get("langue")
     if langue is not None and langue in SUPPORTED_LANGUAGES:

@@ -96,9 +96,11 @@ class Tenant(db.Model):
     # Grille de salaires conventionnelle (JSON) : {"EI": {"1": 101526, ...}, ...}.
     # Éditée et VÉRIFIÉE par le tenant ; sert au pré-remplissage du salaire de base.
     grille_salaires  = db.Column(db.Text)
-    # Taux d'acquisition des congés (jours ouvrables / mois travaillé, Art. 222).
-    # Minimum légal adulte = 2.0 ; défaut historique de l'app = 2.5 (avantage).
-    jours_conge_par_mois = db.Column(db.Numeric(3, 1), default=2.5)
+    # Taux d'acquisition des congés (jours ouvrables / mois, Art. 222 Loi 022/2021).
+    # Défaut = minimum légal adulte 2,0. Une entreprise au contrat/à la convention
+    # plus favorable le relève dans Paramètres (Hydrocarbures : 2,5, Art. 42).
+    # Les moins de 18 ans ont toujours 2,5 (calculé, pas stocké ici).
+    jours_conge_par_mois = db.Column(db.Numeric(3, 1), default=2.0)
     # Quotité cessible : % du salaire au-delà duquel on alerte (acompte + prêt). Indicatif.
     quotite_cessible_pct = db.Column(db.Numeric(5, 2), default=50)
     # Seuil hebdomadaire de déclenchement des heures supplémentaires (en heures).

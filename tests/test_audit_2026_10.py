@@ -384,3 +384,63 @@ def test_paiement_manuel_toujours_fonctionnel(env):
         p = Paiement.query.filter_by(tenant_id=env["ta"]).one()
         assert p.statut == "EN_ATTENTE" and p.reference_externe == "VIR-0001"
         assert db.session.get(Tenant, env["ta"]).statut == "PAIEMENT_EN_ATTENTE"
+
+
+# ── 9. Congés : taux légal d'acquisition (Art. 222, Loi 022/2021) ──────────────
+
+class _T:   # entreprise minimale
+    def __init__(self, taux): self.jours_conge_par_mois = taux
+
+
+class _S:   # salarié minimal
+    def __init__(self, naissance, tenant=None): self.date_naissance = naissance; self.tenant = tenant
+
+
+def test_taux_legal_adulte_2_jours():
+    from conges_avance import taux_acquisition
+    assert taux_acquisition(tenant=_T(None), salarie=_S(date(1990, 5, 1))) == 2.0
+    assert taux_acquisition() == 2.0
+
+
+def test_taux_mineur_2_5_jours():
+    from conges_avance import taux_acquisition
+    assert taux_acquisition(tenant=_T(2.0), salarie=_S(date(2010, 6, 1)),
+                            date_ref=date(2026, 10, 14)) == 2.5     # 16 ans
+    assert taux_acquisition(tenant=_T(2.0), salarie=_S(date(2008, 10, 14)),
+                            date_ref=date(2026, 10, 14)) == 2.0     # 18 ans ce jour
+
+
+def test_taux_contractuel_plus_favorable_et_plancher_legal():
+    from conges_avance import taux_acquisition
+    assert taux_acquisition(tenant=_T(2.5), salarie=_S(date(1990, 1, 1))) == 2.5
+    assert taux_acquisition(tenant=_T(1.5), salarie=_S(date(1990, 1, 1))) == 2.0   # jamais sous la loi
+
+
+def test_ne_le_29_fevrier_ne_plante_pas():
+    from conges_avance import taux_acquisition
+    assert taux_acquisition(tenant=_T(2.0), salarie=_S(date(2008, 2, 29)),
+                            date_ref=date(2025, 12, 31)) == 2.5
+
+
+def test_annee_complete_24_jours_pour_un_adulte():
+    from conges_avance import calculer_jours_acquis
+    r = calculer_jours_acquis(date(2020, 1, 1), date_ref=date(2026, 5, 31), annee_ref=2025,
+                              salarie=_S(date(1990, 1, 1), tenant=_T(2.0)))
+    assert r["jours_acquis_periode"] == 24.0
+
+
+def test_parametre_taux_conges_borne(env):
+    cli = _client_pour(env["admin"])
+    cli.post("/parametres/societe", data={"jours_conge_par_mois": "3"})
+    with flask_app.app_context():
+        assert float(db.session.get(Tenant, env["ta"]).jours_conge_par_mois) == 2.5
+    cli.post("/parametres/societe", data={"jours_conge_par_mois": "1"})
+    with flask_app.app_context():
+        assert float(db.session.get(Tenant, env["ta"]).jours_conge_par_mois) == 2.0
+
+
+def test_page_conges_avec_salarie_ne_29_fevrier(env):
+    with flask_app.app_context():
+        s = db.session.get(Salarie, env["sal"]); s.date_naissance = date(2008, 2, 29); db.session.commit()
+    r = _client_pour(env["admin"]).get("/conges?annee=2025")
+    assert r.status_code == 200

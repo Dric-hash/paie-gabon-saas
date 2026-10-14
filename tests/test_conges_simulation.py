@@ -21,18 +21,18 @@ from conges_avance import (
 
 class TestJoursAcquis:
     def test_1_an_complet(self):
-        """12 mois dans la période juin→mai = 30 jours"""
+        """12 mois dans la période juin→mai = 24 jours (Art. 222 : 2 j/mois, adulte)"""
         emb = date(2024, 6, 1)
         ref = date(2025, 5, 31)  # dernier jour de la période
         r = calculer_jours_acquis(emb, date_ref=ref, annee_ref=2024)
-        assert r["jours_acquis_periode"] == pytest.approx(30, abs=1)
+        assert r["jours_acquis_periode"] == pytest.approx(24, abs=1)
 
     def test_6_mois(self):
-        """6 mois ≈ 15 jours"""
+        """6 mois ≈ 12 jours (Art. 222 : 2 j/mois, adulte)"""
         emb = date(2024, 6, 1)
         ref = date(2024, 12, 1)
         r = calculer_jours_acquis(emb, date_ref=ref)
-        assert r["jours_acquis_periode"] == pytest.approx(15, abs=1)
+        assert r["jours_acquis_periode"] == pytest.approx(12, abs=1)
 
     def test_plafond_30_jours(self):
         """Plus de 12 mois → plafonné à 30j"""
