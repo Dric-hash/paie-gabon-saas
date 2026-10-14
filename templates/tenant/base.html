@@ -125,6 +125,11 @@
     /* Grand écran : ouverte par défaut, repliable avec le bouton */
     body.sidebar-collapsed aside { transform: translateX(-100%); }
     body.sidebar-collapsed main  { margin-left: 0 !important; }
+    /* Liens rapides du bandeau haut : masqués tant que la sidebar est ouverte
+       (ils y feraient doublon), affichés uniquement quand elle est repliée. */
+    @media (min-width: 1024px) {
+      body.sidebar-collapsed #topnav { display: flex !important; }
+    }
     /* Mobile/tablette (<1024px) : repliée par défaut, s'ouvre par-dessus le contenu */
     @media (max-width: 1023px) {
       aside { transform: translateX(-100%); }
@@ -402,8 +407,8 @@
         aria-label="Afficher ou masquer le menu"
         style="background:var(--bg-card);border:1px solid var(--border);border-radius:.625rem;padding:.4rem .65rem;cursor:pointer;font-size:1.05rem;color:var(--text-main);line-height:1">☰</button>
 
-      <!-- Liens rapides horizontaux (visibles sur grand écran) -->
-      <nav class="hidden lg:flex items-center gap-1">
+      <!-- Liens rapides horizontaux : affichés uniquement quand la sidebar est repliée -->
+      <nav id="topnav" class="hidden items-center gap-1">
         {% set tep = request.endpoint %}
         <a href="/dashboard" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="color:{{ 'var(--brand)' if tep=='dashboard' else 'var(--text-sub)' }}">Tableau de bord</a>
         <a href="/salaries" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="color:{{ 'var(--brand)' if 'salari' in (tep or '') else 'var(--text-sub)' }}">Salariés</a>
