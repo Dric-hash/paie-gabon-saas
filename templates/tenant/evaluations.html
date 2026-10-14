@@ -1,0 +1,47 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:1.5rem">
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem">📋 Évaluations</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 1.25rem">Entretiens et évaluations du personnel. Créez-en une depuis la page Carrière d'un salarié.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if evaluations %}
+  {% set MOIS = ['','janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'] %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <thead><tr style="background:#f9fafb;text-align:left;color:#6b7280">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem">Type</th>
+        <th style="padding:.6rem .9rem">Date</th>
+        <th style="padding:.6rem .9rem">Note</th>
+        <th style="padding:.6rem .9rem">Statut</th>
+        <th style="padding:.6rem .9rem;text-align:right">Actions</th>
+      </tr></thead>
+      <tbody>
+      {% for e in evaluations %}
+        <tr style="border-top:1px solid #f0f0f0">
+          <td style="padding:.6rem .9rem">{% if e.salarie %}<a href="{{ url_for('tenant.carriere', id=e.salarie.id) }}" style="color:#0f3d36;font-weight:700;text-decoration:none">{{ e.salarie.nom_complet }}</a>{% else %}—{% endif %}</td>
+          <td style="padding:.6rem .9rem">{{ e.type_libelle }}{% if e.periode %} · {{ e.periode }}{% endif %}</td>
+          <td style="padding:.6rem .9rem">{% if e.date_evaluation %}{{ e.date_evaluation.day }} {{ MOIS[e.date_evaluation.month] }} {{ e.date_evaluation.year }}{% else %}—{% endif %}</td>
+          <td style="padding:.6rem .9rem">{% if e.note_globale %}<strong style="color:#0f3d36">{{ e.note_globale }}</strong> <span style="color:#9ca3af;font-size:.78rem">{{ e.note_libelle }}</span>{% else %}—{% endif %}</td>
+          <td style="padding:.6rem .9rem">{{ 'Réalisée' if e.statut=='REALISEE' else 'Planifiée' }}</td>
+          <td style="padding:.6rem .9rem;text-align:right;white-space:nowrap">
+            <a href="{{ url_for('tenant.evaluation_pdf', id=e.id) }}" target="_blank" style="color:#17564c;font-weight:700;text-decoration:none;font-size:.8rem">📄</a>
+            <a href="{{ url_for('tenant.evaluation_modifier', id=e.id) }}" style="color:#17564c;font-weight:700;text-decoration:none;font-size:.8rem;margin-left:.4rem">Modifier</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:2rem;text-align:center;color:#6b7280">
+    <div style="font-size:2rem">📋</div>
+    <p style="font-size:.9rem;margin:.5rem 0 0">Aucune évaluation enregistrée.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

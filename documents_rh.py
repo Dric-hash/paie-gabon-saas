@@ -1151,3 +1151,121 @@ def generer_attestation_medaille_pdf(tenant, salarie, evt, palier=None) -> bytes
         "ce que de droit.", corps))
     el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
     return _build(el)
+
+
+def generer_attestation_formation_pdf(tenant, salarie, formation) -> bytes:
+    """Attestation de participation à une formation, sur papier à en-tête."""
+    S = _styles()
+    nom = (salarie.nom_complet if salarie and hasattr(salarie, "nom_complet")
+           else (f"{salarie.nom} {salarie.prenom}" if salarie else ""))
+    el = _entete(tenant, S)
+    el.append(Paragraph("ATTESTATION DE FORMATION", S["titre"]))
+    el.append(Spacer(1, 18))
+    corps = ParagraphStyle("corps_fo", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=16, spaceAfter=8)
+    periode = ""
+    if formation.date_debut and formation.date_fin:
+        periode = f" du <b>{_date_fr(formation.date_debut)}</b> au <b>{_date_fr(formation.date_fin)}</b>"
+    elif formation.date_debut:
+        periode = f" le <b>{_date_fr(formation.date_debut)}</b>"
+    el.append(Paragraph(
+        f"Nous, soussignés {tenant.denomination or ''}, attestons que "
+        f"<b>{nom}</b>"
+        + (f", matricule {salarie.matricule}" if getattr(salarie, "matricule", None) else "")
+        + f", a suivi la formation <b>« {formation.intitule} »</b>"
+        + (f", dispensée par {formation.organisme}" if formation.organisme else "")
+        + periode + ".", corps))
+    infos = []
+    if formation.duree_heures:
+        infos.append(["Durée", f"{int(float(formation.duree_heures))} heures"])
+    infos.append(["Type", formation.type_libelle])
+    if formation.certifiante:
+        txt = "Oui"
+        if formation.date_expiration:
+            txt += f" — valide jusqu'au {_date_fr(formation.date_expiration)}"
+        infos.append(["Certifiante", txt])
+    if formation.resultat:
+        infos.append(["Résultat", formation.resultat])
+    if infos:
+        tbl = Table([[k, v] for k, v in infos], colWidths=[45*mm, None])
+        tbl.setStyle(TableStyle([
+            ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
+            ("FONT", (1, 0), (1, -1), "Helvetica", 10),
+            ("TEXTCOLOR", (0, 0), (0, -1), C_DARK),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+            ("LINEBELOW", (0, 0), (-1, -1), 0.4, C_GRAY),
+        ]))
+        el.append(Spacer(1, 6))
+        el.append(tbl)
+    el.append(Spacer(1, 10))
+    el.append(Paragraph(
+        "La présente attestation est délivrée à l'intéressé(e) pour servir et valoir "
+        "ce que de droit.", corps))
+    el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
+    return _build(el)
+
+
+def generer_compte_rendu_evaluation_pdf(tenant, salarie, evaluation) -> bytes:
+    """Compte rendu d'entretien / évaluation, sur papier à en-tête, avec espaces
+    de signature de l'évaluateur et du salarié."""
+    S = _styles()
+    nom = (salarie.nom_complet if salarie and hasattr(salarie, "nom_complet")
+           else (f"{salarie.nom} {salarie.prenom}" if salarie else ""))
+    el = _entete(tenant, S)
+    el.append(Paragraph("COMPTE RENDU D'ÉVALUATION", S["titre"]))
+    el.append(Paragraph(evaluation.type_libelle
+                        + (f" — {evaluation.periode}" if evaluation.periode else ""),
+                        S["soustitre"]))
+    # Bloc d'en-tête : salarié, date, évaluateur, note
+    note = evaluation.note_globale or "—"
+    note_lib = evaluation.note_libelle
+    entete = [
+        ["Salarié", nom],
+        ["Date", _date_fr(evaluation.date_evaluation)],
+        ["Évaluateur", evaluation.evaluateur_nom or "—"],
+        ["Appréciation globale", f"{note} — {note_lib}" if note != "—" else "—"],
+    ]
+    tbl = Table(entete, colWidths=[48*mm, None])
+    tbl.setStyle(TableStyle([
+        ("FONT", (0, 0), (0, -1), "Helvetica-Bold", 10),
+        ("FONT", (1, 0), (1, -1), "Helvetica", 10),
+        ("TEXTCOLOR", (0, 0), (0, -1), C_DARK),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("LINEBELOW", (0, 0), (-1, -1), 0.4, C_GRAY),
+    ]))
+    el.append(tbl)
+    el.append(Spacer(1, 14))
+
+    corps = ParagraphStyle("corps_ev", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=15, spaceAfter=6)
+    titre_sec = ParagraphStyle("sec_ev", fontName="Helvetica-Bold", fontSize=11,
+                               textColor=C_DARK, spaceBefore=10, spaceAfter=4)
+
+    def _section(titre, texte):
+        if texte:
+            el.append(Paragraph(titre, titre_sec))
+            el.append(Paragraph(texte.replace("\n", "<br/>"), corps))
+
+    _section("Points forts", evaluation.points_forts)
+    _section("Axes d'amélioration", evaluation.axes_amelioration)
+    _section("Objectifs pour la période suivante", evaluation.objectifs)
+    _section("Commentaire du salarié", evaluation.commentaire_salarie)
+
+    # Double signature (évaluateur / salarié)
+    el.append(Spacer(1, 30))
+    sig = Table([
+        ["L'évaluateur", "Le salarié"],
+        ["", ""],
+        ["______________________", "______________________"],
+    ], colWidths=[None, None])
+    sig.setStyle(TableStyle([
+        ("FONT", (0, 0), (-1, 0), "Helvetica-Bold", 10),
+        ("TEXTCOLOR", (0, 0), (-1, 0), C_DARK),
+        ("TOPPADDING", (0, 1), (-1, 1), 26),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
+    el.append(sig)
+    el.append(Spacer(1, 6))
+    el.append(Paragraph(f"Fait à {getattr(tenant, 'ville', None) or 'Libreville'}, "
+                        f"le {_date_fr(date.today())}", S["entete_det"]))
+    return _build(el)

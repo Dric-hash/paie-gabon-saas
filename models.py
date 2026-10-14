@@ -2298,3 +2298,143 @@ class PalierMedaille(db.Model):
     @property
     def icone(self):
         return self.ICONES.get((self.code or "").upper(), "🏅")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# DÉVELOPPEMENT RH (gestion de carrière — Phase 3) : formations, compétences,
+# évaluations. Aucune de ces tables n'intervient dans le calcul de la paie.
+# ══════════════════════════════════════════════════════════════════════════════
+
+class Formation(db.Model):
+    """Action de formation suivie (ou planifiée) par un salarié.
+
+    Alimente la frise de carrière. Si la formation est certifiante avec une
+    date d'expiration, elle déclenche l'alerte « formation à renouveler »."""
+    __tablename__ = "formations"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id     = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    intitule       = db.Column(db.String(200), nullable=False)
+    organisme      = db.Column(db.String(200))
+    type           = db.Column(db.String(30), default="EXTERNE")   # INTERNE / EXTERNE / CERTIFIANTE
+    date_debut     = db.Column(db.Date)
+    date_fin       = db.Column(db.Date)
+    duree_heures   = db.Column(db.Numeric(8, 2))
+    cout           = db.Column(db.Numeric(15, 2))
+    statut         = db.Column(db.String(20), default="PLANIFIEE")  # PLANIFIEE/EN_COURS/TERMINEE/ANNULEE
+    certifiante    = db.Column(db.Boolean, default=False)
+    date_expiration = db.Column(db.Date)   # validité d'une certification (alerte renouvellement)
+    resultat       = db.Column(db.String(200))   # mention / note / "Réussi"
+    details        = db.Column(db.Text)
+    cree_par       = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    cree_par_nom   = db.Column(db.String(150))
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+
+    salarie = db.relationship("Salarie", backref="formations")
+
+    __table_args__ = (
+        db.Index("idx_formations_tenant_salarie", "tenant_id", "salarie_id"),
+        db.Index("idx_formations_expiration", "tenant_id", "date_expiration"),
+    )
+
+    TYPES = {"INTERNE": "Interne", "EXTERNE": "Externe", "CERTIFIANTE": "Certifiante"}
+    STATUTS = {"PLANIFIEE": "Planifiée", "EN_COURS": "En cours",
+               "TERMINEE": "Terminée", "ANNULEE": "Annulée"}
+
+    @property
+    def type_libelle(self):
+        return self.TYPES.get(self.type, self.type)
+
+    @property
+    def statut_libelle(self):
+        return self.STATUTS.get(self.statut, self.statut)
+
+
+class Competence(db.Model):
+    """Compétence du référentiel de l'entreprise (ex. « Soudure TIG », « Anglais »,
+    « Conduite d'engins »). Évaluée par salarié via CompetenceSalarie."""
+    __tablename__ = "competences"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    libelle       = db.Column(db.String(150), nullable=False)
+    categorie     = db.Column(db.String(50))   # Technique / Management / Langue / Sécurité / Bureautique / Autre
+    actif         = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "libelle", name="uq_competence_tenant_libelle"),
+        db.Index("idx_competences_tenant", "tenant_id", "actif"),
+    )
+
+    CATEGORIES = ["Technique", "Management", "Langue", "Sécurité", "Bureautique", "Autre"]
+
+
+class CompetenceSalarie(db.Model):
+    """Niveau d'un salarié sur une compétence (4 niveaux). Une ligne par couple
+    (salarié, compétence), mise à jour dans le temps."""
+    __tablename__ = "competences_salarie"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id     = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    competence_id  = db.Column(db.Integer, db.ForeignKey("competences.id"), nullable=False)
+    niveau         = db.Column(db.Integer, nullable=False)   # 1..4
+    date_evaluation = db.Column(db.Date)
+    evaluateur_nom = db.Column(db.String(150))
+    commentaire    = db.Column(db.String(255))
+
+    competence = db.relationship("Competence")
+    salarie    = db.relationship("Salarie", backref="competences_salarie")
+
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "salarie_id", "competence_id",
+                            name="uq_comp_sal_tenant_salarie_competence"),
+        db.Index("idx_comp_sal_salarie", "tenant_id", "salarie_id"),
+    )
+
+    NIVEAUX = {1: "Débutant", 2: "Intermédiaire", 3: "Confirmé", 4: "Expert"}
+
+    @property
+    def niveau_libelle(self):
+        return self.NIVEAUX.get(self.niveau, "—")
+
+
+class Evaluation(db.Model):
+    """Entretien / évaluation d'un salarié. Note globale en lettres (A–E).
+    N'altère jamais la paie."""
+    __tablename__ = "evaluations"
+    id                = db.Column(db.Integer, primary_key=True)
+    tenant_id         = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id        = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    type              = db.Column(db.String(30), default="ANNUELLE")   # ANNUELLE/PERIODE_ESSAI/PROFESSIONNEL/AUTRE
+    date_evaluation   = db.Column(db.Date)
+    periode           = db.Column(db.String(20))   # ex. "2026", "2026-S1"
+    note_globale      = db.Column(db.String(2))    # A/B/C/D/E
+    evaluateur_id     = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    evaluateur_nom    = db.Column(db.String(150))
+    points_forts      = db.Column(db.Text)
+    axes_amelioration = db.Column(db.Text)
+    objectifs         = db.Column(db.Text)   # objectifs pour la période suivante
+    commentaire_salarie = db.Column(db.Text)
+    statut            = db.Column(db.String(20), default="PLANIFIEE")  # PLANIFIEE / REALISEE
+    cree_par          = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    cree_par_nom      = db.Column(db.String(150))
+    date_creation     = db.Column(db.DateTime, default=utcnow)
+
+    salarie = db.relationship("Salarie", backref="evaluations")
+
+    __table_args__ = (
+        db.Index("idx_evaluations_tenant_salarie", "tenant_id", "salarie_id"),
+    )
+
+    TYPES = {"ANNUELLE": "Évaluation annuelle", "PERIODE_ESSAI": "Fin de période d'essai",
+             "PROFESSIONNEL": "Entretien professionnel", "AUTRE": "Autre"}
+    NOTES = {"A": "Excellent", "B": "Très bien", "C": "Bien",
+             "D": "À améliorer", "E": "Insuffisant"}
+
+    @property
+    def type_libelle(self):
+        return self.TYPES.get(self.type, self.type)
+
+    @property
+    def note_libelle(self):
+        return self.NOTES.get((self.note_globale or "").upper(), "—")

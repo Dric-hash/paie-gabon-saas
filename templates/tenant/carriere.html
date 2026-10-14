@@ -17,6 +17,13 @@
     </div>
   </div>
 
+  <!-- Développement RH (Phase 3) : accès rapides -->
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin:-.5rem 0 1.25rem">
+    <a href="{{ url_for('tenant.formation_nouvelle', id=salarie.id) }}" style="background:#fff;border:1px solid #e5e7eb;color:#17564c;padding:.5rem .9rem;border-radius:.6rem;text-decoration:none;font-weight:700;font-size:.85rem">📚 + Formation</a>
+    <a href="{{ url_for('tenant.competences_salarie', id=salarie.id) }}" style="background:#fff;border:1px solid #e5e7eb;color:#17564c;padding:.5rem .9rem;border-radius:.6rem;text-decoration:none;font-weight:700;font-size:.85rem">🧠 Compétences{% if nb_competences %} ({{ nb_competences }}){% endif %}</a>
+    <a href="{{ url_for('tenant.evaluation_nouvelle', id=salarie.id) }}" style="background:#fff;border:1px solid #e5e7eb;color:#17564c;padding:.5rem .9rem;border-radius:.6rem;text-decoration:none;font-weight:700;font-size:.85rem">📋 + Évaluation</a>
+  </div>
+
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
   {% endwith %}

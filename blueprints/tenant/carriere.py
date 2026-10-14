@@ -12,7 +12,8 @@ from blueprints.tenant import bp, _doc_response
 from core import get_tenant, _parse_date
 from audit import log_action
 from models import (db, Salarie, Contrat, CategorieEmploi, EvenementCarriere,
-                    HistoriqueSalarie, Sanction)
+                    HistoriqueSalarie, Sanction, Formation, Evaluation,
+                    CompetenceSalarie)
 
 
 def _frise(t, s):
@@ -57,6 +58,27 @@ def _frise(t, s):
                        "titre": "Sanction" + (f" — {sa.type}" if sa.type else ""),
                        "details": sa.motif or "", "evt_id": None})
 
+    # Formations (développement RH — Phase 3)
+    for f in Formation.query.filter_by(tenant_id=t.id, salarie_id=s.id).all():
+        det = f.type_libelle + (f" · {f.organisme}" if f.organisme else "")
+        det += f" · {f.statut_libelle}"
+        if f.certifiante and f.date_expiration:
+            det += f"\nCertification valide jusqu'au {f.date_expiration.strftime('%d/%m/%Y')}"
+        lignes.append({"date": f.date_debut or f.date_creation.date() if f.date_creation else date.today(),
+                       "type": "FORMATION", "icone": "🎓",
+                       "titre": f"Formation — {f.intitule}", "details": det,
+                       "evt_id": None, "formation_id": f.id})
+
+    # Évaluations / entretiens (développement RH — Phase 3)
+    for e in Evaluation.query.filter_by(tenant_id=t.id, salarie_id=s.id).all():
+        det = e.type_libelle
+        if e.note_globale:
+            det += f" · Appréciation {e.note_globale} ({e.note_libelle})"
+        lignes.append({"date": e.date_evaluation or date.today(),
+                       "type": "EVALUATION", "icone": "📋",
+                       "titre": "Évaluation" + (f" {e.periode}" if e.periode else ""),
+                       "details": det, "evt_id": None, "evaluation_id": e.id})
+
     # Historique des modifications (fonction / date d'embauche)
     for h in HistoriqueSalarie.query.filter_by(tenant_id=t.id, salarie_id=s.id).all():
         lignes.append({"date": (h.date_modification.date() if h.date_modification else date.today()),
@@ -80,9 +102,11 @@ def carriere(id):
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     contrat = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
     anc_jours = (date.today() - s.date_embauche).days if s.date_embauche else 0
+    nb_competences = CompetenceSalarie.query.filter_by(tenant_id=t.id, salarie_id=s.id).count()
     return render_template("tenant/carriere.html", tenant=t, salarie=s,
                            frise=_frise(t, s), contrat=contrat,
                            anciennete_ans=anc_jours // 365,
+                           nb_competences=nb_competences,
                            TYPES=EvenementCarriere.TYPES, now=datetime.now())
 
 

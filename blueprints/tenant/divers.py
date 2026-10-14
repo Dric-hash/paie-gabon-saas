@@ -315,6 +315,21 @@ def dashboard():
             "msg":f"{_ex}.",
             "lien":"/salaries","lien_texte":"Voir les salariés"})
 
+    # ── Formations certifiantes à renouveler ──────────────────────────────────
+    try:
+        from blueprints.tenant.developpement import formations_a_renouveler
+        _fr = formations_a_renouveler(t)
+        if _fr:
+            _retard = sum(1 for f in _fr if f.date_expiration and f.date_expiration < now.date())
+            _msg = (f"{_retard} certification(s) déjà expirée(s), {len(_fr)} à renouveler sous 60 jours."
+                    if _retard else
+                    f"{len(_fr)} certification(s) arrivent à échéance sous 60 jours.")
+            alertes.append({"type":"warning" if _retard else "info","icone":"🎓",
+                "titre":"Formations / certifications à renouveler", "msg":_msg,
+                "lien":"/formations","lien_texte":"Voir les formations"})
+    except Exception as _e:
+        logger.warning(f"[Alertes formations] indisponible : {_e}")
+
     # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
     exp_date = t.date_expiration
     jours_restants = (exp_date.date() - now.date()).days if exp_date else None

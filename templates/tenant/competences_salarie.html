@@ -1,0 +1,49 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:760px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.carriere', id=salarie.id) }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Carrière</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.3rem 0 .25rem">🧠 Compétences — {{ salarie.prenom }} {{ salarie.nom }}</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 1rem">Attribuez un niveau à chaque compétence. Laissez « Non évalué » pour ne pas la retenir.</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if competences %}
+  <form method="POST" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.1rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+      <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #eee">
+        <th style="padding:.5rem">Compétence</th>
+        <th style="padding:.5rem;width:230px">Niveau</th>
+      </tr></thead>
+      <tbody>
+      {% for c in competences %}
+        {% set cs = existantes.get(c.id) %}
+        <tr style="border-top:1px solid #f6f6f6">
+          <td style="padding:.5rem">
+            <strong style="color:#0f3d36">{{ c.libelle }}</strong>
+            {% if c.categorie %}<span style="color:#9ca3af;font-size:.76rem"> · {{ c.categorie }}</span>{% endif %}
+          </td>
+          <td style="padding:.5rem">
+            <select name="niveau_{{ c.id }}" style="width:100%;padding:.45rem;border:1px solid #d1d5db;border-radius:.5rem">
+              <option value="">— Non évalué —</option>
+              {% for n, lib in NIVEAUX.items() %}<option value="{{ n }}" {% if cs and cs.niveau==n %}selected{% endif %}>{{ n }} — {{ lib }}</option>{% endfor %}
+            </select>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    <div style="margin-top:1rem;display:flex;justify-content:flex-end">
+      <button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1.3rem;border-radius:.6rem;font-weight:800;cursor:pointer">Enregistrer</button>
+    </div>
+  </form>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:1.5rem;text-align:center;color:#6b7280">
+    <p style="font-size:.9rem;margin:0 0 .6rem">Le référentiel de compétences est vide.</p>
+    <a href="{{ url_for('tenant.competences') }}" style="color:#17564c;font-weight:700;text-decoration:none">Créer le référentiel →</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

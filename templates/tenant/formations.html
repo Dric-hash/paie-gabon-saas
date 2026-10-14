@@ -1,0 +1,62 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:1000px;margin:0 auto;padding:1.5rem">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">📚 Formations</h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">Suivi des formations du personnel et des certifications à renouveler.</p>
+    </div>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+      <a href="{{ url_for('tenant.formations') }}" style="padding:.45rem .8rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.85rem;{% if not statut %}background:#0f3d36;color:#fff{% else %}background:#eef4f2;color:#17564c{% endif %}">Toutes</a>
+      {% for code, lib in STATUTS.items() %}
+      <a href="{{ url_for('tenant.formations', statut=code) }}" style="padding:.45rem .8rem;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.85rem;{% if statut==code %}background:#0f3d36;color:#fff{% else %}background:#eef4f2;color:#17564c{% endif %}">{{ lib }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  {% if formations %}
+  {% set MOIS = ['','janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'] %}
+  <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;overflow:hidden">
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <thead><tr style="background:#f9fafb;text-align:left;color:#6b7280">
+        <th style="padding:.6rem .9rem">Salarié</th>
+        <th style="padding:.6rem .9rem">Formation</th>
+        <th style="padding:.6rem .9rem">Période</th>
+        <th style="padding:.6rem .9rem">Statut</th>
+        <th style="padding:.6rem .9rem">Validité</th>
+        <th style="padding:.6rem .9rem;text-align:right">Actions</th>
+      </tr></thead>
+      <tbody>
+      {% for f in formations %}
+        <tr style="border-top:1px solid #f0f0f0{% if f.id in a_renouveler %};background:#fff7ed{% endif %}">
+          <td style="padding:.6rem .9rem">{% if f.salarie %}<a href="{{ url_for('tenant.carriere', id=f.salarie.id) }}" style="color:#0f3d36;font-weight:700;text-decoration:none">{{ f.salarie.nom_complet }}</a>{% else %}—{% endif %}</td>
+          <td style="padding:.6rem .9rem">
+            <strong>{{ f.intitule }}</strong>
+            <div style="color:#9ca3af;font-size:.76rem">{{ f.type_libelle }}{% if f.organisme %} · {{ f.organisme }}{% endif %}{% if f.certifiante %} · 🎓 certifiante{% endif %}</div>
+          </td>
+          <td style="padding:.6rem .9rem">{% if f.date_debut %}{{ f.date_debut.day }} {{ MOIS[f.date_debut.month] }} {{ f.date_debut.year }}{% else %}—{% endif %}</td>
+          <td style="padding:.6rem .9rem">{{ f.statut_libelle }}</td>
+          <td style="padding:.6rem .9rem">
+            {% if f.date_expiration %}{{ f.date_expiration.day }} {{ MOIS[f.date_expiration.month] }} {{ f.date_expiration.year }}{% if f.id in a_renouveler %} <span style="color:#c2410c;font-weight:700">⚠️</span>{% endif %}{% else %}—{% endif %}
+          </td>
+          <td style="padding:.6rem .9rem;text-align:right;white-space:nowrap">
+            {% if f.statut == 'TERMINEE' %}<a href="{{ url_for('tenant.formation_attestation', id=f.id) }}" target="_blank" style="color:#17564c;font-weight:700;text-decoration:none;font-size:.8rem">📄</a>{% endif %}
+            <a href="{{ url_for('tenant.formation_modifier', id=f.id) }}" style="color:#17564c;font-weight:700;text-decoration:none;font-size:.8rem;margin-left:.4rem">Modifier</a>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:2rem;text-align:center;color:#6b7280">
+    <div style="font-size:2rem">📚</div>
+    <p style="font-size:.9rem;margin:.5rem 0 0">Aucune formation enregistrée. Ajoutez-en une depuis la page Carrière d'un salarié.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
