@@ -1,0 +1,81 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.salarie_detail', id=salarie.id) }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Fiche salarié</a>
+
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin:.4rem 0 1.25rem">
+    <div>
+      <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:0">Carrière — {{ salarie.prenom }} {{ salarie.nom }}</h1>
+      <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">
+        {{ salarie.emploi or '—' }}{% if salarie.categorie %} · Catégorie {{ salarie.categorie.code }}{% endif %}{% if salarie.echelon %} · Échelon {{ salarie.echelon }}{% endif %}
+        · Ancienneté {{ anciennete_ans }} an(s)
+      </p>
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <a href="{{ url_for('tenant.promouvoir', id=salarie.id) }}" style="background:#0f3d36;color:#fff;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">⬆️ Promouvoir / avancer</a>
+      <button onclick="document.getElementById('form-evt').style.display='block';this.remove()" style="background:#eef4f2;color:#17564c;border:none;padding:.55rem 1rem;border-radius:.6rem;font-weight:700;cursor:pointer">+ Événement</button>
+    </div>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <!-- Ajout d'un événement manuel (caché par défaut) -->
+  <form id="form-evt" method="POST" action="{{ url_for('tenant.carriere_evenement', id=salarie.id) }}" style="display:none;background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.1rem;margin-bottom:1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <h3 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .6rem">Ajouter un événement</h3>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:.6rem">
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Type</label>
+        <select name="type" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem">
+          {% for code, lib in TYPES.items() %}<option value="{{ code }}">{{ lib }}</option>{% endfor %}
+        </select></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Date d'effet</label>
+        <input type="date" name="date_effet" value="{{ now.strftime('%Y-%m-%d') }}" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Titre</label>
+        <input name="titre" placeholder="(optionnel)" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+    </div>
+    <div style="margin-top:.6rem"><label style="font-size:.78rem;font-weight:700;color:#374151">Détails</label>
+      <textarea name="details" rows="2" style="width:100%;padding:.5rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;resize:vertical"></textarea></div>
+    <div style="margin-top:.7rem;display:flex;gap:.5rem;justify-content:flex-end">
+      <button style="background:#0f3d36;color:#fff;border:none;padding:.5rem 1.1rem;border-radius:.5rem;font-weight:700;cursor:pointer">Enregistrer</button>
+    </div>
+  </form>
+
+  <!-- Frise de carrière -->
+  {% if frise %}
+  <div style="position:relative;padding-left:1.5rem">
+    <div style="position:absolute;left:.55rem;top:.4rem;bottom:.4rem;width:2px;background:#e5e7eb"></div>
+    {% set MOIS = ['','janv','févr','mars','avr','mai','juin','juil','août','sept','oct','nov','déc'] %}
+    {% for e in frise %}
+    <div style="position:relative;margin-bottom:1.1rem">
+      <div style="position:absolute;left:-1.5rem;top:.1rem;width:1.15rem;height:1.15rem;border-radius:9999px;background:#fff;border:2px solid #0f3d36;display:flex;align-items:center;justify-content:center;font-size:.6rem">{{ e.icone }}</div>
+      <div style="background:#fff;border:1px solid #e5e7eb;border-radius:.75rem;padding:.7rem .9rem">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:.75rem;flex-wrap:wrap">
+          <strong style="color:#0f3d36;font-size:.95rem">{{ e.titre }}</strong>
+          <span style="color:#9ca3af;font-size:.78rem">{% if e.date %}{{ e.date.day }} {{ MOIS[e.date.month] }} {{ e.date.year }}{% endif %}</span>
+        </div>
+        {% if e.details %}<div style="color:#6b7280;font-size:.85rem;margin-top:.25rem;white-space:pre-line">{{ e.details }}</div>{% endif %}
+        {% if e.evt_id %}
+        <div style="margin-top:.4rem;display:flex;gap:.6rem">
+          {% if e.type in ['PROMOTION','AUGMENTATION','CHANGEMENT_POSTE','TITULARISATION','DISTINCTION'] %}
+          <a href="{{ url_for('tenant.carriere_attestation', id=e.evt_id) }}" target="_blank" style="font-size:.76rem;color:#17564c;font-weight:700">📄 Attestation</a>
+          {% endif %}
+          <form method="POST" action="{{ url_for('tenant.carriere_evenement_supprimer', id=e.evt_id) }}" style="display:inline" onsubmit="return confirm('Supprimer cet événement ? (l''avenant de contrat est conservé)')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <button style="background:none;border:none;color:#b91c1c;font-size:.76rem;font-weight:700;cursor:pointer;padding:0">Supprimer</button>
+          </form>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="background:#f9fafb;border:1px dashed #d1d5db;border-radius:.75rem;padding:2rem;text-align:center;color:#6b7280">
+    <div style="font-size:2rem">🧭</div>
+    <p style="font-size:.9rem;margin:.5rem 0 0">Aucun événement de carrière pour l'instant.</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

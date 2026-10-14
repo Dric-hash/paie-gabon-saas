@@ -615,6 +615,7 @@ class Salarie(db.Model):
     code_emploi            = db.Column(db.String(10))   # Code emploi DGI (repli : code catégorie)
     numero_cnamgs          = db.Column(db.String(30))
     emploi                 = db.Column(db.String(200))
+    echelon                = db.Column(db.String(20))   # échelon dans la catégorie (texte libre, gestion de carrière)
     # Poste de nuit (21h-6h) : ouvre droit à la prime de nuit conventionnelle
     # (ex. Hôtellerie Art. 39.2 : 20 % du salaire de base).
     travail_de_nuit        = db.Column(db.Boolean, default=False)
@@ -2201,3 +2202,61 @@ class FeuillePresence(db.Model):
                             name="uix_feuille_presence"),
         db.Index("idx_feuille_tenant_date", "tenant_id", "date_pointage"),
     )
+
+
+class EvenementCarriere(db.Model):
+    """Événement de carrière d'un salarié : brique de la frise de carrière
+    (promotion, augmentation, changement de poste, mobilité, titularisation,
+    distinction, formation, sanction, départ…). Les promotions sont reliées à
+    l'avenant de contrat correspondant (contrat_id). N'altère pas la paie :
+    le changement de salaire passe par le contrat, pas par cet enregistrement."""
+    __tablename__ = "evenements_carriere"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id     = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    type           = db.Column(db.String(20), nullable=False)   # voir TYPES
+    date_effet     = db.Column(db.Date, nullable=False)
+    titre          = db.Column(db.String(200))
+    details        = db.Column(db.Text)
+    ancienne_valeur = db.Column(db.String(255))
+    nouvelle_valeur = db.Column(db.String(255))
+    contrat_id     = db.Column(db.Integer, db.ForeignKey("contrats.id"), nullable=True)  # avenant lié
+    cree_par       = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    cree_par_nom   = db.Column(db.String(150))
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+
+    salarie = db.relationship("Salarie", backref="evenements_carriere")
+    contrat = db.relationship("Contrat")
+
+    __table_args__ = (
+        db.Index("idx_evt_carriere_salarie", "tenant_id", "salarie_id"),
+    )
+
+    TYPES = {
+        "EMBAUCHE":        "Embauche",
+        "TITULARISATION":  "Titularisation",
+        "PROMOTION":       "Promotion",
+        "AUGMENTATION":    "Augmentation de salaire",
+        "CHANGEMENT_POSTE":"Changement de poste",
+        "MOBILITE":        "Mobilité / changement de site",
+        "FORMATION":       "Formation",
+        "DISTINCTION":     "Distinction / médaille",
+        "SANCTION":        "Sanction",
+        "DEPART":          "Départ",
+        "AUTRE":           "Autre",
+    }
+    # Pastille (emoji) par type, pour la frise
+    ICONES = {
+        "EMBAUCHE": "🎉", "TITULARISATION": "✅", "PROMOTION": "⬆️",
+        "AUGMENTATION": "💰", "CHANGEMENT_POSTE": "🔁", "MOBILITE": "📍",
+        "FORMATION": "🎓", "DISTINCTION": "🏅", "SANCTION": "⚠️",
+        "DEPART": "👋", "AUTRE": "•",
+    }
+
+    @property
+    def type_libelle(self):
+        return self.TYPES.get(self.type, self.type)
+
+    @property
+    def icone(self):
+        return self.ICONES.get(self.type, "•")

@@ -1080,3 +1080,40 @@ def generer_feuille_presence_pdf(tenant, site, date_p, pointages, feuille) -> by
     el.append(Paragraph("Document établi via l'application de pointage mobile PaieGabon. "
                         "Horodatage et géolocalisation conservés côté serveur.", S["entete_det"]))
     return _build(el)
+
+
+def generer_attestation_carriere_pdf(tenant, salarie, evt) -> bytes:
+    """Attestation d'un événement de carrière (promotion, augmentation,
+    distinction…) sur papier à en-tête, signée par la direction."""
+    S = _styles()
+    nom = (salarie.nom_complet if salarie and hasattr(salarie, "nom_complet")
+           else (f"{salarie.nom} {salarie.prenom}" if salarie else ""))
+    TYPES = {"PROMOTION": "ATTESTATION DE PROMOTION",
+             "AUGMENTATION": "ATTESTATION D'AUGMENTATION",
+             "CHANGEMENT_POSTE": "ATTESTATION DE CHANGEMENT DE POSTE",
+             "TITULARISATION": "ATTESTATION DE TITULARISATION",
+             "DISTINCTION": "ATTESTATION DE DISTINCTION"}
+    titre = TYPES.get(getattr(evt, "type", ""), "ATTESTATION")
+    el = _entete(tenant, S)
+    el.append(Paragraph(titre, S["titre"]))
+    el.append(Spacer(1, 18))
+    corps = ParagraphStyle("corps_car", parent=S["corps"], alignment=TA_JUSTIFY,
+                           fontSize=10.5, leading=16, spaceAfter=8)
+    el.append(Paragraph(
+        f"Nous, soussignés {tenant.denomination or ''}, attestons par la présente que "
+        f"<b>{nom}</b>"
+        + (f", matricule {salarie.matricule}" if getattr(salarie, "matricule", None) else "")
+        + f", bénéficie de la mesure suivante : <b>{evt.type_libelle}</b>, "
+        f"avec effet au <b>{_date_fr(evt.date_effet)}</b>.", corps))
+    if getattr(evt, "ancienne_valeur", None) or getattr(evt, "nouvelle_valeur", None):
+        el.append(Paragraph(
+            f"Situation antérieure : {evt.ancienne_valeur or '—'}.<br/>"
+            f"Nouvelle situation : <b>{evt.nouvelle_valeur or '—'}</b>.", corps))
+    if getattr(evt, "details", None):
+        el.append(Paragraph(f"Précisions : {evt.details}".replace("\n", "<br/>"), corps))
+    el.append(Spacer(1, 8))
+    el.append(Paragraph(
+        "La présente attestation est délivrée à l'intéressé(e) pour servir et "
+        "valoir ce que de droit.", corps))
+    el.extend(_signature(tenant, S, ville=getattr(tenant, "ville", None)))
+    return _build(el)

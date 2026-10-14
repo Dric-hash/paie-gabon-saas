@@ -1,0 +1,56 @@
+{% extends "tenant/base.html" %}
+{% block content %}
+<div style="max-width:680px;margin:0 auto;padding:1.5rem">
+  <a href="{{ url_for('tenant.carriere', id=salarie.id) }}" style="color:#6b7280;text-decoration:none;font-size:.85rem">← Carrière</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.3rem 0 .25rem">Promotion / avancement</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 1rem">{{ salarie.prenom }} {{ salarie.nom }} — {{ salarie.emploi or '—' }}{% if salarie.categorie %} · Catégorie {{ salarie.categorie.code }}{% endif %}</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.7rem 1rem;border-radius:.6rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <div style="background:#eef4f2;border:1px solid #d9e6e2;border-radius:.7rem;padding:.75rem 1rem;margin-bottom:1rem;font-size:.84rem;color:#17564c">
+    ℹ️ Cette action crée un <strong>avenant au contrat</strong>. Le nouveau salaire s'applique à partir de la paie du mois de la date d'effet. Les bulletins déjà validés ne sont pas modifiés.
+  </div>
+
+  <form method="POST" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem">
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Type de mesure</label>
+        <select name="type_evt" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem">
+          <option value="PROMOTION">Promotion</option>
+          <option value="AUGMENTATION">Augmentation de salaire</option>
+          <option value="CHANGEMENT_POSTE">Changement de poste</option>
+        </select></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Date d'effet *</label>
+        <input type="date" name="date_effet" required value="{{ now.strftime('%Y-%m-%d') }}" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:2fr 1fr;gap:.8rem;margin-top:.8rem">
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Nouveau poste</label>
+        <input name="poste" value="{{ salarie.emploi or '' }}" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Échelon</label>
+        <input name="echelon" value="{{ salarie.echelon or '' }}" placeholder="(optionnel)" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;margin-top:.8rem">
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Nouvelle catégorie</label>
+        <select name="categorie_id" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem">
+          <option value="">— Inchangée —</option>
+          {% for c in categories %}<option value="{{ c.id }}" {% if salarie.categorie_id==c.id %}selected{% endif %}>{{ c.code }} — {{ c.libelle or '' }}</option>{% endfor %}
+        </select></div>
+      <div><label style="font-size:.78rem;font-weight:700;color:#374151">Nouveau salaire de base (FCFA) *</label>
+        <input name="salaire_base" inputmode="decimal" required value="{{ '%g'% (contrat.salaire_base|float) if contrat else '' }}" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/>
+        {% if contrat %}<div style="font-size:.74rem;color:#9ca3af;margin-top:.2rem">Actuel : {{ '{:,.0f}'.format(contrat.salaire_base|float).replace(',',' ') }} FCFA</div>{% endif %}</div>
+    </div>
+
+    <div style="margin-top:.8rem"><label style="font-size:.78rem;font-weight:700;color:#374151">Motif</label>
+      <input name="motif" placeholder="(optionnel)" style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem"/></div>
+
+    <div style="margin-top:1rem;display:flex;gap:.6rem;justify-content:flex-end">
+      <a href="{{ url_for('tenant.carriere', id=salarie.id) }}" style="border:1px solid #e5e7eb;color:#6b7280;padding:.6rem 1.1rem;border-radius:.6rem;text-decoration:none;font-weight:700">Annuler</a>
+      <button style="background:#0f3d36;color:#fff;border:none;padding:.6rem 1.3rem;border-radius:.6rem;font-weight:800;cursor:pointer">Valider la promotion</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
