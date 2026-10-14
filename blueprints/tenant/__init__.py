@@ -158,7 +158,7 @@ def _bloquer_si_expire():
 # elles), on bloque ici toute requête d'écriture pour un utilisateur sans droit
 # d'écriture — les routes futures sont protégées d'office. Seules restent
 # ouvertes les actions sans effet sur les données (calculs, aperçus PDF), la
-# sécurité de son propre compte et le règlement de l'abonnement.
+# sécurité de son propre compte et la déclaration du règlement de l'abonnement.
 METHODES_ECRITURE = {"POST", "PUT", "PATCH", "DELETE"}
 POST_AUTORISES_LECTURE = {
     # Calculs / simulations (aucune écriture en base)
@@ -169,9 +169,8 @@ POST_AUTORISES_LECTURE = {
     "tenant.acomptes_imprimer", "tenant.mad_facture_pdf",
     # Sécurité de son propre compte
     "tenant.basculer_2fa",
-    # Règlement de l'abonnement et rappels des prestataires de paiement
-    "tenant.paiement_airtel_initier", "tenant.paiement_cinetpay_initier",
-    "tenant.paiement_confirmer", "tenant.webhook_airtel", "tenant.webhook_cinetpay",
+    # Déclaration du règlement de l'abonnement (paiement manuel)
+    "tenant.paiement_confirmer",
 }
 
 
@@ -322,63 +321,6 @@ def _bulletin_imprimer_impl(id):
                            cumuls=cumuls, conges_annees=conges_annees,
                            config_rubriques=_config_rubriques_dict(t.id))
 
-
-# ✅ ENVOI EMAIL ASYNCHRONE — ne bloque plus le serveur
-
-
-def _activer_abonnement(paiement: "Paiement"):
-    """
-    Appelé après confirmation d'un paiement (webhook ou polling).
-    Met à jour le tenant : statut ACTIF, date_expiration prolongée.
-    Envoie un email de confirmation.
-    """
-    from datetime import timezone
-    p = paiement
-    p.statut           = "SUCCES"
-    p.date_confirmation = utcnow()
-
-    t = p.tenant
-    now = utcnow()
-
-    # Prolonger depuis aujourd'hui ou depuis la date d'expiration si future
-    base = t.date_expiration if (t.date_expiration and t.date_expiration > now) else now
-    t.date_expiration = base + timedelta(days=30 * p.duree_mois)
-    t.statut = "ACTIF"
-
-    if p.plan_id:
-        t.plan_id = p.plan_id
-
-    db.session.commit()
-    _cache_delete(f"{t.id}:")  # invalider le cache dashboard
-
-    logger.info(
-        f"[Abonnement] Tenant {t.id} activé jusqu'au "
-        f"{t.date_expiration.strftime('%d/%m/%Y')} — "
-        f"{p.duree_mois} mois via {p.moyen}"
-    )
-
-    # Email de confirmation
-    try:
-        msg = Message(
-            subject=f"Abonnement PaieGabon activé — {t.denomination}",
-            recipients=[u.email for u in t.utilisateurs if u.role == "TENANT_ADMIN" and u.email],
-            body=(
-                f"Bonjour,\n\n"
-                f"Votre paiement de {float(p.montant):,.0f} FCFA a été confirmé.\n"
-                f"Abonnement actif jusqu'au : {t.date_expiration.strftime('%d/%m/%Y')}\n"
-                f"Référence : {p.reference_interne}\n\n"
-                f"Merci de votre confiance.\n"
-                f"L'équipe PaieGabon"
-            ),
-        )
-        send_email_async(current_app.extensions["mail"], msg)
-    except Exception as e:
-        logger.warning(f"[Abonnement] Email de confirmation non envoyé : {e}")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CINETPAY — Paiement multi-opérateurs (Airtel, Moov, Visa, Mastercard)
-# ══════════════════════════════════════════════════════════════════════════════
 
 def _grille_tenant(t):
     """Grille de salaires ENREGISTRÉE du tenant → dict {code: {echelon: montant}}.

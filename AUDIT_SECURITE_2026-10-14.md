@@ -20,11 +20,11 @@ Le socle reste sérieux (SQL paramétré, CSRF, en-têtes de sécurité, `SECRET
 | S5 | PWA pointage : PIN 4 chiffres sans limite d'essais, jeton non révoqué au changement de PIN | 🟠 Moyenne | ✅ Corrigé |
 | B2 | Feuille journalier repayable ; paiement groupé ignorant les avances | 🟠 Moyenne | ✅ Corrigé |
 | B3 | Bulletins : paiement d'un brouillon, re-validation d'un payé, **date de paiement jamais enregistrée** | 🟠 Moyenne | ✅ Corrigé (+ migration) |
-| S6 | CinetPay : montant vérifié absent/nul accepté ; 2 chemins d'activation sans contrôle de montant | 🟡 Faible-Moyenne | ✅ Corrigé |
+| S6 | CinetPay : montant vérifié absent/nul accepté ; 2 chemins d'activation sans contrôle de montant | 🟡 Faible-Moyenne | ✅ Supprimé (API inutilisée) |
 | S7 | Collaborateur de cabinet désassigné gardant l'accès jusqu'à reconnexion | 🟢 Faible | ✅ Corrigé |
 | B4 | `migration_sgtg.py` : `utcnow` non importé (plantage) | 🟢 Faible | ✅ Corrigé |
 | M1 | `blueprints/tenant.py` (10 742 lignes) : code mort masqué par le package `blueprints/tenant/` | Maintenance | ✅ Supprimé |
-| R1 | Webhook Airtel accepté sans signature si secret absent et environnement non marqué « production » | 🟡 Config | ⚠️ À vérifier sur le VPS |
+| R1 | Webhook Airtel accepté sans signature si secret absent et environnement non marqué « production » | 🟡 Config | ✅ Supprimé (API inutilisée) |
 | R2 | Le super-admin peut supprimer un bulletin VALIDÉ | Gouvernance | ⚠️ Décision à prendre |
 | R3 | Taux d'acquisition des congés unifié sur la constante du code (2,5 j/mois) | Réglementaire | ⚠️ À valider |
 
@@ -77,7 +77,7 @@ Le webhook sautait le contrôle de montant si le montant vérifié était absent
 
 ## 2. À traiter par toi
 
-**R1 — Webhook Airtel.** Sans `AIRTEL_WEBHOOK_SECRET`, la signature n'est vérifiée que si `FLASK_ENV`, `APP_ENV` ou `AIRTEL_ENV` vaut `production`. La revérification du statut auprès d'Airtel limite le risque, mais vérifie la configuration du service.
+**R1 — Webhook Airtel → résolu par suppression.** Les intégrations automatiques **Airtel Money (API)** et **CinetPay** n'étaient reliées à aucun écran : elles ont été retirées (modules, routes, webhooks publics, pages d'attente, tests). Le paiement d'abonnement reste **manuel** — mobile money sur le numéro de PaieGabon, virement Orabank, espèces — déclaré par le client et validé par le super-admin.
 
 **R2 — Suppression d'un bulletin validé par le super-admin.** Possible aujourd'hui (support). Un bulletin validé est un document officiel numéroté : à garder, journaliser davantage, ou interdire — ta décision.
 

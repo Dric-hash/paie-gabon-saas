@@ -9,7 +9,6 @@ Chaque test reproduit une faille ou un bug constaté puis corrigé :
   • congés : erreur 500 à la création, double comptage, écrasement, suppression
   • paie journaliers : double paiement ; bulletins : paiement d'un brouillon
   • PWA pointage : jeton non révoqué au changement de PIN
-  • CinetPay : montant vérifié absent ou nul accepté
 """
 import os
 import sys
@@ -366,14 +365,22 @@ def test_force_brute_du_pin_bloquee(env):
         limiter.enabled = False
 
 
-# ── 8. CinetPay : montant vérifié obligatoire ─────────────────────────────────
+# ── 8. Paiement : uniquement le circuit MANUEL (API Airtel / CinetPay retirées) ─
 
-def test_cinetpay_montant_absent_refuse():
-    from blueprints.tenant.paiements import _cinetpay_montant_conforme
+@pytest.mark.parametrize("url", ["/webhook/airtel", "/webhook/cinetpay",
+                                 "/paiement/airtel/initier", "/paiement/cinetpay/initier"])
+def test_api_de_paiement_automatiques_retirees(env, url):
+    assert flask_app.test_client().post(url).status_code == 404
 
-    class P:
-        montant = 15000
-    assert _cinetpay_montant_conforme(P(), {"montant": None}) is False
-    assert _cinetpay_montant_conforme(P(), {"montant": 0}) is False
-    assert _cinetpay_montant_conforme(P(), {"montant": 10000}) is False
-    assert _cinetpay_montant_conforme(P(), {"montant": "15000"}) is True
+
+def test_paiement_manuel_toujours_fonctionnel(env):
+    from models import Paiement
+    cli = _client_pour(env["admin"])
+    page = cli.get("/paiement").get_data(as_text=True)
+    assert "Airtel Money" in page and "Virement bancaire" in page   # options manuelles affichées
+    r = cli.post("/paiement/confirmer", data={"moyen": "VIREMENT", "reference": "VIR-0001", "duree": "3"})
+    assert r.status_code == 302
+    with flask_app.app_context():
+        p = Paiement.query.filter_by(tenant_id=env["ta"]).one()
+        assert p.statut == "EN_ATTENTE" and p.reference_externe == "VIR-0001"
+        assert db.session.get(Tenant, env["ta"]).statut == "PAIEMENT_EN_ATTENTE"
