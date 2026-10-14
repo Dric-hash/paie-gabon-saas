@@ -152,6 +152,53 @@ def _bloquer_si_expire():
     return redirect(url_for("tenant.paiement"))
 
 
+# ── Rôles en lecture seule : aucune écriture possible ─────────────────────────
+# COMPTABLE, DIRECTEUR et LECTURE consultent sans modifier. Plutôt que de
+# compter sur un contrôle dans chaque route (oublié sur une trentaine d'entre
+# elles), on bloque ici toute requête d'écriture pour un utilisateur sans droit
+# d'écriture — les routes futures sont protégées d'office. Seules restent
+# ouvertes les actions sans effet sur les données (calculs, aperçus PDF), la
+# sécurité de son propre compte et le règlement de l'abonnement.
+METHODES_ECRITURE = {"POST", "PUT", "PATCH", "DELETE"}
+POST_AUTORISES_LECTURE = {
+    # Calculs / simulations (aucune écriture en base)
+    "tenant.api_calculer", "tenant.api_simuler_paie", "tenant.api_simuler_scenarios",
+    "tenant.api_simuler_net_vers_brut", "tenant.api_simuler_augmentation",
+    "tenant.api_simuler_droits", "tenant.api_cache_clear",
+    # Aperçus / impressions générés à la volée
+    "tenant.acomptes_imprimer", "tenant.mad_facture_pdf",
+    # Sécurité de son propre compte
+    "tenant.basculer_2fa",
+    # Règlement de l'abonnement et rappels des prestataires de paiement
+    "tenant.paiement_airtel_initier", "tenant.paiement_cinetpay_initier",
+    "tenant.paiement_confirmer", "tenant.webhook_airtel", "tenant.webhook_cinetpay",
+}
+
+
+def refuser_ecriture_lecture_seule(autorises=POST_AUTORISES_LECTURE):
+    """Retourne une réponse de refus si l'utilisateur courant (en lecture seule)
+    tente une écriture hors liste blanche, sinon None. Réutilisé par d'autres
+    blueprints (prestataires)."""
+    if request.method not in METHODES_ECRITURE:
+        return None
+    if not current_user.is_authenticated or current_user.is_super_admin:
+        return None
+    if current_user.can_edit or request.endpoint in autorises:
+        return None
+    logger.warning(f"[DROITS] Écriture refusée (lecture seule) : {current_user.email} "
+                   f"→ {request.endpoint}")
+    if request.is_json or "/api/" in request.path \
+       or "application/json" in (request.headers.get("Accept", "")):
+        return jsonify({"error": "Accès en lecture seule : modification non autorisée."}), 403
+    flash("Votre profil est en lecture seule : vous ne pouvez pas modifier les données.", "error")
+    return redirect(url_for("tenant.dashboard"))
+
+
+@bp.before_request
+def _bloquer_ecriture_lecture_seule():
+    return refuser_ecriture_lecture_seule()
+
+
 
 
 

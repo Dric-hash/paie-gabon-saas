@@ -9,6 +9,8 @@ qu'après validation du RH. La synchronisation est idempotente par uuid_client :
 rejouer la file hors-ligne ne crée jamais de doublon.
 """
 import math
+import hashlib
+import functools
 import logging
 from datetime import datetime, date
 
@@ -31,8 +33,14 @@ def _serializer():
     return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt=_TOKEN_SALT)
 
 
+def _empreinte_pin(pointeur):
+    """Empreinte courte du PIN haché, embarquée dans le jeton : changer le PIN
+    rend immédiatement caducs les jetons émis avant (téléphone perdu/volé)."""
+    return hashlib.sha256((pointeur.pin_hash or "").encode()).hexdigest()[:16]
+
+
 def _emettre_token(pointeur):
-    return _serializer().dumps({"pid": pointeur.id})
+    return _serializer().dumps({"pid": pointeur.id, "v": _empreinte_pin(pointeur)})
 
 
 def _pointeur_depuis_token():
@@ -49,6 +57,12 @@ def _pointeur_depuis_token():
         return None
     p = PointeurChantier.query.get(data.get("pid"))
     if not p or not p.actif:
+        return None
+    # Jeton émis avant un changement de PIN → refusé. (Les jetons antérieurs à
+    # ce contrôle, sans « v », restent acceptés jusqu'à leur expiration naturelle
+    # de 30 jours, pour ne pas déconnecter d'un coup tous les chefs de chantier.)
+    v = data.get("v")
+    if v is not None and v != _empreinte_pin(p):
         return None
     return p
 
@@ -142,7 +156,46 @@ def service_worker():
 
 # ──────────────────────────────── API JSON ────────────────────────────────
 
+# Limites de la connexion PWA. Par CODE pointeur : la vraie barrière contre le
+# cassage du PIN (9 000 combinaisons à 10 essais/heure ≈ 37 jours). Par IP :
+# large, car les opérateurs mobiles placent souvent de nombreux abonnés
+# derrière une même IP publique (plusieurs chefs de chantier à la fois).
+_LIMITES_PAR_CODE = "5/minute;10/hour"
+_LIMITES_PAR_IP = "60/minute"
+
+
+def _limiter_connexion(f):
+    """Anti force brute du PIN : chaque tentative est comptée UNE fois par clé
+    (code pointeur, adresse IP) via le moteur de limites partagé de
+    l'application. Réponse JSON 429 lisible par la PWA."""
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        from core import get_limiter
+        lim = get_limiter()
+        if not lim or not getattr(lim, "enabled", True):
+            return f(*args, **kwargs)
+        try:
+            from limits import parse_many
+            moteur = lim.limiter
+            code = ((request.get_json(silent=True) or {}).get("code") or "").strip().upper()
+            controles = [(parse_many(_LIMITES_PAR_IP), ("pwa-login-ip", request.remote_addr or "?"))]
+            if code:
+                controles.append((parse_many(_LIMITES_PAR_CODE), ("pwa-login-code", code)))
+            for limites, cle in controles:
+                for item in limites:
+                    if not moteur.hit(item, *cle):
+                        logger.warning(f"[MOBILE] Trop de tentatives de connexion "
+                                       f"({cle[0]}={cle[1]})")
+                        return jsonify({"ok": False,
+                                        "erreur": "Trop de tentatives. Réessayez plus tard."}), 429
+        except Exception as e:   # le limiteur ne doit jamais bloquer le service
+            logger.warning(f"[MOBILE] Limiteur indisponible : {e}")
+        return f(*args, **kwargs)
+    return wrapper
+
+
 @bp.route("/api/login", methods=["POST"])
+@_limiter_connexion
 def api_login():
     data = request.get_json(silent=True) or {}
     code = (data.get("code") or "").strip().upper()

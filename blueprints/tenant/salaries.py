@@ -10,7 +10,7 @@ from sqlalchemy import desc, or_, func
 from blueprints.tenant import (bp, logger, _doc_response, _build_elements_recurrents,
     _grille_tenant, _lire_pointage_salaries, _sal_periode_demandee,
     _pointages_mois_contexte, _resoudre_mois_annee)
-from core import tenant_required, get_tenant, can_edit, _pd, _parse_date, parse_date, _cache_delete
+from core import tenant_required, get_tenant, can_edit, _pd, _parse_date, parse_date, _cache_delete, id_du_tenant
 from audit import log_action
 from models import (db, Salarie, Contrat, CategorieEmploi, DocumentSalarie, ModeleContrat,
                     BulletinPaie, PeriodePaie, Conge, Acompte, ComposantPaie,
@@ -369,7 +369,7 @@ def salarie_nouveau():
             return redirect(url_for("tenant.salaries"))
         s=Salarie(tenant_id=t.id,
             matricule=request.form["matricule"].strip().upper(),
-            categorie_id=request.form.get("categorie_id") or None,
+            categorie_id=id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t),
             nom=request.form["nom"].strip().upper(), prenom=request.form["prenom"].strip(),
             telephone=request.form.get("telephone"), email=request.form.get("email","").strip() or None,
             nationalite=request.form.get("nationalite","GABONAISE"),
@@ -408,8 +408,14 @@ def salarie_detail(id):
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     bulletins = BulletinPaie.query.filter_by(salarie_id=id, tenant_id=t.id)        .order_by(BulletinPaie.date_creation.desc()).all()
     contrat = Contrat.query.filter_by(salarie_id=id, tenant_id=t.id, actif=True).first()
-    conge   = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
-                                     annee=datetime.now().year).first()
+    # Soldes : ligne de solde annuel (date_depart vide) ; à défaut, 1re ligne de l'année.
+    _conges_annee = Conge.query.filter_by(salarie_id=id, tenant_id=t.id,
+                                          annee=datetime.now().year)
+    conge   = (_conges_annee.filter(Conge.date_depart.is_(None)).first()
+               or _conges_annee.first())
+    dernier_conge = (Conge.query.filter_by(salarie_id=id, tenant_id=t.id)
+                     .filter(Conge.date_depart.isnot(None))
+                     .order_by(Conge.date_depart.desc()).first())
     total_brut = sum(float(b.salaire_brut or 0) for b in bulletins)
     total_net  = sum(float(b.net_a_payer  or 0) for b in bulletins)
     total_cnss = sum(float(b.cnss_salarie or 0) for b in bulletins)
@@ -451,6 +457,7 @@ def salarie_detail(id):
         .order_by(Sanction.date_sanction.desc()).all())
     return render_template("tenant/salarie_detail.html",
         salarie=s, tenant=t, bulletins=bulletins, contrat=contrat, conge=conge,
+        dernier_conge=dernier_conge,
         documents=documents, historique_modifs=historique_modifs, sanctions=sanctions,
         modeles_contrat=ModeleContrat.query.filter_by(tenant_id=t.id, actif=True).order_by(ModeleContrat.nom).all(),
         total_brut=total_brut, total_net=total_net, total_cnss=total_cnss,
@@ -488,7 +495,7 @@ def salarie_modifier(id):
             ("nb_enfants",int(request.form.get("nb_enfants") or 0)),
             ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
             ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
-            ("emploi",request.form.get("emploi")),("categorie_id",request.form.get("categorie_id") or None),
+            ("emploi",request.form.get("emploi")),("categorie_id",id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t)),
             ("mode_paiement",(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
@@ -536,7 +543,7 @@ def salarie_modifier(id):
 
         db.session.commit()
         # ── Affectation site ──────────────────────────────────────────────
-        site_id = request.form.get("site_id", type=int)
+        site_id = id_du_tenant(Site, request.form.get("site_id"), t)
         if site_id:
             aff_prev = AffectationSite.query.filter_by(
                 salarie_id=s.id, tenant_id=t.id, actif=True).first()
@@ -606,7 +613,7 @@ def contrat_nouveau(sal_id):
         type_c  = request.form.get("type_contrat", "CDI")
         salaire = float(request.form.get("salaire_base", 0) or 0)
         poste   = request.form.get("poste", "").strip() or s.emploi
-        cat_id  = request.form.get("categorie_id", type=int)
+        cat_id  = id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t)
 
         try:
             date_debut = datetime.strptime(request.form.get("date_debut",""), "%Y-%m-%d").date()
@@ -688,7 +695,7 @@ def contrat_modifier(id):
         avant = c.to_dict()
         c.type_contrat = request.form.get("type_contrat", c.type_contrat)
         c.poste        = request.form.get("poste", c.poste or "").strip()
-        c.categorie_id = request.form.get("categorie_id", type=int) or c.categorie_id
+        c.categorie_id = id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t) or c.categorie_id
 
         try:
             c.salaire_base = float(request.form.get("salaire_base", c.salaire_base) or 0)

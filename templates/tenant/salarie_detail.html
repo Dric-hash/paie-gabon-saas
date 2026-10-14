@@ -77,7 +77,7 @@
     </div>
     {% if current_user.is_tenant_admin %}
     <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="margin:0"
-      onsubmit="return confirm('⚠️ Supprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données (bulletins brouillon, contrats, pointages, acomptes, congés) seront effacées.\n\nCette action est IRRÉVERSIBLE.')">
+      onsubmit="return confirm(this.dataset.confirm)" data-confirm="⚠️ Supprimer définitivement {{ salarie.nom_complet }} ?&#10;&#10;Toutes ses données (bulletins brouillon, contrats, pointages, acomptes, congés) seront effacées.&#10;&#10;Cette action est IRRÉVERSIBLE.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <button type="submit"
         style="background:#dc2626;color:white;padding:.5rem 1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">
@@ -220,10 +220,11 @@
           <div style="font-size:.7rem;color:#1d4ed8">Restant</div>
         </div>
       </div>
-      {% if conge.date_depart %}
+      {% set _dc = dernier_conge or (conge if conge and conge.date_depart else none) %}
+      {% if _dc %}
       <div style="margin-top:.75rem;font-size:.8rem;color:#6b7280;text-align:center">
-        Dernier congé : {{ conge.date_depart|date_fr }} → {{ conge.date_retour|date_fr }}
-        <span class="badge-{{ conge.statut|lower }}" style="margin-left:.5rem">{{ conge.statut }}</span>
+        Dernier congé : {{ _dc.date_depart|date_fr }} → {{ _dc.date_retour|date_fr }}
+        <span class="badge-{{ _dc.statut|lower }}" style="margin-left:.5rem">{{ _dc.statut }}</span>
       </div>
       {% endif %}
       {% else %}
@@ -402,7 +403,7 @@
           👤 Passer en INACTIF
         </a>
         <form method="POST" action="/salaries/{{ salarie.id }}/supprimer" style="flex:1;margin:0"
-          onsubmit="return confirm('⚠️ ATTENTION\n\nSupprimer définitivement {{ salarie.nom_complet }} ?\n\nToutes ses données seront effacées.\nCette action est IRRÉVERSIBLE.')">
+          onsubmit="return confirm(this.dataset.confirm)" data-confirm="⚠️ ATTENTION&#10;&#10;Supprimer définitivement {{ salarie.nom_complet }} ?&#10;&#10;Toutes ses données seront effacées.&#10;Cette action est IRRÉVERSIBLE.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
           <button type="submit"
             style="width:100%;background:#dc2626;color:white;padding:.625rem;border-radius:.75rem;font-weight:700;font-size:.8rem;border:none;cursor:pointer">

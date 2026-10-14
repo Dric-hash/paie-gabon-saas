@@ -38,6 +38,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from app import app
 from models import db, Plan, Tenant, Utilisateur, CategorieEmploi, \
                    Salarie, Contrat, PeriodePaie, BulletinPaie
+from models import utcnow
 import secrets as sec_mod
 
 # ── HELPERS ───────────────────────────────────────────────────────────────────

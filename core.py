@@ -250,11 +250,52 @@ def get_tenant():
             from models import Tenant
             ent = Tenant.query.get(ent_id)
             if ent and ent.cabinet_id == t.id:
-                return ent
-            # Contexte invalide (entreprise inexistante ou pas au cabinet) :
-            # on le purge par prudence.
+                # Un collaborateur (non admin) doit TOUJOURS être assigné à
+                # l'entreprise : si l'admin du cabinet lui retire l'assignation,
+                # l'accès cesse immédiatement (pas seulement à la reconnexion).
+                if current_user.is_tenant_admin:
+                    return ent
+                from models import CollaborateurEntreprise
+                if CollaborateurEntreprise.query.filter_by(
+                        utilisateur_id=current_user.id, entreprise_id=ent.id).first():
+                    return ent
+            # Contexte invalide (entreprise inexistante, pas au cabinet, ou
+            # collaborateur désassigné) : on le purge par prudence.
             session.pop("cabinet_entreprise_id", None)
     return t
+
+
+def id_du_tenant(model, valeur, t):
+    """Valide un identifiant étranger reçu d'un formulaire (categorie_id,
+    site_id, contrat_id…) : renvoie l'id s'il désigne un objet appartenant à CE
+    tenant, sinon None. Empêche de rattacher une donnée à l'objet d'une autre
+    entreprise en forgeant la requête (référence croisée entre tenants)."""
+    try:
+        vid = int(valeur)
+    except (TypeError, ValueError):
+        return None
+    if vid <= 0 or t is None:
+        return None
+    obj = model.query.filter_by(id=vid, tenant_id=t.id).first()
+    return obj.id if obj else None
+
+
+def chemin_interne(url, defaut):
+    """Cible de redirection sûre : n'accepte qu'un chemin relatif interne
+    (« /bulletins?… »). Rejette « //site.com », « /\\site.com », les schémas
+    (http:, javascript:) et les caractères de contrôle, que les navigateurs
+    interprètent comme une sortie vers un autre site (redirection ouverte)."""
+    from urllib.parse import urlparse
+    if not url or not isinstance(url, str):
+        return defaut
+    url = url.strip()
+    if (not url.startswith("/") or url.startswith("//") or "\\" in url
+            or any(ord(ch) < 32 for ch in url)):
+        return defaut
+    p = urlparse(url)
+    if p.scheme or p.netloc:
+        return defaut
+    return url
 
 
 def parse_date(val):

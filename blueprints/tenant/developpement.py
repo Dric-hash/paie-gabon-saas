@@ -11,7 +11,7 @@ from flask import render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 
 from blueprints.tenant import bp, _doc_response
-from core import get_tenant, _parse_date
+from core import get_tenant, _parse_date, chemin_interne
 from audit import log_action
 from models import (db, Salarie, Formation, Competence, CompetenceSalarie,
                     Evaluation)
@@ -146,7 +146,7 @@ def formation_supprimer(id):
     db.session.commit()
     log_action("DELETE", "formation", id, "Formation supprimée")
     flash("Formation supprimée.", "success")
-    return redirect(request.form.get("retour") or url_for("tenant.carriere", id=sid))
+    return redirect(chemin_interne(request.form.get("retour"), url_for("tenant.carriere", id=sid)))
 
 
 @bp.route("/formations/<int:id>/attestation")
@@ -340,7 +340,7 @@ def evaluation_supprimer(id):
     db.session.commit()
     log_action("DELETE", "evaluation", id, "Évaluation supprimée")
     flash("Évaluation supprimée.", "success")
-    return redirect(request.form.get("retour") or url_for("tenant.carriere", id=sid))
+    return redirect(chemin_interne(request.form.get("retour"), url_for("tenant.carriere", id=sid)))
 
 
 @bp.route("/evaluations/<int:id>/pdf")

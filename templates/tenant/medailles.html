@@ -51,7 +51,7 @@
           <td style="padding:.6rem .9rem">{{ e.palier.icone }} {{ e.palier.libelle }} <span style="color:#9ca3af">({{ e.palier.annees_requises }} ans)</span></td>
           <td style="padding:.6rem .9rem;text-align:right">
             <form method="POST" action="{{ url_for('tenant.medailles_attribuer', salarie_id=e.salarie.id, palier_id=e.palier.id) }}" style="display:inline"
-                  onsubmit="return confirm('Attribuer la {{ e.palier.libelle }} à {{ e.salarie.nom_complet }} ?')">
+                  onsubmit="return confirm(this.dataset.confirm)" data-confirm="Attribuer la {{ e.palier.libelle }} à {{ e.salarie.nom_complet }} ?">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <input type="hidden" name="date_effet" value="{{ now.strftime('%Y-%m-%d') }}"/>
               <button style="background:#0f3d36;color:#fff;border:none;padding:.45rem .9rem;border-radius:.5rem;font-weight:700;cursor:pointer">Attribuer</button>

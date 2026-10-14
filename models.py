@@ -707,6 +707,7 @@ class BulletinPaie(db.Model):
     numero                = db.Column(db.String(30))
     numero_seq            = db.Column(db.Integer)
     mode_paiement         = db.Column(db.String(30), default="ESPECES")  # figé au paiement
+    date_paiement         = db.Column(db.Date)   # date réelle du versement (saisie au paiement)
     nb_jours_travailles   = db.Column(db.Integer)
     salaire_base          = db.Column(db.Numeric(15,2), nullable=False)
     heures_sup_10         = db.Column(db.Numeric(15,2), default=0)

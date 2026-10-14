@@ -501,7 +501,7 @@
         <input type="hidden" name="statut" value="SUSPENDU">
         <input type="hidden" name="plan_id" value="{{ tenant.plan_id or '' }}">
         <button type="submit"
-          onclick="return confirm('Suspendre {{ tenant.denomination }} ? L\'entreprise ne pourra plus se connecter.')"
+          onclick="return confirm(this.dataset.confirm)" data-confirm="Suspendre {{ tenant.denomination }} ? L'entreprise ne pourra plus se connecter."
           style="width:100%;background:#fff;border:1.5px solid #f97316;color:#ea580c;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.8rem;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:.5rem">
           🔴 Suspendre l'accès
         </button>
@@ -553,7 +553,7 @@ function confirmerSuppression() {
     return false; // Bloquer le submit au premier clic
   }
   const saisi  = document.getElementById('confirm-input').value.trim();
-  const attendu = "{{ tenant.denomination }}";
+  const attendu = {{ tenant.denomination|tojson }};
   if (saisi !== attendu) {
     alert(`Le nom saisi ne correspond pas.\nAttendu : "${attendu}"\nSaisi : "${saisi}"`);
     return false;

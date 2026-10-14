@@ -374,6 +374,45 @@ def conges():
         annee=annee, annees_dispo=annees_dispo, now=now, q=q,
         salaries=salaries_list)
 
+# ── Congés : une ligne « SOLDE » par salarié et par année (date_depart vide)
+# porte les jours acquis / pris ; chaque demande est une ligne distincte.
+# Les calculs d'argent (allocation de congé du bulletin, indemnité de départ)
+# additionnent les jours_pris des DEMANDES approuvées : une demande ne doit donc
+# jamais hériter des jours d'une autre, ni être comptée deux fois.
+_STATUTS_APPROUVES = ("APPROUVÉ", "APPROUVE")
+
+
+def _jours_demande(dep, ret):
+    return (ret - dep).days + 1 if dep and ret and ret >= dep else 0
+
+
+def _solde_annuel(t, salarie, annee):
+    """Ligne de solde annuel (créée au besoin). Taux d'acquisition : la constante
+    légale unique du logiciel (conges_avance.JOURS_PAR_MOIS)."""
+    from conges_avance import JOURS_PAR_MOIS
+    solde = (Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie.id, annee=annee)
+             .filter(Conge.date_depart.is_(None)).first())
+    if not solde:
+        mois = max(1, (date.today() - salarie.date_embauche).days // 30) if salarie.date_embauche else 12
+        solde = Conge(tenant_id=t.id, salarie_id=salarie.id, annee=annee,
+                      jours_acquis=round(min(mois, 12) * JOURS_PAR_MOIS, 1),
+                      jours_pris=0, statut="SOLDE")
+        db.session.add(solde)
+    elif solde.statut in (None, "DEMANDÉ", "DEMANDE"):
+        # Anciennes lignes de solde créées avec le statut par défaut : on les
+        # sort des « congés en attente ».
+        solde.statut = "SOLDE"
+    return solde
+
+
+def _imputer_solde(t, c, delta):
+    """Reporte delta jours sur le solde annuel de la demande c (±)."""
+    if not delta or not c.salarie:
+        return
+    solde = _solde_annuel(t, c.salarie, c.annee)
+    solde.jours_pris = max(0.0, float(solde.jours_pris or 0) + delta)
+
+
 @bp.route("/conges/nouveau", methods=["GET","POST"])
 @login_required
 def conge_nouveau():
@@ -399,23 +438,24 @@ def conge_nouveau():
                     complications=(request.form.get("complications_grossesse") == "1"),
                 )
                 date_dep, date_ret = mat["date_debut"], mat["date_fin"]
-        jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
-        conge = Conge.query.filter_by(tenant_id=t.id, salarie_id=salarie_id, annee=annee).first()
-        if not conge:
-            s = Salarie.query.filter_by(id=salarie_id, tenant_id=t.id).first()
-            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
-            conge = Conge(tenant_id=t.id, salarie_id=salarie_id, annee=annee,
-                jours_acquis=round(min(mois,12)*2.0,1), jours_pris=0, type_conge=type_c, statut="DEMANDÉ")
-            db.session.add(conge)
-        conge.date_depart  = date_dep
-        conge.date_retour  = date_ret
-        conge.type_conge   = type_c
-        conge.statut       = "DEMANDÉ"
-        conge.jours_pris   = float(conge.jours_pris or 0)  # ne pas écraser les jours déjà pris
+        s = Salarie.query.filter_by(id=salarie_id, tenant_id=t.id).first() if salarie_id else None
+        if not s:
+            flash("Veuillez choisir un salarié.", "error")
+            return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+        if not date_dep or not date_ret or date_ret < date_dep:
+            flash("Dates de congé invalides (la date de retour doit suivre la date de départ).", "error")
+            return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
+        jours = _jours_demande(date_dep, date_ret)
+        _solde_annuel(t, s, annee)   # garantit la ligne de solde de l'année
+        # Toujours une NOUVELLE demande : on n'écrase jamais une demande existante.
+        conge = Conge(tenant_id=t.id, salarie_id=s.id, annee=annee,
+                      jours_acquis=0, jours_pris=0, type_conge=type_c, statut="DEMANDÉ",
+                      date_depart=date_dep, date_retour=date_ret)
+        db.session.add(conge)
         db.session.commit()
         log_action("CREATE", "conge", conge.id,
-                   f"Demande de congé {conge.salarie.nom_complet if conge.salarie else ''} "
-                   f"({jours} j) — {conge.date_debut}→{conge.date_fin}")
+                   f"Demande de congé {s.nom_complet} ({jours} j) — "
+                   f"{date_dep.strftime('%d/%m/%Y')}→{date_ret.strftime('%d/%m/%Y')}")
         db.session.commit()
         flash(f"✅ Demande de congé enregistrée ({jours} jour(s)).", "success")
         return redirect(url_for("tenant.conges"))
@@ -431,20 +471,29 @@ def conge_modifier(id):
     salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF").order_by(Salarie.nom).all()
 
     if request.method == "POST":
-        old_jours = (c.date_retour - c.date_depart).days + 1 if c.date_depart and c.date_retour else 0
         date_dep  = _parse_date(request.form.get("date_depart"))
         date_ret  = _parse_date(request.form.get("date_retour"))
         type_c    = request.form.get("type_conge", "ANNUEL")
-        new_jours = (date_ret - date_dep).days + 1 if date_dep and date_ret else 0
+        if not date_dep or not date_ret or date_ret < date_dep:
+            flash("Dates de congé invalides (la date de retour doit suivre la date de départ).", "error")
+            return render_template("tenant/conge_form.html", tenant=t, salaries=salaries_list,
+                                   conge=c, now=datetime.now(), mode="modifier")
+        new_jours = _jours_demande(date_dep, date_ret)
+        nouveau_statut = request.form.get("statut", c.statut)
+        etait_approuve = c.statut in _STATUTS_APPROUVES
+        sera_approuve  = nouveau_statut in _STATUTS_APPROUVES
 
-        # Si congé APPROUVÉ → ajuster les jours_pris
-        if c.statut == "APPROUVÉ":
-            c.jours_pris = max(0, float(c.jours_pris or 0) - old_jours + new_jours)
-
+        # Le solde reflète exactement les demandes approuvées : on retire
+        # l'ancienne contribution puis on ajoute la nouvelle.
+        if etait_approuve:
+            _imputer_solde(t, c, -float(c.jours_pris or 0))
         c.date_depart = date_dep
         c.date_retour = date_ret
         c.type_conge  = type_c
-        c.statut      = request.form.get("statut", c.statut)
+        c.statut      = nouveau_statut
+        c.jours_pris  = new_jours if sera_approuve else 0
+        if sera_approuve:
+            _imputer_solde(t, c, new_jours)
         db.session.commit()
         log_action("UPDATE", "conge", c.id,
                    f"Modification congé — {c.salarie.nom_complet if c.salarie else ''} ({new_jours} j)")
@@ -463,26 +512,22 @@ def conge_approuver(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    if c.date_depart and c.date_retour:
-        jours = (c.date_retour - c.date_depart).days + 1
-        # Mettre à jour le solde de l'année
-        solde = Conge.query.filter_by(
-            tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee
-        ).filter(Conge.date_depart == None).first()
-        if not solde:
-            s = Salarie.query.filter_by(id=c.salarie_id, tenant_id=t.id).first()
-            mois = max(1,(datetime.now().date()-s.date_embauche).days//30) if s.date_embauche else 12
-            solde = Conge(tenant_id=t.id, salarie_id=c.salarie_id, annee=c.annee,
-                          jours_acquis=round(min(mois,12)*2.5, 1), jours_pris=0)
-            db.session.add(solde)
-        solde.jours_pris = float(solde.jours_pris or 0) + jours
-        c.jours_pris     = float(c.jours_pris or 0) + jours
+    # Idempotence : un double-clic ne doit pas compter les jours deux fois.
+    if c.statut in _STATUTS_APPROUVES:
+        flash("Ce congé est déjà approuvé.", "info")
+        return redirect(url_for("tenant.conges"))
+    if not c.date_depart or not c.date_retour:
+        flash("Ce congé n'a pas de dates : il ne peut pas être approuvé.", "error")
+        return redirect(url_for("tenant.conges"))
+    jours = _jours_demande(c.date_depart, c.date_retour)
+    c.jours_pris = jours            # valeur exacte, jamais un cumul hérité
     c.statut = "APPROUVÉ"
+    _imputer_solde(t, c, jours)
     db.session.commit()
     log_action("VALIDATE", "conge", c.id,
-               f"Congé approuvé — {c.salarie.nom_complet if c.salarie else ''}")
+               f"Congé approuvé — {c.salarie.nom_complet if c.salarie else ''} ({jours} j)")
     db.session.commit()
-    flash(f"✅ Congé de {c.salarie.nom_complet} approuvé.", "success")
+    flash(f"✅ Congé de {c.salarie.nom_complet if c.salarie else ''} approuvé.", "success")
     return redirect(url_for("tenant.conges"))
 
 @bp.route("/conges/<int:id>/refuser", methods=["POST"])
@@ -491,7 +536,11 @@ def conge_refuser(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    c.statut="REFUSÉ"; db.session.commit()
+    # Refuser un congé déjà approuvé restitue ses jours au solde.
+    if c.statut in _STATUTS_APPROUVES:
+        _imputer_solde(t, c, -float(c.jours_pris or 0))
+        c.jours_pris = 0
+    c.statut = "REFUSÉ"; db.session.commit()
     log_action("CANCEL", "conge", c.id,
                f"Congé refusé — {c.salarie.nom_complet if c.salarie else ''}")
     db.session.commit()
@@ -504,9 +553,14 @@ def conge_supprimer(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     c = Conge.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    nom = c.salarie.nom_complet if c.salarie else ""   # lu AVANT la suppression
+    if c.date_depart is None:
+        flash("La ligne de solde annuel ne se supprime pas.", "error")
+        return redirect(url_for("tenant.conges"))
+    if c.statut in _STATUTS_APPROUVES:
+        _imputer_solde(t, c, -float(c.jours_pris or 0))   # restitue les jours
     db.session.delete(c); db.session.commit()
-    log_action("DELETE", "conge", id,
-               f"Suppression demande de congé — {c.salarie.nom_complet if c.salarie else ''}")
+    log_action("DELETE", "conge", id, f"Suppression demande de congé — {nom}")
     db.session.commit()
     flash("Demande supprimée.", "success")
     return redirect(url_for("tenant.conges"))

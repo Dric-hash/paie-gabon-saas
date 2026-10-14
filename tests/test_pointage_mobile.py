@@ -36,6 +36,11 @@ PIN = "4321"
 def client():
     flask_app.config.update({"TESTING": True, "WTF_CSRF_ENABLED": False,
                              "SERVER_NAME": "localhost"})
+    # Limiter (mémoire) partagé sur toute la session pytest : désactivé ici,
+    # comme dans les autres fichiers de tests (sinon les connexions répétées
+    # de la suite épuiseraient les fenêtres). Testé à part, explicitement.
+    from app import limiter
+    limiter.enabled = False
     with flask_app.app_context():
         db.drop_all()
         db.create_all()

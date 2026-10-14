@@ -70,7 +70,7 @@
           {% else %}<span style="font-size:.75rem;background:#f3f4f6;color:#6b7280;padding:.15rem .5rem;border-radius:.4rem">Inactif</span>{% endif %}
         </td>
         <td style="padding:.55rem .9rem;text-align:right;white-space:nowrap">
-          <form method="POST" action="{{ url_for('tenant.pointeur_pin', id=p.id) }}" style="display:inline" onsubmit="return confirm('Générer un nouveau PIN pour {{ p.nom }} ?')">
+          <form method="POST" action="{{ url_for('tenant.pointeur_pin', id=p.id) }}" style="display:inline" onsubmit="return confirm(this.dataset.confirm)" data-confirm="Générer un nouveau PIN pour {{ p.nom }} ?">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <button style="font-size:.72rem;font-weight:600;background:#eef4f2;color:#17564c;padding:.3rem .6rem;border-radius:.4rem;border:none;cursor:pointer">Nouveau PIN</button>
           </form>

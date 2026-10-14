@@ -551,13 +551,13 @@
               {{ a.date_debut.strftime('%d/%m/%Y') if a.date_debut else '—' }}
             </td>
             <td style="text-align:center;padding:.625rem .5rem">
-              <button onclick="ouvrirPermutation({{ a.id }}, '{{ a.nom_travailleur }}')"
+              <button onclick="ouvrirPermutation({{ a.id }}, this.dataset.nom)" data-nom="{{ a.nom_travailleur }}"
                 style="font-size:.7rem;background:#f59e0b;color:white;padding:.3rem .6rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700">
                 🔄 Permuter
               </button>
             </td>
             <td style="text-align:center;padding:.625rem .5rem">
-              <button onclick="ouvrirRetrait({{ a.id }}, '{{ a.nom_travailleur }}')"
+              <button onclick="ouvrirRetrait({{ a.id }}, this.dataset.nom)" data-nom="{{ a.nom_travailleur }}"
                 style="font-size:.7rem;background:#fee2e2;color:#dc2626;padding:.3rem .6rem;border-radius:.5rem;border:none;cursor:pointer;font-weight:700">
                 ✕ Retirer
               </button>

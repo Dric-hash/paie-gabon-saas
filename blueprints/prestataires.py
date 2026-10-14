@@ -21,7 +21,7 @@ from models import (db, utcnow, Prestataire, ContratPrestation, FacturePrestatai
                     PaiementPrestataire, AvancePrestataire, LigneFacturePrestataire,
                     Site)
 from audit import log_action
-from core import get_tenant, can_edit, require_permission, parse_date, admin_only
+from core import get_tenant, can_edit, require_permission, parse_date, admin_only, id_du_tenant
 from devises import (taux_xaf, convertir_en_xaf, info_taux, devises_disponibles,
                      DEVISES)
 
@@ -53,6 +53,14 @@ def _appliquer_regime_fiscal(p, form):
         p.taux_retenue_source = TAUX_PRECOMPTE
         # CSS optionnelle sous ce régime (cochable au besoin)
         p.assujetti_css = form.get("assujetti_css") == "on"
+
+
+@bp.before_request
+def _bloquer_ecriture_lecture_seule():
+    """Rôles en lecture seule (COMPTABLE, DIRECTEUR, LECTURE) : aucune création,
+    modification, validation ni paiement de facture/avance prestataire."""
+    from blueprints.tenant import refuser_ecriture_lecture_seule
+    return refuser_ecriture_lecture_seule({"prestataires.api_calculer_facture"})
 
 
 def _guard():
@@ -380,7 +388,7 @@ def contrat_prestation_nouveau(id):
         montant=float(request.form.get("montant", 0) or 0),
         date_debut=parse_date(request.form.get("date_debut")) or date.today(),
         date_fin=parse_date(request.form.get("date_fin")),
-        site_id=request.form.get("site_id", type=int) or None,
+        site_id=id_du_tenant(Site, request.form.get("site_id"), t),
         conditions=request.form.get("conditions", "").strip(),
     )
     db.session.add(c)
@@ -435,8 +443,8 @@ def facture_nouvelle(id):
 
     f = FacturePrestataire(
         tenant_id=t.id, prestataire_id=id,
-        contrat_id=request.form.get("contrat_id", type=int) or None,
-        site_id=request.form.get("site_id", type=int) or None,
+        contrat_id=id_du_tenant(ContratPrestation, request.form.get("contrat_id"), t),
+        site_id=id_du_tenant(Site, request.form.get("site_id"), t),
         numero=numero,
         date_facture=parse_date(request.form.get("date_facture")) or date.today(),
         date_echeance=parse_date(request.form.get("date_echeance")),
@@ -532,8 +540,8 @@ def facture_modifier(fid):
     f.date_facture  = parse_date(request.form.get("date_facture")) or f.date_facture
     f.date_echeance = parse_date(request.form.get("date_echeance"))
     f.description   = request.form.get("description", "").strip()
-    f.site_id       = request.form.get("site_id", type=int) or None
-    f.contrat_id    = request.form.get("contrat_id", type=int) or None
+    f.site_id       = id_du_tenant(Site, request.form.get("site_id"), t)
+    f.contrat_id    = id_du_tenant(ContratPrestation, request.form.get("contrat_id"), t)
     f.pourcentage_realisation = request.form.get("pourcentage_realisation", type=float) or 0
     f.montant_ht    = float(request.form.get("montant_ht", f.montant_ht) or 0)
     f.taux_tva      = float(request.form.get("taux_tva", f.taux_tva) or 0)
@@ -728,8 +736,8 @@ def avance_nouvelle(id):
 
     a = AvancePrestataire(
         tenant_id=t.id, prestataire_id=id,
-        contrat_id=request.form.get("contrat_id", type=int) or None,
-        site_id=request.form.get("site_id", type=int) or None,
+        contrat_id=id_du_tenant(ContratPrestation, request.form.get("contrat_id"), t),
+        site_id=id_du_tenant(Site, request.form.get("site_id"), t),
         montant=montant,
         devise=devise, taux_change=taux,
         montant_xaf=round(montant * taux, 2),
@@ -776,8 +784,8 @@ def avance_modifier(aid):
     a.devise        = devise
     a.taux_change   = taux
     a.montant_xaf   = round(montant * taux, 2)
-    a.site_id       = request.form.get("site_id", type=int) or None
-    a.contrat_id    = request.form.get("contrat_id", type=int) or None
+    a.site_id       = id_du_tenant(Site, request.form.get("site_id"), t)
+    a.contrat_id    = id_du_tenant(ContratPrestation, request.form.get("contrat_id"), t)
     a.date_avance   = parse_date(request.form.get("date_avance")) or a.date_avance
     a.mode_paiement = request.form.get("mode_paiement", a.mode_paiement)
     a.reference     = request.form.get("reference", "").strip()

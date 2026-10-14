@@ -9,7 +9,7 @@ from flask import render_template, request, redirect, url_for, flash, abort
 from flask_login import login_required, current_user
 
 from blueprints.tenant import bp, _doc_response
-from core import get_tenant, _parse_date
+from core import get_tenant, _parse_date, id_du_tenant
 from audit import log_action
 from models import (db, Salarie, Contrat, CategorieEmploi, EvenementCarriere,
                     HistoriqueSalarie, Sanction, Formation, Evaluation,
@@ -64,7 +64,7 @@ def _frise(t, s):
         det += f" · {f.statut_libelle}"
         if f.certifiante and f.date_expiration:
             det += f"\nCertification valide jusqu'au {f.date_expiration.strftime('%d/%m/%Y')}"
-        lignes.append({"date": f.date_debut or f.date_creation.date() if f.date_creation else date.today(),
+        lignes.append({"date": f.date_debut or (f.date_creation.date() if f.date_creation else date.today()),
                        "type": "FORMATION", "icone": "🎓",
                        "titre": f"Formation — {f.intitule}", "details": det,
                        "evt_id": None, "formation_id": f.id})
@@ -129,7 +129,8 @@ def promouvoir(id):
         date_effet = _parse_date(request.form.get("date_effet")) or date.today()
         nouveau_poste = (request.form.get("poste") or "").strip() or s.emploi
         nouvel_echelon = (request.form.get("echelon") or "").strip() or None
-        cat_id = request.form.get("categorie_id", type=int)
+        # Catégorie validée contre le tenant (jamais celle d'une autre entreprise)
+        cat_id = id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t)
         motif = (request.form.get("motif") or "").strip() or None
         try:
             nouveau_salaire = float((request.form.get("salaire_base") or "0").replace(" ", "").replace(",", "."))

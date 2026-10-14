@@ -506,11 +506,35 @@ def bulletins_valider_lot():
                    f"Annulation validation de {nb} bulletin(s) — période {pid}")
 
     elif action == "payer":
+        # Seuls les bulletins VALIDÉS se paient (numéro officiel attribué,
+        # acomptes déduits). Un brouillon doit d'abord être validé.
+        nb_brouillons = 0
+        payes = []
         for b in buls:
-            if b.statut not in ("VALIDÉ", "VALIDE", "BROUILLON"): continue
+            if b.statut == "BROUILLON":
+                nb_brouillons += 1; continue
+            if b.statut not in ("VALIDÉ", "VALIDE"): continue
             b.statut = "PAYÉ"
+            b.date_paiement = date.today()
+            b.mode_paiement = ((b.salarie.mode_paiement if b.salarie else None) or "ESPECES")
+            payes.append(b)
             nb += 1
         msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
+        if nb_brouillons:
+            msg += f" {nb_brouillons} brouillon(s) ignoré(s) : validez-les d'abord."
+        # Interconnexion Caisse, comme pour le paiement unitaire (ne bloque jamais).
+        for b in payes:
+            try:
+                from interco_caisse import proposer_ecriture
+                nom = b.salarie.nom_complet if b.salarie else "salarié"
+                periode_lib = f"{b.periode.libelle_mois} {b.periode.annee}" if b.periode else ""
+                proposer_ecriture(
+                    t, source_ref=f"bulletin-{b.id}",
+                    montant=float(b.net_a_payer or 0),
+                    motif=f"Salaire {nom} — {periode_lib}".strip(" —"),
+                    compte_suggere="6611", date_operation=b.date_paiement)
+            except Exception as _e:
+                current_app.logger.warning(f"[COMPTA] Proposition d'écriture échouée (bulletin {b.id}) : {_e}")
         log_action("PAY", "bulletin", pid,
                    f"{nb} bulletin(s) marqué(s) payé(s) — période {pid}")
 
@@ -798,7 +822,8 @@ def bulletin_valider(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
-    if b.statut == "VALIDÉ":
+    # Déjà validé OU déjà payé : ne jamais rétrograder un bulletin payé en « VALIDÉ ».
+    if b.statut in ("VALIDÉ", "VALIDE", "PAYÉ"):
         flash("Ce bulletin est déjà validé.", "info")
         return redirect(url_for("tenant.bulletin_detail", id=id))
     acomptes = Acompte.query.filter_by(
@@ -882,6 +907,13 @@ def bulletin_paye(id):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # Seul un bulletin VALIDÉ (numéroté, acomptes déduits) peut être payé.
+    if b.statut == "PAYÉ":
+        flash("Ce bulletin est déjà payé.", "info")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    if b.statut not in ("VALIDÉ", "VALIDE"):
+        flash("Validez d'abord le bulletin avant de le marquer comme payé.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
     mode = (request.form.get("mode_paiement") or "").strip()
     if mode not in ("ESPECES", "VIREMENT"):
         mode = (b.salarie.mode_paiement if b.salarie else "ESPECES") or "ESPECES"

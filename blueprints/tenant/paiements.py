@@ -384,6 +384,26 @@ def paiement_cinetpay_initier():
         return redirect(url_for("tenant.paiement"))
 
 
+def _cinetpay_montant_conforme(p, verif):
+    """Le montant VÉRIFIÉ auprès de CinetPay couvre-t-il le montant attendu ?
+    Montant absent ou nul = non prouvé. Appliqué à TOUS les chemins
+    d'activation (webhook, retour navigateur, interrogation de statut)."""
+    try:
+        paye = int(round(float(verif.get("montant") or 0)))
+    except (TypeError, ValueError):
+        paye = 0
+    attendu = int(round(float(p.montant or 0)))
+    return paye > 0 and paye >= attendu
+
+
+def _cinetpay_rejeter_montant(p, verif):
+    p.statut = "ECHEC"
+    p.notes = (f"Montant vérifié ({verif.get('montant')}) inférieur au montant attendu "
+               f"({p.montant}) — rejeté.")
+    db.session.commit()
+    logger.warning(f"[CinetPay] Montant non conforme — paiement {p.id}")
+
+
 @bp.route("/paiement/cinetpay/retour")
 @login_required
 def paiement_cinetpay_retour():
@@ -412,6 +432,11 @@ def paiement_cinetpay_retour():
             from cinetpay import verifier_statut
             ref = p.reference_interne
             r   = verifier_statut(ref)
+            if r["statut"] == "ACCEPTED" and not _cinetpay_montant_conforme(p, r):
+                _cinetpay_rejeter_montant(p, r)
+                flash("Le montant réglé ne correspond pas au montant attendu. "
+                      "Contactez le support.", "error")
+                return redirect(url_for("tenant.paiement"))
             if r["statut"] == "ACCEPTED":
                 _activer_abonnement(p)
                 flash("Paiement confirmé ! Votre abonnement est actif.", "success")
@@ -454,6 +479,9 @@ def paiement_cinetpay_statut(reference):
     try:
         from cinetpay import verifier_statut
         r = verifier_statut(reference)
+        if r["statut"] == "ACCEPTED" and not _cinetpay_montant_conforme(p, r):
+            _cinetpay_rejeter_montant(p, r)
+            return jsonify({"statut": "ECHEC", "message": p.notes})
         if r["statut"] == "ACCEPTED":
             _activer_abonnement(p)
             return jsonify({"statut": "SUCCES", "message": "Paiement confirmé !"})
@@ -533,7 +561,9 @@ def webhook_cinetpay():
         montant_paye = int(round(float(verif.get("montant") or 0)))
     except (TypeError, ValueError):
         montant_paye = 0
-    if montant_paye and montant_paye < montant_attendu:
+    # Montant vérifié absent ou nul = non prouvé → rejet (avant : le contrôle
+    # était sauté quand l'API ne renvoyait pas de montant).
+    if montant_paye <= 0 or montant_paye < montant_attendu:
         p.statut = "ECHEC"
         p.notes  = f"Montant payé ({montant_paye}) < attendu ({montant_attendu}) — rejeté."
         db.session.commit()

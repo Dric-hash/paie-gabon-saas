@@ -8,7 +8,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.orm import joinedload
 from sqlalchemy import desc, or_, func
 from blueprints.tenant import bp, _pointages_mois_contexte, _resoudre_mois_annee
-from core import tenant_required, get_tenant, _pd, _parse_date
+from core import tenant_required, get_tenant, _pd, _parse_date, id_du_tenant, chemin_interne
 from audit import log_action
 from models import (db, Journalier, Pointage, FeuillePaieJournalier, AvanceJournalier,
                     Salarie, Site, AffectationSite, Contrat, CategorieEmploi)
@@ -61,7 +61,7 @@ def journalier_convertir(id):
 
         s = Salarie(
             tenant_id=t.id, matricule=matricule,
-            categorie_id=request.form.get("categorie_id") or None,
+            categorie_id=id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t),
             nom=(request.form.get("nom") or j.nom).strip().upper(),
             prenom=(request.form.get("prenom") or j.prenom).strip(),
             telephone=request.form.get("telephone") or j.telephone,
@@ -248,7 +248,7 @@ def journalier_modifier(id):
         j.mode_paiement=(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()
         j.statut=request.form.get("statut","ACTIF")
         # ── Affectation site ──────────────────────────────────────────────
-        site_id = request.form.get("site_id", type=int)
+        site_id = id_du_tenant(Site, request.form.get("site_id"), t)
         if site_id:
             aff_prev = AffectationSite.query.filter_by(
                 journalier_id=j.id, tenant_id=t.id, actif=True).first()
@@ -576,7 +576,8 @@ def pointage_supprimer(ptg_id):
     log_action("DELETE", "pointage", ptg_id, f"Suppression pointage du {date_str}")
     db.session.commit()
     flash("🗑️ Pointage supprimé.", "success")
-    return redirect(next_url or f"/pointage/individuel?date={date_str}&type={type_w}&id={wid}")
+    return redirect(chemin_interne(
+        next_url, f"/pointage/individuel?date={date_str}&type={type_w}&id={wid}"))
 
 @bp.route("/pointage/sauvegarder", methods=["POST"])
 @login_required
@@ -976,14 +977,13 @@ def journalier_avance_supprimer(aid):
     return redirect(url_for("tenant.journalier_detail", id=jid))
 
 
-@bp.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
-@login_required
-def journalier_payer(id):
-    t = get_tenant()
-    if not t: return redirect(url_for("auth.login"))
-    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+def _payer_feuille_journalier(t, f, mode, date_pmt):
+    """Paie UNE feuille journalier en attente : déduit les avances non
+    régularisées (plus ancienne d'abord), fige le mode et la date, trace
+    l'opération et propose la sortie de caisse. Partagé par le paiement unitaire
+    et le paiement groupé, pour que les deux appliquent exactement les mêmes
+    règles. Retourne (net, avance_deduite)."""
     f.montant_brut = f.montant_a_payer   # = montant enregistré (arrondi éventuel déjà appliqué à la génération)
-    # Déduction des avances non régularisées du journalier (plus ancienne d'abord)
     avs = (AvanceJournalier.query.filter_by(tenant_id=t.id, journalier_id=f.journalier_id)
            .order_by(AvanceJournalier.date_avance).all())
     a_deduire = round(min(
@@ -1000,10 +1000,43 @@ def journalier_payer(id):
         pris = min(dispo, reste)
         a.montant_regularise = float(a.montant_regularise or 0) + pris
         reste = round(reste - pris, 2)
+    f.mode_paiement = mode
+    f.statut = "PAYÉ"; f.date_paiement = date_pmt; db.session.commit()
+    net = float(f.montant_brut) - a_deduire
+    nom = f.journalier.nom_complet if f.journalier else "journalier"
+    log_action("PAY", "feuille_journalier", f.id,
+               f"Paiement {nom} — net {net:,.0f} F"
+               + (f" (avances {a_deduire:,.0f} F)" if a_deduire else ""),
+               apres={"montant_brut": float(f.montant_brut), "avance_deduite": a_deduire,
+                      "net": net, "periode": f"{f.date_debut}→{f.date_fin}"})
+    db.session.commit()
+    # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
+    try:
+        from interco_caisse import proposer_ecriture
+        proposer_ecriture(
+            t, source_ref=f"journalier-{f.id}",
+            montant=float(net),
+            motif=f"Paie journalier {nom} — {f.date_debut}→{f.date_fin}",
+            compte_suggere="6611", date_operation=f.date_paiement)
+    except Exception as _e:
+        current_app.logger.warning(f"[COMPTA] Proposition d'écriture échouée (journalier {f.id}) : {_e}")
+    return net, a_deduire
+
+
+@bp.route("/journaliers/paie/<int:id>/payer", methods=["POST"])
+@login_required
+def journalier_payer(id):
+    t = get_tenant()
+    if not t: return redirect(url_for("auth.login"))
+    f = FeuillePaieJournalier.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    # Idempotence : une feuille déjà payée ne se repaie pas (sinon les avances
+    # plus récentes seraient « régularisées » sur une paie déjà versée).
+    if f.statut != "EN_ATTENTE":
+        flash("Cette feuille est déjà payée.", "info")
+        return redirect(url_for("tenant.journaliers_paie"))
     mode = (request.form.get("mode_paiement") or "").strip()
     if mode not in ("ESPECES", "VIREMENT"):
         mode = (f.journalier.mode_paiement if f.journalier else "ESPECES") or "ESPECES"
-    f.mode_paiement = mode
     # Date de paiement : celle choisie dans le formulaire, sinon aujourd'hui.
     date_pmt = date.today()
     _df = (request.form.get("date_paiement") or "").strip()
@@ -1012,30 +1045,13 @@ def journalier_payer(id):
             date_pmt = datetime.strptime(_df, "%Y-%m-%d").date()
         except ValueError:
             date_pmt = date.today()
-    f.statut = "PAYÉ"; f.date_paiement = date_pmt; db.session.commit()
-    net = float(f.montant_brut) - a_deduire
-    log_action("PAY", "feuille_journalier", f.id,
-               f"Paiement {f.journalier.nom_complet} — net {net:,.0f} F"
-               + (f" (avances {a_deduire:,.0f} F)" if a_deduire else ""),
-               apres={"montant_brut": float(f.montant_brut), "avance_deduite": a_deduire,
-                      "net": net, "periode": f"{f.date_debut}→{f.date_fin}"})
-    db.session.commit()
-    # Interconnexion Caisse : proposer la sortie correspondante (ne bloque jamais).
-    try:
-        from interco_caisse import proposer_ecriture
-        nom = f.journalier.nom_complet if f.journalier else "journalier"
-        proposer_ecriture(
-            t, source_ref=f"journalier-{f.id}",
-            montant=float(net),
-            motif=f"Paie journalier {nom} — {f.date_debut}→{f.date_fin}",
-            compte_suggere="6611", date_operation=f.date_paiement)
-    except Exception as _e:
-        current_app.logger.warning(f"[COMPTA] Proposition d'écriture échouée (journalier {f.id}) : {_e}")
+    net, a_deduire = _payer_feuille_journalier(t, f, mode, date_pmt)
+    nom = f.journalier.nom_complet if f.journalier else "journalier"
     if a_deduire > 0:
-        flash(f"Paiement de {f.journalier.nom_complet} enregistré "
+        flash(f"Paiement de {nom} enregistré "
               f"(net {net:,.0f} F après {a_deduire:,.0f} F d'avances).".replace(",", " "), "success")
     else:
-        flash(f"Paiement de {f.journalier.nom_complet} enregistré.", "success")
+        flash(f"Paiement de {nom} enregistré.", "success")
     return redirect(url_for("tenant.journaliers_paie"))
 
 @bp.route("/journaliers/paie/<int:id>/modifier", methods=["POST"])
@@ -1906,12 +1922,22 @@ def journaliers_payer_selection():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     ids = [int(i) for i in request.form.get("feuille_ids","").split(",") if i.strip().isdigit()]
-    nb = 0
+    nb = 0; total_avances = 0.0
     for fid in ids:
         f = FeuillePaieJournalier.query.filter_by(id=fid, tenant_id=t.id, statut="EN_ATTENTE").first()
-        if f: f.statut="PAYÉ"; f.date_paiement=datetime.now().date(); nb+=1
-    db.session.commit()
-    flash(f"{nb} journalier(s) payé(s).", "success")
+        if not f:
+            continue
+        # Mêmes règles que le paiement unitaire : déduction des avances, mode de
+        # paiement du journalier, trace d'audit et proposition d'écriture caisse.
+        mode = (f.journalier.mode_paiement if f.journalier else "ESPECES") or "ESPECES"
+        if mode not in ("ESPECES", "VIREMENT"):
+            mode = "ESPECES"
+        _net, _av = _payer_feuille_journalier(t, f, mode, date.today())
+        nb += 1; total_avances += _av
+    msg = f"{nb} journalier(s) payé(s)."
+    if total_avances:
+        msg += f" Avances déduites : {total_avances:,.0f} F.".replace(",", " ")
+    flash(msg, "success")
     return redirect(url_for("tenant.journaliers_paie"))
 
 

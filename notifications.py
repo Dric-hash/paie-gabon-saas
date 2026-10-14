@@ -94,6 +94,7 @@ def get_notifications(tenant, db, models):
     conges_attente = (Conge.query
         .filter_by(tenant_id=tid)
         .filter(Conge.statut.in_(["DEMANDÉ", "DEMANDE", "EN_ATTENTE"]))
+        .filter(Conge.date_depart.isnot(None))   # la ligne de solde annuel n'est pas une demande
         .all())
     if conges_attente:
         n = len(conges_attente)

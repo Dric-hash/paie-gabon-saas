@@ -79,7 +79,7 @@
     <p style="font-size:.84rem;color:#7f1d1d;margin:0 0 .75rem">
       Clôture le contrat : le salarié passe en <strong>INACTIF</strong>, la date de cessation et le motif sont enregistrés. À faire une fois les étapes ci-dessus effectuées.
     </p>
-    <form method="POST" action="/contrats/{{ contrat.id }}/terminer" onsubmit="return confirm('Confirmer la fin de contrat de {{ salarie.nom_complet }} ?')">
+    <form method="POST" action="/contrats/{{ contrat.id }}/terminer" onsubmit="return confirm(this.dataset.confirm)" data-confirm="Confirmer la fin de contrat de {{ salarie.nom_complet }} ?">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <input type="hidden" name="type_rupture" value="{{ motif }}"/>
       <input type="hidden" name="date_arret" value="{{ date_cessation }}"/>

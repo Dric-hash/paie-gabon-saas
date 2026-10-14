@@ -606,6 +606,9 @@ def run_migrations():
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
+        # Date de versement du salaire : saisie au paiement mais jamais enregistrée
+        # faute de colonne (audit 14/10/2026).
+        "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS date_paiement DATE",
         "ALTER TABLE feuilles_paie_journalier ADD COLUMN IF NOT EXISTS mode_paiement VARCHAR(30) DEFAULT 'ESPECES'",
         # ── Jeton de session (invalidation au changement de mot de passe) ────────
         "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS session_token VARCHAR(32)",

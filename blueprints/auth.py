@@ -130,8 +130,10 @@ def login():
     # Destination post-login (flux SSO : /sso/authorize). On n'accepte qu'un
     # chemin interne pour eviter les redirections ouvertes.
     next_page = request.args.get("next", "") or request.form.get("next", "")
-    if next_page and not next_page.startswith("/"):
-        next_page = ""
+    # Chemin interne uniquement : « //site.com » ou « /\site.com » commencent
+    # aussi par « / » mais mènent hors du site (redirection ouverte).
+    from core import chemin_interne
+    next_page = chemin_interne(next_page, "")
     if current_user.is_authenticated:
         return redirect(next_page or url_for("auth.index"))
     if request.method == "POST":
