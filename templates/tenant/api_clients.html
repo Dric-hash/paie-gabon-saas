@@ -54,7 +54,7 @@
 
   <!-- Formulaire nouveau client -->
   <div id="form-nouveau-client" style="display:none;background:#f9fafb;border-radius:.75rem;padding:1rem;margin-bottom:1rem">
-    <form method="POST" action="/api/clients/creer">
+    <form method="POST" action="{{ url_for('api_v1.api_client_creer') }}">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:.75rem;margin-bottom:.75rem">
         <div>
@@ -118,7 +118,7 @@
           </td>
           <td style="padding:.625rem .75rem">
             {% if c.actif %}
-            <form method="POST" action="/api/clients/{{ c.id }}/supprimer" style="display:inline"
+            <form method="POST" action="{{ url_for('api_v1.api_client_supprimer', client_id=c.id) }}" style="display:inline"
               onsubmit="return confirm('Désactiver ce client ? Les intégrations utilisant ce client ne fonctionneront plus.')">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <button type="submit"

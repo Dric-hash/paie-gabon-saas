@@ -616,6 +616,11 @@ def run_migrations():
         # ── Hash du token API (M4) : ne plus stocker le secret en clair ──────────
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS token_api_hash VARCHAR(64)",
         "CREATE INDEX IF NOT EXISTS idx_tenants_token_api_hash ON tenants (token_api_hash)",
+        # ── Clé de liaison Ameriack États Financiers (lecture seule, 15/10/2026) ──
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cle_liaison_hash VARCHAR(64)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cle_liaison_prefixe VARCHAR(16)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cle_liaison_date TIMESTAMP",
+        "CREATE INDEX IF NOT EXISTS idx_tenants_cle_liaison_hash ON tenants (cle_liaison_hash)",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",

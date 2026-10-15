@@ -33,6 +33,27 @@ def regenerer_token_api():
 
 
 
+@bp.route("/parametres/liaison-etats", methods=["POST"])
+@tenant_required
+@admin_only
+def liaison_etats_financiers():
+    """Clé de liaison Ameriack États Financiers (lecture seule de la fiche
+    d'identité). Affichée une seule fois ; régénérer invalide l'ancienne."""
+    t = get_tenant()
+    if request.form.get("action") == "revoquer":
+        t.revoquer_cle_liaison()
+        db.session.commit()
+        log_action("DELETE", "cle_liaison", t.id, "Révocation de la clé de liaison États Financiers")
+        flash("Clé de liaison révoquée : Ameriack États Financiers ne peut plus lire votre fiche.", "success")
+    else:
+        raw = t.generer_cle_liaison()
+        db.session.commit()
+        log_action("REGENERATE", "cle_liaison", t.id, "Génération de la clé de liaison États Financiers")
+        flash(f"Clé de liaison : {raw} — copiez-la maintenant dans Ameriack États Financiers, "
+              f"elle ne sera plus affichée.", "success")
+    return redirect(url_for("tenant.parametres") + "#liaison-etats")
+
+
 @bp.route("/parametres/export-donnees")
 @tenant_required
 def parametres_export_donnees():

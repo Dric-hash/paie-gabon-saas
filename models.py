@@ -83,6 +83,11 @@ class Tenant(db.Model):
     # Hash SHA-256 du token API (le secret n'est plus stocké en clair ; `token_api`
     # ne conserve qu'un préfixe lisible pour identifier le token côté UI).
     token_api_hash   = db.Column(db.String(64), index=True)
+    # Clé de liaison Ameriack États Financiers : LECTURE SEULE de la fiche
+    # d'identité (GET /api/v1/identite). Stockée hachée, comme le token API.
+    cle_liaison_hash    = db.Column(db.String(64), index=True)
+    cle_liaison_prefixe = db.Column(db.String(16))
+    cle_liaison_date    = db.Column(db.DateTime)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
@@ -208,6 +213,21 @@ class Tenant(db.Model):
         self.token_api_hash = hash_secret(raw)
         self.token_api = raw[:8] + "…"   # préfixe non secret, pour l'affichage
         return raw
+
+    def generer_cle_liaison(self):
+        """Clé de liaison (lecture seule de l'identité de l'entreprise) pour les
+        applications Ameriack. Stocke le hash ; renvoie la clé en clair à
+        afficher UNE SEULE fois. Régénérer invalide l'ancienne clé."""
+        raw = "pgl_" + secrets.token_hex(32)
+        self.cle_liaison_hash = hash_secret(raw)
+        self.cle_liaison_prefixe = raw[:10] + "…"
+        self.cle_liaison_date = utcnow()
+        return raw
+
+    def revoquer_cle_liaison(self):
+        self.cle_liaison_hash = None
+        self.cle_liaison_prefixe = None
+        self.cle_liaison_date = None
 
     @staticmethod
     def hash_token(raw: str) -> str:

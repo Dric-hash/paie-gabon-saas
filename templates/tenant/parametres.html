@@ -398,6 +398,42 @@
       📄 Gérer mes modèles de contrat
     </a>
   </div>
+  <!-- Liaison Ameriack États Financiers -->
+  <div id="liaison-etats" style="margin-top:1.25rem;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem;background:#f9fafb">
+    <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">🔗 Liaison Ameriack États Financiers</h2>
+    <p style="font-size:.85rem;color:#6b7280;margin:.25rem 0 .75rem">
+      Permet à Ameriack États Financiers de reprendre les informations de votre société
+      (dénomination, NIF, adresse, représentant…). Cette clé donne accès
+      <strong>uniquement à la fiche société</strong> : jamais aux salariés ni aux bulletins.
+    </p>
+    <p style="font-size:.8rem;color:#374151;margin:0 0 .75rem">
+      {% if tenant.cle_liaison_hash %}Clé active : <code>{{ tenant.cle_liaison_prefixe }}</code>
+        {% if tenant.cle_liaison_date %} — créée le {{ tenant.cle_liaison_date.strftime('%d/%m/%Y') }}{% endif %}
+      {% else %}Aucune clé active.{% endif %}
+    </p>
+    {% if current_user.is_tenant_admin %}
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <form method="POST" action="{{ url_for('tenant.liaison_etats_financiers') }}" style="margin:0"
+            {% if tenant.cle_liaison_hash %}onsubmit="return confirm(this.dataset.confirm)" data-confirm="Générer une nouvelle clé ? L'ancienne cessera de fonctionner."{% endif %}>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="generer"/>
+        <button type="submit" style="background:#0f3d36;color:#fff;padding:.6rem 1.1rem;border-radius:.6rem;border:none;font-weight:700;font-size:.85rem;cursor:pointer">
+          {{ 'Régénérer la clé' if tenant.cle_liaison_hash else 'Générer une clé de liaison' }}
+        </button>
+      </form>
+      {% if tenant.cle_liaison_hash %}
+      <form method="POST" action="{{ url_for('tenant.liaison_etats_financiers') }}" style="margin:0"
+            onsubmit="return confirm(this.dataset.confirm)" data-confirm="Révoquer la clé ? Ameriack États Financiers ne pourra plus synchroniser votre fiche.">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="action" value="revoquer"/>
+        <button type="submit" style="background:#fff;color:#b42318;padding:.6rem 1.1rem;border-radius:.6rem;border:1px solid #f2c4bf;font-weight:700;font-size:.85rem;cursor:pointer">Révoquer</button>
+      </form>
+      {% endif %}
+    </div>
+    {% else %}
+    <p style="font-size:.8rem;color:#9ca3af;margin:0">Seul l'administrateur de l'entreprise peut générer cette clé.</p>
+    {% endif %}
+  </div>
 </div>
 
 

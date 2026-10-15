@@ -95,6 +95,46 @@ def api_me(tenant):
     })
 
 
+# ── GET /api/v1/identite (clé de liaison, lecture seule) ───────────────────────
+
+STATUTS_LIAISON_REFUSES = ("SUSPENDU", "INACTIF")
+
+
+@bp.route("/identite")
+def api_identite():
+    """Fiche d'identité de l'entreprise pour les applications Ameriack
+    (États Financiers). Authentification par la CLÉ DE LIAISON
+    (header X-Liaison-Key) — distincte du token API : elle ne donne accès
+    qu'à cette fiche, jamais aux salariés ni aux bulletins."""
+    from models import hash_secret
+    cle = (request.headers.get("X-Liaison-Key") or "").strip()
+    if not cle.startswith("pgl_") or len(cle) > 100:
+        return jsonify(_err("AUTH_FAILED", "Clé de liaison absente ou invalide.", 401)), 401
+    t = Tenant.query.filter_by(cle_liaison_hash=hash_secret(cle)).first()
+    if t is None:
+        return jsonify(_err("AUTH_FAILED", "Clé de liaison inconnue ou révoquée.", 401)), 401
+    if (t.statut or "").upper() in STATUTS_LIAISON_REFUSES:
+        return jsonify(_err("TENANT_INACTIF", "Compte PaieGabon suspendu.", 403)), 403
+    return _ok({
+        "reference":             t.id,
+        "denomination":          t.denomination,
+        "sigle":                 t.sigle,
+        "activite":              t.activite,
+        "secteur":               t.secteur,
+        "nif":                   t.nif,
+        "numero_cnss":           t.numero_cnss,
+        "numero_cnamgs":         t.numero_cnamgs,
+        "adresse":               t.adresse,
+        "boite_postale":         t.boite_postale,
+        "telephone":             t.telephone,
+        "ville":                 t.ville,
+        "region":                t.region,
+        "pays":                  t.pays,
+        "representant_nom":      t.representant_nom,
+        "representant_fonction": t.representant_fonction,
+    })
+
+
 # ── GET /api/v1/salaries ───────────────────────────────────────────────────────
 
 @bp.route("/salaries")
@@ -446,15 +486,33 @@ def api_clients_list():
     return render_template("tenant/api_clients.html", tenant=t, clients=clients)
 
 
+def _ui_admin_csrf():
+    """Pages d'interface hébergées dans ce blueprint (exempté de CSRF car
+    l'API utilise des jetons) : on revérifie ici le jeton CSRF du formulaire
+    et le rôle administrateur — créer un client OAuth donne un accès complet
+    à l'API (écriture comprise)."""
+    from flask import abort
+    from flask_wtf.csrf import validate_csrf
+    from wtforms.validators import ValidationError
+    if not current_user.is_tenant_admin:
+        abort(403)
+    if current_app.config.get("WTF_CSRF_ENABLED", True):
+        try:
+            validate_csrf(request.form.get("csrf_token"))
+        except ValidationError:
+            abort(400)
+
+
 @bp.route("/api/clients/creer", methods=["POST"])
 @tenant_required
 def api_client_creer():
     """Crée un nouveau client OAuth2 pour ce tenant."""
+    _ui_admin_csrf()
     t   = get_tenant()
     nom = request.form.get("nom", "").strip()
     if not nom:
         flash("Le nom du client est obligatoire.", "error")
-        return redirect(url_for("tenant.api_clients_list"))
+        return redirect(url_for("api_v1.api_clients_list"))
 
     import secrets as _sec
     from models import hash_secret
@@ -473,19 +531,20 @@ def api_client_creer():
     flash(f"Client OAuth '{nom}' créé. client_id : {client.client_id} — "
           f"client_secret : {secret_clair} — conservez-le, il ne sera plus affiché.",
           "success")
-    return redirect(url_for("tenant.api_clients_list"))
+    return redirect(url_for("api_v1.api_clients_list"))
 
 
 @bp.route("/api/clients/<int:client_id>/supprimer", methods=["POST"])
 @tenant_required
 def api_client_supprimer(client_id):
     """Désactive un client OAuth."""
+    _ui_admin_csrf()
     t      = get_tenant()
     client = OAuthClient.query.filter_by(id=client_id, tenant_id=t.id).first_or_404()
     client.actif = False
     db.session.commit()
     flash(f"Client '{client.nom}' désactivé.", "success")
-    return redirect(url_for("tenant.api_clients_list"))
+    return redirect(url_for("api_v1.api_clients_list"))
 
 
 @bp.route("/recherche")
