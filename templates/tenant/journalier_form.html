@@ -125,6 +125,15 @@
       </div>
 
       <div>
+        <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Sexe</label>
+        <select name="sexe" style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem">
+          <option value="">— Non renseigné —</option>
+          <option value="M" {% if journalier and journalier.sexe == 'M' %}selected{% endif %}>Masculin</option>
+          <option value="F" {% if journalier and journalier.sexe == 'F' %}selected{% endif %}>Féminin</option>
+        </select>
+      </div>
+
+      <div>
         <label style="display:block;font-size:.75rem;font-weight:700;color:#6b7280;margin-bottom:.375rem">Début de mission</label>
         <input type="date" name="date_debut" value="{{ journalier.date_debut or '' if journalier else '' }}"
           style="width:100%;border:1px solid #e5e7eb;border-radius:.75rem;padding:.625rem .75rem;font-size:.875rem"/>

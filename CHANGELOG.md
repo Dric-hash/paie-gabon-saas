@@ -9,6 +9,18 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ### Ajouté
 
+#### Liaison Ameriack États Financiers — totaux annuels de paie (Note 27B)
+- Nouvelle autorisation dans **Paramètres → Liaison Ameriack États Financiers** :
+  **« Autoriser les totaux de paie »** (administrateur, désactivée par défaut).
+- Avec la clé de liaison et cette autorisation, États Financiers lit
+  `GET /api/v1/liaison/paie?debut=…&fin=…` : effectifs et salaires bruts **agrégés**
+  par catégorie × nationalité × sexe × type de contrat, totaux des cotisations
+  (CNSS, CNAMGS, FNH, CFP, TCS, IRPP) et des journaliers. **Aucune donnée
+  nominative** (ni nom, ni matricule, ni montant individuel). Chaque lecture est
+  inscrite au journal d'audit. La révocation de la clé retire l'autorisation.
+- **Journaliers** : champ **Sexe** (fiche et conversion en salarié), utile à la Note 27B.
+- Migration : `migrations/migration_liaison_paie_totaux.sql` (appliquée au démarrage).
+
 #### Prestataires — factures affichées dans leur devise
 - Sur le **relevé** et la **fiche** d'un prestataire, chaque **facture est désormais
   affichée dans sa propre devise** (XAF, EUR, USD, MAD…) et non plus convertie en XAF.

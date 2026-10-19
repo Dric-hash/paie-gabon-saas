@@ -88,6 +88,10 @@ class Tenant(db.Model):
     cle_liaison_hash    = db.Column(db.String(64), index=True)
     cle_liaison_prefixe = db.Column(db.String(16))
     cle_liaison_date    = db.Column(db.DateTime)
+    # Autorisation expresse (administrateur) : la même clé donne aussi accès aux
+    # TOTAUX ANNUELS AGRÉGÉS de la paie (Note 27B de la DSF, rapprochement
+    # comptable) — jamais aux données nominatives.
+    liaison_paie_autorisee = db.Column(db.Boolean, default=False)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
@@ -228,6 +232,7 @@ class Tenant(db.Model):
         self.cle_liaison_hash = None
         self.cle_liaison_prefixe = None
         self.cle_liaison_date = None
+        self.liaison_paie_autorisee = False
 
     @staticmethod
     def hash_token(raw: str) -> str:
@@ -1000,6 +1005,7 @@ class Journalier(db.Model):
     date_debut    = db.Column(db.Date)           # début de mission (libre)
     date_fin      = db.Column(db.Date)           # fin de mission (optionnel)
     nationalite   = db.Column(db.String(60))
+    sexe          = db.Column(db.String(1))          # M | F (Note 27B de la DSF)
     date_creation = db.Column(db.DateTime, default=utcnow)
     pointages = db.relationship("Pointage", backref="journalier", lazy=True,
                 foreign_keys="Pointage.journalier_id")

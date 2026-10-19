@@ -404,7 +404,8 @@
     <p style="font-size:.85rem;color:#6b7280;margin:.25rem 0 .75rem">
       Permet à Ameriack États Financiers de reprendre les informations de votre société
       (dénomination, NIF, adresse, représentant…). Cette clé donne accès
-      <strong>uniquement à la fiche société</strong> : jamais aux salariés ni aux bulletins.
+      <strong>à la fiche société</strong> et, seulement si vous l'autorisez ci-dessous, aux
+      <strong>totaux annuels de paie agrégés</strong> : jamais aux noms, matricules ni bulletins individuels.
     </p>
     <p style="font-size:.8rem;color:#374151;margin:0 0 .75rem">
       {% if tenant.cle_liaison_hash %}Clé active : <code>{{ tenant.cle_liaison_prefixe }}</code>
@@ -430,6 +431,30 @@
       </form>
       {% endif %}
     </div>
+    {% if tenant.cle_liaison_hash %}
+    <div style="margin-top:1rem;padding-top:1rem;border-top:1px dashed #e5e7eb">
+      <p style="font-size:.85rem;color:#374151;margin:0 0 .5rem">
+        <strong>Totaux de paie pour la DSF</strong> —
+        {% if tenant.liaison_paie_autorisee %}<span style="color:#127a4b;font-weight:700">autorisés</span>{% else %}<span style="color:#6b7280;font-weight:700">non autorisés</span>{% endif %}
+      </p>
+      <p style="font-size:.8rem;color:#6b7280;margin:0 0 .75rem">
+        Permet à Ameriack États Financiers de remplir la Note 27B (effectifs et masse salariale par catégorie,
+        sexe et nationalité) et de rapprocher la paie de la comptabilité. Seuls des totaux par regroupement
+        sont transmis (effectif, salaires bruts, cotisations) — aucun nom, matricule ni montant individuel.
+        Chaque lecture est inscrite au journal d'audit.
+      </p>
+      <form method="POST" action="{{ url_for('tenant.liaison_etats_financiers') }}" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        {% if tenant.liaison_paie_autorisee %}
+        <input type="hidden" name="action" value="retirer_paie"/>
+        <button type="submit" style="background:#fff;color:#b42318;padding:.55rem 1rem;border-radius:.6rem;border:1px solid #f2c4bf;font-weight:700;font-size:.85rem;cursor:pointer">Retirer l'autorisation</button>
+        {% else %}
+        <input type="hidden" name="action" value="autoriser_paie"/>
+        <button type="submit" style="background:#0f3d36;color:#fff;padding:.55rem 1rem;border-radius:.6rem;border:none;font-weight:700;font-size:.85rem;cursor:pointer">Autoriser les totaux de paie</button>
+        {% endif %}
+      </form>
+    </div>
+    {% endif %}
     {% else %}
     <p style="font-size:.8rem;color:#9ca3af;margin:0">Seul l'administrateur de l'entreprise peut générer cette clé.</p>
     {% endif %}

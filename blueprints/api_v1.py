@@ -100,21 +100,31 @@ def api_me(tenant):
 STATUTS_LIAISON_REFUSES = ("SUSPENDU", "INACTIF")
 
 
+def _tenant_liaison():
+    """(tenant, None) si la clé de liaison (header X-Liaison-Key) est valide,
+    sinon (None, réponse d'erreur)."""
+    from models import hash_secret
+    cle = (request.headers.get("X-Liaison-Key") or "").strip()
+    if not cle.startswith("pgl_") or len(cle) > 100:
+        return None, (jsonify(_err("AUTH_FAILED", "Clé de liaison absente ou invalide.", 401)), 401)
+    t = Tenant.query.filter_by(cle_liaison_hash=hash_secret(cle)).first()
+    if t is None:
+        return None, (jsonify(_err("AUTH_FAILED", "Clé de liaison inconnue ou révoquée.", 401)), 401)
+    if (t.statut or "").upper() in STATUTS_LIAISON_REFUSES:
+        return None, (jsonify(_err("TENANT_INACTIF", "Compte PaieGabon suspendu.", 403)), 403)
+    return t, None
+
+
 @bp.route("/identite")
 def api_identite():
     """Fiche d'identité de l'entreprise pour les applications Ameriack
     (États Financiers). Authentification par la CLÉ DE LIAISON
-    (header X-Liaison-Key) — distincte du token API : elle ne donne accès
-    qu'à cette fiche, jamais aux salariés ni aux bulletins."""
-    from models import hash_secret
-    cle = (request.headers.get("X-Liaison-Key") or "").strip()
-    if not cle.startswith("pgl_") or len(cle) > 100:
-        return jsonify(_err("AUTH_FAILED", "Clé de liaison absente ou invalide.", 401)), 401
-    t = Tenant.query.filter_by(cle_liaison_hash=hash_secret(cle)).first()
-    if t is None:
-        return jsonify(_err("AUTH_FAILED", "Clé de liaison inconnue ou révoquée.", 401)), 401
-    if (t.statut or "").upper() in STATUTS_LIAISON_REFUSES:
-        return jsonify(_err("TENANT_INACTIF", "Compte PaieGabon suspendu.", 403)), 403
+    (header X-Liaison-Key) — distincte du token API : elle donne accès à
+    cette fiche et, si l'administrateur l'a autorisé, aux totaux annuels
+    agrégés de la paie (/api/v1/liaison/paie) ; jamais aux données nominatives."""
+    t, erreur = _tenant_liaison()
+    if erreur:
+        return erreur
     return _ok({
         "reference":             t.id,
         "denomination":          t.denomination,
@@ -133,6 +143,34 @@ def api_identite():
         "representant_nom":      t.representant_nom,
         "representant_fonction": t.representant_fonction,
     })
+
+
+# ── GET /api/v1/liaison/paie (clé de liaison + autorisation expresse) ──────────
+
+@bp.route("/liaison/paie")
+def api_liaison_paie():
+    """Totaux annuels AGRÉGÉS de la paie (Note 27B de la DSF, rapprochement
+    comptable) pour Ameriack États Financiers. Paramètres : ?debut=AAAA-MM-JJ
+    &fin=AAAA-MM-JJ (24 mois au plus). Exige que l'administrateur ait autorisé
+    la transmission des totaux de paie. Aucune donnée nominative."""
+    import liaison_paie
+    t, erreur = _tenant_liaison()
+    if erreur:
+        return erreur
+    if not t.liaison_paie_autorisee:
+        return jsonify(_err("PAIE_NON_AUTORISEE",
+                            "La transmission des totaux de paie n'est pas autorisée par l'administrateur.", 403)), 403
+    try:
+        debut = datetime.strptime(request.args.get("debut", ""), "%Y-%m-%d").date()
+        fin = datetime.strptime(request.args.get("fin", ""), "%Y-%m-%d").date()
+        donnees = liaison_paie.totaux(t, debut, fin)
+    except ValueError as e:
+        msg = str(e) if isinstance(e, liaison_paie.ErreurPeriode) else "Paramètres debut et fin attendus (AAAA-MM-JJ)."
+        return jsonify(_err("PERIODE_INVALIDE", msg, 400)), 400
+    log_action("READ", "liaison_paie", t.id, f"Totaux de paie transmis à États Financiers ({debut} → {fin})",
+               tenant_id=t.id)
+    db.session.commit()
+    return _ok(donnees)
 
 
 # ── GET /api/v1/salaries ───────────────────────────────────────────────────────
