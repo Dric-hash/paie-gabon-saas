@@ -40,7 +40,22 @@ def liaison_etats_financiers():
     """Clé de liaison Ameriack États Financiers (lecture seule de la fiche
     d'identité). Affichée une seule fois ; régénérer invalide l'ancienne."""
     t = get_tenant()
-    if request.form.get("action") == "revoquer":
+    action = request.form.get("action")
+    if action in ("autoriser_paie", "retirer_paie"):
+        if not t.cle_liaison_hash:
+            flash("Générez d'abord une clé de liaison.", "error")
+            return redirect(url_for("tenant.parametres") + "#liaison-etats")
+        t.liaison_paie_autorisee = action == "autoriser_paie"
+        db.session.commit()
+        log_action("UPDATE", "cle_liaison", t.id,
+                   "Totaux de paie " + ("autorisés" if t.liaison_paie_autorisee else "retirés")
+                   + " pour la liaison États Financiers")
+        db.session.commit()
+        flash("Ameriack États Financiers peut lire les totaux annuels de paie (agrégés, sans données nominatives)."
+              if t.liaison_paie_autorisee else
+              "Autorisation retirée : États Financiers ne lit plus que la fiche société.", "success")
+        return redirect(url_for("tenant.parametres") + "#liaison-etats")
+    if action == "revoquer":
         t.revoquer_cle_liaison()
         db.session.commit()
         log_action("DELETE", "cle_liaison", t.id, "Révocation de la clé de liaison États Financiers")

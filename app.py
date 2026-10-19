@@ -621,6 +621,9 @@ def run_migrations():
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cle_liaison_prefixe VARCHAR(16)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS cle_liaison_date TIMESTAMP",
         "CREATE INDEX IF NOT EXISTS idx_tenants_cle_liaison_hash ON tenants (cle_liaison_hash)",
+        # ── Liaison États Financiers : totaux annuels de paie (Note 27B), 19/10/2026 ──
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS liaison_paie_autorisee BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS sexe VARCHAR(1)",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",

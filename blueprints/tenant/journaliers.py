@@ -18,6 +18,12 @@ from core import csv_safe
 from jours_feries import type_jour_auto
 from blueprints.tenant import _MOIS_FR
 
+
+def _sexe(v):
+    """M | F, ou None si non renseigné."""
+    v = (v or "").strip().upper()[:1]
+    return v if v in ("M", "F") else None
+
 @bp.route("/journaliers/<int:id>/convertir", methods=["GET", "POST"])
 @login_required
 def journalier_convertir(id):
@@ -67,7 +73,7 @@ def journalier_convertir(id):
             telephone=request.form.get("telephone") or j.telephone,
             email=(request.form.get("email") or "").strip() or None,
             nationalite=request.form.get("nationalite") or j.nationalite or "GABONAISE",
-            sexe=request.form.get("sexe"),
+            sexe=request.form.get("sexe") or j.sexe,
             date_naissance=_pd(request.form.get("date_naissance")),
             date_embauche=_pd(request.form.get("date_embauche")) or j.date_embauche or date.today(),
             situation_matrimoniale=request.form.get("situation_matrimoniale"),
@@ -164,6 +170,7 @@ def journalier_nouveau():
             date_debut=   _parse_date(request.form.get("date_debut")),
             date_fin=     _parse_date(request.form.get("date_fin")),
             nationalite=  request.form.get("nationalite","").strip() or None,
+            sexe=_sexe(request.form.get("sexe")),
             mode_paiement=(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip(),
             statut="ACTIF")
         db.session.add(j); db.session.commit()
@@ -245,6 +252,7 @@ def journalier_modifier(id):
         j.date_debut=   _parse_date(request.form.get("date_debut"))
         j.date_fin=     _parse_date(request.form.get("date_fin"))
         j.nationalite=  request.form.get("nationalite","").strip() or None
+        j.sexe=_sexe(request.form.get("sexe"))
         j.mode_paiement=(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()
         j.statut=request.form.get("statut","ACTIF")
         # ── Affectation site ──────────────────────────────────────────────
