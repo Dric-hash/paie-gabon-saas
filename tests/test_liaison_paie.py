@@ -180,3 +180,26 @@ def test_journalier_sexe_enregistre(env):
     assert r.status_code == 302
     with flask_app.app_context():
         assert Journalier.query.filter_by(nom="NZE").first().sexe == "F"
+
+
+def test_totaux_mensuels(env):
+    admin = _client_pour(env["admin"])
+    cle = _cle(admin)
+    admin.post("/parametres/liaison-etats", data={"action": "autoriser_paie"})
+    d = _paie(cle).get_json()["data"]
+    m = {x["mois"]: x for x in d["mensuel"]}
+    assert list(m) == ["2025-11", "2025-12"]
+    assert m["2025-11"]["salaire_brut"] == 1_300_000 and m["2025-12"]["salaire_brut"] == 1_000_000
+    assert m["2025-11"]["nb_bulletins"] == 2 and m["2025-12"]["nb_bulletins"] == 1
+    assert m["2025-11"]["brut_par_nationalite"] == {"CAMEROUNAISE": 300_000, "GABONAISE": 1_000_000}
+    assert m["2025-11"]["irpp"] == 80_000 and m["2025-11"]["tcs"] == 20_000 and m["2025-11"]["fnh"] == 10_000
+    assert m["2025-11"]["journaliers_brut"] == 120_000 and m["2025-12"]["journaliers_brut"] == 80_000
+    for k in ("acompte", "retenue_pret", "ajustement_arrondi", "net_a_payer"):
+        assert k in m["2025-11"]
+    # la somme des mois redonne les totaux annuels
+    tot = d["salaries"]["totaux"]
+    for k in ("salaire_brut", "cnss_patronale", "cnamgs_patronale", "irpp", "net_a_payer"):
+        assert sum(x[k] for x in d["mensuel"]) == tot[k], k
+    texte = str(d["mensuel"])
+    for nominatif in ("NDONG", "MBA", "OBAME", "M1"):
+        assert nominatif not in texte
