@@ -5,6 +5,10 @@ Servis par GET /api/v1/liaison/paie avec la clé de liaison, uniquement si
 l'administrateur de l'entreprise a coché « Autoriser la transmission des
 totaux de paie » (Paramètres → Liaison Ameriack États Financiers).
 
+Totaux mensuels (« mensuel ») : mêmes montants agrégés mois par mois, plus
+acomptes, retenues de prêt et arrondis, et le brut ventilé par nationalité
+(texte saisi) — pour le journal de paie mensuel proposé par États Financiers.
+
 Usage côté États Financiers :
   - Note 27B de la DSF (effectifs et masse salariale par catégorie, sexe et
     nationalité) ;
@@ -29,6 +33,9 @@ STATUTS_FEUILLES = ("EN_ATTENTE", "PAYÉ", "PAYE")
 MOIS_MAX = 24
 CHAMPS_TOTAUX = ("salaire_brut", "cnss_salarie", "cnss_patronale", "cnamgs_salarie", "cnamgs_patronale",
                  "fnh", "cfp", "tcs", "irpp", "net_a_payer")
+# Totaux MENSUELS (journal de paie agrégé côté États Financiers) : champs ci-dessus
+# + acompte, retenue de prêt et ajustement d'arrondi, pour un journal équilibré.
+CHAMPS_MENSUELS = CHAMPS_TOTAUX + ("acompte", "retenue_pret", "ajustement_arrondi")
 
 
 class ErreurPeriode(ValueError):
@@ -87,6 +94,8 @@ def totaux(tenant, debut: date, fin: date) -> dict:
 
     groupes = defaultdict(lambda: {"salaries": set(), "dernier_mois": set(), "masse_brute": 0.0})
     tot = {k: 0.0 for k in CHAMPS_TOTAUX}
+    mens = defaultdict(lambda: {**{k: 0.0 for k in CHAMPS_MENSUELS}, "brut_par_nationalite": defaultdict(float),
+                                "nb_bulletins": 0, "journaliers_brut": 0.0})
     mois_payes = set()
     for b in bulletins:
         s = salaries.get(b.salarie_id)
@@ -103,6 +112,11 @@ def totaux(tenant, debut: date, fin: date) -> dict:
         mois_payes.add(pid_mois[b.periode_id])
         for k in CHAMPS_TOTAUX:
             tot[k] += _f(getattr(b, k))
+        mm = mens[pid_mois[b.periode_id]]
+        for k in CHAMPS_MENSUELS:
+            mm[k] += _f(getattr(b, k, 0))
+        mm["brut_par_nationalite"][_texte(s.nationalite) or "NON RENSEIGNÉE"] += _f(b.salaire_brut)
+        mm["nb_bulletins"] += 1
 
     # Journaliers
     feuilles = [f for f in FeuillePaieJournalier.query.filter(
@@ -125,6 +139,7 @@ def totaux(tenant, debut: date, fin: date) -> dict:
         if (f.date_fin.year, f.date_fin.month) == dernier:
             g["dernier_mois"].add(j.id)
         brut_j += _f(f.montant_brut)
+        mens[(f.date_fin.year, f.date_fin.month)]["journaliers_brut"] += _f(f.montant_brut)
         if (f.statut or "").upper() == "EN_ATTENTE":
             attente_j += _f(f.montant_brut)
 
@@ -144,6 +159,11 @@ def totaux(tenant, debut: date, fin: date) -> dict:
             "totaux": {**{k: r(v) for k, v in tot.items()}, "nb_bulletins": len(bulletins),
                        "nb_salaries": len(sal_ids), "bulletins_non_retenus": non_retenus},
         },
+        "mensuel": [{"mois": f"{a:04d}-{m:02d}",
+                     **{k: r(v) for k, v in mens[(a, m)].items() if k in CHAMPS_MENSUELS},
+                     "brut_par_nationalite": {n: r(v) for n, v in sorted(mens[(a, m)]["brut_par_nationalite"].items())},
+                     "nb_bulletins": mens[(a, m)]["nb_bulletins"], "journaliers_brut": r(mens[(a, m)]["journaliers_brut"])}
+                    for a, m in mois],
         "journaliers": {
             "groupes": [{"nationalite": k[0], "sexe": k[1], "type_paie": k[2],
                          "effectif_paye": len(g["journaliers"]), "effectif_dernier_mois": len(g["dernier_mois"]),
