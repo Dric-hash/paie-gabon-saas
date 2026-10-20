@@ -203,3 +203,31 @@ def test_totaux_mensuels(env):
     texte = str(d["mensuel"])
     for nominatif in ("NDONG", "MBA", "OBAME", "M1"):
         assert nominatif not in texte
+
+
+def test_comptes_du_journal_de_paie(env):
+    import json
+    admin = _client_pour(env["admin"])
+    page = admin.get("/parametres").get_data(as_text=True)
+    assert "Comptes du journal de paie" in page and "proposés par défaut" in page
+    cle = _cle(admin)
+    admin.post("/parametres/liaison-etats", data={"action": "autoriser_paie"})
+    d = _paie(cle).get_json()["data"]
+    assert d["comptes_paie"]["personnalises"] is False and d["comptes_paie"]["comptes"]["brut_national"] == "661"
+    import plan_comptable_paie as pcp
+    form = {f"compte_{k}": v for k, v in pcp.DEFAUTS.items()}
+    form.update({"compte_brut_national": "661100", "journal": "sal"})
+    # un comptable ne peut pas modifier
+    assert _client_pour(env["compta"]).post("/parametres/comptes-paie", data=form).status_code in (302, 403)
+    with flask_app.app_context():
+        assert not db.session.get(Tenant, env["t"]).comptes_paie
+    admin.post("/parametres/comptes-paie", data=form)
+    d = _paie(cle).get_json()["data"]
+    assert d["comptes_paie"] == {"comptes": {**pcp.DEFAUTS, "brut_national": "661100"}, "journal": "SAL", "personnalises": True}
+    r = admin.post("/parametres/comptes-paie", data={**form, "compte_net": "abc"}, follow_redirects=True)
+    assert "Compte invalide" in r.get_data(as_text=True)
+    with flask_app.app_context():
+        assert json.loads(db.session.get(Tenant, env["t"]).comptes_paie)["comptes"]["net"] == "422"
+    admin.post("/parametres/comptes-paie", data={"action": "defaut"})
+    with flask_app.app_context():
+        assert db.session.get(Tenant, env["t"]).comptes_paie is None

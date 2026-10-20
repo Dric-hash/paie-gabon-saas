@@ -7,6 +7,28 @@ Format inspiré de [Keep a Changelog](https://keepachangelog.com/fr/).
 
 ## [Non publié] — Convention Commerce & Déclaration Annuelle des Salaires
 
+### Corrigé
+
+#### Journal de paie (export Sage) — comptes SYSCOHADA et équilibre
+- Les charges de personnel étaient passées en 641xxx / 645xxx, qui sont en SYSCOHADA
+  des comptes d'**impôts et taxes**. Comptes proposés désormais : 661 / 662 (salaires
+  bruts national / non national), 663 (éléments hors brut), 664 (cotisations
+  patronales), 6413 (FNH, CFP), 431 (CNSS), 433 (CNAMGS), 447 (IRPP, TCS),
+  442 (FNH, CFP à payer), 421 (acomptes, prêts), 422 (net à payer).
+- Le journal n'était pas équilibré (TCS traitée comme charge patronale, FNH/CFP sans
+  contrepartie, acomptes et éléments hors brut ignorés) : l'écriture est maintenant
+  toujours équilibrée.
+- Comptes et code journal **paramétrables** par l'administrateur : Paramètres →
+  Comptes du journal de paie. Ils sont repris par Ameriack États Financiers.
+- ⚠️ Les entreprises qui importent ce journal dans Sage doivent vérifier ces comptes
+  (ou saisir les leurs) avant le prochain export.
+
+### Ajouté
+
+#### Liaison États Financiers — totaux mensuels et comptes du journal de paie
+- `GET /api/v1/liaison/paie` renvoie aussi `mensuel` (totaux agrégés par mois) et
+  `comptes_paie` (comptes du journal de paie de l'entreprise).
+
 ### Ajouté
 
 #### Liaison Ameriack États Financiers — totaux annuels de paie (Note 27B)

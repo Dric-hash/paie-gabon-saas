@@ -38,6 +38,7 @@ def _bulletin(salaire_base=400_000, salaire_brut=None, **kwargs):
     b.net_avant_irpp    = kwargs.get("net_avant_irpp",    salaire_base * 0.90)
     b.salaire_net       = kwargs.get("salaire_net",       salaire_base * 0.85)
     b.acompte           = kwargs.get("acompte",           0.0)
+    b.retenue_pret      = kwargs.get("retenue_pret",      0.0)
     b.net_a_payer       = kwargs.get("net_a_payer",       salaire_base * 0.82)
     b.heures_sup_10     = kwargs.get("heures_sup_10",     0.0)
     b.heures_sup_30     = kwargs.get("heures_sup_30",     0.0)
@@ -78,6 +79,7 @@ def _bulletin(salaire_base=400_000, salaire_brut=None, **kwargs):
     s.categorie     = MagicMock()
     s.categorie.libelle = kwargs.get("categorie", "Techniciens")
     s.categorie.code    = "C2"
+    s.nationalite   = kwargs.get("nationalite", "Gabonaise")
     b.salarie       = s
     return b
 
@@ -91,8 +93,9 @@ def _periode(mois=6, annee=2026):
     return p
 
 
-def _tenant():
+def _tenant(comptes_paie=None):
     t = MagicMock()
+    t.comptes_paie = comptes_paie
     t.denomination = "SOCIÉTÉ TEST GABON"
     t.sigle        = "STG"
     t.nif          = "GA123456"
@@ -176,19 +179,59 @@ class TestJournalPaie:
         texte = contenu.decode("windows-1252")
         assert "PAI" in texte  # code journal
 
-    def test_contient_comptes_debit(self):
-        bulletins = [_bulletin(400_000)]
-        contenu = generer_journal_paie(bulletins, _periode(), _tenant())
-        texte = contenu.decode("windows-1252")
-        assert "641100" in texte  # Salaires
-        assert "645110" in texte  # CNSS patronale
+    @staticmethod
+    def _ecritures(contenu):
+        out = []
+        for ligne in contenu.decode("windows-1252").splitlines():
+            if ligne.startswith(";") or not ligne.strip():
+                continue
+            c = ligne.split("\t")
+            m = lambda v: int(round(float(v.replace(" ", "").replace(",", ".")))) if v else 0
+            out.append((c[3], m(c[5]), m(c[6])))
+        return out
 
-    def test_contient_comptes_credit(self):
-        bulletins = [_bulletin(400_000)]
-        contenu = generer_journal_paie(bulletins, _periode(), _tenant())
+    def test_comptes_syscohada_par_defaut(self):
+        """Charges de personnel en classe 66 (et non 641/645, comptes d'impôts et taxes en SYSCOHADA)."""
+        contenu = generer_journal_paie([_bulletin(400_000)], _periode(), _tenant())
+        comptes = {c for c, _, _ in self._ecritures(contenu)}
+        assert {"661", "664", "6413", "431", "433", "447", "442", "422"} <= comptes
+        assert not any(c.startswith(("641100", "645")) for c in comptes)
+        assert "proposés par défaut" in contenu.decode("windows-1252")
+
+    def test_journal_equilibre(self):
+        """Débit = crédit, y compris TCS (retenue salariale), FNH/CFP, acompte et éléments hors brut."""
+        b1 = _bulletin(400_000, acompte=50_000, net_a_payer=400_000 - 20_000 - 6_000 - 4_000 - 5_000 - 50_000 + 25_000,
+                       cnss_salarie=20_000, cnamgs_salarie=6_000, tcs=4_000, irpp=5_000)
+        b2 = _bulletin(500_000, nationalite="Camerounaise")
+        e = self._ecritures(generer_journal_paie([b1, b2], _periode(), _tenant()))
+        assert sum(d for _, d, _ in e) == sum(c for _, _, c in e)
+        par = {}
+        for c, d, cr in e:
+            par[c] = par.get(c, 0) + d - cr
+        assert par["661"] == 400_000 and par["662"] == 500_000
+        assert par["421"] == -50_000                                   # acompte imputé
+
+    def test_comptes_personnalises(self):
+        import json
+        cpt = {"brut_national": "661100", "brut_non_national": "662100", "journaliers": "661100", "hors_brut": "663800",
+               "charges_sociales": "664100", "taxes_salaires": "641300", "cnss": "431100", "cnamgs": "431200",
+               "impots_retenus": "447200", "taxes_dues": "442800", "avances": "421000", "net": "422000"}
+        contenu = generer_journal_paie([_bulletin(400_000)], _periode(),
+                                       _tenant(json.dumps({"comptes": cpt, "journal": "SAL"})))
         texte = contenu.decode("windows-1252")
-        assert "421000" in texte  # Net à payer
-        assert "431100" in texte  # CNSS à décaisser
+        comptes = {c for c, _, _ in self._ecritures(contenu)}
+        assert "661100" in comptes and "431200" in comptes and "661" not in comptes
+        assert texte.splitlines()[-1].startswith("SAL\t") and "paramétrés par l'entreprise" in texte
+
+    def test_formulaire_comptes(self):
+        import plan_comptable_paie as pcp
+        form = {f"compte_{k}": d for k, d in pcp.DEFAUTS.items()}
+        assert pcp.lire_formulaire({**form, "journal": "pai"})["journal"] == "PAI"
+        with pytest.raises(ValueError):
+            pcp.lire_formulaire({**form, "compte_net": "42A", "journal": "PAI"})
+        with pytest.raises(ValueError):
+            pcp.lire_formulaire({**form, "journal": "TROP-LONG"})
+        assert pcp.est_national("GABONAISE") and pcp.est_national("Gabonais") and not pcp.est_national("Malienne")
 
     def test_libelle_periode_present(self):
         bulletins = [_bulletin(400_000)]

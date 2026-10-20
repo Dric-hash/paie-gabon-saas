@@ -92,6 +92,9 @@ class Tenant(db.Model):
     # TOTAUX ANNUELS AGRÉGÉS de la paie (Note 27B de la DSF, rapprochement
     # comptable) — jamais aux données nominatives.
     liaison_paie_autorisee = db.Column(db.Boolean, default=False)
+    # Comptes du journal de paie (export comptable), JSON {"comptes": {...}, "journal": "PAI"}.
+    # Vide = comptes proposés par défaut (SYSCOHADA révisé), voir plan_comptable_paie.py.
+    comptes_paie = db.Column(db.Text)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
