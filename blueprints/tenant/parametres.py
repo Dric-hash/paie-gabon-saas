@@ -14,6 +14,7 @@ from models import (db, Plan, Utilisateur, Salarie, Contrat, PeriodePaie, Bullet
 
 import io
 from i18n import SUPPORTED_LANGUAGES, set_language
+import plan_comptable_paie
 
 @bp.route("/parametres/api/regenerer-token", methods=["POST"])
 @tenant_required
@@ -31,6 +32,34 @@ def regenerer_token_api():
     return redirect(url_for("api_v1.api_clients_list"))
 
 
+
+
+@bp.route("/parametres/comptes-paie", methods=["POST"])
+@tenant_required
+@admin_only
+def comptes_paie():
+    """Comptes du journal de paie (export comptable Sage et liaison États Financiers)."""
+    import json
+    import plan_comptable_paie as pcp
+    t = get_tenant()
+    if request.form.get("action") == "defaut":
+        t.comptes_paie = None
+        db.session.commit()
+        log_action("UPDATE", "parametres", t.id, "Comptes du journal de paie : retour aux comptes proposés")
+        db.session.commit()
+        flash("Comptes du journal de paie : retour aux comptes proposés par défaut.", "success")
+        return redirect(url_for("tenant.parametres") + "#comptes-paie")
+    try:
+        valeur = pcp.lire_formulaire(request.form)
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("tenant.parametres") + "#comptes-paie")
+    t.comptes_paie = json.dumps(valeur, ensure_ascii=False)
+    db.session.commit()
+    log_action("UPDATE", "parametres", t.id, "Comptes du journal de paie enregistrés")
+    db.session.commit()
+    flash("Comptes du journal de paie enregistrés.", "success")
+    return redirect(url_for("tenant.parametres") + "#comptes-paie")
 
 
 @bp.route("/parametres/liaison-etats", methods=["POST"])
@@ -147,7 +176,7 @@ def parametres():
         rubriques=RubriquePaie.query.filter_by(actif=True).all(),
         categories=CategorieEmploi.query.filter_by(tenant_id=t.id).all(),
         users=Utilisateur.query.filter_by(tenant_id=t.id).all(),
-        plans_dispo=plans_dispo)
+        plans_dispo=plans_dispo, pcp_module=plan_comptable_paie)
 
 @bp.route("/parametres/grille-salaires", methods=["GET", "POST"])
 @tenant_required

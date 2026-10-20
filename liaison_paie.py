@@ -146,8 +146,12 @@ def totaux(tenant, debut: date, fin: date) -> dict:
     def r(v):
         return round(v, 2)
 
+    import plan_comptable_paie as pcp
     return {
         "debut": debut.isoformat(), "fin": fin.isoformat(),
+        # Comptes du journal de paie de l'entreprise (repris par États Financiers)
+        "comptes_paie": {"comptes": pcp.comptes(tenant), "journal": pcp.journal(tenant),
+                         "personnalises": pcp.personnalises(tenant)},
         "mois": [f"{a:04d}-{m:02d}" for a, m in mois],
         "mois_sans_bulletin": [f"{a:04d}-{m:02d}" for a, m in mois if (a, m) not in mois_payes],
         "statuts_retenus": list(STATUTS_BULLETINS),

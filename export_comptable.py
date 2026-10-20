@@ -14,20 +14,12 @@ Génère deux types de fichiers importables dans Sage 100 Comptabilité :
    Contenu : Détail ligne par ligne par salarié
    → Matricule, nom, salaire brut, cotisations, IRPP, net à payer
 
-Plan comptable OHADA adapté Gabon :
-   641100  Salaires et appointements
-   641200  Primes et gratifications
-   641300  Heures supplémentaires
-   645110  Cotisations CNSS (part patronale)
-   645120  Cotisations CNAMGS (part patronale)
-   645130  FNH (Fonds National de l'Habitat)
-   645140  CFP (Contribution à la Formation Professionnelle)
-   421000  Personnel — Rémunérations dues (net à payer)
-   431100  CNSS à décaisser (part salariale + patronale)
-   431200  CNAMGS à décaisser
-   431300  TCS à décaisser
-   431400  IRPP à décaisser
-   447000  Charges sociales diverses
+Comptes du journal : paramétrables par l'entreprise (plan_comptable_paie.py),
+proposés par défaut selon le SYSCOHADA révisé — 661/662 salaires bruts,
+663 éléments hors brut, 664 cotisations patronales, 6413 taxes sur salaires,
+431 CNSS, 433 CNAMGS, 447 impôts retenus, 442 taxes à payer, 421 acomptes,
+422 net à payer. (Avant le 20/10/2026 : comptes 641/645, qui sont en
+SYSCOHADA des comptes d'impôts et taxes, et journal non équilibré.)
 """
 
 import csv
@@ -38,224 +30,101 @@ from datetime import date, datetime
 
 logger = logging.getLogger("paiegalon.export_comptable")
 
-# ── Plan comptable Sage 100 / OHADA Gabon ────────────────────────────────────
-COMPTES = {
-    # Charges de personnel
-    "salaires":          ("641100", "Salaires et appointements"),
-    "primes":            ("641200", "Primes et gratifications"),
-    "heures_sup":        ("641300", "Heures supplémentaires"),
-    "indemnites":        ("641400", "Indemnités diverses"),
-    # Charges patronales
-    "cnss_patronale":    ("645110", "Cotisations CNSS patronales"),
-    "cnamgs_patronale":  ("645120", "Cotisations CNAMGS patronales"),
-    "fnh":               ("645130", "FNH"),
-    "cfp":               ("645140", "CFP"),
-    "tcs_patronal":      ("645150", "TCS"),
-    # Dettes envers le personnel
-    "net_a_payer":       ("421000", "Personnel — Rémunérations dues"),
-    # Dettes envers organismes sociaux
-    "cnss_total":        ("431100", "CNSS à décaisser"),
-    "cnamgs_total":      ("431200", "CNAMGS à décaisser"),
-    "tcs_total":         ("431300", "TCS à décaisser"),
-    "irpp_total":        ("431400", "IRPP à décaisser"),
-    # Retenues salariales
-    "retenues_sal":      ("421100", "Retenues salariales diverses"),
-}
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # JOURNAL DE PAIE — Format Sage 100 texte
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def generer_journal_paie(bulletins, periode, tenant) -> bytes:
     """
-    Génère le journal de paie mensuel au format Sage 100.
+    Journal de paie mensuel (une écriture agrégée, équilibrée), au format texte
+    importable dans Sage 100 Comptabilité (Fichier → Importer → Journal de saisie).
 
-    Le fichier produit est un .txt importable dans Sage 100 Comptabilité
-    via Fichier → Importer → Journal de saisie.
+    Comptes : ceux enregistrés par l'entreprise (Paramètres → Comptes du journal
+    de paie), à défaut ceux proposés selon le SYSCOHADA révisé
+    (voir plan_comptable_paie.RUBRIQUES).
 
-    Format des colonnes (largeurs fixes, séparateur tabulation) :
+    Format des colonnes (séparateur tabulation) :
       Journal | Date | N°Pièce | Compte | Libellé | Débit | Crédit | Analytique
-
-    Args:
-        bulletins : liste de BulletinPaie (statut VALIDE)
-        periode   : PeriodePaie
-        tenant    : Tenant
 
     Returns:
         bytes du fichier .txt encodé Windows-1252 (compatible Sage)
     """
+    import plan_comptable_paie as pcp
     if not bulletins:
         raise ExportVide("Aucun bulletin validé pour cette période.")
 
+    lignes_compta = ecriture_paie(bulletins, tenant)
     mois_nom = _nom_mois(periode.mois)
-    date_ecriture = _derniere_jour_mois(periode.annee, periode.mois)
-    date_str      = date_ecriture.strftime("%d/%m/%Y")
-    num_piece     = f"PAIE{periode.annee}{periode.mois:02d}"
-    journal_code  = "PAI"  # Code journal Sage (à configurer dans Sage)
-    libelle_base  = f"Paie {mois_nom} {periode.annee}"
-
-    # ── Agréger les totaux ────────────────────────────────────────────────────
+    date_str = _derniere_jour_mois(periode.annee, periode.mois).strftime("%d/%m/%Y")
+    num_piece = f"PAIE{periode.annee}{periode.mois:02d}"
+    journal_code = pcp.journal(tenant)
+    libelle_base = f"Paie {mois_nom} {periode.annee}"
     totaux = _calculer_totaux(bulletins)
 
-    lignes = []
+    lignes = [
+        _ligne_commentaire(f"Export PaieGabon — {tenant.denomination} — {mois_nom} {periode.annee}"),
+        _ligne_commentaire(f"Généré le {datetime.now().strftime('%d/%m/%Y %H:%M')} — {len(bulletins)} bulletins — "
+                           f"Masse salariale brute : {totaux['total_brut']:,.0f} XAF"),
+        _ligne_commentaire("Comptes : " + ("paramétrés par l'entreprise" if pcp.personnalises(tenant)
+                                           else "proposés par défaut (SYSCOHADA révisé), à vérifier dans Paramètres")),
+    ]
+    for l in lignes_compta:
+        lignes.append(_ligne_ecriture(journal=journal_code, date=date_str, piece=num_piece, compte=l["compte"],
+                                      libelle=f"{libelle_base} — {l['libelle']}", debit=l["debit"], credit=l["credit"]))
 
-    # En-tête commentaire (ignoré par Sage à l'import)
-    lignes.append(_ligne_commentaire(
-        f"Export PaieGabon — {tenant.denomination} — {mois_nom} {periode.annee}"
-    ))
-    lignes.append(_ligne_commentaire(
-        f"Généré le {datetime.now().strftime('%d/%m/%Y %H:%M')} — "
-        f"{len(bulletins)} bulletins — "
-        f"Masse salariale brute : {totaux['total_brut']:,.0f} XAF"
-    ))
+    total_debit = sum(l["debit"] for l in lignes if isinstance(l, dict))
+    total_credit = sum(l["credit"] for l in lignes if isinstance(l, dict))
+    if total_debit != total_credit:            # impossible par construction (solde hors brut) ; garde-fou
+        raise ValueError(f"Journal de paie déséquilibré : débit {total_debit} / crédit {total_credit}")
+    logger.info(f"[Export Sage] Journal paie généré — {len(bulletins)} bulletins — "
+                f"Débit: {total_debit:,.0f} / Crédit: {total_credit:,.0f} XAF")
 
-    # ── SECTION 1 : Charges de personnel (DÉBIT comptes 641xxx) ───────────────
-    if totaux["total_salaires"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["salaires"][0],
-            libelle=f"{libelle_base} — Salaires de base",
-            debit=totaux["total_salaires"], credit=0,
-        ))
-
-    if totaux["total_primes"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["primes"][0],
-            libelle=f"{libelle_base} — Primes et gratifications",
-            debit=totaux["total_primes"], credit=0,
-        ))
-
-    if totaux["total_heures_sup"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["heures_sup"][0],
-            libelle=f"{libelle_base} — Heures supplémentaires",
-            debit=totaux["total_heures_sup"], credit=0,
-        ))
-
-    if totaux["total_indemnites"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["indemnites"][0],
-            libelle=f"{libelle_base} — Indemnités diverses",
-            debit=totaux["total_indemnites"], credit=0,
-        ))
-
-    # ── SECTION 2 : Charges patronales (DÉBIT comptes 645xxx) ─────────────────
-    if totaux["total_cnss_pat"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["cnss_patronale"][0],
-            libelle=f"{libelle_base} — CNSS patronale",
-            debit=totaux["total_cnss_pat"], credit=0,
-        ))
-
-    if totaux["total_cnamgs_pat"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["cnamgs_patronale"][0],
-            libelle=f"{libelle_base} — CNAMGS patronale",
-            debit=totaux["total_cnamgs_pat"], credit=0,
-        ))
-
-    if totaux["total_fnh"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["fnh"][0],
-            libelle=f"{libelle_base} — FNH",
-            debit=totaux["total_fnh"], credit=0,
-        ))
-
-    if totaux["total_cfp"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["cfp"][0],
-            libelle=f"{libelle_base} — CFP",
-            debit=totaux["total_cfp"], credit=0,
-        ))
-
-    if totaux["total_tcs"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["tcs_patronal"][0],
-            libelle=f"{libelle_base} — TCS",
-            debit=totaux["total_tcs"], credit=0,
-        ))
-
-    # ── SECTION 3 : Dettes envers le personnel (CRÉDIT 421) ───────────────────
-    lignes.append(_ligne_ecriture(
-        journal=journal_code, date=date_str, piece=num_piece,
-        compte=COMPTES["net_a_payer"][0],
-        libelle=f"{libelle_base} — Net à payer",
-        debit=0, credit=totaux["total_net"],
-    ))
-
-    # ── SECTION 4 : Dettes envers organismes sociaux (CRÉDIT 431xxx) ──────────
-    cnss_total = totaux["total_cnss_sal"] + totaux["total_cnss_pat"]
-    if cnss_total > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["cnss_total"][0],
-            libelle=f"{libelle_base} — CNSS à décaisser",
-            debit=0, credit=cnss_total,
-        ))
-
-    cnamgs_total = totaux["total_cnamgs_sal"] + totaux["total_cnamgs_pat"]
-    if cnamgs_total > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["cnamgs_total"][0],
-            libelle=f"{libelle_base} — CNAMGS à décaisser",
-            debit=0, credit=cnamgs_total,
-        ))
-
-    if totaux["total_tcs"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["tcs_total"][0],
-            libelle=f"{libelle_base} — TCS à décaisser",
-            debit=0, credit=totaux["total_tcs"],
-        ))
-
-    if totaux["total_irpp"] > 0:
-        lignes.append(_ligne_ecriture(
-            journal=journal_code, date=date_str, piece=num_piece,
-            compte=COMPTES["irpp_total"][0],
-            libelle=f"{libelle_base} — IRPP à décaisser",
-            debit=0, credit=totaux["total_irpp"],
-        ))
-
-    # ── Retenues salariales (cotisations part salarié — CRÉDIT 421100) ────────
-    retenues_sal = totaux["total_cnss_sal"] + totaux["total_cnamgs_sal"] + totaux["total_irpp"]
-    if retenues_sal > 0:
-        # Note : ces montants sont déjà inclus dans le brut
-        # On les pointe ici pour information de rapprochement
-        pass  # La balance est équilibrée via net_a_payer + charges patronales
-
-    # ── Vérification de l'équilibre débit/crédit ──────────────────────────────
-    total_debit  = sum(l.get("debit",  0) for l in lignes if isinstance(l, dict))
-    total_credit = sum(l.get("credit", 0) for l in lignes if isinstance(l, dict))
-    ecart = round(abs(total_debit - total_credit), 2)
-    if ecart > 1:
-        logger.warning(f"[Export Sage] Écart débit/crédit : {ecart} XAF — vérifier le journal")
-
-    logger.info(
-        f"[Export Sage] Journal paie généré — {len(bulletins)} bulletins — "
-        f"Débit: {total_debit:,.0f} / Crédit: {total_credit:,.0f} XAF"
-    )
-
-    # ── Sérialiser en texte Sage ───────────────────────────────────────────────
     output = io.StringIO()
     for ligne in lignes:
-        if isinstance(ligne, dict):
-            output.write(_formater_ligne_sage(ligne))
-        else:
-            output.write(ligne + "\r\n")
-
-    # Sage 100 attend Windows-1252
+        output.write(_formater_ligne_sage(ligne) if isinstance(ligne, dict) else ligne + "\r\n")
     return output.getvalue().encode("windows-1252", errors="replace")
+
+
+def ecriture_paie(bulletins, tenant) -> list[dict]:
+    """Lignes de l'écriture de paie agrégée (montants arrondis au franc),
+    équilibrée : les éléments hors brut (primes de panier, transport, arrondis…)
+    sont le solde net à payer + acomptes + prêts + retenues salariales − brut."""
+    import plan_comptable_paie as pcp
+    cpt = pcp.comptes(tenant)
+
+    def r(v):
+        return int(round(v))
+
+    nat = non_nat = 0
+    t = {k: 0 for k in ("cnss_s", "cnss_p", "cnam_s", "cnam_p", "fnh", "cfp", "tcs", "irpp", "acompte", "pret", "net")}
+    for b in bulletins:
+        brut = r(_f(b, "salaire_brut"))
+        s = getattr(b, "salarie", None)
+        if pcp.est_national(getattr(s, "nationalite", "")):
+            nat += brut
+        else:
+            non_nat += brut
+        for k, champ in (("cnss_s", "cnss_salarie"), ("cnss_p", "cnss_patronale"), ("cnam_s", "cnamgs_salarie"),
+                         ("cnam_p", "cnamgs_patronale"), ("fnh", "fnh"), ("cfp", "cfp"), ("tcs", "tcs"),
+                         ("irpp", "irpp"), ("acompte", "acompte"), ("pret", "retenue_pret"), ("net", "net_a_payer")):
+            t[k] += r(_f(b, champ))
+    brut = nat + non_nat
+    hors_brut = t["net"] + t["acompte"] + t["pret"] + t["cnss_s"] + t["cnam_s"] + t["tcs"] + t["irpp"] - brut
+    montants = {
+        "brut_national": nat, "brut_non_national": non_nat, "journaliers": 0, "hors_brut": hors_brut,
+        "charges_sociales": t["cnss_p"] + t["cnam_p"], "taxes_salaires": t["fnh"] + t["cfp"],
+        "cnss": t["cnss_s"] + t["cnss_p"], "cnamgs": t["cnam_s"] + t["cnam_p"], "impots_retenus": t["irpp"] + t["tcs"],
+        "taxes_dues": t["fnh"] + t["cfp"], "avances": t["acompte"] + t["pret"], "net": t["net"],
+    }
+    out = []
+    for k, lib, _, sens in pcp.RUBRIQUES:
+        v = montants[k]
+        if not v:
+            continue
+        au_debit = (sens == "D") == (v > 0)
+        out.append({"cle": k, "compte": cpt[k], "libelle": lib, "debit": abs(v) if au_debit else 0,
+                    "credit": 0 if au_debit else abs(v)})
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

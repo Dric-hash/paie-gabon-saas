@@ -398,6 +398,40 @@
       📄 Gérer mes modèles de contrat
     </a>
   </div>
+  <!-- Comptes du journal de paie -->
+  {% set _pcp = pcp_module %}
+  <div id="comptes-paie" style="margin-top:1.25rem;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem;background:#f9fafb">
+    <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">📒 Comptes du journal de paie</h2>
+    <p style="font-size:.85rem;color:#6b7280;margin:.25rem 0 .75rem">
+      Comptes utilisés par l'export comptable (journal de paie Sage) et repris par Ameriack États Financiers.
+      {% if _pcp.personnalises(tenant) %}<strong style="color:#127a4b">Comptes paramétrés par l'entreprise.</strong>
+      {% else %}<strong style="color:#b45309">Comptes proposés par défaut (SYSCOHADA révisé) : vérifiez-les selon votre plan de comptes.</strong>{% endif %}
+    </p>
+    {% set _cpt = _pcp.comptes(tenant) %}
+    <form method="POST" action="{{ url_for('tenant.comptes_paie') }}" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.5rem 1rem">
+        {% for k, lib, defaut, sens in _pcp.RUBRIQUES %}
+        <label style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.8rem;color:#374151">
+          <span>{{ lib }} <span style="color:#9ca3af">({{ 'débit' if sens == 'D' else 'crédit' }})</span></span>
+          <input type="text" name="compte_{{ k }}" value="{{ _cpt[k] }}" inputmode="numeric" maxlength="10" style="width:7rem;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:.5rem"{% if not current_user.is_tenant_admin %} disabled{% endif %}/>
+        </label>
+        {% endfor %}
+        <label style="display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-size:.8rem;color:#374151">
+          <span>Code journal</span>
+          <input type="text" name="journal" value="{{ _pcp.journal(tenant) }}" maxlength="6" style="width:7rem;padding:.4rem .5rem;border:1px solid #d1d5db;border-radius:.5rem"{% if not current_user.is_tenant_admin %} disabled{% endif %}/>
+        </label>
+      </div>
+      {% if current_user.is_tenant_admin %}
+      <div style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap">
+        <button type="submit" style="background:#0f3d36;color:#fff;padding:.55rem 1rem;border-radius:.6rem;border:none;font-weight:700;font-size:.85rem;cursor:pointer">Enregistrer les comptes</button>
+        {% if _pcp.personnalises(tenant) %}<button type="submit" name="action" value="defaut" formnovalidate style="background:#fff;color:#374151;padding:.55rem 1rem;border-radius:.6rem;border:1px solid #d1d5db;font-weight:700;font-size:.85rem;cursor:pointer">Revenir aux comptes proposés</button>{% endif %}
+      </div>
+      {% endif %}
+    </form>
+    <p style="font-size:.75rem;color:#6b7280;margin:.75rem 0 0">Salaires bruts nationaux / non nationaux selon la nationalité du salarié. Les éléments hors brut
+      (panier, transport, arrondis…) sont le solde qui équilibre l'écriture.</p>
+  </div>
   <!-- Liaison Ameriack États Financiers -->
   <div id="liaison-etats" style="margin-top:1.25rem;border:1px solid #e5e7eb;border-radius:1rem;padding:1.5rem;background:#f9fafb">
     <h2 class="text-xs font-bold text-blue-600 uppercase tracking-widest mb-1">🔗 Liaison Ameriack États Financiers</h2>

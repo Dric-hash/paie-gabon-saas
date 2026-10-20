@@ -624,6 +624,8 @@ def run_migrations():
         # ── Liaison États Financiers : totaux annuels de paie (Note 27B), 19/10/2026 ──
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS liaison_paie_autorisee BOOLEAN DEFAULT FALSE",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS sexe VARCHAR(1)",
+        # ── Comptes du journal de paie paramétrables (SYSCOHADA), 20/10/2026 ──
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS comptes_paie TEXT",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
