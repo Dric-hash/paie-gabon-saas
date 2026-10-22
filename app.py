@@ -211,7 +211,9 @@ def add_security_headers(response):
     if path.startswith("/static/"):
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif response.content_type and "text/html" in response.content_type:
-        response.headers["Cache-Control"]          = "private, no-cache"
+        # Portail des employés : données de salaire, jamais gardées en cache
+        response.headers["Cache-Control"]          = ("no-store" if path.startswith("/espace")
+                                                      else "private, no-cache")
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"]        = "SAMEORIGIN"
         response.headers["Referrer-Policy"]        = "strict-origin-when-cross-origin"

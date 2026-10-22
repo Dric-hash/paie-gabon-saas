@@ -270,6 +270,13 @@ def _bulletin_imprimer_impl(id):
         if not t:
             return redirect(url_for("auth.login"))
         b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
+    return rendu_bulletin_html(b, t)
+
+
+def rendu_bulletin_html(b, t, portail=False, retour_url=None, imprimer=False):
+    """Bulletin dans le modèle d'impression choisi par l'entreprise (Paramètres).
+    Partagé par l'aperçu du RH et l'espace salarié (portail=True : pas de lien
+    vers les pages de gestion)."""
     # Modèle de bulletin choisi par le tenant, avec repli sécurisé.
     try:
         modele = t.modele_bulletin or "classique"
@@ -283,10 +290,15 @@ def _bulletin_imprimer_impl(id):
         "sgtg":        "tenant/bulletin_print_sgtg.html",
     }
     template = template_map.get(modele, "tenant/bulletin_print.html")
-    # Vérifier que le template existe réellement sur le serveur, sinon repli.
-    import os
-    tpl_path = os.path.join(os.path.dirname(__file__), "..", "templates", template)
-    if not os.path.exists(tpl_path):
+    # Vérifier que le modèle existe réellement (chargeur Jinja de l'application),
+    # sinon repli sur le modèle classique. NB : l'ancien contrôle par chemin de
+    # fichier pointait vers blueprints/templates (inexistant) depuis le passage
+    # de blueprints/tenant.py en paquet : le modèle choisi n'était jamais appliqué.
+    from flask import current_app
+    from jinja2 import TemplateNotFound
+    try:
+        current_app.jinja_env.get_template(template)
+    except TemplateNotFound:
         template = "tenant/bulletin_print.html"
     composants = BulletinComposant.query.filter_by(bulletin_id=b.id).all()
     # Répartition par site (multi-chantiers) — affichée seulement si > 1 site.
@@ -319,7 +331,8 @@ def _bulletin_imprimer_impl(id):
     return render_template(template, bulletin=b, tenant=t, composants=composants,
                            recap_sites=recap_sites, multi_sites=multi_sites,
                            cumuls=cumuls, conges_annees=conges_annees,
-                           config_rubriques=_config_rubriques_dict(t.id))
+                           config_rubriques=_config_rubriques_dict(t.id),
+                           portail=portail, retour_url=retour_url or f"/bulletins/{b.id}", imprimer=imprimer)
 
 
 def _grille_tenant(t):
