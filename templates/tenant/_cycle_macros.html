@@ -34,7 +34,8 @@
 {% macro formulaire(x, retour, peut_saisir) -%}
 {% if peut_saisir %}
 <details class="cy-form">
-  <summary>{% if x.code in ['ECRITURES','DAS'] %}Enregistrer{% elif x.statut == 'PAYE' %}Modifier{% else %}Déclarer / payer{% endif %}</summary>
+  {% if x.etat == 'ATTENTE' %}<div class="cy-suivi" style="color:#b45309">L'étape précédente du cycle n'est pas terminée.</div>{% endif %}
+  <summary>{% if x.code in ['POINTAGE','ECRITURES','DAS'] %}{{ 'Modifier' if x.ob else 'Enregistrer' }}{% elif x.statut == 'PAYE' %}Modifier{% else %}Déclarer / payer{% endif %}</summary>
   <form method="POST" action="/cycle-paie/obligation">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
     <input type="hidden" name="code" value="{{ x.code }}">
@@ -42,20 +43,20 @@
     <input type="hidden" name="periode" value="{{ x.periode }}">
     <input type="hidden" name="retour" value="{{ retour }}">
     <div class="cy-champs">
-      <label>{% if x.code == 'ECRITURES' %}Date de comptabilisation{% elif x.code == 'DAS' %}Date de dépôt{% else %}Date de déclaration{% endif %}
+      <label>{% if x.code == 'POINTAGE' %}Date d'arrêt{% elif x.code == 'ECRITURES' %}Date de comptabilisation{% elif x.code == 'DAS' %}Date de dépôt{% else %}Date de déclaration{% endif %}
         <input type="date" name="date_declaration" value="{{ x.ob.date_declaration.isoformat() if x.ob and x.ob.date_declaration else '' }}"></label>
-      {% if x.code not in ['ECRITURES','DAS'] %}
+      {% if x.code not in ['POINTAGE','ECRITURES','DAS'] %}
       <label>Date de paiement
         <input type="date" name="date_paiement" value="{{ x.ob.date_paiement.isoformat() if x.ob and x.ob.date_paiement else '' }}"></label>
       <label>Montant payé (FCFA)
         <input type="text" inputmode="decimal" name="montant_paye" placeholder="{{ x.du|int if x.du else '' }}" value="{{ x.ob.montant_paye|int if x.ob and x.ob.montant_paye is not none else '' }}"></label>
       {% endif %}
-      <label>{% if x.code == 'ECRITURES' %}Référence (n° de pièce){% else %}Référence (quittance, dépôt){% endif %}
+      <label>{% if x.code == 'POINTAGE' %}Observation (facultatif){% elif x.code == 'ECRITURES' %}Référence (n° de pièce){% else %}Référence (quittance, dépôt){% endif %}
         <input type="text" name="reference" maxlength="100" value="{{ x.ob.reference if x.ob and x.ob.reference else '' }}"></label>
     </div>
     <div class="cy-boutons">
-      {% if x.code in ['ECRITURES','DAS'] %}
-      <button name="action" value="DECLARE" class="cy-btn cy-btn-vert">{{ 'Marquer comptabilisées' if x.code == 'ECRITURES' else 'Marquer déposée' }}</button>
+      {% if x.code in ['POINTAGE','ECRITURES','DAS'] %}
+      <button name="action" value="DECLARE" class="cy-btn cy-btn-vert">{{ {'POINTAGE': 'Arrêter le pointage', 'ECRITURES': 'Marquer comptabilisées', 'DAS': 'Marquer déposée'}[x.code] }}</button>
       {% else %}
       <button name="action" value="DECLARE" class="cy-btn cy-btn-bleu">Déclaré</button>
       <button name="action" value="PAYE" class="cy-btn cy-btn-vert">Payé</button>
@@ -95,5 +96,13 @@
   .cy-alerte{background:#fffbeb;border:1px solid #fcd34d;color:#78350f;border-radius:.75rem;padding:.75rem 1rem;font-size:.8rem;margin-bottom:1.25rem}
   .cy-lien{font-size:.75rem;font-weight:700;color:#2563eb;text-decoration:none;white-space:nowrap}
   .cy-scroll{overflow-x:auto}
+  .cy-parcours{display:flex;gap:.4rem;align-items:stretch;flex-wrap:wrap;margin-bottom:1.25rem}
+  .cy-etape{flex:1;min-width:150px;background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:.75rem .9rem;position:relative}
+  .cy-etape .cy-n{font-size:.65rem;font-weight:800;color:#9ca3af;letter-spacing:.06em}
+  .cy-etape .cy-t{font-size:.85rem;font-weight:800;color:#0f3d36;margin:.15rem 0 .35rem}
+  .cy-etape.cy-ok{border-color:#86efac;background:#f0fdf4}
+  .cy-etape.cy-ko{border-color:#fca5a5;background:#fef2f2}
+  .cy-fleche{align-self:center;color:#9ca3af;font-weight:800}
+  @media (max-width:640px){.cy-fleche{display:none}.cy-etape{min-width:45%}}
 </style>
 {% endmacro %}

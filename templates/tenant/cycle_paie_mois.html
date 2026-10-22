@@ -18,10 +18,34 @@
   </div>
 </div>
 
-{# ── 1. Paie du mois ────────────────────────────────────────────────── #}
+{# ── 1. Pointage ────────────────────────────────────────────────────── #}
+{% set x = e.pointage %}
 <div class="cy-carte">
-  <h2>1. Paie du mois</h2>
-  <p class="cy-sous">Ouvrir la période, générer les bulletins, les vérifier et les valider, puis payer les salaires.</p>
+  <h2>1. Pointage du mois</h2>
+  <p class="cy-sous">Saisir ou importer les présences, heures supplémentaires et absences du mois, valider les pointages mobiles,
+    puis arrêter le pointage : les bulletins reprennent ensuite les heures validées.</p>
+  <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px">
+      {{ cy.pastille(x.etat, 'Arrêté') }} {{ cy.echeance(x) }}
+      <div class="cy-suivi">
+        {% if x.etat == 'SANS_OBJET' %}L'entreprise n'utilise pas le pointage : étape sans objet.
+        {% else %}{{ x.stats.sal }} salarié(s) et {{ x.stats.jour }} journalier(s) pointé(s) · {{ x.stats.lignes }} pointage(s) validé(s){% endif %}
+      </div>
+      {% if x.stats.attente %}<div class="cy-suivi" style="color:#b45309;font-weight:700">{{ x.stats.attente }} pointage(s) mobile(s) en attente : à valider ou rejeter avant d'arrêter le pointage.</div>{% endif %}
+      {{ cy.suivi(x) }}
+      {% if x.etat != 'SANS_OBJET' or x.ob %}{{ cy.formulaire(x, retour, peut_saisir) }}{% endif %}
+    </div>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <a href="{{ x.lien }}" style="background:#0f3d36;color:#fff;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">Ouvrir le pointage</a>
+      {% if x.lien_mobile %}<a href="{{ x.lien_mobile }}" style="background:#fff;color:#b45309;border:1px solid #b45309;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">Valider les pointages mobiles</a>{% endif %}
+    </div>
+  </div>
+</div>
+
+{# ── 2. Bulletins et paiement ───────────────────────────────────────── #}
+<div class="cy-carte">
+  <h2>2. Bulletins et paiement des salaires</h2>
+  <p class="cy-sous">Une fois le pointage arrêté : ouvrir la période, générer les bulletins, les vérifier et les valider, puis payer les salaires.</p>
   <table class="cy-table"><tbody>
   {% for s in e.etapes if s.code != 'CLOTURE' %}
   <tr>
@@ -37,8 +61,8 @@
 
 {# ── 2. Impôts et taxes du mois ─────────────────────────────────────── #}
 <div class="cy-carte">
-  <h2>2. Impôts et taxes sur salaires — {{ e.libelle }}</h2>
-  <p class="cy-sous">Montants calculés sur les bulletins validés ou payés.
+  <h2>3. Impôts et taxes sur salaires — {{ e.libelle }}</h2>
+  <p class="cy-sous">Une fois les salaires payés. Montants calculés sur les bulletins validés ou payés.
     {% if p %}<a class="cy-lien" href="/declaration-cnss/imprimer-mensuel?periode_id={{ p.id }}" target="_blank">Imprimer le bordereau mensuel →</a>
     <a class="cy-lien" href="/declaration-cnss?periode_id={{ p.id }}&mode=mensuel" style="margin-left:.75rem">Voir le détail par salarié →</a>{% endif %}</p>
   <div class="cy-scroll"><table class="cy-table">
@@ -84,7 +108,7 @@
 {# ── 3. Écritures de paie ───────────────────────────────────────────── #}
 {% set x = e.ecritures %}
 <div class="cy-carte">
-  <h2>3. Écritures de paie</h2>
+  <h2>4. Écritures de paie</h2>
   <p class="cy-sous">Exporter le journal de paie du mois (comptes SYSCOHADA réglés dans Paramètres) et le passer en comptabilité.</p>
   <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
     <div style="flex:1;min-width:240px">
@@ -105,7 +129,7 @@
 {# ── 4. Clôture ─────────────────────────────────────────────────────── #}
 {% set c = e.etapes|selectattr('code', 'equalto', 'CLOTURE')|first %}
 <div class="cy-carte">
-  <h2>4. Clôture de la période</h2>
+  <h2>5. Clôture de la période</h2>
   <p class="cy-sous">Une fois la paie payée, les déclarations faites et les écritures passées, clôturer la période pour la figer.</p>
   {{ cy.pastille(c.etat, 'Clôturée') }}
   {% if p and not e.cloture %}<a class="cy-lien" href="/periodes/{{ p.id }}" style="margin-left:.75rem">Clôturer depuis la fiche de la période →</a>{% endif %}
@@ -113,9 +137,9 @@
 
 {# ── Trimestre ──────────────────────────────────────────────────────── #}
 <div class="cy-carte">
-  <h2>DTS CNSS et CNAMGS — {{ tri.libelle }}</h2>
-  <p class="cy-sous">{{ tri.mois_libelles }} · {{ tri.mois_clotures }} / 3 mois clôturé(s).
-    {% if e.fin_trimestre %}Ce mois termine le trimestre : la DTS se prépare après sa clôture.{% endif %}</p>
+  <h2>Ensuite, chaque trimestre : DTS CNSS et CNAMGS — {{ tri.libelle }}</h2>
+  <p class="cy-sous">{{ tri.mois_libelles }} · {{ tri.mois_complets }} / {{ tri.mois_attendus }} mois prêt(s) (pointage arrêté, salaires payés, impôts réglés).
+    {% if e.fin_trimestre %}Ce mois termine le trimestre : la DTS se prépare une fois ses impôts et taxes réglés.{% endif %}</p>
   <table class="cy-table"><tbody>
   {% for x in tri.obligations %}
   <tr><td style="font-weight:700">{{ 'CNSS' if x.code == 'CNSS' else 'CNAMGS' }}</td><td class="cy-num">{{ x.du|fcfa }}</td>
