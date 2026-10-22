@@ -11,6 +11,7 @@
     <p class="text-gray-500 text-sm mt-1">Paie du mois, impôts et taxes, DTS CNSS et CNAMGS, écritures, DAS : où en est chaque étape.</p>
   </div>
   <form method="GET" action="/cycle-paie" style="display:flex;gap:.5rem;align-items:center">
+    <a href="/cycle-paie/echeances" class="cy-lien" style="margin-right:.75rem">⚙ Mes échéances</a>
     <label for="annee" style="font-size:.75rem;color:#6b7280">Année</label>
     <select id="annee" name="annee" onchange="this.form.submit()" style="border:1px solid #d1d5db;border-radius:.5rem;padding:.35rem .6rem;font-size:.85rem">
       {% for a in annees %}<option value="{{ a }}" {{ 'selected' if a == annee else '' }}>{{ a }}</option>{% endfor %}
@@ -21,8 +22,8 @@
 {% if etat.echeances_manquantes %}
 <div class="cy-alerte">
   <strong>Dates limites légales non renseignées</strong> pour : {{ etat.echeances_manquantes|join(', ') }}.
-  Le cycle indique ce qui reste à faire, mais ne peut pas signaler les retards tant que l'administrateur
-  de PaieGabon n'a pas saisi ces échéances.
+  Les retards légaux ne peuvent pas être signalés pour ces obligations. Vous pouvez dès maintenant fixer
+  vos propres dates dans <a href="/cycle-paie/echeances" class="cy-lien">Mes échéances</a>.
 </div>
 {% endif %}
 
@@ -30,6 +31,7 @@
 <div class="cy-carte">
   <h2>À faire maintenant
     {% if etat.compte.RETARD %}<span class="cy-pastille" style="background:#fee2e2;color:#991b1b;margin-left:.4rem">{{ etat.compte.RETARD }} en retard</span>{% endif %}
+    {% if etat.compte.OBJECTIF %}<span class="cy-pastille" style="background:#ffedd5;color:#9a3412;margin-left:.4rem">{{ etat.compte.OBJECTIF }} objectif(s) dépassé(s)</span>{% endif %}
   </h2>
   {% if etat.a_faire %}
   <p class="cy-sous">Déclarations et paiements prêts à être faits (bulletins du mois validés). Les plus urgents en premier.</p>
