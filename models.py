@@ -97,6 +97,8 @@ class Tenant(db.Model):
     comptes_paie = db.Column(db.Text)
     # Portail des employés (consultation des bulletins) : activé par l'administrateur
     portail_salaries_actif = db.Column(db.Boolean, default=False)
+    # Attestations demandées sur le portail : délivrées sans validation du RH si activé
+    portail_attestations_auto = db.Column(db.Boolean, default=False)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
@@ -968,6 +970,9 @@ class Conge(db.Model):
     date_retour  = db.Column(db.Date)
     type_conge   = db.Column(db.String(50), default="ANNUEL")
     statut       = db.Column(db.String(20), default="DEMANDÉ")
+    origine      = db.Column(db.String(10))      # PORTAIL = demandée par le salarié sur son espace
+    commentaire  = db.Column(db.String(500))     # message du salarié
+    date_demande = db.Column(db.DateTime)
     salarie = db.relationship("Salarie", backref="conges")
     @property
     def jours_restants(self): return float(self.jours_acquis or 0) - float(self.jours_pris or 0)
@@ -2569,3 +2574,40 @@ class ConsultationBulletin(db.Model):
     bulletin_id = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id"), nullable=False, index=True)
     date        = db.Column(db.DateTime, default=utcnow, nullable=False)
     ip          = db.Column(db.String(45))
+
+
+class DemandeDocument(db.Model):
+    """Attestation demandée par un salarié sur son espace. Le PDF est généré et
+    figé au moment où le RH la délivre (ou automatiquement si l'entreprise l'a
+    choisi)."""
+    __tablename__ = "demandes_documents"
+    id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    salarie_id      = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False, index=True)
+    type_doc        = db.Column(db.String(30), nullable=False)   # ATTESTATION_TRAVAIL | ATTESTATION_SALAIRE
+    motif           = db.Column(db.String(300))
+    statut          = db.Column(db.String(15), nullable=False, default="DEMANDE")   # DEMANDE | DELIVRE | REFUSE
+    date_demande    = db.Column(db.DateTime, default=utcnow)
+    date_traitement = db.Column(db.DateTime)
+    traite_par      = db.Column(db.String(150))
+    motif_refus     = db.Column(db.String(300))
+    pdf             = db.Column(db.LargeBinary)
+    salarie = db.relationship("Salarie")
+
+
+class DemandeProfil(db.Model):
+    """Modification de ses informations personnelles demandée par un salarié ;
+    appliquée à sa fiche seulement après acceptation par le RH."""
+    __tablename__ = "demandes_profil"
+    id              = db.Column(db.Integer, primary_key=True)
+    tenant_id       = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    salarie_id      = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False, index=True)
+    champ           = db.Column(db.String(40), nullable=False)
+    ancienne_valeur = db.Column(db.String(300))
+    nouvelle_valeur = db.Column(db.String(300))
+    statut          = db.Column(db.String(15), nullable=False, default="DEMANDE")   # DEMANDE | ACCEPTE | REFUSE
+    date_demande    = db.Column(db.DateTime, default=utcnow)
+    date_traitement = db.Column(db.DateTime)
+    traite_par      = db.Column(db.String(150))
+    motif_refus     = db.Column(db.String(300))
+    salarie = db.relationship("Salarie")

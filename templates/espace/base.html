@@ -16,7 +16,7 @@
   html,body{margin:0;padding:0;background:var(--creme);color:var(--ink);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
   .wrap{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
-  header{background:var(--teal);color:#fff;padding:1rem 1.1rem calc(1rem + env(safe-area-inset-top,0)) ;position:sticky;top:0;z-index:5}
+  header{background:var(--teal);color:#fff;padding:1rem 1.1rem calc(1rem + env(safe-area-inset-top,0)) }
   header .l{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
   header h1{font-size:1.05rem;font-weight:800;margin:0}
   header .sub{font-size:.78rem;color:rgba(255,255,255,.75);margin-top:.15rem}
@@ -43,6 +43,22 @@
   .check input{width:auto;margin-top:.15rem}
   footer{text-align:center;font-size:.72rem;color:var(--mute);padding:1rem}
   #installer{display:none}
+  .onglets{display:grid;grid-template-columns:repeat(4,1fr);background:#fff;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:4}
+  .onglets a{display:flex;flex-direction:column;align-items:center;gap:.1rem;padding:.55rem 0;text-decoration:none;
+    color:var(--mute);font-size:.72rem;font-weight:700;border-bottom:3px solid transparent}
+  .onglets a.on{color:var(--teal);border-bottom-color:var(--teal)}
+  .onglets a span{font-size:.7rem}
+  .ligne{display:flex;align-items:center;gap:.6rem;padding:.7rem 0;border-top:1px solid #f3f4f6}
+  .ligne:first-child{border-top:none}
+  .ligne .m{flex:1;min-width:0}
+  .ligne .m strong{display:block;font-size:.95rem}
+  .ligne .m small{color:var(--mute);font-size:.78rem;display:block}
+  .etat{display:inline-block;border-radius:9999px;padding:.12rem .55rem;font-size:.7rem;font-weight:800;white-space:nowrap}
+  .etat.att{background:#fef3c7;color:#92400e}.etat.ok{background:#dcfce7;color:#166534}.etat.ko{background:#fee2e2;color:#991b1b}
+  .mini{border-radius:.55rem;padding:.5rem .7rem;font-size:.8rem;font-weight:800;text-decoration:none;white-space:nowrap;border:none;cursor:pointer}
+  .mini.v{background:var(--teal);color:#fff}.mini.d{background:#fff;border:1px solid var(--line);color:var(--teal)}
+  select,textarea{width:100%;padding:.7rem;border:1px solid #d1d5db;border-radius:.6rem;font-size:1rem;background:#fff;font-family:inherit}
+  .grille2{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
 </style>
 {% block head %}{% endblock %}
 </head>
@@ -55,9 +71,22 @@
         <div><h1>{% block entete %}Mon espace salarié{% endblock %}</h1>
           <div class="sub">{% block sous_entete %}PaieGabon{% endblock %}</div></div>
       </div>
-      {% block actions %}{% endblock %}
+      {% block actions %}{% if s is defined and s %}
+      <form method="POST" action="/espace/deconnexion" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button type="submit" style="background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:.6rem;padding:.45rem .7rem;font-weight:700;font-size:.8rem">Quitter</button>
+      </form>{% endif %}{% endblock %}
     </div>
   </header>
+  {% if s is defined and s %}
+  {% set ep = request.endpoint or '' %}
+  <nav class="onglets">
+    <a href="/espace/bulletins" class="{{ 'on' if ep in ['espace.mes_bulletins'] else '' }}">📄<span>Bulletins</span></a>
+    <a href="/espace/conges" class="{{ 'on' if ep in ['espace.mes_conges'] else '' }}">🏖️<span>Congés</span></a>
+    <a href="/espace/documents" class="{{ 'on' if ep in ['espace.mes_documents'] else '' }}">📑<span>Attestations</span></a>
+    <a href="/espace/profil" class="{{ 'on' if ep in ['espace.mon_profil', 'espace.changer_pin'] else '' }}">👤<span>Profil</span></a>
+  </nav>
+  {% endif %}
   <main>
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% for cat, msg in messages %}<div class="flash {{ cat if cat in ['error','success','info'] else 'info' }}">{{ msg }}</div>{% endfor %}

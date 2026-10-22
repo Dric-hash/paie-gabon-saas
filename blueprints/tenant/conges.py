@@ -235,19 +235,9 @@ def conges():
                                 date_ref=date(annee_ref, 12, 31))
 
     def calculer_solde_auto(salarie, annee_ref):
-        """Jours acquis proratisés selon le taux applicable."""
-        tx = taux_conge(salarie, annee_ref)
-        if not salarie.date_embauche:
-            return round(12 * tx, 1)
-        emb         = salarie.date_embauche
-        debut_annee = datetime(annee_ref, 1, 1).date()
-        fin_annee   = datetime(annee_ref, 12, 31).date()
-        debut_acq   = max(emb, debut_annee)
-        fin_acq     = min(datetime.now().date(), fin_annee)
-        if fin_acq < debut_acq:
-            return 0.0
-        mois_trav = min(round((fin_acq - debut_acq).days / 30.44, 1), 12)
-        return round(mois_trav * tx, 1)
+        """Jours acquis proratisés selon le taux applicable (calcul partagé avec le portail)."""
+        from conges_avance import jours_acquis_auto
+        return jours_acquis_auto(t, salarie, annee_ref)
 
     salaries_list = Salarie.query.filter_by(tenant_id=t.id, statut="ACTIF")        .options(joinedload(Salarie.categorie), joinedload(Salarie.contrats)).order_by(Salarie.nom).all()
 

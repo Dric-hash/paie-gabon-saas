@@ -19,7 +19,7 @@ import pytest
 
 from app import app as flask_app
 from models import (db, utcnow, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie, PeriodePaie, BulletinPaie,
-                    AccesSalarie, ConsultationBulletin, AuditLog)
+                    AccesSalarie, ConsultationBulletin, AuditLog, Conge, DemandeDocument, DemandeProfil)
 import portail_salaries as ps
 
 
@@ -300,3 +300,160 @@ def test_pwa_et_pin(env):
         matricule = "004215"
     assert ps.pin_refuse("031285", S) and ps.pin_refuse("12345", S) and ps.pin_refuse("987654", S)
     assert ps.pin_refuse("482915", S) is None
+
+
+
+def _espace_connecte(env):
+    _activer_portail(env)
+    cli, _ = _activer_compte(_inviter(env, "s1")[0])
+    return cli
+
+
+def test_conges_demande_annulation_et_traitement_rh(env):
+    cli = _espace_connecte(env)
+    r = cli.get("/espace/conges")
+    assert r.status_code == 200 and "Mon solde" in r.get_data(as_text=True)
+    dep = date.today() + timedelta(days=10)
+    ret = dep + timedelta(days=4)
+    cli.post("/espace/conges", data={"type_conge": "ANNUEL", "date_depart": dep.isoformat(),
+                                     "date_retour": ret.isoformat(), "commentaire": "vacances"})
+    assert "5 jour(s)" in _messages(cli)
+    with flask_app.app_context():
+        c = Conge.query.filter(Conge.date_depart.isnot(None)).one()
+        assert (c.statut, c.origine, c.commentaire, c.salarie_id) == ("DEMANDÉ", "PORTAIL", "vacances", env["s1"])
+        # la ligne de solde de l'année existe, comme pour une demande saisie par le RH
+        assert Conge.query.filter(Conge.date_depart.is_(None), Conge.salarie_id == env["s1"]).count() == 1
+        cid = c.id
+    # refus : chevauchement, dates passées, type réservé au RH, retour avant départ
+    for data, attendu in (
+            ({"type_conge": "ANNUEL", "date_depart": ret.isoformat(), "date_retour": (ret + timedelta(days=2)).isoformat()}, "chevauchent"),
+            ({"type_conge": "ANNUEL", "date_depart": "2020-01-01", "date_retour": "2020-01-03"}, "passée"),
+            ({"type_conge": "MALADIE", "date_depart": dep.isoformat(), "date_retour": dep.isoformat()}, "non disponible"),
+            ({"type_conge": "ANNUEL", "date_depart": ret.isoformat(), "date_retour": dep.isoformat()}, "doit suivre")):
+        cli.post("/espace/conges", data=data)
+        assert attendu in _messages(cli)
+    # visible côté RH avec la mention « via le portail »
+    html = _client_pour(env["admin"]).get("/conges").get_data(as_text=True)
+    assert "via le portail" in html and "vacances" in html
+    assert "1</strong> demande(s) de congé" in _client_pour(env["admin"]).get("/portail-employes").get_data(as_text=True)
+    # le salarié annule sa demande en attente ; un autre salarié ne peut pas l'annuler
+    with flask_app.app_context():
+        autre = Conge(tenant_id=env["t"], salarie_id=env["s2"], annee=dep.year, type_conge="ANNUEL", statut="DEMANDÉ",
+                      date_depart=dep, date_retour=dep)
+        db.session.add(autre); db.session.commit(); autre_id = autre.id
+    assert cli.post(f"/espace/conges/{autre_id}/annuler").status_code == 404
+    cli.post(f"/espace/conges/{cid}/annuler")
+    with flask_app.app_context():
+        assert db.session.get(Conge, cid) is None and db.session.get(Conge, autre_id) is not None
+    # une demande accordée ne peut plus être annulée par le salarié
+    cli.post("/espace/conges", data={"type_conge": "PERMISSION", "date_depart": dep.isoformat(),
+                                     "date_retour": dep.isoformat()})
+    with flask_app.app_context():
+        c = Conge.query.filter_by(salarie_id=env["s1"], type_conge="PERMISSION").one()
+        cid = c.id
+    _client_pour(env["admin"]).post(f"/conges/{cid}/approuver")
+    cli.post(f"/espace/conges/{cid}/annuler")
+    assert "en attente" in _messages(cli)
+    assert "Accordé" in cli.get("/espace/conges").get_data(as_text=True)
+
+
+def test_attestations_validation_rh_puis_automatique(env):
+    cli = _espace_connecte(env)
+    cli.post("/espace/documents", data={"type_doc": "ATTESTATION_TRAVAIL", "motif": "banque"})
+    cli.post("/espace/documents", data={"type_doc": "ATTESTATION_TRAVAIL"})
+    assert "déjà en attente" in _messages(cli)
+    with flask_app.app_context():
+        d = DemandeDocument.query.one()
+        assert d.statut == "DEMANDE" and d.pdf is None
+        did = d.id
+    assert cli.get(f"/espace/documents/{did}.pdf").status_code == 404          # pas encore délivrée
+    rh = _client_pour(env["rh"])
+    assert "banque" in rh.get("/portail-employes").get_data(as_text=True)
+    flask_app.config["MAIL_CAPTURE"].clear()
+    rh.post(f"/portail-employes/document/{did}/delivrer")
+    assert len(flask_app.config["MAIL_CAPTURE"]) == 1                       # salarié prévenu par e-mail
+    r = cli.get(f"/espace/documents/{did}.pdf")
+    assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data[:4] == b"%PDF"
+    # refus avec motif
+    cli.post("/espace/documents", data={"type_doc": "ATTESTATION_SALAIRE"})
+    with flask_app.app_context():
+        d2 = DemandeDocument.query.filter_by(type_doc="ATTESTATION_SALAIRE").one().id
+    rh.post(f"/portail-employes/document/{d2}/refuser", data={"motif_refus": "voir le RH"})
+    assert "voir le RH" in cli.get("/espace/documents").get_data(as_text=True)
+    # délivrance automatique : réservée à l'administrateur, immédiate pour le salarié
+    assert rh.post("/portail-employes/attestations-auto", data={"auto": "1"}).status_code == 403
+    _client_pour(env["admin"]).post("/portail-employes/attestations-auto", data={"auto": "1"})
+    cli.post("/espace/documents", data={"type_doc": "ATTESTATION_SALAIRE"})
+    assert "prête" in _messages(cli)
+    with flask_app.app_context():
+        d3 = DemandeDocument.query.filter_by(type_doc="ATTESTATION_SALAIRE", statut="DELIVRE").one()
+        assert d3.traite_par == "Délivrance automatique" and d3.pdf[:4] == b"%PDF"
+        d3id = d3.id
+    # document d'un autre salarié : introuvable
+    with flask_app.app_context():
+        autre = DemandeDocument(tenant_id=env["t"], salarie_id=env["s2"], type_doc="ATTESTATION_TRAVAIL",
+                                statut="DELIVRE", pdf=b"%PDF-x", date_traitement=utcnow())
+        db.session.add(autre); db.session.commit(); aid = autre.id
+    assert cli.get(f"/espace/documents/{aid}.pdf").status_code == 404
+    assert cli.get(f"/espace/documents/{d3id}.pdf").status_code == 200
+
+
+def test_attestation_salaire_sans_bulletin_valide(env):
+    _activer_portail(env)
+    cli, _ = _activer_compte(_inviter(env, "s1")[0])
+    with flask_app.app_context():
+        for b in BulletinPaie.query.filter_by(salarie_id=env["s1"]).all():
+            b.statut = "BROUILLON"
+        db.session.commit()
+    cli.post("/espace/documents", data={"type_doc": "ATTESTATION_SALAIRE"})
+    with flask_app.app_context():
+        did = DemandeDocument.query.one().id
+    rh = _client_pour(env["rh"])
+    rh.post(f"/portail-employes/document/{did}/delivrer")
+    assert "aucun bulletin validé" in _messages(rh)
+    with flask_app.app_context():
+        assert DemandeDocument.query.one().statut == "DEMANDE"
+
+
+def test_profil_demande_et_validation_rh(env):
+    cli = _espace_connecte(env)
+    assert "NDONG" in cli.get("/espace/profil").get_data(as_text=True)
+    # champs inchangés : rien n'est créé
+    cli.post("/espace/profil", data={"email": "jean@ndong.ga", "telephone": ""})
+    assert "Aucune modification" in _messages(cli)
+    cli.post("/espace/profil", data={"email": "pas-un-email"})
+    assert "invalide" in _messages(cli)
+    cli.post("/espace/profil", data={"telephone": "+241 77 12 34 56", "situation_matrimoniale": "MARIE AEAC",
+                                     "nb_enfants": "2", "email": "jean@ndong.ga"})
+    with flask_app.app_context():
+        ds = {d.champ: d for d in DemandeProfil.query.all()}
+        assert set(ds) == {"telephone", "situation_matrimoniale", "nb_enfants"}
+        s1 = db.session.get(Salarie, env["s1"])
+        assert s1.telephone is None                       # rien n'est appliqué avant validation
+        ids = {k: v.id for k, v in ds.items()}
+    # nouvelle demande sur le même champ : remplace la précédente en attente
+    cli.post("/espace/profil", data={"telephone": "+241 66 00 00 00"})
+    with flask_app.app_context():
+        tel = DemandeProfil.query.filter_by(champ="telephone").all()
+        assert len(tel) == 1 and tel[0].nouvelle_valeur == "+241 66 00 00 00"
+        ids["telephone"] = tel[0].id
+    rh = _client_pour(env["rh"])
+    for champ in ("telephone", "situation_matrimoniale", "nb_enfants"):
+        rh.post(f"/portail-employes/profil/{ids[champ]}/accepter")
+    with flask_app.app_context():
+        s1 = db.session.get(Salarie, env["s1"])
+        assert (s1.telephone, s1.situation_matrimoniale, s1.nb_enfants) == ("+241 66 00 00 00", "MARIE AEAC", 2)
+        from core import calculer_parts_irpp
+        assert float(s1.nombre_parts) == calculer_parts_irpp("MARIE AEAC", 2)
+    # refus avec motif, visible par le salarié ; une demande déjà traitée ne se retraite pas
+    cli.post("/espace/profil", data={"adresse": "Quartier Potos, Franceville"})
+    with flask_app.app_context():
+        aid = DemandeProfil.query.filter_by(champ="adresse").one().id
+    rh.post(f"/portail-employes/profil/{aid}/refuser", data={"motif_refus": "justificatif manquant"})
+    assert "justificatif manquant" in cli.get("/espace/profil").get_data(as_text=True)
+    assert rh.post(f"/portail-employes/profil/{aid}/accepter").status_code == 404
+    # lecture seule : aucune validation possible
+    _client_pour(env["dir"]).post(f"/portail-employes/profil/{ids['telephone']}/refuser")
+    with flask_app.app_context():
+        assert DemandeProfil.query.get(ids["telephone"]).statut == "ACCEPTE"
+        assert db.session.get(Salarie, env["s1"]).adresse is None

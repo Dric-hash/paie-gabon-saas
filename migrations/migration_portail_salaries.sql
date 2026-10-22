@@ -35,3 +35,41 @@ CREATE TABLE IF NOT EXISTS consultations_bulletins (
 CREATE INDEX IF NOT EXISTS ix_consultations_bulletins_tenant_id ON consultations_bulletins (tenant_id);
 CREATE INDEX IF NOT EXISTS ix_consultations_bulletins_salarie_id ON consultations_bulletins (salarie_id);
 CREATE INDEX IF NOT EXISTS ix_consultations_bulletins_bulletin_id ON consultations_bulletins (bulletin_id);
+
+-- Portail des employés v2 : congés, attestations, profil (22/10/2026)
+ALTER TABLE tenants ADD COLUMN IF NOT EXISTS portail_attestations_auto BOOLEAN DEFAULT FALSE;
+ALTER TABLE conges ADD COLUMN IF NOT EXISTS origine VARCHAR(10);
+ALTER TABLE conges ADD COLUMN IF NOT EXISTS commentaire VARCHAR(500);
+ALTER TABLE conges ADD COLUMN IF NOT EXISTS date_demande TIMESTAMP;
+
+CREATE TABLE IF NOT EXISTS demandes_documents (
+    id              SERIAL PRIMARY KEY,
+    tenant_id       INTEGER NOT NULL REFERENCES tenants(id),
+    salarie_id      INTEGER NOT NULL REFERENCES salaries(id),
+    type_doc        VARCHAR(30) NOT NULL,
+    motif           VARCHAR(300),
+    statut          VARCHAR(15) NOT NULL DEFAULT 'DEMANDE',
+    date_demande    TIMESTAMP,
+    date_traitement TIMESTAMP,
+    traite_par      VARCHAR(150),
+    motif_refus     VARCHAR(300),
+    pdf             BYTEA
+);
+CREATE INDEX IF NOT EXISTS ix_demandes_documents_tenant_id ON demandes_documents (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_demandes_documents_salarie_id ON demandes_documents (salarie_id);
+
+CREATE TABLE IF NOT EXISTS demandes_profil (
+    id              SERIAL PRIMARY KEY,
+    tenant_id       INTEGER NOT NULL REFERENCES tenants(id),
+    salarie_id      INTEGER NOT NULL REFERENCES salaries(id),
+    champ           VARCHAR(40) NOT NULL,
+    ancienne_valeur VARCHAR(300),
+    nouvelle_valeur VARCHAR(300),
+    statut          VARCHAR(15) NOT NULL DEFAULT 'DEMANDE',
+    date_demande    TIMESTAMP,
+    date_traitement TIMESTAMP,
+    traite_par      VARCHAR(150),
+    motif_refus     VARCHAR(300)
+);
+CREATE INDEX IF NOT EXISTS ix_demandes_profil_tenant_id ON demandes_profil (tenant_id);
+CREATE INDEX IF NOT EXISTS ix_demandes_profil_salarie_id ON demandes_profil (salarie_id);

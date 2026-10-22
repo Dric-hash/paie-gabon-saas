@@ -11,7 +11,7 @@ from blueprints.tenant import bp, logger
 from core import tenant_required, get_tenant, send_email_async
 from audit import log_action
 from models import (db, utcnow, Salarie, PeriodePaie, BulletinPaie, AccesSalarie, ConsultationBulletin,
-                    AuditLog)
+                    AuditLog, Conge, DemandeDocument, DemandeProfil)
 import portail_salaries as ps
 
 SITUATIONS = {
@@ -109,7 +109,16 @@ def portail_employes():
         stats_periodes.append({"p": p, "nb": len(visibles), "vus": vus,
                                "notifie_le": notif.date_action if notif else None})
     lien = url_for("espace.accueil", e=t.slug, _external=True)
+    # Demandes des salariés à traiter
+    docs = (DemandeDocument.query.filter_by(tenant_id=t.id, statut="DEMANDE")
+            .order_by(DemandeDocument.date_demande).all())
+    profils = (DemandeProfil.query.filter_by(tenant_id=t.id, statut="DEMANDE")
+               .order_by(DemandeProfil.date_demande).all())
+    nb_conges = (Conge.query.filter(Conge.tenant_id == t.id, Conge.origine == "PORTAIL",
+                                    Conge.statut.in_(["DEMANDÉ", "DEMANDE"])).count())
     return render_template("tenant/portail_employes.html", tenant=t, lignes=lignes, compte=compte,
+                           docs=docs, profils=profils, nb_conges=nb_conges, TYPES_DOC=ps.TYPES_DOCUMENT,
+                           CHAMPS=ps.CHAMPS_PROFIL,
                            periodes=stats_periodes, lien=lien, peut_saisir=current_user.can_edit,
                            est_admin=current_user.is_tenant_admin, SITUATIONS=SITUATIONS,
                            mail_actif=_mail_actif(), CODE_JOURS=ps.CODE_JOURS)
@@ -251,3 +260,95 @@ def portail_employes_prevenir():
         msg += f" {sans_acces} sans accès activé."
     flash(msg, "success" if envoyes else "warning")
     return redirect(url_for("tenant.portail_employes"))
+
+
+@bp.route("/portail-employes/attestations-auto", methods=["POST"])
+@login_required
+@tenant_required
+def portail_employes_attestations_auto():
+    t = _contexte()
+    if not current_user.is_tenant_admin:
+        abort(403)
+    auto = request.form.get("auto") == "1"
+    if bool(t.portail_attestations_auto) != auto:
+        t.portail_attestations_auto = auto
+        log_action("UPDATE", "tenant", t.id, "Portail des employés : attestations délivrées "
+                   + ("automatiquement" if auto else "après validation du RH"), tenant_id=t.id)
+        db.session.commit()
+    flash("Les attestations demandées seront délivrées automatiquement." if auto else
+          "Les attestations demandées seront délivrées après votre validation.", "success")
+    return redirect(url_for("tenant.portail_employes") + "#demandes")
+
+
+@bp.route("/portail-employes/document/<int:doc_id>/<action>", methods=["POST"])
+@login_required
+@tenant_required
+def portail_employes_document(doc_id, action):
+    t = _contexte()
+    if not current_user.can_edit:
+        abort(403)
+    if action not in ("delivrer", "refuser"):
+        abort(404)
+    d = DemandeDocument.query.filter_by(id=doc_id, tenant_id=t.id, statut="DEMANDE").first_or_404()
+    s = d.salarie
+    lib = ps.TYPES_DOCUMENT.get(d.type_doc, d.type_doc)
+    if action == "delivrer":
+        try:
+            ps.delivrer(d, t, _par())
+        except ValueError as e:
+            flash(f"{lib} non délivrée : {e}.", "error")
+            return redirect(url_for("tenant.portail_employes") + "#demandes")
+        except Exception as e:
+            logger.error(f"[PORTAIL] Génération {d.type_doc} pour {s.id} : {e}")
+            flash("Le document n'a pas pu être généré. Vérifiez la fiche du salarié.", "error")
+            return redirect(url_for("tenant.portail_employes") + "#demandes")
+        if s.email and _mail_actif():
+            _envoyer(s.email, f"{t.denomination} — votre {lib.lower()} est disponible", _gabarit_mail(
+                t, f"Votre {lib.lower()} est disponible", [f"Bonjour {s.prenom or ''},",
+                f"Votre {lib.lower()} est disponible sur votre espace salarié."],
+                "Télécharger", url_for("espace.accueil", e=t.slug, _external=True)))
+        msg = f"{lib} délivrée à {s.prenom} {s.nom}."
+    else:
+        d.statut = "REFUSE"
+        d.date_traitement = utcnow()
+        d.traite_par = _par()[:150]
+        d.motif_refus = (request.form.get("motif_refus") or "").strip()[:300] or None
+        msg = f"Demande de {lib.lower()} de {s.prenom} {s.nom} refusée."
+    log_action("UPDATE", "demande_document", d.id, f"Portail des employés : {msg}", tenant_id=t.id)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(url_for("tenant.portail_employes") + "#demandes")
+
+
+@bp.route("/portail-employes/profil/<int:demande_id>/<action>", methods=["POST"])
+@login_required
+@tenant_required
+def portail_employes_profil(demande_id, action):
+    t = _contexte()
+    if not current_user.can_edit:
+        abort(403)
+    if action not in ("accepter", "refuser"):
+        abort(404)
+    d = DemandeProfil.query.filter_by(id=demande_id, tenant_id=t.id, statut="DEMANDE").first_or_404()
+    s = d.salarie
+    lib = ps.CHAMPS_PROFIL.get(d.champ, d.champ)
+    if action == "accepter":
+        if d.champ == "email" and d.nouvelle_valeur and Salarie.query.filter(
+                Salarie.tenant_id == t.id, Salarie.id != s.id, Salarie.email == d.nouvelle_valeur).first():
+            flash("Cette adresse e-mail est déjà utilisée par un autre salarié.", "error")
+            return redirect(url_for("tenant.portail_employes") + "#demandes")
+        ps.appliquer_profil(d, _par())
+        msg = f"{lib} de {s.prenom} {s.nom} mis(e) à jour : {d.ancienne_valeur or '—'} → {d.nouvelle_valeur or '—'}."
+        if d.champ in ("situation_matrimoniale", "nb_enfants"):
+            msg += f" Parts fiscales recalculées : {s.nombre_parts}."
+    else:
+        d.statut = "REFUSE"
+        d.date_traitement = utcnow()
+        d.traite_par = _par()[:150]
+        d.motif_refus = (request.form.get("motif_refus") or "").strip()[:300] or None
+        msg = f"Modification de {lib.lower()} de {s.prenom} {s.nom} refusée."
+    log_action("UPDATE", "salarie" if action == "accepter" else "demande_profil",
+               s.id if action == "accepter" else d.id, f"Portail des employés : {msg}", tenant_id=t.id)
+    db.session.commit()
+    flash(msg, "success")
+    return redirect(url_for("tenant.portail_employes") + "#demandes")

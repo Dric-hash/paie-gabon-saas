@@ -1,0 +1,40 @@
+{% extends "espace/base.html" %}
+{% block title %}Mes attestations{% endblock %}
+{% block entete %}{{ s.prenom }} {{ s.nom }}{% endblock %}
+{% block sous_entete %}{{ t.denomination }} · matricule {{ s.matricule }}{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Demander une attestation</h2>
+  <form method="POST" action="/espace/documents">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label for="type_doc">Document</label>
+    <select id="type_doc" name="type_doc" required>
+      {% for code, lib in TYPES.items() %}<option value="{{ code }}">{{ lib }}</option>{% endfor %}
+    </select>
+    <label for="motif">Pour quel usage ? (facultatif)</label>
+    <input id="motif" name="motif" maxlength="300" placeholder="Ex. dossier de prêt bancaire, demande de visa">
+    <button class="btn primary" type="submit">{{ 'Obtenir l\'attestation' if t.portail_attestations_auto else 'Envoyer la demande' }}</button>
+  </form>
+  <p class="mute" style="margin:.7rem 0 0">
+    {% if t.portail_attestations_auto %}Votre employeur délivre les attestations immédiatement.
+    {% else %}Le service RH vérifie et délivre l'attestation ; vous la téléchargez ici ensuite.{% endif %}</p>
+</div>
+
+<div class="card">
+  <h2>Mes attestations</h2>
+  {% for d in demandes %}
+  {% set st = STATUTS.get(d.statut, (d.statut, 'att')) %}
+  <div class="ligne">
+    <div class="m"><strong>{{ TYPES.get(d.type_doc, d.type_doc) }}</strong>
+      <small>demandée le {{ d.date_demande|date_fr }}{% if d.motif %} · {{ d.motif }}{% endif %}</small>
+      {% if d.statut == 'REFUSE' and d.motif_refus %}<small style="color:#991b1b">Motif : {{ d.motif_refus }}</small>{% endif %}</div>
+    {% if d.statut == 'DELIVRE' %}
+    <a class="mini v" href="/espace/documents/{{ d.id }}.pdf" target="_blank" rel="noopener">Voir</a>
+    <a class="mini d" href="/espace/documents/{{ d.id }}.pdf?dl=1" aria-label="Télécharger">⬇</a>
+    {% else %}<span class="etat {{ st[1] }}">{{ st[0] }}</span>{% endif %}
+  </div>
+  {% else %}
+  <p class="mute" style="margin:0">Aucune attestation demandée.</p>
+  {% endfor %}
+</div>
+{% endblock %}
