@@ -8,7 +8,7 @@
 <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:1rem">
   <div>
     <h1 class="text-2xl font-black text-gray-900">Cycle de paie {{ annee }}</h1>
-    <p class="text-gray-500 text-sm mt-1">Paie du mois, impôts et taxes, DTS CNSS et CNAMGS, écritures, DAS : où en est chaque étape.</p>
+    <p class="text-gray-500 text-sm mt-1">Pointage → bulletins et paiement → impôts et taxes → DTS CNSS et CNAMGS → DAS : chaque étape attend la précédente.</p>
   </div>
   <form method="GET" action="/cycle-paie" style="display:flex;gap:.5rem;align-items:center">
     <a href="/cycle-paie/echeances" class="cy-lien" style="margin-right:.75rem">⚙ Mes échéances</a>
@@ -17,6 +17,20 @@
       {% for a in annees %}<option value="{{ a }}" {{ 'selected' if a == annee else '' }}>{{ a }}</option>{% endfor %}
     </select>
   </form>
+</div>
+
+{# ── Parcours ───────────────────────────────────────────────────────── #}
+<div class="cy-parcours">
+  {% for p in etat.parcours %}
+  <div class="cy-etape {{ 'cy-ok' if p.etat == 'FAIT' else ('cy-ko' if p.etat == 'RETARD' else '') }}">
+    <div class="cy-n">ÉTAPE {{ loop.index }}</div>
+    <div class="cy-t">{{ p.libelle }}</div>
+    {% if p.code == 'DAS' %}{{ cy.pastille(p.etat, 'Déposée') }}
+    {% elif p.total %}<div style="font-size:.8rem;color:#374151"><strong>{{ p.fait }}</strong> / {{ p.total }} {{ p.unite }}</div>
+    {% else %}<div style="font-size:.75rem;color:#9ca3af">pas encore commencé</div>{% endif %}
+  </div>
+  {% if not loop.last %}<div class="cy-fleche">→</div>{% endif %}
+  {% endfor %}
 </div>
 
 {% if etat.echeances_manquantes %}
@@ -34,7 +48,7 @@
     {% if etat.compte.OBJECTIF %}<span class="cy-pastille" style="background:#ffedd5;color:#9a3412;margin-left:.4rem">{{ etat.compte.OBJECTIF }} objectif(s) dépassé(s)</span>{% endif %}
   </h2>
   {% if etat.a_faire %}
-  <p class="cy-sous">Déclarations et paiements prêts à être faits (bulletins du mois validés). Les plus urgents en premier.</p>
+  <p class="cy-sous">Ce qui est prêt à être fait (l'étape précédente est terminée), et tout ce qui a dépassé une échéance. Les plus urgents en premier.</p>
   <div class="cy-scroll"><table class="cy-table">
     <thead><tr><th>Obligation</th><th>Période</th><th class="cy-num">Montant calculé</th><th>Situation</th><th>Échéance</th><th></th></tr></thead>
     <tbody>
@@ -46,7 +60,7 @@
       <td>{{ cy.pastille(x.etat) }}</td>
       <td>{{ cy.echeance(x) }}</td>
       <td>
-        {% if x.code in ['IRPP','TCS','FNH','CFP','ECRITURES'] %}
+        {% if x.code in ['POINTAGE','IRPP','TCS','FNH','CFP','ECRITURES'] %}
         <a class="cy-lien" href="/cycle-paie/{{ x.annee }}/{{ x.periode }}">Ouvrir le mois →</a>
         {% else %}<a class="cy-lien" href="#{{ 'das' if x.code == 'DAS' else 'trimestres' }}">Voir →</a>{% endif %}
       </td>
@@ -62,17 +76,20 @@
 
 {# ── Paie mensuelle ─────────────────────────────────────────────────── #}
 <div class="cy-carte">
-  <h2>Paie mensuelle</h2>
-  <p class="cy-sous">Pour chaque mois : bulletins calculés et validés, salaires payés, impôts et taxes (IRPP, TCS, FNH, CFP), écritures de paie, clôture de la période.</p>
+  <h2>Étapes 1 à 3 — chaque mois</h2>
+  <p class="cy-sous">Pointage arrêté, puis bulletins calculés et validés, salaires payés, puis impôts et taxes (IRPP, TCS, FNH, CFP) ; ensuite écritures de paie et clôture de la période.</p>
   <div class="cy-scroll"><table class="cy-table">
     <thead><tr>
-      <th>Mois</th><th>Bulletins</th><th>Salaires payés</th><th>IRPP · TCS · FNH · CFP</th>
+      <th>Mois</th><th>1. Pointage</th><th>2. Bulletins</th><th>2. Salaires payés</th><th>3. IRPP · TCS · FNH · CFP</th>
       <th>Écritures</th><th>Clôture</th><th class="cy-num">Brut</th><th></th>
     </tr></thead>
     <tbody>
     {% for e in etat.mois %}
     <tr class="{{ '' if e.actif else 'cy-inactif' }}">
       <td style="font-weight:700;white-space:nowrap">{{ MOIS[e.mois] }}</td>
+      <td>{{ cy.pastille(e.colonnes.POINTAGE, 'Arrêté') }}
+        {% if e.pointage.stats.attente %}<div class="cy-suivi" style="color:#b45309">{{ e.pointage.stats.attente }} mobile(s) à valider</div>
+        {% elif e.pointage.stats.lignes %}<div class="cy-suivi">{{ e.pointage.stats.sal }} salarié(s){% if e.pointage.stats.jour %}, {{ e.pointage.stats.jour }} journalier(s){% endif %}</div>{% endif %}</td>
       <td>{{ cy.pastille(e.colonnes.PAIE, 'Validés') }}
         {% if e.nb %}<div class="cy-suivi">{{ e.nb }} bulletin(s){% if e.nb_brouillon %}, {{ e.nb_brouillon }} brouillon(s){% endif %}</div>{% endif %}</td>
       <td>{{ cy.pastille(e.colonnes.PAIEMENT, 'Payés') }}</td>
@@ -92,10 +109,10 @@
 
 {# ── DTS trimestrielles CNSS / CNAMGS ───────────────────────────────── #}
 <div class="cy-carte" id="trimestres">
-  <h2>DTS trimestrielles CNSS et CNAMGS</h2>
-  <p class="cy-sous">Montants calculés sur les bulletins validés ou payés des trois mois (parts salariale et patronale). La déclaration est prête quand les trois mois sont clôturés.</p>
+  <h2>Étape 4 — DTS trimestrielles CNSS et CNAMGS</h2>
+  <p class="cy-sous">Montants calculés sur les bulletins validés ou payés des trois mois (parts salariale et patronale). La DTS est prête quand, pour chacun des trois mois, le pointage est arrêté, les salaires payés et les impôts et taxes réglés.</p>
   <div class="cy-scroll"><table class="cy-table">
-    <thead><tr><th>Trimestre</th><th>Mois clôturés</th><th>Organisme</th><th class="cy-num">Montant calculé</th><th>Situation</th><th style="min-width:220px">Suivi</th></tr></thead>
+    <thead><tr><th>Trimestre</th><th>Mois prêts</th><th>Organisme</th><th class="cy-num">Montant calculé</th><th>Situation</th><th style="min-width:220px">Suivi</th></tr></thead>
     <tbody>
     {% for tr in etat.trimestres %}
       {% for x in tr.obligations %}
@@ -103,7 +120,7 @@
         {% if loop.first %}
         <td rowspan="{{ tr.obligations|length }}" style="font-weight:700;white-space:nowrap">{{ tr.libelle }}<div class="cy-suivi">{{ tr.mois_libelles }}</div>
           <a class="cy-lien" href="/declaration-cnss?mode=trimestriel{% for m in etat.mois if m.mois == tr.mois[-1] and m.periode %}&periode_id={{ m.periode.id }}{% endfor %}">Préparer la DTS →</a></td>
-        <td rowspan="{{ tr.obligations|length }}">{{ tr.mois_clotures }} / 3
+        <td rowspan="{{ tr.obligations|length }}">{{ tr.mois_complets }} / {{ tr.mois_attendus }}
           {% if tr.nb_brouillon %}<div class="cy-suivi" style="color:#b45309">{{ tr.nb_brouillon }} brouillon(s)</div>{% endif %}</td>
         {% endif %}
         <td style="font-weight:700">{{ 'CNSS' if x.code == 'CNSS' else 'CNAMGS' }}</td>
@@ -120,8 +137,9 @@
 {# ── DAS ────────────────────────────────────────────────────────────── #}
 {% set d = etat.das %}
 <div class="cy-carte" id="das">
-  <h2>Déclaration annuelle des salaires (DAS) {{ annee }}</h2>
-  <p class="cy-sous">À préparer une fois les douze mois clôturés : {{ d.mois_clotures }} / 12 clôturé(s).</p>
+  <h2>Étape 5 — Déclaration annuelle des salaires (DAS) {{ annee }}</h2>
+  <p class="cy-sous">À préparer une fois l'année terminée et toutes les DTS déclarées et payées :
+    {{ d.dts_faites }} / {{ d.dts_attendues }} trimestre(s) terminé(s) · {{ d.mois_clotures }} / 12 mois clôturé(s).</p>
   <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
     <div style="flex:1;min-width:240px">
       {{ cy.pastille(d.etat, 'Déposée') }} {{ cy.echeance(d) }}

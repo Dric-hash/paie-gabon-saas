@@ -85,6 +85,19 @@ def env():
         db.drop_all()
 
 
+def _payer_janvier():
+    for b in BulletinPaie.query.join(PeriodePaie).filter(PeriodePaie.mois == 1).all():
+        b.statut = "PAYÉ"
+    db.session.commit()
+
+
+def _regler_impots(tid, mois):
+    for m in mois:
+        for c in cp.TAXES_MENSUELLES:
+            db.session.add(ObligationPaie(tenant_id=tid, code=c, annee=2026, periode=m, statut="PAYE"))
+    db.session.commit()
+
+
 def _etat(ids, aujourd_hui=date(2026, 5, 20)):
     t = db.session.get(Tenant, ids["t"])
     return cp.etat_annee(t, 2026, aujourd_hui)
@@ -115,13 +128,19 @@ def test_trimestre_cnss_cnamgs(env):
         ob = {x["code"]: x for x in t1["obligations"]}
         assert ob["CNSS"]["du"] == 37_500 + 150_000 + 125_000 + 125_000
         assert ob["CNAMGS"]["du"] == 61_000 + 30_500
-        # aucun mois clôturé → DTS pas encore prête
+        # janvier pas entièrement payé → DTS pas encore prête
         assert t1["pret"] is False and ob["CNSS"]["etat"] == "ATTENTE"
-        for p in PeriodePaie.query.filter(PeriodePaie.mois <= 3).all():
-            p.statut = "CLÔTURÉ"
-        db.session.commit()
+        _payer_janvier()
+        t1 = _etat(env)["trimestres"][0]
+        assert t1["pret"] is False and t1["mois_complets"] == 0      # impôts et taxes pas encore réglés
+        _regler_impots(env["t"], [1, 2])
+        t1 = _etat(env)["trimestres"][0]
+        assert t1["pret"] is False and t1["mois_complets"] == 2      # mars manque encore
+        _regler_impots(env["t"], [3])
         t1 = _etat(env)["trimestres"][0]
         assert t1["pret"] is True and t1["obligations"][0]["etat"] == "A_FAIRE"
+        # la clôture des périodes n'est pas exigée pour la DTS
+        assert t1["mois_clotures"] == 0
         # T2 : seul un brouillon → rien à déclarer
         t2 = _etat(env)["trimestres"][1]
         assert t2["nb_brouillon"] == 1 and t2["obligations"][0]["du"] == 0
@@ -141,6 +160,11 @@ def test_echeance_reglee_et_retard(env):
     with flask_app.app_context():
         db.session.add(EcheanceLegale(code="IRPP", jour=31, decalage_mois=1, source="test"))
         db.session.commit()
+        # la date légale est signalée même si l'étape précédente n'est pas finie
+        e = _etat(env, aujourd_hui=date(2026, 3, 1))
+        assert next(x for x in e["mois"][0]["taxes"] if x["code"] == "IRPP")["etat"] == "RETARD"
+        assert next(x for x in e["mois"][0]["taxes"] if x["code"] == "TCS")["etat"] == "ATTENTE"
+        _payer_janvier()
         regles = cp.echeances()
         assert cp.date_limite("IRPP", 2026, 1, regles) == date(2026, 2, 28)   # ramené à fin février
         assert cp.date_limite("IRPP", 2026, 12, regles) == date(2027, 1, 31)  # passage d'année
@@ -297,6 +321,7 @@ def test_objectif_interne_a_cote_de_la_date_legale(env):
         # objectif d'une AUTRE entreprise : sans effet sur ACME
         db.session.add(EcheanceTenant(tenant_id=env["autre_t"], code="TCS", jour=1, decalage_mois=1))
         db.session.commit()
+        _payer_janvier()
         def irpp_jan(j):
             return next(x for x in _etat(env, aujourd_hui=j)["mois"][0]["taxes"] if x["code"] == "IRPP")
         x = irpp_jan(date(2026, 2, 5))
@@ -348,3 +373,50 @@ def test_page_mes_echeances(env):
     assert 'value="20"' not in html
     with flask_app.app_context():
         assert EcheanceTenant.query.filter_by(tenant_id=env["t"]).count() == 1
+
+
+def test_ordre_du_cycle_pointage_puis_paie_puis_impots_dts_das(env):
+    from models import Pointage
+    with flask_app.app_context():
+        s1 = Salarie.query.filter_by(matricule="M1").one()
+        # l'entreprise pointe : janvier compte 2 pointages validés et 1 mobile en attente
+        db.session.add_all([
+            Pointage(tenant_id=env["t"], salarie_id=s1.id, date_pointage=date(2026, 1, 5), statut="VALIDE"),
+            Pointage(tenant_id=env["t"], salarie_id=s1.id, date_pointage=date(2026, 1, 6), statut="VALIDE"),
+            Pointage(tenant_id=env["t"], salarie_id=s1.id, date_pointage=date(2026, 1, 7), statut="SOUMIS",
+                     source="MOBILE"),
+        ])
+        db.session.commit()
+        e = _etat(env)
+        jan = e["mois"][0]
+        assert jan["pointage"]["etat"] == "A_FAIRE"
+        assert jan["pointage"]["stats"] == {"sal": 1, "jour": 0, "lignes": 2, "attente": 1}
+        assert e["mois"][6]["pointage"]["etat"] == "ATTENTE"          # juillet pas commencé (on est le 20/05)
+        assert e["parcours"][0]["code"] == "POINTAGE" and [p["code"] for p in e["parcours"]] == \
+            ["POINTAGE", "PAIE", "IMPOTS", "DTS", "DAS"]
+        assert any(x["code"] == "POINTAGE" for x in e["a_faire"])
+        # bulletins de mai non créés : en attente du pointage de mai
+        mai = e["mois"][4]
+        assert mai["pointage"]["etat"] == "A_FAIRE"
+        assert next(x for x in mai["etapes"] if x["code"] == "CALCUL")["etat"] == "ATTENTE"
+    cli = _client_pour(env["admin"])
+    # arrêt refusé tant qu'un pointage mobile attend
+    cli.post("/cycle-paie/obligation", data={"code": "POINTAGE", "annee": 2026, "periode": 1, "action": "DECLARE"})
+    with flask_app.app_context():
+        assert ObligationPaie.query.filter_by(code="POINTAGE").count() == 0
+        Pointage.query.filter_by(statut="SOUMIS").one().statut = "VALIDE"
+        db.session.commit()
+    cli.post("/cycle-paie/obligation", data={"code": "POINTAGE", "annee": 2026, "periode": 1, "action": "PAYE"})
+    with flask_app.app_context():
+        assert ObligationPaie.query.filter_by(code="POINTAGE").one().statut == "DECLARE"   # « arrêté »
+        e = _etat(env)
+        assert e["mois"][0]["pointage"]["etat"] == "FAIT"
+        assert e["mois"][0]["complet"] is False                       # salaires et impôts restent à faire
+        _payer_janvier(); _regler_impots(env["t"], [1])
+        assert _etat(env)["mois"][0]["complet"] is True
+        # DAS : jamais prête avant la fin de l'année ni avant toutes les DTS
+        assert _etat(env, aujourd_hui=date(2027, 2, 1))["das"]["etat"] == "ATTENTE"
+    html = cli.get("/cycle-paie/2026/1").get_data(as_text=True)
+    assert "1. Pointage du mois" in html and "2. Bulletins et paiement" in html and "3. Impôts et taxes" in html
+    html = cli.get("/cycle-paie?annee=2026").get_data(as_text=True)
+    assert "ÉTAPE 1" in html and "Étape 5" in html
