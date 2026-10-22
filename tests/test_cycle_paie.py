@@ -17,7 +17,7 @@ import pytest
 
 from app import app as flask_app
 from models import (db, Plan, Tenant, Utilisateur, CategorieEmploi, Salarie, PeriodePaie, BulletinPaie,
-                    AuditLog, ObligationPaie, EcheanceLegale)
+                    AuditLog, ObligationPaie, EcheanceLegale, EcheanceTenant)
 import cycle_paie as cp
 
 
@@ -287,3 +287,64 @@ def test_admin_echeances(env):
     cli.post("/admin/echeances-paie", data={})
     with flask_app.app_context():
         assert EcheanceLegale.query.count() == 0
+
+
+def test_objectif_interne_a_cote_de_la_date_legale(env):
+    with flask_app.app_context():
+        db.session.add(EcheanceLegale(code="IRPP", jour=15, decalage_mois=1, source="test"))
+        db.session.add(EcheanceTenant(tenant_id=env["t"], code="IRPP", jour=10, decalage_mois=1))
+        db.session.add(EcheanceTenant(tenant_id=env["t"], code="ECRITURES", jour=20, decalage_mois=1))
+        # objectif d'une AUTRE entreprise : sans effet sur ACME
+        db.session.add(EcheanceTenant(tenant_id=env["autre_t"], code="TCS", jour=1, decalage_mois=1))
+        db.session.commit()
+        def irpp_jan(j):
+            return next(x for x in _etat(env, aujourd_hui=j)["mois"][0]["taxes"] if x["code"] == "IRPP")
+        x = irpp_jan(date(2026, 2, 5))
+        assert (x["cible"], x["limite"], x["etat"]) == (date(2026, 2, 10), date(2026, 2, 15), "A_FAIRE")
+        assert irpp_jan(date(2026, 2, 12))["etat"] == "OBJECTIF"      # objectif passé, date légale non
+        assert irpp_jan(date(2026, 2, 16))["etat"] == "RETARD"        # la date légale prime
+        e = _etat(env, aujourd_hui=date(2026, 2, 12))
+        assert e["compte"]["OBJECTIF"] >= 1 and e["a_faire"][0]["etat"] == "OBJECTIF"
+        tcs = next(x for x in e["mois"][0]["taxes"] if x["code"] == "TCS")
+        assert tcs["cible"] is None and tcs["etat"] == "A_FAIRE"
+        # écritures : objectif interne seulement (pas de date légale)
+        ecr = _etat(env, aujourd_hui=date(2026, 2, 21))["mois"][0]["ecritures"]
+        assert ecr["cible"] == date(2026, 2, 20) and ecr["limite"] is None and ecr["etat"] == "OBJECTIF"
+        # l'obligation payée n'est plus jamais signalée
+        db.session.add(ObligationPaie(tenant_id=env["t"], code="IRPP", annee=2026, periode=1, statut="PAYE"))
+        db.session.commit()
+        assert irpp_jan(date(2026, 3, 1))["etat"] == "FAIT"
+
+
+def test_page_mes_echeances(env):
+    cli = _client_pour(env["admin"])
+    r = cli.get("/cycle-paie/echeances")
+    assert r.status_code == 200 and "Mes échéances" in r.get_data(as_text=True)
+    r = cli.post("/cycle-paie/echeances", data={"jour_IRPP": "10", "decalage_IRPP": "1", "note_IRPP": "bordereau du 10",
+                                                 "jour_CNSS": "20", "decalage_CNSS": "1"})
+    assert r.status_code == 302
+    with flask_app.app_context():
+        lignes = {e.code: e for e in EcheanceTenant.query.filter_by(tenant_id=env["t"]).all()}
+        assert set(lignes) == {"IRPP", "CNSS"}
+        assert (lignes["IRPP"].jour, lignes["IRPP"].decalage_mois, lignes["IRPP"].note) == (10, 1, "bordereau du 10")
+        assert AuditLog.query.filter(AuditLog.entite == "echeance_tenant").count() == 1
+        assert EcheanceLegale.query.count() == 0                        # la date légale n'est jamais touchée
+    html = cli.get("/cycle-paie/2026/1").get_data(as_text=True)
+    assert "objectif 10/02/2026" in html
+    # valeur invalide : rien n'est modifié
+    cli.post("/cycle-paie/echeances", data={"jour_IRPP": "45", "decalage_IRPP": "1", "jour_CNSS": "20", "decalage_CNSS": "1"})
+    with flask_app.app_context():
+        assert EcheanceTenant.query.filter_by(tenant_id=env["t"], code="IRPP").one().jour == 10
+    # ligne vidée : objectif retiré
+    cli.post("/cycle-paie/echeances", data={"jour_CNSS": "20", "decalage_CNSS": "1"})
+    with flask_app.app_context():
+        assert {e.code for e in EcheanceTenant.query.filter_by(tenant_id=env["t"]).all()} == {"CNSS"}
+    # lecture seule : voit la page, ne modifie rien ; autre entreprise : ne voit pas ces dates
+    for qui in ("dir", "compta"):
+        c = _client_pour(env[qui])
+        assert c.get("/cycle-paie/echeances").status_code == 200
+        c.post("/cycle-paie/echeances", data={})
+    html = _client_pour(env["autre"]).get("/cycle-paie/echeances").get_data(as_text=True)
+    assert 'value="20"' not in html
+    with flask_app.app_context():
+        assert EcheanceTenant.query.filter_by(tenant_id=env["t"]).count() == 1

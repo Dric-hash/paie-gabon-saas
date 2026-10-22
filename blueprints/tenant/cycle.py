@@ -113,3 +113,71 @@ def cycle_paie_obligation():
              "ANNULER": "suivi annulé"}[action]
     flash(f"{', '.join(faits)} : {verbe}.", "success")
     return redirect(retour)
+
+
+@bp.route("/cycle-paie/echeances", methods=["GET", "POST"])
+@login_required
+@tenant_required
+def cycle_paie_echeances():
+    """Objectifs internes de l'entreprise : ses propres dates, à côté des dates légales."""
+    if current_user.is_super_admin:
+        return redirect(url_for("admin.admin_dashboard"))
+    t = get_tenant()
+    if not t:
+        return redirect(url_for("auth.login"))
+    from models import EcheanceTenant
+    internes = cp.echeances_tenant(t.id)
+    if request.method == "POST":
+        if not _peut_saisir():
+            abort(403)
+        erreurs, modifs = [], []
+        for code in cp.CODES_INTERNES:
+            jour = (request.form.get(f"jour_{code}") or "").strip()
+            dec = (request.form.get(f"decalage_{code}") or "").strip()
+            note = (request.form.get(f"note_{code}") or "").strip()[:300]
+            r = internes.get(code)
+            if not jour and not dec:
+                if r is not None:
+                    db.session.delete(r)
+                    modifs.append(f"{code} retiré")
+                continue
+            try:
+                j, d = int(jour), int(dec)
+                if not (1 <= j <= 31 and 0 <= d <= 24):
+                    raise ValueError
+            except ValueError:
+                erreurs.append(cp.OBLIGATIONS[code]["libelle"])
+                continue
+            if r is None:
+                r = EcheanceTenant(tenant_id=t.id, code=code)
+                db.session.add(r)
+            if (r.jour, r.decalage_mois, r.note) != (j, d, note or None):
+                modifs.append(f"{code} : jour {j}, +{d} mois")
+            r.jour, r.decalage_mois, r.note = j, d, note or None
+        if erreurs:
+            db.session.rollback()
+            flash("Valeurs invalides pour : " + ", ".join(erreurs)
+                  + " (jour de 1 à 31, décalage de 0 à 24 mois). Rien n'a été enregistré.", "error")
+            return redirect(url_for("tenant.cycle_paie_echeances"))
+        if modifs:
+            log_action("UPDATE", "echeance_tenant", None,
+                       "Cycle de paie : échéances internes — " + " ; ".join(modifs), tenant_id=t.id)
+        db.session.commit()
+        flash("Vos échéances ont été enregistrées.", "success")
+        return redirect(url_for("tenant.cycle_paie_echeances"))
+
+    legales = cp.echeances()
+    annee = date.today().year
+    lignes = []
+    for code in cp.CODES_INTERNES:
+        per = cp.OBLIGATIONS[code]["periodicite"]
+        pex = 0 if per == "ANNUEL" else 1
+        legal = cp.date_limite(code, annee, pex, legales) if code in cp.CODES_ECHEANCE else None
+        interne = cp.date_limite(code, annee, pex, internes)
+        lignes.append({"code": code, "libelle": cp.OBLIGATIONS[code]["libelle"], "periodicite": per,
+                       "r": internes.get(code), "legale": legales.get(code), "legal_ex": legal,
+                       "interne_ex": interne, "exemple_periode": cp.libelle_periode(code, annee, pex),
+                       "apres_legal": bool(legal and interne and interne > legal),
+                       "sans_legal": code in cp.CODES_ECHEANCE and legales.get(code) is None})
+    return render_template("tenant/cycle_paie_echeances.html", tenant=t, lignes=lignes,
+                           peut_saisir=_peut_saisir())

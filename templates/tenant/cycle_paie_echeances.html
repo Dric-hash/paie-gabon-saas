@@ -1,0 +1,63 @@
+{% extends "tenant/base.html" %}
+{% import "tenant/_cycle_macros.html" as cy with context %}
+{% block title %}Mes échéances — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+{{ cy.styles() }}
+
+<div style="margin-bottom:1.25rem">
+  <a href="/cycle-paie" style="font-size:.75rem;color:#6b7280;text-decoration:none">← Cycle de paie</a>
+  <h1 class="text-2xl font-black text-gray-900" style="margin-top:.15rem">Mes échéances</h1>
+  <p class="text-gray-500 text-sm mt-1" style="max-width:780px">
+    Fixez vos propres dates pour chaque obligation, par exemple payer l'IRPP le 10 alors que la date légale est plus tard.
+    Votre date apparaît comme <strong>objectif</strong> dans le cycle de paie et signale « Objectif dépassé » quand elle passe.
+    La date légale reste affichée à côté ; elle seule déclenche « En retard ».
+  </p>
+</div>
+
+<div class="cy-carte">
+  <h2>Règle de calcul</h2>
+  <p class="cy-sous" style="margin:0">Le <strong>jour J</strong> du mois situé <strong>N mois</strong> après le dernier mois de la période :
+    le mois de paie pour IRPP, TCS, FNH, CFP et écritures ; le 3ᵉ mois du trimestre pour les DTS ; décembre pour la DAS.
+    Exemple : jour 10, décalage 1 → le 10 du mois suivant. Si le jour dépasse la fin du mois, le dernier jour est retenu.
+    Videz le jour et le décalage pour retirer votre objectif.</p>
+</div>
+
+<form method="POST" class="cy-carte">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <div class="cy-scroll"><table class="cy-table">
+    <thead><tr>
+      <th>Obligation</th><th>Date légale</th><th>Mon jour J</th><th>Décalage N (mois)</th><th>Note</th><th>Exemple</th>
+    </tr></thead>
+    <tbody>
+    {% for l in lignes %}
+    <tr>
+      <td style="font-weight:700;white-space:nowrap">{{ l.libelle }}<div class="cy-suivi" style="color:#9ca3af">{{ l.periodicite|lower }}</div></td>
+      <td style="font-size:.75rem">
+        {% if l.code == 'ECRITURES' %}<span style="color:#9ca3af">pas de date légale</span>
+        {% elif l.legale %}jour {{ l.legale.jour }}, +{{ l.legale.decalage_mois }} mois
+          {% if l.legale.source %}<div class="cy-suivi" style="color:#6b7280">{{ l.legale.source }}</div>{% endif %}
+        {% else %}<span class="cy-ech cy-ech-vide">non renseignée par PaieGabon</span>{% endif %}
+      </td>
+      <td><input type="number" min="1" max="31" name="jour_{{ l.code }}" value="{{ l.r.jour if l.r else '' }}" {{ '' if peut_saisir else 'disabled' }}
+                 style="width:4.5rem;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem"></td>
+      <td><input type="number" min="0" max="24" name="decalage_{{ l.code }}" value="{{ l.r.decalage_mois if l.r else '' }}" {{ '' if peut_saisir else 'disabled' }}
+                 style="width:4.5rem;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem"></td>
+      <td><input type="text" maxlength="300" name="note_{{ l.code }}" value="{{ l.r.note if l.r and l.r.note else '' }}" {{ '' if peut_saisir else 'disabled' }}
+                 placeholder="ex. payé avec le bordereau du 10" style="width:100%;min-width:180px;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem"></td>
+      <td style="font-size:.75rem;white-space:nowrap">
+        <div style="color:#6b7280">{{ l.exemple_periode }}</div>
+        {% if l.interne_ex %}objectif {{ l.interne_ex|date_fr }}{% endif %}
+        {% if l.legal_ex %}<div style="color:#6b7280">légal {{ l.legal_ex|date_fr }}</div>{% endif %}
+        {% if l.apres_legal %}<div class="cy-ecart">après la date légale</div>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% if peut_saisir %}
+  <button type="submit" class="cy-btn cy-btn-vert" style="margin-top:1rem;padding:.6rem 1.2rem;font-size:.85rem">Enregistrer mes échéances</button>
+  {% else %}
+  <p class="cy-sous" style="margin-top:1rem">Votre profil est en lecture seule : seuls l'administrateur, les RH et les gestionnaires modifient ces dates.</p>
+  {% endif %}
+</form>
+{% endblock %}

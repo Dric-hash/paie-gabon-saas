@@ -29,3 +29,16 @@ CREATE TABLE IF NOT EXISTS echeances_legales (
     verifie_le        DATE,
     date_modification TIMESTAMP
 );
+
+-- Objectifs internes propres à chaque entreprise (ajout du 22/10/2026)
+CREATE TABLE IF NOT EXISTS echeances_tenant (
+    id                SERIAL PRIMARY KEY,
+    tenant_id         INTEGER NOT NULL REFERENCES tenants(id),
+    code              VARCHAR(20) NOT NULL,
+    jour              INTEGER NOT NULL,
+    decalage_mois     INTEGER NOT NULL,
+    note              VARCHAR(300),
+    date_modification TIMESTAMP,
+    CONSTRAINT uq_echeance_tenant UNIQUE (tenant_id, code)
+);
+CREATE INDEX IF NOT EXISTS ix_echeances_tenant_tenant_id ON echeances_tenant (tenant_id);

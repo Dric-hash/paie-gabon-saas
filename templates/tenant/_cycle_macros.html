@@ -5,6 +5,7 @@
   'DECLARE':    ('#dbeafe', '#1e40af', 'Déclaré, à payer'),
   'A_FAIRE':    ('#fef3c7', '#92400e', 'À faire'),
   'RETARD':     ('#fee2e2', '#991b1b', 'En retard'),
+  'OBJECTIF':   ('#ffedd5', '#9a3412', 'Objectif dépassé'),
   'ATTENTE':    ('#f3f4f6', '#6b7280', 'En attente'),
   'SANS_OBJET': ('#f9fafb', '#9ca3af', 'Néant'),
 }.get(etat, ('#f3f4f6', '#6b7280', etat)) -%}
@@ -12,8 +13,9 @@
 {%- endmacro %}
 
 {% macro echeance(x) -%}
-{% if x.limite %}<span class="cy-ech{{ ' cy-ech-retard' if x.etat == 'RETARD' else '' }}">limite {{ x.limite|date_fr }}</span>
-{% elif x.code in ['IRPP','TCS','FNH','CFP','CNSS','CNAMGS','DAS'] %}<span class="cy-ech cy-ech-vide">échéance à renseigner</span>{% endif %}
+{% if x.cible %}<span class="cy-ech{{ ' cy-ech-objectif' if x.etat == 'OBJECTIF' else '' }}">objectif {{ x.cible|date_fr }}</span>{% endif %}
+{% if x.limite %}<span class="cy-ech{{ ' cy-ech-retard' if x.etat == 'RETARD' else '' }}">{{ '· ' if x.cible else '' }}limite légale {{ x.limite|date_fr }}</span>
+{% elif x.code in ['IRPP','TCS','FNH','CFP','CNSS','CNAMGS','DAS'] and not x.cible %}<span class="cy-ech cy-ech-vide">échéance à renseigner</span>{% endif %}
 {%- endmacro %}
 
 {% macro suivi(x) -%}
@@ -73,6 +75,7 @@
   .cy-pastille{display:inline-block;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px;white-space:nowrap}
   .cy-ech{display:inline-block;font-size:.7rem;color:#6b7280;white-space:nowrap}
   .cy-ech-retard{color:#991b1b;font-weight:700}
+  .cy-ech-objectif{color:#9a3412;font-weight:700}
   .cy-ech-vide{color:#b45309;font-style:italic}
   .cy-suivi{font-size:.72rem;color:#374151;margin-top:.25rem}
   .cy-ecart{display:inline-block;color:#b45309;font-weight:700;margin-left:.25rem}

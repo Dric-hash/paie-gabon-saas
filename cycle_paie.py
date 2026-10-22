@@ -106,6 +106,33 @@ def date_limite(code: str, annee: int, periode: int, regles: dict) -> date | Non
     return date(a, m, j)
 
 
+# ── Échéances propres à l'entreprise (objectifs internes) ────────────────
+# Chaque entreprise peut se fixer sa propre date (ex. payer l'IRPP le 10 alors
+# que la date légale est le 15). La date légale reste la seule qui déclenche
+# « En retard » ; l'objectif interne déclenche « Objectif dépassé ».
+CODES_INTERNES = CODES_ECHEANCE + ("ECRITURES",)
+
+
+class Regles:
+    """Échéances légales (communes) + objectifs internes (d'une entreprise)."""
+    def __init__(self, legal: dict, interne: dict):
+        self.legal, self.interne = legal, interne
+
+
+def echeances_tenant(tenant_id: int) -> dict:
+    from models import EcheanceTenant
+    return {e.code: e for e in EcheanceTenant.query.filter_by(tenant_id=tenant_id).all()}
+
+
+def regles_pour(tenant_id: int) -> Regles:
+    return Regles(echeances(), echeances_tenant(tenant_id))
+
+
+def _regles(regles) -> Regles:
+    # compatibilité : un simple dict = échéances légales seules
+    return regles if isinstance(regles, Regles) else Regles(regles or {}, {})
+
+
 # ── Lecture des données ────────────────────────────────────────────────────
 
 def _f(v) -> float:
@@ -167,8 +194,13 @@ def montants(bulletins) -> dict:
 # ── États ──────────────────────────────────────────────────────────────────
 
 def _etat_obligation(code, annee, periode, ob, du, regles, aujourd_hui, pret=True):
-    """Situation d'une obligation : FAIT | DECLARE | RETARD | A_FAIRE | ATTENTE | SANS_OBJET."""
-    limite = date_limite(code, annee, periode, regles) if code in CODES_ECHEANCE else None
+    """Situation d'une obligation :
+    FAIT | DECLARE | RETARD | OBJECTIF | A_FAIRE | ATTENTE | SANS_OBJET.
+    RETARD   : date légale dépassée ;
+    OBJECTIF : objectif interne de l'entreprise dépassé (date légale pas encore atteinte)."""
+    regles = _regles(regles)
+    limite = date_limite(code, annee, periode, regles.legal) if code in CODES_ECHEANCE else None
+    cible = date_limite(code, annee, periode, regles.interne) if code in CODES_INTERNES else None
     statut = ob.statut if ob else "A_FAIRE"
     termine = statut == "PAYE" or (statut == "DECLARE" and (code in ("ECRITURES", "DAS") or not du))
     if termine:
@@ -177,6 +209,8 @@ def _etat_obligation(code, annee, periode, ob, du, regles, aujourd_hui, pret=Tru
         etat = "SANS_OBJET"
     elif limite and aujourd_hui > limite:
         etat = "RETARD"
+    elif cible and aujourd_hui > cible:
+        etat = "OBJECTIF"
     elif statut == "DECLARE":
         etat = "DECLARE"
     elif not pret:
@@ -184,7 +218,7 @@ def _etat_obligation(code, annee, periode, ob, du, regles, aujourd_hui, pret=Tru
     else:
         etat = "A_FAIRE"
     return {"code": code, "libelle": OBLIGATIONS[code]["libelle"], "annee": annee, "periode": periode,
-            "du": du, "statut": statut, "etat": etat, "limite": limite, "ob": ob,
+            "du": du, "statut": statut, "etat": etat, "limite": limite, "cible": cible, "ob": ob,
             "libelle_periode": libelle_periode(code, annee, periode)}
 
 
@@ -198,7 +232,7 @@ def etat_mois(t, annee: int, mois: int, par_mois=None, periodes=None, obs=None, 
     if periodes is None:
         periodes = {p.mois: p for p in PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee).all()}
     obs = obligations(t.id, annee) if obs is None else obs
-    regles = echeances() if regles is None else regles
+    regles = regles_pour(t.id) if regles is None else regles
     p = periodes.get(mois)
     if exports is None:
         exports = _exports_journal(t.id, [p.id] if p else [])
@@ -247,12 +281,15 @@ def etat_mois(t, annee: int, mois: int, par_mois=None, periodes=None, obs=None, 
             "trimestre": tri, "fin_trimestre": mois % 3 == 0}
 
 
+A_TRAITER = ("RETARD", "OBJECTIF", "A_FAIRE", "DECLARE")
+
+
 def _resume(etats: list) -> str:
     """Résumé d'un groupe d'états : RETARD > A_FAIRE/DECLARE > ATTENTE > FAIT."""
     es = [e for e in etats if e != "SANS_OBJET"]
     if not es:
         return "SANS_OBJET"
-    for cle in ("RETARD", "A_FAIRE", "DECLARE", "ATTENTE"):
+    for cle in ("RETARD", "OBJECTIF", "A_FAIRE", "DECLARE", "ATTENTE"):
         if cle in es:
             return cle
     return "FAIT"
@@ -264,7 +301,7 @@ def etat_annee(t, annee: int, aujourd_hui: date | None = None) -> dict:
     par_mois = _bulletins_annee(t.id, annee)
     periodes = {p.mois: p for p in PeriodePaie.query.filter_by(tenant_id=t.id, annee=annee).all()}
     obs = obligations(t.id, annee)
-    regles = echeances()
+    regles = regles_pour(t.id)
     exports = _exports_journal(t.id, [p.id for p in periodes.values()])
     mois = []
     for m in range(1, 13):
@@ -306,21 +343,21 @@ def etat_annee(t, annee: int, aujourd_hui: date | None = None) -> dict:
     a_faire = []
     for e in mois:
         for x in e["taxes"] + [e["ecritures"]]:
-            if x["etat"] in ("RETARD", "A_FAIRE", "DECLARE"):
+            if x["etat"] in A_TRAITER:
                 a_faire.append(x)
     for tr in trimestres:
         for x in tr["obligations"]:
-            if x["etat"] in ("RETARD", "A_FAIRE", "DECLARE"):
+            if x["etat"] in A_TRAITER:
                 a_faire.append(x)
-    if das["etat"] in ("RETARD", "A_FAIRE", "DECLARE"):
+    if das["etat"] in A_TRAITER:
         a_faire.append(das)
-    ordre = {"RETARD": 0, "DECLARE": 1, "A_FAIRE": 2}
-    a_faire.sort(key=lambda x: (ordre[x["etat"]], x["limite"] or date.max))
-    compte = {"RETARD": sum(1 for x in a_faire if x["etat"] == "RETARD")}
+    ordre = {"RETARD": 0, "OBJECTIF": 1, "DECLARE": 2, "A_FAIRE": 3}
+    a_faire.sort(key=lambda x: (ordre[x["etat"]], min(x["cible"] or date.max, x["limite"] or date.max)))
+    compte = {k: sum(1 for x in a_faire if x["etat"] == k) for k in ("RETARD", "OBJECTIF")}
     return {"annee": annee, "mois": mois, "trimestres": trimestres, "das": das, "a_faire": a_faire,
             "compte": compte, "echeances_manquantes": [c for c in CODES_ECHEANCE if date_limite(c, annee, 1 if
                                                        OBLIGATIONS[c]["periodicite"] != "ANNUEL" else 0,
-                                                       regles) is None],
+                                                       regles.legal) is None],
             "nb_clotures": nb_clotures}
 
 

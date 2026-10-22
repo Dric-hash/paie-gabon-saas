@@ -2513,3 +2513,18 @@ class EcheanceLegale(db.Model):
     source        = db.Column(db.String(300))        # texte de référence
     verifie_le    = db.Column(db.Date)
     date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+
+
+class EcheanceTenant(db.Model):
+    """Objectif interne d'une entreprise pour une obligation du cycle de paie
+    (ex. payer l'IRPP le 10 du mois suivant). Même règle de calcul que
+    EcheanceLegale ; n'efface jamais la date légale, qui reste affichée."""
+    __tablename__ = "echeances_tenant"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    code          = db.Column(db.String(20), nullable=False)
+    jour          = db.Column(db.Integer, nullable=False)
+    decalage_mois = db.Column(db.Integer, nullable=False)
+    note          = db.Column(db.String(300))
+    date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "code", name="uq_echeance_tenant"),)
