@@ -1,0 +1,96 @@
+{# Macros du cycle de paie #}
+{% macro pastille(etat, fait="Fait") -%}
+{%- set s = {
+  'FAIT':       ('#dcfce7', '#166534', '✓ ' ~ fait),
+  'DECLARE':    ('#dbeafe', '#1e40af', 'Déclaré, à payer'),
+  'A_FAIRE':    ('#fef3c7', '#92400e', 'À faire'),
+  'RETARD':     ('#fee2e2', '#991b1b', 'En retard'),
+  'ATTENTE':    ('#f3f4f6', '#6b7280', 'En attente'),
+  'SANS_OBJET': ('#f9fafb', '#9ca3af', 'Néant'),
+}.get(etat, ('#f3f4f6', '#6b7280', etat)) -%}
+<span class="cy-pastille" style="background:{{ s[0] }};color:{{ s[1] }}">{{ s[2] }}</span>
+{%- endmacro %}
+
+{% macro echeance(x) -%}
+{% if x.limite %}<span class="cy-ech{{ ' cy-ech-retard' if x.etat == 'RETARD' else '' }}">limite {{ x.limite|date_fr }}</span>
+{% elif x.code in ['IRPP','TCS','FNH','CFP','CNSS','CNAMGS','DAS'] %}<span class="cy-ech cy-ech-vide">échéance à renseigner</span>{% endif %}
+{%- endmacro %}
+
+{% macro suivi(x) -%}
+{% if x.ob %}
+<div class="cy-suivi">
+  {% if x.ob.date_declaration %}Déclaré le {{ x.ob.date_declaration|date_fr }}{% endif %}
+  {% if x.ob.date_paiement %} · payé le {{ x.ob.date_paiement|date_fr }}{% endif %}
+  {% if x.ob.montant_paye is not none %} · {{ x.ob.montant_paye|fcfa }}{% endif %}
+  {% if x.ob.reference %} · réf. {{ x.ob.reference }}{% endif %}
+  {% if x.ob.montant_paye is not none and x.du and (x.ob.montant_paye|float - x.du|float)|abs >= 1 %}
+  <span class="cy-ecart">écart de {{ (x.ob.montant_paye|float - x.du|float)|fcfa }} avec le montant calculé</span>{% endif %}
+</div>
+{% endif %}
+{%- endmacro %}
+
+{% macro formulaire(x, retour, peut_saisir) -%}
+{% if peut_saisir %}
+<details class="cy-form">
+  <summary>{% if x.code in ['ECRITURES','DAS'] %}Enregistrer{% elif x.statut == 'PAYE' %}Modifier{% else %}Déclarer / payer{% endif %}</summary>
+  <form method="POST" action="/cycle-paie/obligation">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="code" value="{{ x.code }}">
+    <input type="hidden" name="annee" value="{{ x.annee }}">
+    <input type="hidden" name="periode" value="{{ x.periode }}">
+    <input type="hidden" name="retour" value="{{ retour }}">
+    <div class="cy-champs">
+      <label>{% if x.code == 'ECRITURES' %}Date de comptabilisation{% elif x.code == 'DAS' %}Date de dépôt{% else %}Date de déclaration{% endif %}
+        <input type="date" name="date_declaration" value="{{ x.ob.date_declaration.isoformat() if x.ob and x.ob.date_declaration else '' }}"></label>
+      {% if x.code not in ['ECRITURES','DAS'] %}
+      <label>Date de paiement
+        <input type="date" name="date_paiement" value="{{ x.ob.date_paiement.isoformat() if x.ob and x.ob.date_paiement else '' }}"></label>
+      <label>Montant payé (FCFA)
+        <input type="text" inputmode="decimal" name="montant_paye" placeholder="{{ x.du|int if x.du else '' }}" value="{{ x.ob.montant_paye|int if x.ob and x.ob.montant_paye is not none else '' }}"></label>
+      {% endif %}
+      <label>{% if x.code == 'ECRITURES' %}Référence (n° de pièce){% else %}Référence (quittance, dépôt){% endif %}
+        <input type="text" name="reference" maxlength="100" value="{{ x.ob.reference if x.ob and x.ob.reference else '' }}"></label>
+    </div>
+    <div class="cy-boutons">
+      {% if x.code in ['ECRITURES','DAS'] %}
+      <button name="action" value="DECLARE" class="cy-btn cy-btn-vert">{{ 'Marquer comptabilisées' if x.code == 'ECRITURES' else 'Marquer déposée' }}</button>
+      {% else %}
+      <button name="action" value="DECLARE" class="cy-btn cy-btn-bleu">Déclaré</button>
+      <button name="action" value="PAYE" class="cy-btn cy-btn-vert">Payé</button>
+      {% endif %}
+      {% if x.ob %}<button name="action" value="ANNULER" class="cy-btn cy-btn-gris" onclick="return confirm('Annuler le suivi de {{ x.libelle }} — {{ x.libelle_periode }} ?')">Annuler le suivi</button>{% endif %}
+    </div>
+  </form>
+</details>
+{% endif %}
+{%- endmacro %}
+
+{% macro styles() %}
+<style>
+  .cy-carte{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;margin-bottom:1.25rem}
+  .cy-carte h2{font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem}
+  .cy-carte .cy-sous{font-size:.78rem;color:#6b7280;margin:0 0 1rem}
+  .cy-pastille{display:inline-block;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px;white-space:nowrap}
+  .cy-ech{display:inline-block;font-size:.7rem;color:#6b7280;white-space:nowrap}
+  .cy-ech-retard{color:#991b1b;font-weight:700}
+  .cy-ech-vide{color:#b45309;font-style:italic}
+  .cy-suivi{font-size:.72rem;color:#374151;margin-top:.25rem}
+  .cy-ecart{display:inline-block;color:#b45309;font-weight:700;margin-left:.25rem}
+  .cy-table{width:100%;border-collapse:collapse;font-size:.8rem}
+  .cy-table th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:.5rem;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+  .cy-table td{padding:.55rem .5rem;border-bottom:1px solid #f3f4f6;vertical-align:top}
+  .cy-table tr.cy-inactif td{opacity:.45}
+  .cy-num{text-align:right;font-family:ui-monospace,monospace;white-space:nowrap}
+  .cy-form{margin-top:.4rem}
+  .cy-form summary{cursor:pointer;font-size:.72rem;font-weight:700;color:#0f3d36}
+  .cy-champs{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.5rem;margin:.5rem 0}
+  .cy-champs label{font-size:.68rem;color:#6b7280;display:flex;flex-direction:column;gap:.2rem}
+  .cy-champs input{border:1px solid #d1d5db;border-radius:.5rem;padding:.35rem .5rem;font-size:.8rem;color:#111827}
+  .cy-boutons{display:flex;gap:.4rem;flex-wrap:wrap}
+  .cy-btn{border:none;border-radius:.5rem;padding:.4rem .8rem;font-size:.75rem;font-weight:700;cursor:pointer;color:#fff}
+  .cy-btn-bleu{background:#2563eb}.cy-btn-vert{background:#0f766e}.cy-btn-gris{background:#9ca3af}
+  .cy-alerte{background:#fffbeb;border:1px solid #fcd34d;color:#78350f;border-radius:.75rem;padding:.75rem 1rem;font-size:.8rem;margin-bottom:1.25rem}
+  .cy-lien{font-size:.75rem;font-weight:700;color:#2563eb;text-decoration:none;white-space:nowrap}
+  .cy-scroll{overflow-x:auto}
+</style>
+{% endmacro %}

@@ -1,0 +1,127 @@
+{% extends "tenant/base.html" %}
+{% import "tenant/_cycle_macros.html" as cy with context %}
+{% block title %}Cycle de paie — {{ e.libelle }} — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+{{ cy.styles() }}
+{% set retour = '/cycle-paie/' ~ e.annee ~ '/' ~ e.mois %}
+{% set p = e.periode %}
+
+<div style="display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:1.25rem;flex-wrap:wrap;gap:1rem">
+  <div>
+    <a href="/cycle-paie?annee={{ e.annee }}" style="font-size:.75rem;color:#6b7280;text-decoration:none">← Cycle de paie {{ e.annee }}</a>
+    <h1 class="text-2xl font-black text-gray-900" style="margin-top:.15rem">{{ e.libelle }}</h1>
+    <p class="text-gray-500 text-sm mt-1">Liste de contrôle du mois, dans l'ordre.</p>
+  </div>
+  <div style="display:flex;gap:.5rem">
+    {% if e.mois > 1 %}<a class="cy-lien" href="/cycle-paie/{{ e.annee }}/{{ e.mois - 1 }}">← {{ MOIS[e.mois - 1] }}</a>{% endif %}
+    {% if e.mois < 12 %}<a class="cy-lien" href="/cycle-paie/{{ e.annee }}/{{ e.mois + 1 }}">{{ MOIS[e.mois + 1] }} →</a>{% endif %}
+  </div>
+</div>
+
+{# ── 1. Paie du mois ────────────────────────────────────────────────── #}
+<div class="cy-carte">
+  <h2>1. Paie du mois</h2>
+  <p class="cy-sous">Ouvrir la période, générer les bulletins, les vérifier et les valider, puis payer les salaires.</p>
+  <table class="cy-table"><tbody>
+  {% for s in e.etapes if s.code != 'CLOTURE' %}
+  <tr>
+    <td style="width:2rem;font-weight:800;color:#9ca3af">{{ loop.index }}</td>
+    <td style="font-weight:700">{{ s.libelle }}<div class="cy-suivi">{{ s.detail }}{% if s.montant %} · net à payer {{ s.montant|fcfa }}{% endif %}</div></td>
+    <td>{{ cy.pastille(s.etat) }}</td>
+    <td style="text-align:right">{% if s.lien and s.etat != 'FAIT' %}<a class="cy-lien" href="{{ s.lien }}">Y aller →</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody></table>
+  {% if e.nb_brouillon %}<p class="cy-sous" style="color:#b45309;margin:.75rem 0 0">Les {{ e.nb_brouillon }} bulletin(s) en brouillon ne sont comptés dans aucun montant ci-dessous.</p>{% endif %}
+</div>
+
+{# ── 2. Impôts et taxes du mois ─────────────────────────────────────── #}
+<div class="cy-carte">
+  <h2>2. Impôts et taxes sur salaires — {{ e.libelle }}</h2>
+  <p class="cy-sous">Montants calculés sur les bulletins validés ou payés.
+    {% if p %}<a class="cy-lien" href="/declaration-cnss/imprimer-mensuel?periode_id={{ p.id }}" target="_blank">Imprimer le bordereau mensuel →</a>
+    <a class="cy-lien" href="/declaration-cnss?periode_id={{ p.id }}&mode=mensuel" style="margin-left:.75rem">Voir le détail par salarié →</a>{% endif %}</p>
+  <div class="cy-scroll"><table class="cy-table">
+    <thead><tr><th>Impôt / taxe</th><th class="cy-num">Montant calculé</th><th>Situation</th><th style="min-width:240px">Suivi</th></tr></thead>
+    <tbody>
+    {% for x in e.taxes %}
+    <tr>
+      <td style="font-weight:700">{{ x.libelle }}</td>
+      <td class="cy-num">{{ x.du|fcfa }}</td>
+      <td>{{ cy.pastille(x.etat) }}<div>{{ cy.echeance(x) }}</div></td>
+      <td>{{ cy.suivi(x) }}{{ cy.formulaire(x, retour, peut_saisir) }}</td>
+    </tr>
+    {% endfor %}
+    <tr><td style="font-weight:800">Total</td>
+      <td class="cy-num" style="font-weight:800">{{ (e.montants.IRPP + e.montants.TCS + e.montants.FNH + e.montants.CFP)|fcfa }}</td><td></td><td></td></tr>
+    </tbody>
+  </table></div>
+  {% if peut_saisir %}
+  <details class="cy-form" style="margin-top:.75rem">
+    <summary>Enregistrer plusieurs impôts et taxes en une fois (même bordereau, même quittance)</summary>
+    <form method="POST" action="/cycle-paie/obligation">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="annee" value="{{ e.annee }}">
+      <input type="hidden" name="periode" value="{{ e.mois }}">
+      <input type="hidden" name="retour" value="{{ retour }}">
+      <div style="display:flex;gap:1rem;flex-wrap:wrap;margin:.5rem 0;font-size:.8rem">
+        {% for x in e.taxes %}<label><input type="checkbox" name="codes" value="{{ x.code }}" {{ 'checked' if x.du and x.statut != 'PAYE' else '' }}> {{ x.libelle }}</label>{% endfor %}
+      </div>
+      <div class="cy-champs">
+        <label>Date de déclaration<input type="date" name="date_declaration"></label>
+        <label>Date de paiement<input type="date" name="date_paiement"></label>
+        <label>Référence (quittance, dépôt)<input type="text" name="reference" maxlength="100"></label>
+      </div>
+      <div class="cy-boutons">
+        <button name="action" value="DECLARE" class="cy-btn cy-btn-bleu">Déclaré</button>
+        <button name="action" value="PAYE" class="cy-btn cy-btn-vert">Payé</button>
+      </div>
+    </form>
+  </details>
+  {% endif %}
+</div>
+
+{# ── 3. Écritures de paie ───────────────────────────────────────────── #}
+{% set x = e.ecritures %}
+<div class="cy-carte">
+  <h2>3. Écritures de paie</h2>
+  <p class="cy-sous">Exporter le journal de paie du mois (comptes SYSCOHADA réglés dans Paramètres) et le passer en comptabilité.</p>
+  <div style="display:flex;gap:1rem;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-width:240px">
+      {{ cy.pastille(x.etat, 'Comptabilisées') }}
+      <div class="cy-suivi">{% if x.exporte_le %}Journal exporté le {{ x.exporte_le|date_fr }}.{% else %}Journal pas encore exporté.{% endif %}</div>
+      {{ cy.suivi(x) }}
+      {{ cy.formulaire(x, retour, peut_saisir) }}
+    </div>
+    {% if p and e.nb_valides and current_user.can_export_sage %}
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <a href="/export/sage/journal/{{ p.id }}" style="background:#0f3d36;color:#fff;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">Exporter le journal de paie</a>
+      <a href="/export/sage/les-deux/{{ p.id }}" style="background:#fff;color:#0f3d36;border:1px solid #0f3d36;padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;text-decoration:none">Journal + livre de paie (ZIP)</a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── 4. Clôture ─────────────────────────────────────────────────────── #}
+{% set c = e.etapes|selectattr('code', 'equalto', 'CLOTURE')|first %}
+<div class="cy-carte">
+  <h2>4. Clôture de la période</h2>
+  <p class="cy-sous">Une fois la paie payée, les déclarations faites et les écritures passées, clôturer la période pour la figer.</p>
+  {{ cy.pastille(c.etat, 'Clôturée') }}
+  {% if p and not e.cloture %}<a class="cy-lien" href="/periodes/{{ p.id }}" style="margin-left:.75rem">Clôturer depuis la fiche de la période →</a>{% endif %}
+</div>
+
+{# ── Trimestre ──────────────────────────────────────────────────────── #}
+<div class="cy-carte">
+  <h2>DTS CNSS et CNAMGS — {{ tri.libelle }}</h2>
+  <p class="cy-sous">{{ tri.mois_libelles }} · {{ tri.mois_clotures }} / 3 mois clôturé(s).
+    {% if e.fin_trimestre %}Ce mois termine le trimestre : la DTS se prépare après sa clôture.{% endif %}</p>
+  <table class="cy-table"><tbody>
+  {% for x in tri.obligations %}
+  <tr><td style="font-weight:700">{{ 'CNSS' if x.code == 'CNSS' else 'CNAMGS' }}</td><td class="cy-num">{{ x.du|fcfa }}</td>
+    <td>{{ cy.pastille(x.etat) }} {{ cy.echeance(x) }}{{ cy.suivi(x) }}</td></tr>
+  {% endfor %}
+  </tbody></table>
+  <a class="cy-lien" href="/cycle-paie?annee={{ e.annee }}#trimestres">Enregistrer la déclaration ou le paiement →</a>
+</div>
+{% endblock %}

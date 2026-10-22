@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:960px;margin:0 auto;padding:1.5rem">
+  <a href="/admin" style="font-size:.78rem;color:#6b7280;text-decoration:none">← Administration</a>
+  <h1 style="font-size:1.5rem;font-weight:800;color:#0f3d36;margin:.2rem 0 .25rem">📆 Échéances légales du cycle de paie</h1>
+  <p style="color:#6b7280;font-size:.88rem;margin:0 0 .5rem">
+    Dates limites de déclaration et de paiement utilisées par le cycle de paie de toutes les entreprises.
+    PaieGabon ne fournit <strong>aucune valeur par défaut</strong> : saisissez-les à partir des textes officiels
+    (DGI, CNSS, CNAMGS), avec leur source. Tant qu'une ligne est vide, les entreprises voient « échéance à renseigner »
+    et aucun retard n'est signalé.
+  </p>
+  <p style="color:#6b7280;font-size:.8rem;margin:0 0 1.25rem">
+    Règle : la date limite est le <strong>jour J</strong> du mois situé <strong>N mois</strong> après le dernier mois
+    de la période (le mois pour les impôts mensuels, le 3ᵉ mois du trimestre pour les DTS, décembre pour la DAS).
+    Exemple : jour 15, décalage 1 → le 15 du mois suivant. Si le jour dépasse la fin du mois, le dernier jour du mois est retenu.
+    Videz le jour et le décalage pour retirer une échéance.
+  </p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}<div style="padding:.6rem 1rem;border-radius:.5rem;margin-bottom:.75rem;font-size:.9rem;{% if cat=='error' %}background:#fee2e2;color:#991b1b{% else %}background:#dcfce7;color:#166534{% endif %}">{{ msg }}</div>{% endfor %}
+  {% endwith %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:.85rem">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem">
+      <thead><tr style="background:#f9fafb;text-align:left;font-size:.72rem;text-transform:uppercase;color:#6b7280">
+        <th style="padding:.6rem">Obligation</th><th style="padding:.6rem">Jour J</th><th style="padding:.6rem">Décalage N (mois)</th>
+        <th style="padding:.6rem">Source (texte, article)</th><th style="padding:.6rem">Vérifié le</th><th style="padding:.6rem">Exemple</th>
+      </tr></thead>
+      <tbody>
+      {% for l in lignes %}
+      <tr style="border-top:1px solid #f3f4f6">
+        <td style="padding:.6rem;font-weight:700;white-space:nowrap">{{ l.libelle }}<div style="font-size:.7rem;color:#9ca3af;font-weight:400">{{ l.periodicite|lower }}</div></td>
+        <td style="padding:.6rem"><input type="number" min="1" max="31" name="jour_{{ l.code }}" value="{{ l.r.jour if l.r and l.r.jour else '' }}" style="width:4.5rem;padding:.4rem;border:1px solid #e5e7eb;border-radius:.5rem"></td>
+        <td style="padding:.6rem"><input type="number" min="0" max="24" name="decalage_{{ l.code }}" value="{{ l.r.decalage_mois if l.r and l.r.decalage_mois is not none else '' }}" style="width:4.5rem;padding:.4rem;border:1px solid #e5e7eb;border-radius:.5rem"></td>
+        <td style="padding:.6rem"><input type="text" maxlength="300" name="source_{{ l.code }}" value="{{ l.r.source if l.r and l.r.source else '' }}" style="width:100%;min-width:200px;padding:.4rem;border:1px solid #e5e7eb;border-radius:.5rem"></td>
+        <td style="padding:.6rem"><input type="date" name="verifie_{{ l.code }}" value="{{ l.r.verifie_le.isoformat() if l.r and l.r.verifie_le else '' }}" style="padding:.4rem;border:1px solid #e5e7eb;border-radius:.5rem"></td>
+        <td style="padding:.6rem;font-size:.78rem;white-space:nowrap">{% if l.exemple %}{{ l.exemple_periode }} → {{ l.exemple.strftime('%d/%m/%Y') }}{% else %}<span style="color:#b45309">non renseignée</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <button type="submit" style="margin-top:1rem;background:#0f3d36;color:#fff;border:none;border-radius:.6rem;padding:.65rem 1.25rem;font-weight:700;cursor:pointer">Enregistrer</button>
+  </form>
+</div>
+{% endblock %}
