@@ -1272,3 +1272,64 @@ def admin_tarifs_das():
         "cab_early":  t.prix_cabinet - round(t.prix_cabinet * t.earlybird_taux / 100),
     }
     return render_template("admin/tarifs_das.html", t=t, apercu=apercu)
+
+
+@bp.route("/admin/echeances-paie", methods=["GET", "POST"])
+@login_required
+def admin_echeances_paie():
+    """Super-admin : dates limites légales du cycle de paie (aucune valeur par
+    défaut : elles sont saisies à partir des textes officiels)."""
+    if not current_user.is_super_admin:
+        from flask import abort; abort(403)
+    from datetime import date as _date
+    from models import EcheanceLegale
+    import cycle_paie as cp
+    regles = cp.echeances()
+    if request.method == "POST":
+        erreurs = []
+        for code in cp.CODES_ECHEANCE:
+            jour = (request.form.get(f"jour_{code}") or "").strip()
+            dec = (request.form.get(f"decalage_{code}") or "").strip()
+            source = (request.form.get(f"source_{code}") or "").strip()[:300]
+            verifie = (request.form.get(f"verifie_{code}") or "").strip()
+            r = regles.get(code)
+            if not jour and not dec:
+                if r is not None:
+                    db.session.delete(r)
+                continue
+            try:
+                j, d = int(jour), int(dec)
+                if not (1 <= j <= 31 and 0 <= d <= 24):
+                    raise ValueError
+            except ValueError:
+                erreurs.append(code)
+                continue
+            if r is None:
+                r = EcheanceLegale(code=code)
+                db.session.add(r)
+            r.jour, r.decalage_mois, r.source = j, d, source or None
+            try:
+                r.verifie_le = _date.fromisoformat(verifie) if verifie else None
+            except ValueError:
+                r.verifie_le = None
+        if erreurs:
+            db.session.rollback()
+            flash("Valeurs invalides pour : " + ", ".join(erreurs)
+                  + " (jour de 1 à 31, décalage de 0 à 24 mois).", "error")
+            return redirect(url_for("admin.admin_echeances_paie"))
+        db.session.commit()
+        log_action("UPDATE", "echeance_legale", None, "Échéances légales du cycle de paie modifiées",
+                   user_id=current_user.id)
+        db.session.commit()
+        flash("Échéances légales mises à jour.", "success")
+        return redirect(url_for("admin.admin_echeances_paie"))
+    lignes = []
+    annee = _date.today().year
+    for code in cp.CODES_ECHEANCE:
+        per = cp.OBLIGATIONS[code]["periodicite"]
+        exemple_periode = 1 if per != "ANNUEL" else 0
+        lignes.append({"code": code, "libelle": cp.OBLIGATIONS[code]["libelle"], "periodicite": per,
+                       "r": regles.get(code),
+                       "exemple": cp.date_limite(code, annee, exemple_periode, regles),
+                       "exemple_periode": cp.libelle_periode(code, annee, exemple_periode)})
+    return render_template("admin/echeances_paie.html", lignes=lignes)

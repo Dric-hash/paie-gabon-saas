@@ -1446,12 +1446,12 @@ def export_sage_journal(periode_id):
     """
     Export du journal de paie mensuel au format Sage 100 (.txt).
     Importable dans Sage 100 Comptabilité via Fichier → Importer → Journal.
-    Seuls les bulletins VALIDE sont inclus.
+    Bulletins validés ou payés (jamais les brouillons).
     """
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ","PAYE","PAYÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
@@ -1483,15 +1483,18 @@ def export_sage_journal(periode_id):
 @bp.route("/export/sage/livre/<int:periode_id>")
 @tenant_required
 def export_sage_livre(periode_id):
+    if not current_user.can_export_sage:
+        flash("Accès refusé. Seuls les Administrateurs et Comptables peuvent exporter vers Sage.", "error")
+        return redirect(url_for("tenant.bulletins"))
     """
     Export du livre de paie détaillé par salarié au format CSV (.csv).
     Compatible Excel et importable dans Sage 100.
-    Seuls les bulletins VALIDE sont inclus.
+    Bulletins validés ou payés (jamais les brouillons).
     """
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ","PAYE","PAYÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
@@ -1520,6 +1523,9 @@ def export_sage_livre(periode_id):
 @bp.route("/export/sage/les-deux/<int:periode_id>")
 @tenant_required
 def export_sage_les_deux(periode_id):
+    if not current_user.can_export_sage:
+        flash("Accès refusé. Seuls les Administrateurs et Comptables peuvent exporter vers Sage.", "error")
+        return redirect(url_for("tenant.bulletins"))
     """
     Export des deux fichiers (journal + livre) dans une archive ZIP.
     Pratique pour envoyer tout au comptable en une fois.
@@ -1528,7 +1534,7 @@ def export_sage_les_deux(periode_id):
     t = get_tenant()
     periode = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query
-                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ"]))
+                 .filter(BulletinPaie.periode_id==periode_id, BulletinPaie.tenant_id==t.id, BulletinPaie.statut.in_(["VALIDE","VALIDÉ","PAYE","PAYÉ"]))
                  .join(Salarie)
                  .order_by(Salarie.nom)
                  .all())
@@ -1556,6 +1562,9 @@ def export_sage_les_deux(periode_id):
 
         nom_zip = f"export_sage_{periode.mois:02d}{periode.annee}_{t.sigle or t.id}.zip"
         logger.info(f"[Export Sage] ZIP généré — tenant={t.id}")
+        log_action("EXPORT", "bulletin", periode_id,
+                   f"Export Sage Journal de paie (ZIP journal + livre) — {periode.libelle_complet} ({len(bulletins)} bulletins)")
+        db.session.commit()
         return send_file(
             zip_buffer,
             mimetype="application/zip",

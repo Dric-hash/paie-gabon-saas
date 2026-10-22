@@ -2470,3 +2470,46 @@ class Evaluation(db.Model):
     @property
     def note_libelle(self):
         return self.NOTES.get((self.note_globale or "").upper(), "—")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# CYCLE DE PAIE — suivi des obligations (déclarations et paiements)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ObligationPaie(db.Model):
+    """Déclaration / paiement d'une obligation du cycle de paie, saisi par
+    l'entreprise (IRPP, TCS, FNH, CFP mensuels ; CNSS, CNAMGS trimestriels ;
+    DAS annuelle ; comptabilisation des écritures de paie du mois).
+    periode = mois (1-12), trimestre (1-4) ou 0 pour l'année, selon le code."""
+    __tablename__ = "obligations_paie"
+    id               = db.Column(db.Integer, primary_key=True)
+    tenant_id        = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    code             = db.Column(db.String(20), nullable=False)
+    annee            = db.Column(db.Integer, nullable=False)
+    periode          = db.Column(db.Integer, nullable=False, default=0)
+    statut           = db.Column(db.String(20), nullable=False, default="A_FAIRE")  # A_FAIRE | DECLARE | PAYE
+    date_declaration = db.Column(db.Date)
+    date_paiement    = db.Column(db.Date)
+    montant_paye     = db.Column(db.Numeric(15, 2))
+    reference        = db.Column(db.String(100))      # n° de quittance / de dépôt
+    commentaire      = db.Column(db.String(500))
+    saisi_par        = db.Column(db.String(150))
+    date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
+    __table_args__ = (db.UniqueConstraint("tenant_id", "code", "annee", "periode",
+                                          name="uq_obligation_paie"),)
+
+
+class EcheanceLegale(db.Model):
+    """Date limite légale d'une obligation, réglée par le super-administrateur.
+    Aucune valeur par défaut : tant qu'elle n'est pas renseignée, le cycle de
+    paie affiche « échéance à renseigner ».
+    Échéance = jour `jour` du mois situé `decalage_mois` mois après le dernier
+    mois de la période (mois, trimestre ou année)."""
+    __tablename__ = "echeances_legales"
+    id            = db.Column(db.Integer, primary_key=True)
+    code          = db.Column(db.String(20), nullable=False, unique=True)
+    jour          = db.Column(db.Integer)            # 1-31 (ramené au dernier jour du mois si besoin)
+    decalage_mois = db.Column(db.Integer)            # 0 = même mois que la fin de période
+    source        = db.Column(db.String(300))        # texte de référence
+    verifie_le    = db.Column(db.Date)
+    date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
