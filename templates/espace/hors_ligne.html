@@ -1,0 +1,10 @@
+{% extends "espace/base.html" %}
+{% block title %}Hors connexion{% endblock %}
+{% block contenu %}
+<div class="card" style="text-align:center">
+  <h2>Pas de connexion internet</h2>
+  <p class="mute">Vos bulletins sont confidentiels : ils ne sont pas enregistrés sur le téléphone.
+    Reconnectez-vous à internet pour les consulter, ou téléchargez le PDF pour le garder.</p>
+  <a class="btn primary" href="/espace">Réessayer</a>
+</div>
+{% endblock %}

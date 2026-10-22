@@ -1,0 +1,43 @@
+{% extends "espace/base.html" %}
+{% block title %}Connexion{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Consulter mes bulletins de paie</h2>
+  <form method="POST" action="/espace/connexion" id="f" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label for="code_entreprise">Code entreprise</label>
+    <input id="code_entreprise" name="code_entreprise" value="{{ code_entreprise }}" required autocapitalize="none" spellcheck="false">
+    <label for="matricule">Matricule</label>
+    <input id="matricule" name="matricule" required autocapitalize="characters" spellcheck="false">
+    <label for="pin">Code PIN (6 chiffres)</label>
+    <input id="pin" name="pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="current-password">
+    <label class="check"><input type="checkbox" id="retenir" checked> Retenir mon code entreprise et mon matricule sur ce téléphone</label>
+    <button class="btn primary" type="submit">Se connecter</button>
+  </form>
+</div>
+<div class="card">
+  <h2>Première connexion ?</h2>
+  <p class="mute" style="margin:0">Votre service RH vous a remis un <strong>code d'activation</strong>. Utilisez-le pour choisir votre code PIN.</p>
+  <a class="btn ghost" id="lien-activer" href="/espace/activer{% if code_entreprise %}?e={{ code_entreprise }}{% endif %}">Activer mon accès</a>
+</div>
+<p class="mute" style="text-align:center">PIN oublié ? Demandez à votre service RH de réinitialiser votre accès.</p>
+{% endblock %}
+{% block scripts %}
+<script>
+  (function(){
+    var ce = document.getElementById("code_entreprise"), m = document.getElementById("matricule"),
+        r = document.getElementById("retenir");
+    try {
+      var memo = JSON.parse(localStorage.getItem("espace_id") || "null");
+      if (memo) { if (!ce.value) ce.value = memo.e || ""; m.value = memo.m || ""; }
+      if (ce.value && m.value) document.getElementById("pin").focus();
+    } catch (e) {}
+    document.getElementById("f").addEventListener("submit", function(){
+      try {
+        if (r.checked) localStorage.setItem("espace_id", JSON.stringify({e: ce.value.trim().toLowerCase(), m: m.value.trim()}));
+        else localStorage.removeItem("espace_id");
+      } catch (e) {}
+    });
+  })();
+</script>
+{% endblock %}

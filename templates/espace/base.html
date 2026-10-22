@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<meta name="theme-color" content="#0f3d36"/>
+<meta name="robots" content="noindex"/>
+<link rel="manifest" href="/espace/manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png"/>
+<link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+<title>{% block title %}Mon espace salarié{% endblock %} — PaieGabon</title>
+<style>
+  :root{--teal:#0f3d36;--teal2:#17564c;--or:#E9B043;--creme:#F5F3EE;--ok:#059669;--no:#dc2626;
+        --line:#e5e7eb;--ink:#1f2937;--mute:#6b7280}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--creme);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:560px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+  header{background:var(--teal);color:#fff;padding:1rem 1.1rem calc(1rem + env(safe-area-inset-top,0)) ;position:sticky;top:0;z-index:5}
+  header .l{display:flex;justify-content:space-between;align-items:center;gap:.6rem}
+  header h1{font-size:1.05rem;font-weight:800;margin:0}
+  header .sub{font-size:.78rem;color:rgba(255,255,255,.75);margin-top:.15rem}
+  .logo{display:inline-flex;width:30px;height:30px;border-radius:8px;background:var(--or);color:var(--teal);
+    font-weight:900;align-items:center;justify-content:center;margin-right:.5rem}
+  main{flex:1;padding:1rem 1.1rem 3rem}
+  .card{background:#fff;border:1px solid var(--line);border-radius:.9rem;padding:1rem;margin-bottom:.8rem}
+  h2{font-size:1rem;color:var(--teal);margin:0 0 .6rem}
+  label{font-size:.78rem;font-weight:700;color:#374151;display:block;margin:.6rem 0 .25rem}
+  input{width:100%;padding:.7rem;border:1px solid #d1d5db;border-radius:.6rem;font-size:1rem;background:#fff}
+  input.pin{letter-spacing:.5em;font-size:1.3rem;text-align:center}
+  .btn{display:block;width:100%;border:none;border-radius:.7rem;padding:.85rem;font-size:1rem;font-weight:800;
+    cursor:pointer;text-align:center;text-decoration:none;margin-top:.9rem}
+  .btn.primary{background:var(--teal);color:#fff}
+  .btn.or{background:var(--or);color:#3a2a00}
+  .btn.ghost{background:#fff;border:1px solid var(--line);color:var(--mute)}
+  .flash{padding:.7rem .9rem;border-radius:.6rem;font-size:.88rem;margin-bottom:.8rem}
+  .flash.error{background:#fee2e2;color:#991b1b}.flash.success{background:#dcfce7;color:#166534}
+  .flash.info{background:#e0f2fe;color:#075985}
+  .mute{color:var(--mute);font-size:.82rem}
+  .lien{color:var(--teal2);font-weight:700;font-size:.88rem}
+  a.lien{text-decoration:none}
+  .check{display:flex;gap:.6rem;align-items:flex-start;font-size:.85rem;margin-top:.8rem}
+  .check input{width:auto;margin-top:.15rem}
+  footer{text-align:center;font-size:.72rem;color:var(--mute);padding:1rem}
+  #installer{display:none}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="l">
+      <div style="display:flex;align-items:center">
+        <span class="logo">P</span>
+        <div><h1>{% block entete %}Mon espace salarié{% endblock %}</h1>
+          <div class="sub">{% block sous_entete %}PaieGabon{% endblock %}</div></div>
+      </div>
+      {% block actions %}{% endblock %}
+    </div>
+  </header>
+  <main>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}<div class="flash {{ cat if cat in ['error','success','info'] else 'info' }}">{{ msg }}</div>{% endfor %}
+    {% endwith %}
+    {% block contenu %}{% endblock %}
+    <button id="installer" class="btn or" type="button">📲 Installer l'application sur ce téléphone</button>
+    <p id="aide-ios" class="mute" style="display:none;text-align:center;margin-top:.8rem">
+      Sur iPhone : touchez <strong>Partager</strong> puis <strong>Sur l'écran d'accueil</strong> pour installer l'application.</p>
+  </main>
+  <footer>PaieGabon · Ameriack I.T. Solutions · vos bulletins restent confidentiels</footer>
+</div>
+<script>
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/espace/sw.js", {scope: "/espace"}).catch(function(){});
+  }
+  (function(){
+    var invite = null, bouton = document.getElementById("installer");
+    window.addEventListener("beforeinstallprompt", function(e){ e.preventDefault(); invite = e; bouton.style.display = "block"; });
+    bouton.addEventListener("click", function(){ if (invite) { invite.prompt(); invite = null; bouton.style.display = "none"; } });
+    var ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    var installe = window.navigator.standalone || window.matchMedia("(display-mode: standalone)").matches;
+    if (ios && !installe) { document.getElementById("aide-ios").style.display = "block"; }
+  })();
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

@@ -95,6 +95,8 @@ class Tenant(db.Model):
     # Comptes du journal de paie (export comptable), JSON {"comptes": {...}, "journal": "PAI"}.
     # Vide = comptes proposés par défaut (SYSCOHADA révisé), voir plan_comptable_paie.py.
     comptes_paie = db.Column(db.Text)
+    # Portail des employés (consultation des bulletins) : activé par l'administrateur
+    portail_salaries_actif = db.Column(db.Boolean, default=False)
     notes            = db.Column(db.Text)
     modele_bulletin  = db.Column(db.String(30), default="classique")
     # Valeurs : "classique" | "moderne" | "minimaliste"
@@ -2528,3 +2530,42 @@ class EcheanceTenant(db.Model):
     note          = db.Column(db.String(300))
     date_modification = db.Column(db.DateTime, default=utcnow, onupdate=utcnow)
     __table_args__ = (db.UniqueConstraint("tenant_id", "code", name="uq_echeance_tenant"),)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# PORTAIL DES EMPLOYÉS — consultation des bulletins par les salariés
+# ═══════════════════════════════════════════════════════════════════════════
+
+class AccesSalarie(db.Model):
+    """Accès d'un salarié au portail (/espace) : matricule + code PIN.
+    Le PIN est choisi par le salarié lui-même à l'activation ; le RH ne le
+    connaît jamais (il ne remet qu'un code d'activation à usage unique)."""
+    __tablename__ = "acces_salaries"
+    id                 = db.Column(db.Integer, primary_key=True)
+    tenant_id          = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    salarie_id         = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False, unique=True)
+    pin_hash           = db.Column(db.String(256))           # vide tant que l'accès n'est pas activé
+    code_hash          = db.Column(db.String(256))           # code d'activation (haché, usage unique)
+    code_expire        = db.Column(db.DateTime)
+    actif              = db.Column(db.Boolean, default=True, nullable=False)
+    version            = db.Column(db.Integer, default=1, nullable=False)  # +1 = sessions ouvertes invalidées
+    echecs             = db.Column(db.Integer, default=0, nullable=False)
+    verrou_jusqua      = db.Column(db.DateTime)
+    consentement_le    = db.Column(db.DateTime)              # accord pour le bulletin électronique
+    active_le          = db.Column(db.DateTime)              # première activation
+    derniere_connexion = db.Column(db.DateTime)
+    invite_le          = db.Column(db.DateTime)
+    invite_par         = db.Column(db.String(150))
+    date_creation      = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie", backref=db.backref("acces_portail", uselist=False))
+
+
+class ConsultationBulletin(db.Model):
+    """Trace de mise à disposition : bulletin consulté ou téléchargé par le salarié."""
+    __tablename__ = "consultations_bulletins"
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False, index=True)
+    salarie_id  = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False, index=True)
+    bulletin_id = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id"), nullable=False, index=True)
+    date        = db.Column(db.DateTime, default=utcnow, nullable=False)
+    ip          = db.Column(db.String(45))

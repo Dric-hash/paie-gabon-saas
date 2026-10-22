@@ -382,6 +382,7 @@ from blueprints.tenant import bp as tenant_bp
 from blueprints.api_v1 import bp as api_v1_bp
 from blueprints.prestataires import bp as prestataires_bp
 from blueprints.mobile import bp as mobile_bp
+from blueprints.espace import bp as espace_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(admin_bp)
@@ -389,6 +390,7 @@ app.register_blueprint(tenant_bp)
 app.register_blueprint(api_v1_bp)
 app.register_blueprint(prestataires_bp)
 app.register_blueprint(mobile_bp)
+app.register_blueprint(espace_bp)   # portail des employés (/espace)
 import models_sso
 from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
 app.register_blueprint(sso_bp)
@@ -626,6 +628,7 @@ def run_migrations():
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS sexe VARCHAR(1)",
         # ── Comptes du journal de paie paramétrables (SYSCOHADA), 20/10/2026 ──
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS comptes_paie TEXT",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS portail_salaries_actif BOOLEAN DEFAULT FALSE",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",
