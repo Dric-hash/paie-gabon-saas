@@ -50,8 +50,8 @@
 <body>
 <div class="no-print">
   <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer / Enregistrer PDF</button>
-  <a class="btn btn-pdf" href="/bulletins/{{ bulletin.id }}/pdf">📄 Télécharger PDF</a>
-  <a class="btn btn-back" href="/bulletins/{{ bulletin.id }}">← Retour</a>
+  {% if not portail %}<a class="btn btn-pdf" href="/bulletins/{{ bulletin.id }}/pdf">📄 Télécharger PDF</a>{% endif %}
+  <a class="btn btn-back" href="{{ retour_url or ('/bulletins/' ~ bulletin.id) }}">← Retour</a>
   <span style="color:#555;font-size:12px;margin-left:6px">{{ bulletin.salarie.nom_complet }} — {{ bulletin.periode.libelle_complet if bulletin.periode else '' }}</span>
 </div>
 {% set b = bulletin %}{% set s = bulletin.salarie %}{% set p = bulletin.periode %}
@@ -255,5 +255,6 @@
   </div>
 
 </div>
+{% if portail and imprimer %}<script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 400); });</script>{% endif %}
 </body>
 </html>

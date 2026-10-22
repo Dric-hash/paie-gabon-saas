@@ -240,29 +240,36 @@ def mes_bulletins():
                            vus=vus, libelle=ps.libelle)
 
 
-@bp.route("/bulletins/<int:bulletin_id>.pdf")
+@bp.route("/bulletins/<int:bulletin_id>")
 @connexion_requise
-def bulletin_pdf(bulletin_id):
+def bulletin_voir(bulletin_id):
+    """Bulletin dans le modèle choisi par l'employeur (le même que celui du RH).
+    ?imprimer=1 ouvre directement l'impression (« Enregistrer en PDF » sur le téléphone)."""
     s, t = g.esp_salarie, g.esp_tenant
     b = ps.bulletin(s, bulletin_id)
     if b is None:
         abort(404)
-    from pdf_bulletin import generer_bulletin_pdf
-    try:
-        data = generer_bulletin_pdf(b, t)
-    except Exception as e:
-        logger.error(f"[ESPACE] PDF bulletin {b.id} : {e}")
-        flash("Le bulletin n'a pas pu être généré. Réessayez plus tard ou contactez votre service RH.", "error")
-        return redirect(url_for("espace.mes_bulletins"))
+    from blueprints.tenant import rendu_bulletin_html
+    page = rendu_bulletin_html(b, t, portail=True, retour_url=url_for("espace.mes_bulletins",
+                               annee=b.periode.annee), imprimer=bool(request.args.get("imprimer")))
+    # Téléphone : le bulletin est une page A4 ; on l'affiche en entier dans la
+    # largeur de l'écran (le salarié peut zoomer). L'impression reste en A4.
+    import re as _re
+    vp = '<meta name="viewport" content="width=840, user-scalable=yes">'
+    page = (_re.sub(r'<meta[^>]+name="viewport"[^>]*>', vp, page, count=1) if 'name="viewport"' in page
+            else page.replace("<head>", "<head>\n" + vp, 1))
     db.session.add(ConsultationBulletin(tenant_id=t.id, salarie_id=s.id, bulletin_id=b.id,
                                         ip=(request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
                                             or request.remote_addr or "")[:45]))
     db.session.commit()
-    nom = f"bulletin_{b.periode.annee}_{b.periode.mois:02d}_{s.matricule}.pdf".replace(" ", "_").replace("/", "-")
-    mode = "attachment" if request.args.get("dl") else "inline"
-    resp = Response(data, mimetype="application/pdf")
-    resp.headers["Content-Disposition"] = f'{mode}; filename="{nom}"'
-    return resp
+    return page
+
+
+@bp.route("/bulletins/<int:bulletin_id>.pdf")
+@connexion_requise
+def bulletin_pdf(bulletin_id):
+    # Ancienne adresse : renvoie vers le bulletin au modèle de l'entreprise.
+    return redirect(url_for("espace.bulletin_voir", bulletin_id=bulletin_id, imprimer=request.args.get("dl") or None))
 
 
 @bp.route("/pin", methods=["GET", "POST"])

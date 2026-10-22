@@ -181,12 +181,17 @@ def test_cloisonnement_et_pdf(env):
     _activer_portail(env)
     code = _inviter(env, "s1")[0]
     cli, _ = _activer_compte(code)
+    r = cli.get(f"/espace/bulletins/{env['b11']}")
+    assert r.status_code == 200 and r.mimetype == "text/html" and r.headers["Cache-Control"] == "no-store"
+    html = r.get_data(as_text=True)
+    assert 'href="/espace/bulletins?annee=2026"' in html and 'href="/bulletins/' not in html   # aucun lien RH
+    assert "window.print()" in cli.get(f"/espace/bulletins/{env['b12']}?imprimer=1").get_data(as_text=True)
+    # ancienne adresse .pdf : renvoie vers le bulletin au modèle de l'entreprise
     r = cli.get(f"/espace/bulletins/{env['b11']}.pdf")
-    assert r.status_code == 200 and r.mimetype == "application/pdf" and r.headers["Cache-Control"] == "no-store"
-    assert "attachment" in cli.get(f"/espace/bulletins/{env['b12']}.pdf?dl=1").headers["Content-Disposition"]
+    assert r.status_code == 302 and r.headers["Location"].endswith(f"/espace/bulletins/{env['b11']}")
     # bulletin d'un collègue, brouillon, bulletin d'une autre entreprise : introuvables
     for bid in (env["b21"], env["b13"], env["bb"]):
-        assert cli.get(f"/espace/bulletins/{bid}.pdf").status_code == 404
+        assert cli.get(f"/espace/bulletins/{bid}").status_code == 404
     with flask_app.app_context():
         assert ConsultationBulletin.query.count() == 2
     # la session du portail n'ouvre aucune page de gestion
@@ -457,3 +462,35 @@ def test_profil_demande_et_validation_rh(env):
     with flask_app.app_context():
         assert DemandeProfil.query.get(ids["telephone"]).statut == "ACCEPTE"
         assert db.session.get(Salarie, env["s1"]).adresse is None
+
+
+
+@pytest.mark.parametrize("modele", ["classique", "moderne", "minimaliste", "grandlivre", "sgtg"])
+def test_bulletin_au_modele_de_l_entreprise(env, modele):
+    """Le salarié voit le bulletin dans le modèle choisi dans Paramètres, comme le RH."""
+    _activer_portail(env)
+    cli, _ = _activer_compte(_inviter(env, "s1")[0])
+    with flask_app.app_context():
+        db.session.get(Tenant, env["t"]).modele_bulletin = modele
+        db.session.commit()
+    rh = _client_pour(env["admin"]).get(f"/bulletins/{env['b11']}/imprimer").get_data(as_text=True)
+    sal = cli.get(f"/espace/bulletins/{env['b11']}").get_data(as_text=True)
+
+    def corps(h):
+        # même page, à l'exception du lien « Retour » et du lien PDF réservés au RH
+        h = re.sub(r'href="[^"]*"', 'href=""', h)
+        h = re.sub(r'<meta[^>]+name="viewport"[^>]*>', "", h)   # affichage adapté au téléphone
+        h = re.sub(r'<a class="btn btn-pdf"[^>]*>[^<]*</a>', "", h)
+        return re.sub(r"\s+", " ", h)
+    assert corps(rh) == corps(sal)
+    # et c'est bien le modèle choisi qui est rendu (pas le repli « classique »)
+    attendu = {"classique": "tenant/bulletin_print.html", "moderne": "tenant/bulletin_print_moderne.html",
+               "minimaliste": "tenant/bulletin_print_minimaliste.html",
+               "grandlivre": "tenant/bulletin_print_grandlivre.html", "sgtg": "tenant/bulletin_print_sgtg.html"}
+    with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", attendu[modele]),
+              encoding="utf-8") as f:
+        titre = re.search(r"<title>([^{<]*)", f.read()).group(1).strip()
+    style = re.search(r"<style>(.{0,200})", sal, re.S).group(1)
+    with open(os.path.join(os.path.dirname(os.path.dirname(__file__)), "templates", attendu[modele]),
+              encoding="utf-8") as f:
+        assert style.strip()[:120] in f.read()

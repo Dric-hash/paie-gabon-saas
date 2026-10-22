@@ -48,8 +48,8 @@
 </head>
 <body>
 <div class="no-print">
-  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer</button>
-  <a class="btn btn-back" href="/bulletins/{{ bulletin.id }}" style="text-decoration:none;display:inline-flex;align-items:center">← Retour</a>
+  <button class="btn btn-print" onclick="window.print()">🖨️ Imprimer / Enregistrer PDF</button>
+  <a class="btn btn-back" href="{{ retour_url or ('/bulletins/' ~ bulletin.id) }}" style="text-decoration:none;display:inline-flex;align-items:center">← Retour</a>
   <span style="color:rgba(255,255,255,.6);font-size:12px;margin-left:8px">Modèle : Minimaliste</span>
 </div>
 
@@ -206,5 +206,6 @@
     </div>
   </div>
 </div>
+{% if portail and imprimer %}<script>window.addEventListener("load", function(){ setTimeout(function(){ window.print(); }, 400); });</script>{% endif %}
 </body>
 </html>
