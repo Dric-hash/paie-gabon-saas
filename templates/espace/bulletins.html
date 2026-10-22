@@ -45,13 +45,12 @@
 
 <div class="card">
   <h2>Mes bulletins {{ annee }}</h2>
-  <p class="mute" style="margin:0 0 .3rem">« ⬇ PDF » ouvre l'impression : choisissez « Enregistrer au format PDF » pour garder le bulletin.</p>
   {% for b in liste %}
   <div class="bul">
     <div class="m"><strong>{{ libelle(b) }}{% if b.id not in vus %}<span class="nouveau">NOUVEAU</span>{% endif %}</strong>
       <small>Net à payer {{ b.net_a_payer|fcfa }}{% if b.statut in ['PAYÉ','PAYE'] %} · payé{% endif %}</small></div>
     <a class="mini v" href="/espace/bulletins/{{ b.id }}">Voir</a>
-    <a class="mini d" href="/espace/bulletins/{{ b.id }}?imprimer=1" aria-label="Enregistrer en PDF le bulletin de {{ libelle(b) }}">⬇ PDF</a>
+    <a class="mini d" href="/espace/bulletins/{{ b.id }}.pdf?dl=1" aria-label="Télécharger le PDF du bulletin de {{ libelle(b) }}">⬇ PDF</a>
   </div>
   {% endfor %}
 </div>

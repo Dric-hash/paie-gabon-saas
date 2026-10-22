@@ -268,8 +268,26 @@ def bulletin_voir(bulletin_id):
 @bp.route("/bulletins/<int:bulletin_id>.pdf")
 @connexion_requise
 def bulletin_pdf(bulletin_id):
-    # Ancienne adresse : renvoie vers le bulletin au modèle de l'entreprise.
-    return redirect(url_for("espace.bulletin_voir", bulletin_id=bulletin_id, imprimer=request.args.get("dl") or None))
+    """PDF du bulletin au modèle de l'entreprise (le même PDF que celui du RH)."""
+    s, t = g.esp_salarie, g.esp_tenant
+    b = ps.bulletin(s, bulletin_id)
+    if b is None:
+        abort(404)
+    from blueprints.tenant import _pdf_bulletin_bytes
+    try:
+        data = _pdf_bulletin_bytes(b, t)
+    except Exception as e:
+        logger.error(f"[ESPACE] PDF bulletin {b.id} : {e}")
+        flash("Le PDF n'a pas pu être généré. Utilisez « Voir » puis « Imprimer / Enregistrer PDF ».", "error")
+        return redirect(url_for("espace.mes_bulletins"))
+    db.session.add(ConsultationBulletin(tenant_id=t.id, salarie_id=s.id, bulletin_id=b.id,
+                                        ip=(request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                                            or request.remote_addr or "")[:45]))
+    db.session.commit()
+    nom = f"bulletin_{b.periode.annee}_{b.periode.mois:02d}_{s.matricule}.pdf".replace(" ", "_").replace("/", "-")
+    resp = Response(data, mimetype="application/pdf")
+    resp.headers["Content-Disposition"] = f'{"attachment" if request.args.get("dl") else "inline"}; filename="{nom}"'
+    return resp
 
 
 @bp.route("/pin", methods=["GET", "POST"])

@@ -68,8 +68,12 @@ def _config_rubriques_dict(tenant_id):
 def _pdf_bulletin_bytes(b, t):
     """Choisit le générateur PDF selon le modèle du tenant."""
     from pdf_bulletin import generer_bulletin_pdf, generer_bulletin_detaille_pdf
-    if (getattr(t, "modele_bulletin", None) or "classique") == "sgtg":
+    modele = getattr(t, "modele_bulletin", None) or "classique"
+    if modele == "sgtg":
         return generer_bulletin_detaille_pdf(b, t)
+    import pdf_bulletin_modeles
+    if modele in pdf_bulletin_modeles.MODELES:
+        return pdf_bulletin_modeles.generer(b, t, modele)
     return generer_bulletin_pdf(b, t)
 
 

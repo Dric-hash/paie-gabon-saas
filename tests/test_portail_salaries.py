@@ -186,14 +186,16 @@ def test_cloisonnement_et_pdf(env):
     html = r.get_data(as_text=True)
     assert 'href="/espace/bulletins?annee=2026"' in html and 'href="/bulletins/' not in html   # aucun lien RH
     assert "window.print()" in cli.get(f"/espace/bulletins/{env['b12']}?imprimer=1").get_data(as_text=True)
-    # ancienne adresse .pdf : renvoie vers le bulletin au modèle de l'entreprise
-    r = cli.get(f"/espace/bulletins/{env['b11']}.pdf")
-    assert r.status_code == 302 and r.headers["Location"].endswith(f"/espace/bulletins/{env['b11']}")
+    # PDF au modèle de l'entreprise, téléchargeable
+    r = cli.get(f"/espace/bulletins/{env['b11']}.pdf?dl=1")
+    assert r.status_code == 200 and r.mimetype == "application/pdf" and r.data[:4] == b"%PDF"
+    assert "attachment" in r.headers["Content-Disposition"]
     # bulletin d'un collègue, brouillon, bulletin d'une autre entreprise : introuvables
     for bid in (env["b21"], env["b13"], env["bb"]):
         assert cli.get(f"/espace/bulletins/{bid}").status_code == 404
+        assert cli.get(f"/espace/bulletins/{bid}.pdf").status_code == 404
     with flask_app.app_context():
-        assert ConsultationBulletin.query.count() == 2
+        assert ConsultationBulletin.query.count() == 3
     # la session du portail n'ouvre aucune page de gestion
     r = cli.get("/bulletins")
     assert r.status_code == 302 and "/espace" not in r.headers["Location"]

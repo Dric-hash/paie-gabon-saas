@@ -55,6 +55,9 @@ def generer_bulletin_pdf(bulletin, tenant) -> bytes:
 def generer_bulletins_pdf(bulletins, tenant, modele=None) -> bytes:
     """Génère UN SEUL PDF regroupant TOUS les bulletins (un par page).
     Mise en page « détaillé » si modele == 'sgtg'."""
+    import pdf_bulletin_modeles
+    if modele in pdf_bulletin_modeles.MODELES:
+        return pdf_bulletin_modeles.generer_lot(bulletins, tenant, modele)
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
         buffer, pagesize=A4,
