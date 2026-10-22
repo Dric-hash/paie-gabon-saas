@@ -1,0 +1,27 @@
+{% extends "espace/base.html" %}
+{% block title %}Activer mon accès{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Activer mon accès</h2>
+  <p class="mute" style="margin:0">Saisissez le code d'activation remis par votre service RH, puis choisissez votre code PIN.
+    Il est personnel : personne d'autre, ni même le service RH, ne le connaîtra.</p>
+  <form method="POST" action="/espace/activer" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label for="code_entreprise">Code entreprise</label>
+    <input id="code_entreprise" name="code_entreprise" value="{{ code_entreprise }}" required autocapitalize="none" spellcheck="false">
+    <label for="matricule">Matricule</label>
+    <input id="matricule" name="matricule" value="{{ matricule }}" required spellcheck="false">
+    <label for="code_activation">Code d'activation</label>
+    <input id="code_activation" name="code_activation" placeholder="XXXX-XXXX" required autocapitalize="characters" spellcheck="false">
+    <label for="pin">Nouveau code PIN (6 chiffres)</label>
+    <input id="pin" name="pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="new-password">
+    <label for="pin2">Confirmer le code PIN</label>
+    <input id="pin2" name="pin2" class="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="new-password">
+    <p class="mute">Évitez 123456, un chiffre répété ou votre date de naissance : ils sont refusés.</p>
+    <label class="check"><input type="checkbox" name="consentement" value="1" required>
+      J'accepte de recevoir mes bulletins de paie sous forme électronique, sur cet espace sécurisé.</label>
+    <button class="btn primary" type="submit">Activer et me connecter</button>
+  </form>
+</div>
+<a class="lien" href="/espace{% if code_entreprise %}?e={{ code_entreprise }}{% endif %}">← J'ai déjà un code PIN</a>
+{% endblock %}

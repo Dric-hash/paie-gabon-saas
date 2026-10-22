@@ -1,0 +1,142 @@
+{% extends "tenant/base.html" %}
+{% block title %}Portail des employés — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+<style>
+  .pe-carte{background:#fff;border:1px solid #e5e7eb;border-radius:1rem;padding:1.25rem;margin-bottom:1.25rem}
+  .pe-carte h2{font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem}
+  .pe-sous{font-size:.8rem;color:#6b7280;margin:0 0 1rem}
+  .pe-table{width:100%;border-collapse:collapse;font-size:.82rem}
+  .pe-table th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.05em;color:#6b7280;padding:.5rem;border-bottom:2px solid #e5e7eb}
+  .pe-table td{padding:.55rem .5rem;border-bottom:1px solid #f3f4f6;vertical-align:middle}
+  .pe-pastille{display:inline-block;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px;white-space:nowrap}
+  .pe-btn{border:none;border-radius:.55rem;padding:.45rem .9rem;font-size:.78rem;font-weight:700;cursor:pointer;color:#fff;background:#0f3d36}
+  .pe-btn.gris{background:#fff;color:#374151;border:1px solid #d1d5db}
+  .pe-btn.rouge{background:#dc2626}
+  .pe-code{font-family:ui-monospace,monospace;background:#f3f4f6;padding:.15rem .45rem;border-radius:.35rem}
+  .pe-scroll{overflow-x:auto}
+</style>
+
+<div style="margin-bottom:1.25rem">
+  <h1 class="text-2xl font-black text-gray-900">Portail des employés</h1>
+  <p class="text-gray-500 text-sm mt-1">Vos salariés consultent et téléchargent leurs bulletins validés depuis leur téléphone, avec leur matricule et un code PIN personnel.</p>
+</div>
+
+{# ── Activation ─────────────────────────────────────────────────────── #}
+<div class="pe-carte" style="border-color:{{ '#86efac' if tenant.portail_salaries_actif else '#e5e7eb' }}">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div>
+      <h2>{% if tenant.portail_salaries_actif %}✅ Portail activé{% else %}Portail désactivé{% endif %}</h2>
+      <p class="pe-sous" style="margin:0">
+        {% if tenant.portail_salaries_actif %}Adresse à communiquer : <a href="{{ lien }}" target="_blank" style="color:#2563eb">{{ lien }}</a>
+          · code entreprise <span class="pe-code">{{ tenant.slug }}</span>
+        {% else %}Aucun salarié ne peut se connecter. Seul l'administrateur peut l'activer.{% endif %}</p>
+    </div>
+    {% if est_admin %}
+    <form method="POST" action="/portail-employes/activation" style="margin:0"
+          {% if tenant.portail_salaries_actif %}onsubmit="return confirm('Désactiver le portail ? Plus aucun salarié ne pourra se connecter.')"{% endif %}>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="actif" value="{{ '0' if tenant.portail_salaries_actif else '1' }}">
+      <button class="pe-btn {{ 'rouge' if tenant.portail_salaries_actif else '' }}" type="submit">
+        {{ 'Désactiver le portail' if tenant.portail_salaries_actif else 'Activer le portail' }}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if tenant.portail_salaries_actif %}
+{# ── Salariés ───────────────────────────────────────────────────────── #}
+<div class="pe-carte">
+  <h2>Accès des salariés</h2>
+  <p class="pe-sous">
+    {{ compte.ACTIF }} actif(s) · {{ compte.INVITE + compte.CODE_EXPIRE }} en attente d'activation · {{ compte.NON_INVITE }} sans accès.
+    Cochez des salariés puis remettez-leur leur fiche : elle contient un code d'activation valable {{ CODE_JOURS }} jours,
+    qui leur permet de choisir leur code PIN. Réinviter un salarié efface son PIN (PIN oublié, téléphone perdu).
+  </p>
+  <form method="POST" action="/portail-employes/inviter" id="f-inviter">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="pe-scroll"><table class="pe-table">
+      <thead><tr>
+        <th>{% if peut_saisir %}<input type="checkbox" id="tout" aria-label="Tout cocher">{% endif %}</th>
+        <th>Salarié</th><th>Matricule</th><th>E-mail</th><th>Accès</th><th>Dernière connexion</th><th>Dernier bulletin consulté</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for l in lignes %}
+      <tr>
+        <td>{% if peut_saisir and l.sit != 'PARTI' %}<input type="checkbox" name="salarie_ids" value="{{ l.s.id }}" class="case">{% endif %}</td>
+        <td style="font-weight:700">{{ l.s.nom }} {{ l.s.prenom }}</td>
+        <td><span class="pe-code">{{ l.s.matricule }}</span></td>
+        <td style="font-size:.75rem;color:#6b7280">{{ l.s.email or '—' }}</td>
+        <td><span class="pe-pastille" style="background:{{ l.sit_lib[1] }};color:{{ l.sit_lib[2] }}">{{ l.sit_lib[0] }}</span></td>
+        <td style="font-size:.75rem">{{ l.a.derniere_connexion|datetime_fr if l.a and l.a.derniere_connexion else '—' }}</td>
+        <td style="font-size:.75rem">{{ l.vu|datetime_fr if l.vu else '—' }}</td>
+        <td style="text-align:right">
+          {% if peut_saisir and l.a and l.sit != 'PARTI' %}
+            {% if l.sit == 'DESACTIVE' %}
+            <button class="pe-btn gris" form="f-reactiver-{{ l.s.id }}" type="submit">Réactiver</button>
+            {% else %}
+            <button class="pe-btn gris" form="f-desactiver-{{ l.s.id }}" type="submit">Désactiver</button>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="color:#6b7280">Aucun salarié actif.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    {% if peut_saisir and lignes %}
+    <div style="display:flex;gap:1rem;align-items:center;flex-wrap:wrap;margin-top:1rem">
+      <button class="pe-btn" type="submit">Inviter / réinitialiser les salariés cochés</button>
+      <label style="font-size:.8rem;color:#374151"><input type="checkbox" name="envoyer_email" value="1" {{ '' if mail_actif else 'disabled' }}>
+        Envoyer aussi le code par e-mail aux salariés qui en ont un{% if not mail_actif %} (e-mails non configurés){% endif %}</label>
+    </div>
+    {% endif %}
+  </form>
+  {% for l in lignes if l.a and l.sit != 'PARTI' %}
+  <form method="POST" action="/portail-employes/{{ l.s.id }}/{{ 'reactiver' if l.sit == 'DESACTIVE' else 'desactiver' }}"
+        id="f-{{ 'reactiver' if l.sit == 'DESACTIVE' else 'desactiver' }}-{{ l.s.id }}" style="display:none">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/></form>
+  {% endfor %}
+</div>
+
+{# ── Notification ───────────────────────────────────────────────────── #}
+<div class="pe-carte">
+  <h2>Bulletins mis à disposition</h2>
+  <p class="pe-sous">Seuls les bulletins validés ou payés sont visibles par les salariés, jamais les brouillons.
+    Prévenez-les par e-mail quand ceux d'un mois sont prêts.</p>
+  <div class="pe-scroll"><table class="pe-table">
+    <thead><tr><th>Période</th><th>Bulletins visibles</th><th>Consultés</th><th>Salariés prévenus</th><th></th></tr></thead>
+    <tbody>
+    {% for x in periodes %}
+    <tr>
+      <td style="font-weight:700">{{ x.p.libelle_complet }}</td>
+      <td>{{ x.nb }}</td>
+      <td>{{ x.vus }} / {{ x.nb }}</td>
+      <td style="font-size:.75rem">{{ ('le ' ~ (x.notifie_le|datetime_fr)) if x.notifie_le else 'pas encore' }}</td>
+      <td style="text-align:right">
+        {% if peut_saisir %}
+        <form method="POST" action="/portail-employes/prevenir" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <input type="hidden" name="periode_id" value="{{ x.p.id }}">
+          <button class="pe-btn gris" type="submit" {{ '' if mail_actif else 'disabled' }}>✉ Prévenir par e-mail</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" style="color:#6b7280">Aucun bulletin validé pour l'instant.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<script>
+  (function(){
+    var tout = document.getElementById("tout");
+    if (tout) tout.addEventListener("change", function(){
+      document.querySelectorAll(".case").forEach(function(c){ c.checked = tout.checked; });
+    });
+  })();
+</script>
+{% endblock %}

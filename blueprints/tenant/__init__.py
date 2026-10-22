@@ -697,3 +697,4 @@ from blueprints.tenant import carriere  # noqa: E402,F401
 from blueprints.tenant import medailles  # noqa: E402,F401
 from blueprints.tenant import developpement  # noqa: E402,F401
 from blueprints.tenant import cycle  # noqa: E402,F401
+from blueprints.tenant import portail_employes  # noqa: E402,F401

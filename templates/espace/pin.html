@@ -1,0 +1,20 @@
+{% extends "espace/base.html" %}
+{% block title %}Changer mon code PIN{% endblock %}
+{% block entete %}{{ s.prenom }} {{ s.nom }}{% endblock %}
+{% block sous_entete %}{{ t.denomination }}{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Changer mon code PIN</h2>
+  <form method="POST" action="/espace/pin" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label for="pin_actuel">Code PIN actuel</label>
+    <input id="pin_actuel" name="pin_actuel" class="pin" type="password" inputmode="numeric" maxlength="6" required autocomplete="current-password">
+    <label for="pin">Nouveau code PIN</label>
+    <input id="pin" name="pin" class="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="new-password">
+    <label for="pin2">Confirmer le nouveau code PIN</label>
+    <input id="pin2" name="pin2" class="pin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autocomplete="new-password">
+    <button class="btn primary" type="submit">Enregistrer</button>
+  </form>
+</div>
+<a class="lien" href="/espace/bulletins">← Mes bulletins</a>
+{% endblock %}
