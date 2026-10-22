@@ -294,3 +294,124 @@ def changer_pin():
         flash("Code PIN modifié. Vos autres appareils sont déconnectés.", "success")
         return redirect(url_for("espace.mes_bulletins"))
     return render_template("espace/pin.html", t=g.esp_tenant, s=s)
+
+
+# ── Congés ──────────────────────────────────────────────────────────────────
+
+@bp.route("/conges", methods=["GET", "POST"])
+@connexion_requise
+def mes_conges():
+    t, s = g.esp_tenant, g.esp_salarie
+    if request.method == "POST":
+        try:
+            c, jours = ps.demander_conge(t, s, request.form)
+            db.session.flush()
+            from audit import log_action
+            log_action("CREATE", "conge", c.id,
+                       f"Portail des employés : demande de congé {s.matricule} ({jours} j) — "
+                       f"{c.date_depart.strftime('%d/%m/%Y')}→{c.date_retour.strftime('%d/%m/%Y')}", tenant_id=t.id)
+            db.session.commit()
+            flash(f"Demande envoyée ({jours} jour(s)). Votre service RH va la traiter.", "success")
+        except ValueError as e:
+            db.session.rollback()
+            flash(f"Demande impossible : {e}.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    from conges_avance import solde_annee
+    from datetime import date as _date
+    annee = _date.today().year
+    return render_template("espace/conges.html", t=t, s=s, solde=solde_annee(t, s, annee),
+                           conges=ps.conges(s), TYPES=ps.TYPES_CONGE, STATUTS=ps.STATUTS_CONGE,
+                           aujourd_hui=_date.today().isoformat())
+
+
+@bp.route("/conges/<int:conge_id>/annuler", methods=["POST"])
+@connexion_requise
+def annuler_conge(conge_id):
+    from models import Conge
+    t, s = g.esp_tenant, g.esp_salarie
+    c = Conge.query.filter_by(id=conge_id, tenant_id=t.id, salarie_id=s.id).first_or_404()
+    if (c.statut or "").upper() not in ("DEMANDÉ", "DEMANDE") or c.date_depart is None:
+        flash("Seule une demande encore en attente peut être annulée.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    from audit import log_action
+    log_action("DELETE", "conge", c.id, f"Portail des employés : demande de congé annulée par {s.matricule}",
+               tenant_id=t.id)
+    db.session.delete(c)
+    db.session.commit()
+    flash("Demande annulée.", "success")
+    return redirect(url_for("espace.mes_conges"))
+
+
+# ── Attestations ────────────────────────────────────────────────────────────
+
+@bp.route("/documents", methods=["GET", "POST"])
+@connexion_requise
+def mes_documents():
+    from models import DemandeDocument
+    from audit import log_action
+    t, s = g.esp_tenant, g.esp_salarie
+    if request.method == "POST":
+        try:
+            d = ps.demander_document(t, s, request.form)
+            if t.portail_attestations_auto:
+                ps.delivrer(d, t, "Délivrance automatique")
+            db.session.flush()
+            log_action("CREATE", "demande_document", d.id,
+                       f"Portail des employés : {ps.TYPES_DOCUMENT[d.type_doc].lower()} demandée par {s.matricule}"
+                       + (" (délivrée automatiquement)" if d.statut == "DELIVRE" else ""), tenant_id=t.id)
+            db.session.commit()
+            flash("Votre attestation est prête." if d.statut == "DELIVRE"
+                  else "Demande envoyée. Vous pourrez télécharger l'attestation dès que le RH l'aura délivrée.",
+                  "success")
+        except ValueError as e:
+            db.session.rollback()
+            flash(f"Demande impossible : {e}.", "error")
+        return redirect(url_for("espace.mes_documents"))
+    demandes = (DemandeDocument.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+                .order_by(DemandeDocument.id.desc()).limit(30).all())
+    return render_template("espace/documents.html", t=t, s=s, demandes=demandes, TYPES=ps.TYPES_DOCUMENT,
+                           STATUTS=ps.STATUTS_DOCUMENT)
+
+
+@bp.route("/documents/<int:doc_id>.pdf")
+@connexion_requise
+def document_pdf(doc_id):
+    from models import DemandeDocument
+    t, s = g.esp_tenant, g.esp_salarie
+    d = DemandeDocument.query.filter_by(id=doc_id, tenant_id=t.id, salarie_id=s.id, statut="DELIVRE").first()
+    if d is None or not d.pdf:
+        abort(404)
+    nom = f"{d.type_doc.lower()}_{s.matricule}_{d.date_traitement.strftime('%Y%m%d')}.pdf".replace(" ", "_")
+    resp = Response(d.pdf, mimetype="application/pdf")
+    resp.headers["Content-Disposition"] = f'{"attachment" if request.args.get("dl") else "inline"}; filename="{nom}"'
+    return resp
+
+
+# ── Profil ──────────────────────────────────────────────────────────────────
+
+@bp.route("/profil", methods=["GET", "POST"])
+@connexion_requise
+def mon_profil():
+    from models import DemandeProfil
+    from audit import log_action
+    t, s = g.esp_tenant, g.esp_salarie
+    if request.method == "POST":
+        try:
+            creees = ps.demander_profil(t, s, request.form)
+            if not creees:
+                flash("Aucune modification à envoyer.", "info")
+                return redirect(url_for("espace.mon_profil"))
+            log_action("CREATE", "demande_profil", s.id,
+                       f"Portail des employés : modification demandée par {s.matricule} — "
+                       + ", ".join(ps.CHAMPS_PROFIL[d.champ] for d in creees), tenant_id=t.id)
+            db.session.commit()
+            flash("Demande envoyée. Votre fiche sera mise à jour après validation par le service RH.", "success")
+        except ValueError as e:
+            db.session.rollback()
+            flash(f"Demande impossible : {e}.", "error")
+        return redirect(url_for("espace.mon_profil"))
+    demandes = (DemandeProfil.query.filter_by(tenant_id=t.id, salarie_id=s.id)
+                .order_by(DemandeProfil.id.desc()).limit(20).all())
+    en_attente = {d.champ: d for d in demandes if d.statut == "DEMANDE"}
+    return render_template("espace/profil.html", t=t, s=s, demandes=demandes, en_attente=en_attente,
+                           CHAMPS=ps.CHAMPS_PROFIL, SITUATIONS=ps.SITUATIONS, STATUTS=ps.STATUTS_PROFIL)

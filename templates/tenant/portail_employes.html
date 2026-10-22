@@ -99,6 +99,84 @@
   {% endfor %}
 </div>
 
+{# ── Demandes des salariés ──────────────────────────────────────────── #}
+<div class="pe-carte" id="demandes">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap">
+    <div>
+      <h2>Demandes des salariés {% if docs or profils or nb_conges %}<span class="pe-pastille" style="background:#fef3c7;color:#92400e">{{ docs|length + profils|length + nb_conges }} à traiter</span>{% endif %}</h2>
+      <p class="pe-sous">Congés, attestations et modifications de profil envoyés depuis l'espace salarié.</p>
+    </div>
+    {% if est_admin %}
+    <form method="POST" action="/portail-employes/attestations-auto" style="margin:0;font-size:.78rem;color:#374151">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <input type="hidden" name="auto" value="{{ '0' if tenant.portail_attestations_auto else '1' }}">
+      Attestations : <strong>{{ 'délivrées automatiquement' if tenant.portail_attestations_auto else 'après votre validation' }}</strong>
+      <button class="pe-btn gris" type="submit" style="margin-left:.4rem">{{ 'Exiger ma validation' if tenant.portail_attestations_auto else 'Délivrer automatiquement' }}</button>
+    </form>
+    {% endif %}
+  </div>
+
+  <p style="font-size:.85rem;margin:.25rem 0 1rem">🏖️ <strong>{{ nb_conges }}</strong> demande(s) de congé en attente envoyée(s) depuis le portail —
+    <a href="/conges" style="color:#2563eb;font-weight:700">les traiter dans Congés →</a></p>
+
+  {% if docs %}
+  <div class="pe-scroll"><table class="pe-table">
+    <thead><tr><th>Attestation</th><th>Salarié</th><th>Usage</th><th>Demandée le</th><th></th></tr></thead>
+    <tbody>
+    {% for d in docs %}
+    <tr>
+      <td style="font-weight:700">{{ TYPES_DOC.get(d.type_doc, d.type_doc) }}</td>
+      <td>{{ d.salarie.nom }} {{ d.salarie.prenom }} <span class="pe-code">{{ d.salarie.matricule }}</span></td>
+      <td style="font-size:.78rem">{{ d.motif or '—' }}</td>
+      <td style="font-size:.78rem">{{ d.date_demande|datetime_fr }}</td>
+      <td style="text-align:right;white-space:nowrap">
+        {% if peut_saisir %}
+        <form method="POST" action="/portail-employes/document/{{ d.id }}/delivrer" style="display:inline;margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button class="pe-btn" type="submit">Délivrer</button></form>
+        <form method="POST" action="/portail-employes/document/{{ d.id }}/refuser" style="display:inline;margin:0"
+              onsubmit="var m = prompt('Motif du refus (visible par le salarié) :'); if (m === null) return false; this.motif_refus.value = m;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><input type="hidden" name="motif_refus">
+          <button class="pe-btn gris" type="submit">Refuser</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+
+  {% if profils %}
+  <div class="pe-scroll" style="margin-top:1rem"><table class="pe-table">
+    <thead><tr><th>Modification</th><th>Salarié</th><th>Actuel</th><th>Demandé</th><th>Le</th><th></th></tr></thead>
+    <tbody>
+    {% for d in profils %}
+    <tr>
+      <td style="font-weight:700">{{ CHAMPS.get(d.champ, d.champ) }}</td>
+      <td>{{ d.salarie.nom }} {{ d.salarie.prenom }} <span class="pe-code">{{ d.salarie.matricule }}</span></td>
+      <td style="font-size:.78rem;color:#6b7280">{{ d.ancienne_valeur or '—' }}</td>
+      <td style="font-size:.82rem;font-weight:700">{{ d.nouvelle_valeur or '—' }}
+        {% if d.champ in ['situation_matrimoniale', 'nb_enfants'] %}<div style="font-size:.7rem;color:#b45309;font-weight:400">justificatif à demander · parts fiscales recalculées</div>{% endif %}</td>
+      <td style="font-size:.78rem">{{ d.date_demande|datetime_fr }}</td>
+      <td style="text-align:right;white-space:nowrap">
+        {% if peut_saisir %}
+        <form method="POST" action="/portail-employes/profil/{{ d.id }}/accepter" style="display:inline;margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+          <button class="pe-btn" type="submit">Accepter</button></form>
+        <form method="POST" action="/portail-employes/profil/{{ d.id }}/refuser" style="display:inline;margin:0"
+              onsubmit="var m = prompt('Motif du refus (visible par le salarié) :'); if (m === null) return false; this.motif_refus.value = m;">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><input type="hidden" name="motif_refus">
+          <button class="pe-btn gris" type="submit">Refuser</button></form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  {% if not docs and not profils %}<p class="pe-sous" style="margin:0">Aucune attestation ni modification de profil en attente.</p>{% endif %}
+</div>
+
 {# ── Notification ───────────────────────────────────────────────────── #}
 <div class="pe-carte">
   <h2>Bulletins mis à disposition</h2>

@@ -545,3 +545,41 @@ def planning_absences(conges, annee, mois=None) -> list:
         })
 
     return sorted(planning, key=lambda x: x["date_depart"])
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SOLDE DE L'ANNÉE — calcul unique, partagé par la page Congés et le portail
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def jours_acquis_auto(tenant, salarie, annee_ref, aujourd_hui=None) -> float:
+    """Jours acquis de l'année, proratisés au taux applicable (Art. 222)."""
+    aujourd_hui = aujourd_hui or date.today()
+    tx = taux_acquisition(tenant=tenant, salarie=salarie, date_ref=date(annee_ref, 12, 31))
+    if not salarie.date_embauche:
+        return round(12 * tx, 1)
+    debut_acq = max(salarie.date_embauche, date(annee_ref, 1, 1))
+    fin_acq = min(aujourd_hui, date(annee_ref, 12, 31))
+    if fin_acq < debut_acq:
+        return 0.0
+    mois_trav = min(round((fin_acq - debut_acq).days / 30.44, 1), 12)
+    return round(mois_trav * tx, 1)
+
+
+def solde_annee(tenant, salarie, annee_ref, aujourd_hui=None) -> dict:
+    """Solde de congés d'un salarié pour une année, comme sur la page Congés :
+    la ligne de solde (si elle existe) fait foi, sinon calcul automatique et
+    jours des demandes approuvées."""
+    from models import Conge
+    auto = jours_acquis_auto(tenant, salarie, annee_ref, aujourd_hui)
+    ligne = (Conge.query.filter_by(tenant_id=tenant.id, salarie_id=salarie.id, annee=annee_ref)
+             .filter(Conge.date_depart.is_(None)).first())
+    if ligne:
+        acquis = float(ligne.jours_acquis or auto)
+        pris = float(ligne.jours_pris or 0)
+    else:
+        acquis = auto
+        pris = sum(float(c.jours_pris or 0) for c in
+                   Conge.query.filter_by(tenant_id=tenant.id, salarie_id=salarie.id, annee=annee_ref,
+                                         statut="APPROUVÉ").all())
+    return {"annee": annee_ref, "acquis": acquis, "pris": pris, "restants": round(acquis - pris, 1)}

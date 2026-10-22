@@ -1,0 +1,61 @@
+{% extends "espace/base.html" %}
+{% block title %}Mon profil{% endblock %}
+{% block entete %}{{ s.prenom }} {{ s.nom }}{% endblock %}
+{% block sous_entete %}{{ t.denomination }} · matricule {{ s.matricule }}{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Ma fiche</h2>
+  <div class="ligne"><div class="m"><small>Nom et prénom</small><strong>{{ s.nom }} {{ s.prenom }}</strong></div></div>
+  <div class="ligne"><div class="m"><small>Matricule</small><strong>{{ s.matricule }}</strong></div></div>
+  <div class="ligne"><div class="m"><small>Emploi</small><strong>{{ s.emploi or (s.categorie.libelle if s.categorie else '—') }}</strong></div></div>
+  <div class="ligne"><div class="m"><small>Date d'embauche</small><strong>{{ s.date_embauche|date_fr }}</strong></div></div>
+  <div class="ligne"><div class="m"><small>Date de naissance</small><strong>{{ s.date_naissance|date_fr }}</strong></div></div>
+  <div class="ligne"><div class="m"><small>N° CNSS · N° CNAMGS</small><strong>{{ s.numero_cnss or '—' }} · {{ s.numero_cnamgs or '—' }}</strong></div></div>
+  <p class="mute" style="margin:.6rem 0 0">Une erreur sur ces informations ? Signalez-la au service RH.</p>
+</div>
+
+<div class="card">
+  <h2>Mes coordonnées et ma situation</h2>
+  <p class="mute" style="margin:0 0 .4rem">Modifiez ce qui a changé : votre fiche sera mise à jour après validation par le service RH.</p>
+  <form method="POST" action="/espace/profil">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    {% for champ, lib in CHAMPS.items() %}
+    <label for="{{ champ }}">{{ lib }}{% if champ in en_attente %} <span class="etat att">modification en attente</span>{% endif %}</label>
+    {% set valeur = en_attente[champ].nouvelle_valeur if champ in en_attente else (s[champ] if s[champ] is not none else '') %}
+    {% if champ == 'situation_matrimoniale' %}
+    <select id="{{ champ }}" name="{{ champ }}">
+      <option value=""></option>
+      {% for sm in SITUATIONS %}<option value="{{ sm }}" {{ 'selected' if sm == valeur else '' }}>{{ sm|replace('SEAC', '(sans enfant à charge)')|replace('AEAC', '(avec enfant à charge)')|capitalize }}</option>{% endfor %}
+    </select>
+    {% elif champ == 'nb_enfants' %}
+    <input id="{{ champ }}" name="{{ champ }}" type="number" min="0" max="30" value="{{ valeur }}">
+    {% elif champ == 'email' %}
+    <input id="{{ champ }}" name="{{ champ }}" type="email" maxlength="200" value="{{ valeur }}">
+    {% elif champ == 'telephone' %}
+    <input id="{{ champ }}" name="{{ champ }}" type="tel" maxlength="20" value="{{ valeur }}">
+    {% else %}
+    <input id="{{ champ }}" name="{{ champ }}" maxlength="300" value="{{ valeur }}">
+    {% endif %}
+    {% endfor %}
+    <p class="mute">Situation familiale ou enfants : joignez les justificatifs (acte de mariage, acte de naissance) au service RH.</p>
+    <button class="btn primary" type="submit">Envoyer les modifications</button>
+  </form>
+</div>
+
+{% if demandes %}
+<div class="card">
+  <h2>Mes demandes de modification</h2>
+  {% for d in demandes %}
+  {% set st = STATUTS.get(d.statut, (d.statut, 'att')) %}
+  <div class="ligne">
+    <div class="m"><strong>{{ CHAMPS.get(d.champ, d.champ) }}</strong>
+      <small>{{ d.ancienne_valeur or '—' }} → {{ d.nouvelle_valeur or '—' }} · {{ d.date_demande|date_fr }}</small>
+      {% if d.statut == 'REFUSE' and d.motif_refus %}<small style="color:#991b1b">Motif : {{ d.motif_refus }}</small>{% endif %}</div>
+    <span class="etat {{ st[1] }}">{{ st[0] }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<a class="lien" href="/espace/pin">🔒 Changer mon code PIN</a>
+{% endblock %}

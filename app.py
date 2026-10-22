@@ -629,6 +629,10 @@ def run_migrations():
         # ── Comptes du journal de paie paramétrables (SYSCOHADA), 20/10/2026 ──
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS comptes_paie TEXT",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS portail_salaries_actif BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS portail_attestations_auto BOOLEAN DEFAULT FALSE",
+        "ALTER TABLE conges ADD COLUMN IF NOT EXISTS origine VARCHAR(10)",
+        "ALTER TABLE conges ADD COLUMN IF NOT EXISTS commentaire VARCHAR(500)",
+        "ALTER TABLE conges ADD COLUMN IF NOT EXISTS date_demande TIMESTAMP",
         "UPDATE utilisateurs SET email_verifie = TRUE WHERE email_verifie IS NULL OR email_verifie = FALSE",
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS email VARCHAR(200)",
         "ALTER TABLE journaliers ADD COLUMN IF NOT EXISTS date_embauche DATE",

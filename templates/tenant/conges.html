@@ -194,7 +194,8 @@
       <tr style="border-bottom:1px solid #f3f4f6;{% if loop.index0%2==0 %}background:#fafafa{% endif %}">
         <td style="padding:.5rem .875rem">
           <div style="font-weight:700;color:#111827">{{ c.salarie.nom_complet }}</div>
-          <div style="font-size:.7rem;color:#9ca3af">{{ c.annee }}</div>
+          <div style="font-size:.7rem;color:#9ca3af">{{ c.annee }}{% if c.origine == 'PORTAIL' %} · <span style="color:#0f766e;font-weight:700">📱 via le portail</span>{% endif %}</div>
+          {% if c.commentaire %}<div style="font-size:.72rem;color:#6b7280;font-style:italic">« {{ c.commentaire }} »</div>{% endif %}
         </td>
         <td style="padding:.5rem;text-align:center">
           <span style="font-size:.72rem;font-weight:700;background:#f3f4f6;color:#374151;padding:.2rem .5rem;border-radius:9999px">

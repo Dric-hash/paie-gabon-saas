@@ -1,0 +1,56 @@
+{% extends "espace/base.html" %}
+{% block title %}Mes congés{% endblock %}
+{% block entete %}{{ s.prenom }} {{ s.nom }}{% endblock %}
+{% block sous_entete %}{{ t.denomination }} · matricule {{ s.matricule }}{% endblock %}
+{% block contenu %}
+<div class="card">
+  <h2>Mon solde {{ solde.annee }}</h2>
+  <div class="grille2" style="text-align:center">
+    <div><div class="mute">Acquis</div><strong style="font-size:1.3rem">{{ solde.acquis|round(1) }}</strong> <span class="mute">j</span></div>
+    <div><div class="mute">Pris</div><strong style="font-size:1.3rem">{{ solde.pris|round(1) }}</strong> <span class="mute">j</span></div>
+  </div>
+  <div style="text-align:center;margin-top:.7rem;padding-top:.7rem;border-top:1px solid #f3f4f6">
+    <div class="mute">Restant</div><strong style="font-size:1.8rem;color:var(--teal)">{{ solde.restants }}</strong> <span class="mute">jour(s)</span>
+  </div>
+  <p class="mute" style="margin:.7rem 0 0">Solde calculé par votre employeur ; en cas de doute, rapprochez-vous du service RH.</p>
+</div>
+
+<div class="card">
+  <h2>Demander un congé</h2>
+  <form method="POST" action="/espace/conges">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label for="type_conge">Type de congé</label>
+    <select id="type_conge" name="type_conge" required>
+      {% for code, lib in TYPES.items() %}<option value="{{ code }}">{{ lib }}</option>{% endfor %}
+    </select>
+    <div class="grille2">
+      <div><label for="date_depart">Du</label><input type="date" id="date_depart" name="date_depart" min="{{ aujourd_hui }}" required></div>
+      <div><label for="date_retour">Au (inclus)</label><input type="date" id="date_retour" name="date_retour" min="{{ aujourd_hui }}" required></div>
+    </div>
+    <label for="commentaire">Message au service RH (facultatif)</label>
+    <textarea id="commentaire" name="commentaire" rows="2" maxlength="500" placeholder="Ex. mariage de mon frère le 14"></textarea>
+    <p class="mute">Congé maladie ou maternité : remettez le certificat au service RH, qui l'enregistre.</p>
+    <button class="btn primary" type="submit">Envoyer la demande</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Mes demandes</h2>
+  {% for c in conges %}
+  {% set st = STATUTS.get((c.statut or '')|upper, (c.statut, 'att')) %}
+  <div class="ligne">
+    <div class="m"><strong>{{ TYPES.get(c.type_conge, c.type_conge|capitalize) }}</strong>
+      <small>du {{ c.date_depart|date_fr }} au {{ c.date_retour|date_fr }} · {{ (c.date_retour - c.date_depart).days + 1 }} jour(s)</small></div>
+    <span class="etat {{ st[1] }}">{{ st[0] }}</span>
+    {% if (c.statut or '')|upper in ['DEMANDÉ', 'DEMANDE'] %}
+    <form method="POST" action="/espace/conges/{{ c.id }}/annuler" style="margin:0" onsubmit="return confirm('Annuler cette demande ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button class="mini d" type="submit" aria-label="Annuler la demande">✕</button>
+    </form>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="mute" style="margin:0">Aucune demande pour l'instant.</p>
+  {% endfor %}
+</div>
+{% endblock %}
