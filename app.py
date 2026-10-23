@@ -385,6 +385,7 @@ from blueprints.api_v1 import bp as api_v1_bp
 from blueprints.prestataires import bp as prestataires_bp
 from blueprints.mobile import bp as mobile_bp
 from blueprints.espace import bp as espace_bp
+from blueprints.api_crm import bp as api_crm_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(admin_bp)
@@ -393,6 +394,7 @@ app.register_blueprint(api_v1_bp)
 app.register_blueprint(prestataires_bp)
 app.register_blueprint(mobile_bp)
 app.register_blueprint(espace_bp)   # portail des employés (/espace)
+app.register_blueprint(api_crm_bp)  # API commerciale en lecture seule pour Ameriack CRM
 import models_sso
 from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
 app.register_blueprint(sso_bp)
