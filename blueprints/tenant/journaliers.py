@@ -957,11 +957,19 @@ def journalier_avance_valider(aid):
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     av = AvanceJournalier.query.filter_by(id=aid, tenant_id=t.id).first_or_404()
+    deja = av.statut == "VALIDEE"
     av.statut = "VALIDEE"
     db.session.commit()
     log_action("VALIDATE", "avance_journalier", av.id,
                f"Validation avance {float(av.montant):,.0f} F — {av.journalier.nom_complet}".replace(",", " "))
     db.session.commit()
+    if not deja:
+        # Interconnexion Caisse : avance sur paie journalier → 401PREST « Prestataires »
+        from interco_caisse import proposer_ecriture, COMPTE_PRESTATAIRES
+        proposer_ecriture(t, source_ref=f"avance-journalier-{av.id}", montant=av.montant,
+                          motif=f"Avance sur paie journalier — {av.journalier.nom_complet}",
+                          compte_suggere=COMPTE_PRESTATAIRES, date_operation=av.date_avance,
+                          mode_paiement=av.mode_paiement)
     flash("Avance validée — elle est désormais figée.", "success")
     return redirect(url_for("tenant.journalier_detail", id=av.journalier_id))
 

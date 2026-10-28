@@ -107,6 +107,11 @@ def acompte_nouveau():
             log_action("CREATE", "acompte", ac.id,
                        f"Acompte {montant:,.0f} F — {sal.nom_complet}".replace(",", " "))
             db.session.commit()
+            # Interconnexion Caisse : l'acompte versé devient une proposition de sortie (421)
+            from interco_caisse import proposer_ecriture, COMPTE_ACOMPTE
+            proposer_ecriture(t, source_ref=f"acompte-{ac.id}", montant=montant,
+                              motif=f"Acompte sur salaire — {sal.nom_complet}",
+                              compte_suggere=COMPTE_ACOMPTE, date_operation=date_ac)
             flash(f"Acompte de {montant:,.0f} FCFA enregistré.".replace(",", " "), "success")
             return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
     return render_template("tenant/acompte_form.html", tenant=t, salaries=salaries_list, now=datetime.now())
@@ -132,6 +137,8 @@ def acompte_annuler(id):
     a.statut = "ANNULE"; db.session.commit()
     log_action("CANCEL", "acompte", a.id, "Acompte annulé")
     db.session.commit()
+    from interco_caisse import annuler_ecriture
+    annuler_ecriture(t, f"acompte-{a.id}")
     flash("Acompte annulé.", "success")
     return redirect(url_for("tenant.acomptes", mois=a.mois, annee=a.annee))
 
@@ -145,6 +152,8 @@ def acompte_supprimer(id):
     db.session.delete(a); db.session.commit()
     log_action("DELETE", "acompte", id, "Suppression acompte")
     db.session.commit()
+    from interco_caisse import annuler_ecriture
+    annuler_ecriture(t, f"acompte-{id}")
     flash("Acompte supprimé.", "success")
     return redirect(url_for("tenant.acomptes", mois=mois, annee=annee))
 

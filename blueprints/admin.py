@@ -464,6 +464,26 @@ def admin_tenant_notes(id):
     return redirect(url_for("admin.admin_tenant_detail", id=id))
 
 
+@bp.route("/admin/tenants/<int:id>/reference", methods=["POST"])
+@super_admin_required
+def admin_tenant_reference(id):
+    """Référence d'interconnexion partagée avec Caisse / Ops / Projets Ameriack."""
+    import re
+    t = Tenant.query.get_or_404(id)
+    ref = request.form.get("external_ref", "").strip()
+    if ref and not re.fullmatch(r"[A-Za-z0-9_.\-]{3,64}", ref):
+        flash("Référence invalide : 3 à 64 caractères (lettres, chiffres, point, tiret, souligné).", "error")
+    elif ref and Tenant.query.filter(Tenant.external_ref == ref, Tenant.id != t.id).first():
+        flash(f"La référence « {ref} » est déjà utilisée par une autre entreprise.", "error")
+    else:
+        t.external_ref = ref or None
+        db.session.commit()
+        log_action("UPDATE", "tenant", t.id, f"Référence d'interconnexion : {ref or '(aucune)'}")
+        db.session.commit()
+        flash(f"Référence d'interconnexion : {ref}" if ref else "Référence d'interconnexion retirée.", "success")
+    return redirect(url_for("admin.admin_tenant_detail", id=id))
+
+
 @bp.route("/admin/tenants/<int:id>/regenerer-token", methods=["POST"])
 @super_admin_required
 def admin_regenerer_token(id):
