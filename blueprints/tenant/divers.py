@@ -331,10 +331,11 @@ def dashboard():
         logger.warning(f"[Alertes formations] indisponible : {_e}")
 
     # ── 9. Statut abonnement/essai — TOUJOURS affiché ───────────────────────
-    exp_date = t.date_expiration
+    abo = t.tenant_abonnement   # entreprise gérée : abonnement du cabinet
+    exp_date = abo.date_expiration
     jours_restants = (exp_date.date() - now.date()).days if exp_date else None
 
-    if t.statut == "ESSAI":
+    if abo.statut == "ESSAI":
         if jours_restants is None or jours_restants <= 0:
             alertes.append({"type":"danger","icone":"🚫",
                 "titre":"Période d'essai expirée",
@@ -353,10 +354,10 @@ def dashboard():
         else:
             alertes.append({"type":"info","icone":"🧪",
                 "titre":f"Période d'essai — {jours_restants} jour(s) restant(s)",
-                "msg":f"Essai gratuit jusqu'au {exp_date.strftime('%d/%m/%Y')}. Plan actuel : {t.plan.nom}.",
+                "msg":f"Essai gratuit jusqu'au {exp_date.strftime('%d/%m/%Y')}. Plan actuel : {abo.plan.nom}.",
                 "lien":"/parametres","lien_texte":"Voir les plans"})
 
-    elif t.statut == "ACTIF":
+    elif abo.statut == "ACTIF":
         if jours_restants is None or jours_restants <= 0:
             alertes.append({"type":"danger","icone":"🔒",
                 "titre":"Abonnement expiré",
@@ -375,10 +376,10 @@ def dashboard():
         else:
             alertes.append({"type":"info","icone":"✅",
                 "titre":f"Abonnement actif — {jours_restants} jour(s) restant(s)",
-                "msg":f"Plan {t.plan.nom} valide jusqu'au {exp_date.strftime('%d/%m/%Y')}.",
+                "msg":f"Plan {abo.plan.nom} valide jusqu'au {exp_date.strftime('%d/%m/%Y')}.",
                 "lien":"/parametres","lien_texte":"Gérer l'abonnement"})
 
-    elif t.statut == "PAIEMENT_EN_ATTENTE":
+    elif abo.statut == "PAIEMENT_EN_ATTENTE":
         alertes.append({"type":"warning","icone":"💳",
             "titre":"Paiement en attente",
             "msg":"Votre paiement est en cours de traitement. L'accès complet sera rétabli dès confirmation.",

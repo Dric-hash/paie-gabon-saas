@@ -517,15 +517,16 @@ def planning_absences(conges, annee, mois=None) -> list:
         if not c.date_depart:
             continue
 
-        # Filtrer par mois si demandé
-        if mois and c.date_depart.month != mois and (
-            not c.date_retour or c.date_retour.month != mois
-        ):
-            continue
-
-        if c.date_depart.year != annee and (
-            not c.date_retour or c.date_retour.year != annee
-        ):
+        # Le congé touche-t-il la période (le mois, ou l'année) ? Un congé de janvier à
+        # mars apparaît aussi en février.
+        import calendar as _cal
+        from datetime import date as _d
+        fin_c = c.date_retour or c.date_depart
+        if mois:
+            debut_p, fin_p = _d(annee, mois, 1), _d(annee, mois, _cal.monthrange(annee, mois)[1])
+        else:
+            debut_p, fin_p = _d(annee, 1, 1), _d(annee, 12, 31)
+        if c.date_depart > fin_p or fin_c < debut_p:
             continue
 
         jours = float(c.jours_pris or 0)

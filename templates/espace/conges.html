@@ -35,6 +35,40 @@
 </div>
 
 <div class="card">
+  <h2>Mes souhaits pour le planning des congés</h2>
+  <p class="mute" style="margin-top:0">Indiquez quand vous aimeriez partir : votre service RH prépare le planning de l'année
+    et vous dira si vos dates sont retenues. Ce n'est pas encore une demande de congé.</p>
+  {% for x in souhaits %}
+  {% set st = {'PROPOSEE': ('En étude', 'att'), 'RETENUE': ('Retenu', 'ok'), 'REFUSEE': ('Non retenu', 'ko')}[x.statut] %}
+  <div class="ligne">
+    <div class="m"><strong>Planning {{ x.planning.annee }}</strong>
+      <small>du {{ x.date_debut|date_fr }} au {{ x.date_fin|date_fr }} · {{ x.jours }} jour(s){% if x.motif_refus %} · {{ x.motif_refus }}{% endif %}{% if x.conge_id %} · demande de congé créée{% endif %}</small></div>
+    <span class="etat {{ st[1] }}">{{ st[0] }}</span>
+    {% if x.statut == 'PROPOSEE' %}
+    <form method="POST" action="/espace/conges/souhaits/{{ x.id }}/annuler" style="margin:0" onsubmit="return confirm('Retirer ce souhait ?')">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+      <button class="mini d" type="submit" aria-label="Retirer le souhait">✕</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% if annees_ouvertes %}
+  <form method="POST" action="/espace/conges/souhaits" style="margin-top:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div class="grille2">
+      <div><label for="souhait_debut">Du</label><input type="date" id="souhait_debut" name="date_debut" min="{{ aujourd_hui }}" max="{{ limite_fin }}" required></div>
+      <div><label for="souhait_fin">Au (inclus)</label><input type="date" id="souhait_fin" name="date_fin" min="{{ aujourd_hui }}" required></div>
+    </div>
+    <label for="souhait_commentaire">Précision (facultatif)</label>
+    <input id="souhait_commentaire" name="commentaire" maxlength="500" placeholder="Ex. vacances scolaires, voyage au village">
+    <button class="btn" type="submit">Proposer ces dates</button>
+  </form>
+  {% else %}
+  <p class="mute" style="margin:.4rem 0 0">Les propositions sont closes pour l'instant.</p>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Mes demandes</h2>
   {% for c in conges %}
   {% set st = STATUTS.get((c.statut or '')|upper, (c.statut, 'att')) %}

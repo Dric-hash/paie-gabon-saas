@@ -172,6 +172,32 @@ class Tenant(db.Model):
         return self.cabinet_id is not None
 
     @property
+    def tenant_abonnement(self):
+        """Tenant qui porte l'abonnement : le cabinet pour une entreprise qu'il gère
+        (statut, forfait et échéance du cabinet), sinon le tenant lui-même."""
+        return self.cabinet if self.est_entreprise_geree and self.cabinet else self
+
+    def synchroniser_abonnement_entreprises(self):
+        """Cabinet : recopie son abonnement (forfait, échéance, statut) sur chacune des
+        entreprises qu'il gère, pour qu'un renouvellement les couvre toutes d'un coup.
+        Une suspension reste propre à chaque tenant : une entreprise suspendue à part par
+        le super-admin le reste, et la suspension du cabinet n'est pas recopiée (elle
+        bloque déjà l'accès par le cabinet). Retourne le nombre d'entreprises modifiées."""
+        if not self.est_cabinet or self.id is None:
+            return 0
+        n = 0
+        for e in Tenant.query.filter_by(cabinet_id=self.id).all():
+            avant = (e.plan_id, e.date_expiration, e.statut, e.alerte_expiration_envoyee)
+            e.plan_id = self.plan_id
+            e.date_expiration = self.date_expiration
+            e.alerte_expiration_envoyee = self.alerte_expiration_envoyee
+            if "SUSPENDU" not in (e.statut, self.statut):
+                e.statut = self.statut
+            if (e.plan_id, e.date_expiration, e.statut, e.alerte_expiration_envoyee) != avant:
+                n += 1
+        return n
+
+    @property
     def est_expire(self):
         """True si l'essai ou l'abonnement est arrivé à échéance.
         Un tenant sans date d'expiration n'expire jamais. En mode cabinet,
@@ -976,6 +1002,61 @@ class Conge(db.Model):
     salarie = db.relationship("Salarie", backref="conges")
     @property
     def jours_restants(self): return float(self.jours_acquis or 0) - float(self.jours_pris or 0)
+
+
+class PlanningConges(db.Model):
+    """Planning prévisionnel des congés d'une année : les périodes souhaitées par les
+    salariés (portail) ou saisies par le RH, retenues ou refusées par le RH, puis
+    validées par la direction. Une période retenue devient une vraie demande de congé
+    (Conge) quand le RH la transforme ; le planning ne touche jamais aux soldes."""
+    __tablename__ = "plannings_conges"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    annee         = db.Column(db.Integer, nullable=False)
+    statut        = db.Column(db.String(12), default="BROUILLON")   # BROUILLON | VALIDE
+    # Alerte : plus de N % de l'effectif d'un même chantier (ou de l'entreprise) absent le même jour
+    seuil_absents_pct = db.Column(db.Integer, default=30)
+    # Date jusqu'à laquelle les salariés peuvent proposer leurs dates sur le portail (facultatif)
+    date_limite_propositions = db.Column(db.Date)
+    commentaire   = db.Column(db.String(500))
+    valide_par_id = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    date_validation = db.Column(db.DateTime)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    valide_par = db.relationship("Utilisateur", foreign_keys=[valide_par_id])
+    periodes = db.relationship("PrevisionConge", backref="planning", cascade="all, delete-orphan",
+                               order_by="(PrevisionConge.date_debut, PrevisionConge.id)")
+    __table_args__ = (
+        db.UniqueConstraint("tenant_id", "annee", name="uq_planning_conges_annee"),
+    )
+
+
+class PrevisionConge(db.Model):
+    """Une période de congé prévue dans le planning annuel."""
+    __tablename__ = "previsions_conges"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    planning_id   = db.Column(db.Integer, db.ForeignKey("plannings_conges.id"), nullable=False)
+    salarie_id    = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    date_debut    = db.Column(db.Date, nullable=False)
+    date_fin      = db.Column(db.Date, nullable=False)          # inclus
+    origine       = db.Column(db.String(10), default="RH")      # RH | PORTAIL
+    statut        = db.Column(db.String(12), default="PROPOSEE")  # PROPOSEE | RETENUE | REFUSEE
+    commentaire   = db.Column(db.String(500))                   # message du salarié
+    motif_refus   = db.Column(db.String(300))
+    conge_id      = db.Column(db.Integer, db.ForeignKey("conges.id"))   # demande créée à partir de la période
+    cree_par_id   = db.Column(db.Integer, db.ForeignKey("utilisateurs.id"))
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie")
+    conge   = db.relationship("Conge")
+    __table_args__ = (
+        db.Index("idx_previsions_tenant_planning", "tenant_id", "planning_id"),
+        db.Index("idx_previsions_salarie", "salarie_id"),
+    )
+
+    @property
+    def jours(self):
+        """Jours calendaires, comme une demande de congé (départ et retour inclus)."""
+        return (self.date_fin - self.date_debut).days + 1
 
 
 class Acompte(db.Model):

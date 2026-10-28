@@ -1,0 +1,185 @@
+{% extends "tenant/base.html" %}
+{% block title %}Planning prévisionnel des congés {{ annee }}{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.8rem;background:#fff" %}
+{% set btn = "padding:.4rem .8rem;border-radius:.5rem;font-size:.78rem;font-weight:700;border:none;cursor:pointer" %}
+{% macro csrf() %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>{% endmacro %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🗓️ Planning prévisionnel des congés {{ annee }}</h1>
+    <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0;max-width:46rem">
+      Les salariés proposent leurs dates sur leur portail, le RH retient ou refuse, la direction valide.
+      Le planning ne touche pas aux soldes : une période retenue devient une demande de congé quand vous la créez.</p>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    <form method="get" style="margin:0">
+      <select name="annee" onchange="this.form.submit()" style="{{ champ }}">
+        {% for a in annees %}<option value="{{ a }}" {{ 'selected' if a == annee }}>{{ a }}</option>{% endfor %}
+      </select>
+    </form>
+    <a href="/conges/planning-annuel?annee={{ annee }}" style="background:#059669;color:white;{{ btn }};text-decoration:none">📊 Vue annuelle</a>
+    <a href="/conges" style="background:#f3f4f6;color:#374151;{{ btn }};text-decoration:none">← Congés</a>
+  </div>
+</div>
+
+{# ═══ Statut du planning ═══ #}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1.25rem;display:flex;flex-wrap:wrap;justify-content:space-between;gap:1rem;align-items:center">
+  <div>
+    {% if not p %}
+      <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;background:#f3f4f6;color:#6b7280">Pas encore commencé</span>
+      <div style="font-size:.8rem;color:#6b7280;margin-top:.35rem">Ajoutez une première période ci-dessous, ou attendez les propositions des salariés.</div>
+    {% elif p.statut == 'VALIDE' %}
+      <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;background:#d1fae5;color:#065f46">✓ Validé par la direction</span>
+      <div style="font-size:.8rem;color:#6b7280;margin-top:.35rem">le {{ p.date_validation|date_fr }}{% if p.valide_par %} par {{ p.valide_par.nom_complet }}{% endif %}{% if p.commentaire %} — « {{ p.commentaire }} »{% endif %}</div>
+    {% else %}
+      <span style="font-size:.75rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;background:#fef3c7;color:#92400e">En préparation</span>
+      <div style="font-size:.8rem;color:#6b7280;margin-top:.35rem">
+        {% if en_attente %}{{ en_attente|length }} proposition(s) de salarié à traiter avant la validation.{% else %}Prêt à être validé par la direction.{% endif %}</div>
+    {% endif %}
+  </div>
+  {% if p and peut_valider %}
+    {% if p.statut != 'VALIDE' %}
+    <form method="post" action="/conges/previsionnel/{{ annee }}/valider" style="display:flex;gap:.5rem;flex-wrap:wrap;margin:0">
+      {{ csrf() }}
+      <input name="commentaire" maxlength="500" placeholder="Commentaire de la direction (facultatif)" style="{{ champ }};min-width:16rem"/>
+      <button style="{{ btn }};background:#0f3d36;color:#fff{{ ';opacity:.5;cursor:not-allowed' if en_attente }}" {% if en_attente %}disabled title="Traitez d'abord les propositions en attente"{% endif %}>Valider le planning</button>
+    </form>
+    {% else %}
+    <form method="post" action="/conges/previsionnel/{{ annee }}/rouvrir" style="margin:0" onsubmit="return confirm('Rouvrir le planning {{ annee }} ?')">
+      {{ csrf() }}<button style="{{ btn }};background:#fff;color:#b91c1c;border:1px solid #fecaca">Rouvrir</button>
+    </form>
+    {% endif %}
+  {% endif %}
+</div>
+
+{% if p %}
+{# ═══ Alertes ═══ #}
+{% if ctrl.alertes %}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1.25rem;border-left:4px solid #f97316">
+  <div style="font-weight:800;color:#c2410c;font-size:.9rem;margin-bottom:.4rem">⚠ Trop d'absents en même temps (au-delà de {{ ctrl.seuil }} % de l'effectif)</div>
+  {% for a in ctrl.alertes[:12] %}
+  <div style="font-size:.8rem;color:#374151;padding:.15rem 0">
+    <strong>{{ a.groupe }}</strong> : du {{ a.debut|date_fr }} au {{ a.fin|date_fr }} — jusqu'à {{ a.max }} absent(s) sur {{ a.effectif }}</div>
+  {% endfor %}
+  {% if ctrl.alertes|length > 12 %}<div style="font-size:.75rem;color:#6b7280">… et {{ ctrl.alertes|length - 12 }} autre(s) période(s)</div>{% endif %}
+</div>
+{% endif %}
+{% set depassements = ctrl.salaries|selectattr('depasse')|list %}
+{% if depassements %}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1.25rem;border-left:4px solid #ef4444">
+  <div style="font-weight:800;color:#b91c1c;font-size:.9rem;margin-bottom:.4rem">⚠ Jours prévus supérieurs au solde disponible</div>
+  {% for l in depassements %}
+  <div style="font-size:.8rem;color:#374151;padding:.15rem 0"><strong>{{ l.salarie.nom_complet }}</strong> :
+    {{ l.jours_prevus }} j prévus pour {{ l.disponible }} j {{ 'de droits prévus sur ' ~ annee if l.projete else 'disponibles' }} {% if l.demandes %}(solde {{ l.solde.restants }} j moins {{ l.demandes }} j déjà demandés){% endif %}</div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ═══ Propositions en attente ═══ #}
+{% if en_attente %}
+<div class="card" style="overflow:hidden;margin-bottom:1.25rem">
+  <div style="padding:.75rem 1rem;border-bottom:1px solid #e5e7eb;font-weight:800;color:#92400e;font-size:.9rem">Propositions des salariés à traiter ({{ en_attente|length }})</div>
+  {% for x in en_attente %}
+  <div style="padding:.7rem 1rem;border-bottom:1px solid #f3f4f6;display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;align-items:center">
+    <div style="font-size:.85rem">
+      <strong>{{ x.salarie.nom_complet }}</strong> — du {{ x.date_debut|date_fr }} au {{ x.date_fin|date_fr }} · {{ x.jours }} j
+      {% if x.origine == 'PORTAIL' %}<span style="font-size:.7rem;background:#e0f2fe;color:#075985;padding:.05rem .4rem;border-radius:.3rem;margin-left:.3rem">portail</span>{% endif %}
+      {% if x.commentaire %}<div style="font-size:.75rem;color:#6b7280">« {{ x.commentaire }} »</div>{% endif %}
+    </div>
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+      <form method="post" action="/conges/previsionnel/periode/{{ x.id }}/retenir" style="margin:0">{{ csrf() }}<button style="{{ btn }};background:#059669;color:#fff">Retenir</button></form>
+      <form method="post" action="/conges/previsionnel/periode/{{ x.id }}/refuser" style="margin:0;display:flex;gap:.3rem">{{ csrf() }}
+        <input name="motif" maxlength="300" placeholder="Motif du refus" style="{{ champ }};width:11rem"/>
+        <button style="{{ btn }};background:#fee2e2;color:#b91c1c">Refuser</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endif %}
+
+{# ═══ Ajout par le RH ═══ #}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1.25rem">
+  <div style="font-weight:800;color:#0f3d36;font-size:.9rem;margin-bottom:.6rem">Ajouter une période</div>
+  <form method="post" action="/conges/previsionnel/{{ annee }}/periode" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:flex-end;margin:0">
+    {{ csrf() }}
+    <select name="salarie_id" required style="{{ champ }};min-width:14rem">
+      <option value="">Salarié…</option>
+      {% for s in salaries %}<option value="{{ s.id }}">{{ s.nom_complet }}{% if s.matricule %} ({{ s.matricule }}){% endif %}</option>{% endfor %}
+    </select>
+    <label style="font-size:.75rem;color:#6b7280">Du <input type="date" name="date_debut" required min="{{ annee }}-01-01" max="{{ annee }}-12-31" style="{{ champ }}"/></label>
+    <label style="font-size:.75rem;color:#6b7280">Au (inclus) <input type="date" name="date_fin" required min="{{ annee }}-01-01" style="{{ champ }}"/></label>
+    <input name="commentaire" maxlength="500" placeholder="Note (facultatif)" style="{{ champ }};flex:1;min-width:10rem"/>
+    <button style="{{ btn }};background:#0f3d36;color:#fff">Ajouter</button>
+  </form>
+  <div style="font-size:.72rem;color:#9ca3af;margin-top:.4rem">Une période saisie par le RH est directement retenue.</div>
+</div>
+
+{% if p %}
+{# ═══ Par salarié ═══ #}
+<div class="card" style="overflow:hidden;margin-bottom:1.25rem">
+  <div style="padding:.75rem 1rem;border-bottom:1px solid #e5e7eb;display:flex;flex-wrap:wrap;justify-content:space-between;gap:.5rem;align-items:center">
+    <div style="font-weight:800;color:#0f3d36;font-size:.9rem">Périodes par salarié</div>
+    {% if p.statut == 'VALIDE' %}
+    <form method="post" action="/conges/previsionnel/{{ annee }}/demandes" style="display:flex;gap:.4rem;margin:0;align-items:center">
+      {{ csrf() }}
+      <span style="font-size:.75rem;color:#6b7280">Créer les demandes de congé des périodes qui commencent en</span>
+      <select name="mois" style="{{ champ }}">{% for m in range(1, 13) %}<option value="{{ m }}">{{ mois_noms[m] }}</option>{% endfor %}</select>
+      <button style="{{ btn }};background:#059669;color:#fff">Créer</button>
+    </form>
+    {% endif %}
+  </div>
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:44rem">
+    <thead><tr style="background:#f9fafb;border-bottom:1px solid #e5e7eb;text-align:left">
+      <th style="padding:.5rem 1rem">Salarié</th><th style="padding:.5rem">Périodes prévues</th>
+      <th style="padding:.5rem;text-align:right">Prévu</th><th style="padding:.5rem;text-align:right">{{ 'Droits ' ~ annee ~ ' (prévision)' if ctrl.projete else 'Disponible' }}</th></tr></thead>
+    <tbody>
+    {% for l in ctrl.salaries %}{% set periodes = par_sal.get(l.salarie.id, []) %}
+      <tr style="border-bottom:1px solid #f3f4f6;vertical-align:top">
+        <td style="padding:.55rem 1rem;font-weight:600">{{ l.salarie.nom_complet }}</td>
+        <td style="padding:.45rem .5rem">
+          {% for x in periodes %}
+          <div style="display:flex;flex-wrap:wrap;gap:.35rem;align-items:center;padding:.15rem 0">
+            {% set coul = {'RETENUE': '#d1fae5;color:#065f46', 'PROPOSEE': '#fef3c7;color:#92400e', 'REFUSEE': '#f3f4f6;color:#9ca3af'} %}
+            <span style="font-size:.7rem;font-weight:700;padding:.05rem .45rem;border-radius:.3rem;background:{{ coul[x.statut] }}">{{ STATUTS[x.statut] }}</span>
+            <span {% if x.statut == 'REFUSEE' %}style="text-decoration:line-through;color:#9ca3af"{% endif %}>{{ x.date_debut|date_fr }} → {{ x.date_fin|date_fr }} · {{ x.jours }} j</span>
+            {% if x.origine == 'PORTAIL' %}<span style="font-size:.68rem;color:#0369a1">portail</span>{% endif %}
+            {% if x.motif_refus %}<span style="font-size:.7rem;color:#9ca3af">({{ x.motif_refus }})</span>{% endif %}
+            {% if x.conge_id %}<a href="/conges" style="font-size:.7rem;color:#059669;font-weight:700">✓ demande créée ({{ x.conge.statut|lower }})</a>
+            {% else %}
+              {% if p.statut == 'VALIDE' and x.statut == 'RETENUE' %}
+              <form method="post" action="/conges/previsionnel/periode/{{ x.id }}/demande" style="margin:0">{{ csrf() }}<button style="{{ btn }};padding:.15rem .5rem;font-size:.7rem;background:#ecfdf5;color:#047857">Créer la demande</button></form>
+              {% endif %}
+              {% if x.statut == 'REFUSEE' %}<form method="post" action="/conges/previsionnel/periode/{{ x.id }}/retenir" style="margin:0">{{ csrf() }}<button style="{{ btn }};padding:.15rem .5rem;font-size:.7rem;background:#f3f4f6;color:#374151">Retenir</button></form>{% endif %}
+              <form method="post" action="/conges/previsionnel/periode/{{ x.id }}/supprimer" style="margin:0" onsubmit="return confirm('Retirer cette période du planning ?')">{{ csrf() }}<button style="background:none;border:none;color:#b91c1c;cursor:pointer;font-size:.8rem" title="Retirer">✕</button></form>
+            {% endif %}
+          </div>
+          {% else %}<span style="color:#d1d5db">—</span>{% endfor %}
+        </td>
+        <td style="padding:.55rem .5rem;text-align:right;font-family:monospace">{{ l.jours_prevus }} j</td>
+        <td style="padding:.55rem .5rem;text-align:right;font-family:monospace;{{ 'color:#b91c1c;font-weight:700' if l.depasse }}">{{ l.disponible }} j</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+{# ═══ Réglages ═══ #}
+<div class="card" style="padding:1rem 1.25rem">
+  <div style="font-weight:800;color:#0f3d36;font-size:.9rem;margin-bottom:.6rem">Réglages du planning {{ annee }}</div>
+  <form method="post" action="/conges/previsionnel/{{ annee }}/parametres" style="display:flex;flex-wrap:wrap;gap:1rem;align-items:flex-end;margin:0">
+    {{ csrf() }}
+    <label style="font-size:.78rem;color:#374151">Alerte au-delà de
+      <input type="number" name="seuil_absents_pct" min="0" max="100" value="{{ p.seuil_absents_pct or 0 }}" style="{{ champ }};width:5rem"/> % d'absents
+      <span style="display:block;font-size:.7rem;color:#9ca3af">même jour, par chantier et sur l'entreprise (0 = pas d'alerte)</span></label>
+    <label style="font-size:.78rem;color:#374151">Propositions des salariés jusqu'au
+      <input type="date" name="date_limite_propositions" value="{{ p.date_limite_propositions.isoformat() if p.date_limite_propositions else '' }}" style="{{ champ }}"/>
+      <span style="display:block;font-size:.7rem;color:#9ca3af">{{ 'ouvertes' if ouvertes else 'fermées' }} sur le portail · vide = sans limite</span></label>
+    <button style="{{ btn }};background:#f3f4f6;color:#374151">Enregistrer</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

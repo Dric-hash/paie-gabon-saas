@@ -26,6 +26,7 @@ def offres():
     t = get_tenant()
     if not t:
         return redirect(url_for("auth.login"))
+    t = t.tenant_abonnement          # entreprise gérée : les offres sont celles du cabinet
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
     from paliers_cabinet import PALIERS_CABINET, SUR_DEVIS
     return render_template("tenant/offres.html", tenant=t, plans=plans,
@@ -38,6 +39,8 @@ def paiement():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
+    # Entreprise gérée par un cabinet : l'abonnement (et donc le paiement) est celui du cabinet
+    t = t.tenant_abonnement
     plans = Plan.query.filter_by(actif=True).order_by(Plan.prix_mensuel).all()
     historique = Paiement.query.filter_by(tenant_id=t.id)\
         .order_by(Paiement.date_creation.desc()).limit(10).all()
@@ -58,6 +61,7 @@ def paiement_confirmer():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
+    t = t.tenant_abonnement          # le cabinet paie pour toutes ses entreprises
     moyen     = request.form.get("moyen", "MANUEL").strip().upper()  # AIRTEL_MONEY | VIREMENT
     reference = request.form.get("reference", "").strip()
     duree     = int(request.form.get("duree", 1) or 1)
@@ -84,6 +88,7 @@ def paiement_confirmer():
     )
     db.session.add(p)
     t.statut = "PAIEMENT_EN_ATTENTE"
+    t.synchroniser_abonnement_entreprises()
     db.session.commit()
     log_action("CREATE", "paiement", p.id,
                f"Déclaration paiement {libelle_moyen} — réf {reference}, {duree} mois",

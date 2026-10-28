@@ -1,0 +1,101 @@
+{% extends "tenant/base.html" %}
+{% block title %}Planning des congés {{ annee }}{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.8rem;background:#fff" %}
+{% set btn = "padding:.4rem .8rem;border-radius:.5rem;font-size:.78rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+<style>
+  .pa-grille { position:relative; height:1.6rem; background:#fafafa; border-radius:.25rem; }
+  .pa-mois { position:absolute; top:0; bottom:0; border-left:1px solid #eef0f2; }
+  .pa-barre { position:absolute; top:.25rem; bottom:.25rem; border-radius:.2rem; min-width:3px; }
+  .pa-ACCORDE  { background:#2563eb; }
+  .pa-DEMANDE  { background:repeating-linear-gradient(45deg,#93c5fd 0 4px,#bfdbfe 4px 8px); }
+  .pa-RETENUE  { background:#d1fae5; border:1.5px solid #059669; }
+  .pa-PROPOSEE { background:#fffbeb; border:1.5px dashed #d97706; }
+  .pa-MALADIE  { background:#ef4444; } .pa-MATERNITE { background:#ec4899; }
+  .pa-ligne:hover { background:#f8fafc; }
+  .pa-auj { position:absolute; top:0; bottom:0; width:2px; background:#ef4444; opacity:.55; }
+  .pa-leg { display:inline-flex; align-items:center; gap:.35rem; font-size:.72rem; color:#4b5563; margin-right:1rem; }
+  .pa-leg i { display:inline-block; width:1.4rem; height:.7rem; border-radius:.15rem; }
+  @media print {
+    @page { size: A4 landscape; margin: 8mm; }
+    aside, nav, .no-print, header { display:none !important; }
+    main, .pa-page { margin:0 !important; padding:0 !important; width:100% !important; }
+    .pa-ligne { break-inside: avoid; }
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+</style>
+<div class="pa-page">
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">📊 Planning des congés {{ annee }}</h1>
+    <div style="font-size:.8rem;color:#6b7280;margin-top:.2rem">{{ tenant.denomination }} · {{ v.effectif }} salarié(s){% if v.pic %} · jusqu'à {{ v.pic }} absent(s) le même jour{% endif %}
+      {% if v.planning %} · planning prévisionnel {{ 'validé' if v.planning.statut == 'VALIDE' else 'en préparation' }}{% endif %}</div>
+  </div>
+  <div class="no-print" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+    <a href="?annee={{ annee - 1 }}&site={{ site_id or '' }}&categorie={{ categorie_id or '' }}&prevus={{ 1 if avec_prevus else 0 }}" style="{{ btn }};border:1px solid #e5e7eb;color:#374151">← {{ annee - 1 }}</a>
+    <a href="?annee={{ annee + 1 }}&site={{ site_id or '' }}&categorie={{ categorie_id or '' }}&prevus={{ 1 if avec_prevus else 0 }}" style="{{ btn }};border:1px solid #e5e7eb;color:#374151">{{ annee + 1 }} →</a>
+    <a href="/conges/previsionnel?annee={{ annee }}" style="{{ btn }};background:#0f3d36;color:#fff">🗓️ Prévisionnel</a>
+    <a href="/conges/planning" style="{{ btn }};background:#f3f4f6;color:#374151">Vue du mois</a>
+    <button onclick="window.print()" style="{{ btn }};background:#059669;color:#fff">🖨 Imprimer</button>
+  </div>
+</div>
+
+<form method="get" class="card no-print" style="padding:.75rem 1rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.6rem;align-items:center">
+  <input type="hidden" name="annee" value="{{ annee }}"/>
+  <select name="site" style="{{ champ }}" onchange="this.form.submit()">
+    <option value="">Tous les chantiers</option>
+    {% for s in v.sites %}<option value="{{ s.id }}" {{ 'selected' if s.id == site_id }}>{{ s.nom }}</option>{% endfor %}
+  </select>
+  <select name="categorie" style="{{ champ }}" onchange="this.form.submit()">
+    <option value="">Toutes les catégories</option>
+    {% for c in v.categories %}<option value="{{ c.id }}" {{ 'selected' if c.id == categorie_id }}>{{ c.code }} — {{ c.libelle }}</option>{% endfor %}
+  </select>
+  <label style="font-size:.78rem;color:#374151;display:flex;gap:.35rem;align-items:center">
+    <input type="hidden" name="prevus" value="0"/>
+    <input type="checkbox" name="prevus" value="1" {{ 'checked' if avec_prevus }} onchange="this.form.submit()"/> Afficher les périodes prévues</label>
+</form>
+
+<div style="margin-bottom:.6rem">
+  <span class="pa-leg"><i class="pa-ACCORDE"></i>Congé accordé</span>
+  <span class="pa-leg"><i class="pa-DEMANDE"></i>Demande en attente</span>
+  <span class="pa-leg"><i class="pa-MALADIE"></i>Maladie</span>
+  <span class="pa-leg"><i class="pa-MATERNITE"></i>Maternité</span>
+  {% if avec_prevus %}<span class="pa-leg"><i class="pa-RETENUE"></i>Prévu (retenu)</span>
+  <span class="pa-leg"><i class="pa-PROPOSEE"></i>Proposé par le salarié</span>{% endif %}
+</div>
+
+<div class="card" style="padding:.75rem 1rem;overflow-x:auto">
+  <div style="min-width:56rem">
+    <div style="display:grid;grid-template-columns:13rem 1fr 3.2rem;gap:.5rem;align-items:end;margin-bottom:.35rem">
+      <div></div>
+      <div style="position:relative;height:2.1rem">
+        {% for m in v.mois %}
+        <div style="position:absolute;left:{{ m.gauche }}%;width:{{ m.largeur }}%;text-align:center;font-size:.7rem;font-weight:700;color:#374151">
+          {{ m.court|capitalize }}{% if m.max %}<div style="font-size:.62rem;font-weight:600;color:{{ '#c2410c' if v.planning and v.planning.seuil_absents_pct and m.max >= 2 and m.max > v.effectif * v.planning.seuil_absents_pct / 100 else '#9ca3af' }}" title="Nombre maximum d'absents le même jour">{{ m.max }} absent{{ 's' if m.max > 1 }}</div>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      <div style="font-size:.68rem;color:#6b7280;text-align:right">Jours</div>
+    </div>
+    {% for l in v.lignes %}
+    <div class="pa-ligne" style="display:grid;grid-template-columns:13rem 1fr 3.2rem;gap:.5rem;align-items:center;padding:.15rem 0;border-top:1px solid #f3f4f6">
+      <div style="font-size:.78rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="{{ l.salarie.nom_complet }}">{{ l.salarie.nom_complet }}</div>
+      <div class="pa-grille">
+        {% for m in v.mois %}<div class="pa-mois" style="left:{{ m.gauche }}%"></div>{% endfor %}
+        {% if v.aujourd_hui is not none %}<div class="pa-auj" style="left:{{ v.aujourd_hui }}%"></div>{% endif %}
+        {% for b in l.barres %}
+        {% set cls = 'pa-' ~ (b.type if b.type in ('MALADIE', 'MATERNITE') and b.nature == 'ACCORDE' else b.nature) %}
+        <div class="pa-barre {{ cls }}" style="left:{{ b.gauche }}%;width:{{ b.largeur }}%"
+             title="{{ b.debut|date_fr }} → {{ b.fin|date_fr }} · {{ b.jours }} j · {{ {'ACCORDE': 'accordé', 'DEMANDE': 'demandé', 'RETENUE': 'prévu (retenu)', 'PROPOSEE': 'proposé'}[b.nature] }}"></div>
+        {% endfor %}
+      </div>
+      <div style="font-size:.75rem;text-align:right;font-family:monospace">{{ l.jours or '' }}</div>
+    </div>
+    {% else %}
+    <div style="padding:1.5rem;text-align:center;color:#9ca3af;font-size:.85rem">Aucun salarié actif pour ces filtres.</div>
+    {% endfor %}
+  </div>
+</div>
+<div style="font-size:.7rem;color:#9ca3af;margin-top:.5rem">Jours : congés accordés, demandés et périodes retenues de {{ annee }} (jours calendaires, départ et retour inclus). Édité le {{ edite_le|date_fr }}.</div>
+</div>
+{% endblock %}
