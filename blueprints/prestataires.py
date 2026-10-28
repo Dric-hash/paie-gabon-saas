@@ -822,6 +822,13 @@ def avance_valider(aid):
     log_action("VALIDATE", "avance_prestataire", a.id,
                f"Avance validée par {chef}", user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
+    # Interconnexion Caisse : compte fournisseur auxiliaire 401XXX (créé dans la caisse à la validation)
+    from interco_caisse import proposer_ecriture, compte_fournisseur
+    p = a.prestataire
+    proposer_ecriture(t, source_ref=f"avance-prestataire-{a.id}", montant=a.montant,
+                      motif=f"Avance prestataire — {p.raison_sociale}" + (f" ({a.motif})" if a.motif else ""),
+                      compte_suggere=compte_fournisseur(p), libelle_compte=p.raison_sociale,
+                      date_operation=a.date_avance, mode_paiement=a.mode_paiement)
     flash(f"Avance validée par {chef}. Elle est désormais figée.", "success")
     return redirect(url_for("prestataires.prestataire_detail", id=a.prestataire_id))
 

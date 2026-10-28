@@ -11,6 +11,8 @@ pas une dépendance de la paie.
 """
 import json
 import logging
+import re
+import unicodedata
 import urllib.request
 import urllib.error
 from flask import current_app
@@ -22,8 +24,57 @@ logger = logging.getLogger("paiegabon.interco")
 _TIMEOUT = 4
 
 
+# Comptes SYSCOHADA proposés à la caisse
+COMPTE_ACOMPTE = "421"        # Personnel, avances et acomptes
+COMPTE_PRESTATAIRES = "401PREST"  # Avances sur paie des journaliers / prestataires
+
+# Modes de paiement compris par la Caisse (elle propose la caisse, la banque ou le mobile money)
+MODES_CAISSE = {"ESPECES", "VIREMENT", "CHEQUE", "MOBILE_MONEY"}
+
+
+def _normaliser(texte):
+    t = unicodedata.normalize("NFKD", texte or "").encode("ascii", "ignore").decode().upper()
+    return re.sub(r"[^A-Z0-9]", "", t)
+
+
+def compte_fournisseur(prestataire):
+    """Compte fournisseur auxiliaire « 401 » + identifiant du prestataire (12 caractères au plus,
+    limite de la Caisse) : le sigle d'abord (TOTAL → 401TOTAL), sinon le code s'il a été saisi
+    à la main, sinon la raison sociale (PETRO GABON → 401PETROGABO)."""
+    code = _normaliser(getattr(prestataire, "code", ""))
+    if re.fullmatch(r"PRE\d+", code):          # code attribué automatiquement : sans valeur comptable
+        code = ""
+    ident = (_normaliser(getattr(prestataire, "sigle", "")) or code
+             or _normaliser(getattr(prestataire, "raison_sociale", "")))
+    return ("401" + ident)[:12] if ident else COMPTE_PRESTATAIRES
+
+
+def annuler_ecriture(tenant, source_ref):
+    """L'objet a été annulé ou supprimé dans PaieGabon : la Caisse retire la proposition
+    encore en attente, ou la signale si elle était déjà validée. Jamais d'exception."""
+    try:
+        if not current_app.config.get("CAISSE_INTERCO_ACTIF"):
+            return False
+        url = current_app.config.get("CAISSE_URL", "")
+        token = current_app.config.get("CAISSE_TOKEN", "")
+        ref = getattr(tenant, "external_ref", None)
+        if not url or not token or not ref:
+            return False
+        req = urllib.request.Request(
+            url + "/api/interco/ecriture/annuler", method="POST",
+            data=json.dumps({"tenant_ref": ref, "source_app": "paiegabon",
+                             "source_ref": str(source_ref)}).encode("utf-8"),
+            headers={"Content-Type": "application/json", "X-Interco-Token": token})
+        with urllib.request.urlopen(req, timeout=_TIMEOUT) as resp:
+            return resp.getcode() in (200, 201)
+    except Exception as e:
+        logger.warning("Annulation caisse échouée pour %s : %s", source_ref, e)
+        return False
+
+
 def proposer_ecriture(tenant, *, source_ref, montant, motif,
-                      compte_suggere="6611", sens="SORTIE", date_operation=None):
+                      compte_suggere="6611", sens="SORTIE", date_operation=None,
+                      mode_paiement=None, libelle_compte=None):
     """Propose une sortie de caisse à l'app Caisse. Retourne True si l'appel a
     abouti (créé ou déjà reçu), False sinon. N'élève jamais d'exception.
 
@@ -35,6 +86,8 @@ def proposer_ecriture(tenant, *, source_ref, montant, motif,
       compte_suggere : numéro SYSCOHADA suggéré (661/6611 pour les salaires)
       sens           : "SORTIE" (défaut) ou "ENTREE"
       date_operation : date du paiement (date ou "YYYY-MM-DD") ; défaut = aujourd'hui
+      mode_paiement  : ESPECES | VIREMENT | CHEQUE | MOBILE_MONEY (la caisse propose le bon compte)
+      libelle_compte : libellé du compte tiers à créer dans la caisse (ex. « TOTAL GABON » pour 401TOTAL)
     """
     try:
         if not current_app.config.get("CAISSE_INTERCO_ACTIF"):
@@ -68,6 +121,10 @@ def proposer_ecriture(tenant, *, source_ref, montant, motif,
             "compte_suggere": compte_suggere,
             "devise": "XAF",
         }
+        if mode_paiement in MODES_CAISSE:
+            payload["mode_paiement"] = mode_paiement
+        if libelle_compte:
+            payload["libelle_compte"] = str(libelle_compte)[:150]
         # Date de paiement (facultative) : la caisse la reprend telle quelle.
         if date_operation is not None:
             try:

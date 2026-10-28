@@ -190,6 +190,21 @@
           </p>
         </div>
 
+        <!-- Référence d'interconnexion (Caisse, Ops, Projets) -->
+        <div style="margin-bottom:1rem">
+          <span class="field-label">Référence d'interconnexion</span>
+          <form method="POST" action="/admin/tenants/{{ tenant.id }}/reference" style="display:flex;gap:.5rem;margin-top:.25rem;flex-wrap:wrap">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+            <input name="external_ref" value="{{ tenant.external_ref or '' }}" maxlength="64" placeholder="ex. BATIGAB"
+              pattern="[A-Za-z0-9_.\-]{3,64}" title="3 à 64 caractères : lettres, chiffres, point, tiret, souligné"
+              style="flex:1;min-width:10rem;font-family:monospace;font-size:.8rem;padding:.375rem .75rem;border:1px solid #e5e7eb;border-radius:.5rem"/>
+            <button type="submit" style="background:#0f3d36;color:white;padding:.375rem .875rem;border-radius:.5rem;font-size:.72rem;font-weight:700;border:none;cursor:pointer">Enregistrer</button>
+          </form>
+          <p style="font-size:.7rem;color:#9ca3af;margin:.4rem 0 0">
+            La même référence dans Caisse Ameriack : acomptes et avances y arrivent en propositions de sortie. Vide = pas d'envoi.
+          </p>
+        </div>
+
         <!-- Clients OAuth2 -->
         <div>
           <span class="field-label">Clients OAuth2</span>
