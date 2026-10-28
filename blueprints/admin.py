@@ -377,6 +377,7 @@ def admin_tenant_enregistrer_paiement(id):
         t.plan_id = plan_id
     t.statut = "ACTIF"
     t.alerte_expiration_envoyee = None
+    nb_ent = t.synchroniser_abonnement_entreprises()   # cabinet : ses entreprises suivent
     db.session.commit()
     log_action("CREATE", "paiement", p.id,
                f"Paiement enregistré (admin, {p.moyen}) — {duree} mois, "
@@ -384,7 +385,9 @@ def admin_tenant_enregistrer_paiement(id):
                user_id=current_user.id, tenant_id=t.id)
     db.session.commit()
     flash(f"Paiement enregistré : {montant:.0f} F pour {duree} mois. "
-          f"Abonnement actif jusqu'au {t.date_expiration.strftime('%d/%m/%Y')}.", "success")
+          f"Abonnement actif jusqu'au {t.date_expiration.strftime('%d/%m/%Y')}."
+          + (f" {nb_ent} entreprise(s) gérée(s) par le cabinet alignée(s) sur ce renouvellement." if nb_ent else ""),
+          "success")
     return redirect(url_for("admin.admin_tenant_detail", id=t.id))
 
 
@@ -404,7 +407,10 @@ def admin_tenant_statut(id):
             flash("Date d'expiration invalide (format attendu : AAAA-MM-JJ).", "error")
     elif request.form.get("clear_expiration"):
         t.date_expiration = None
-    db.session.commit(); flash(f"{t.denomination} mis à jour.","success")
+    nb_ent = t.synchroniser_abonnement_entreprises()   # cabinet : ses entreprises suivent
+    db.session.commit()
+    flash(f"{t.denomination} mis à jour."
+          + (f" {nb_ent} entreprise(s) gérée(s) alignée(s) sur le cabinet." if nb_ent else ""), "success")
     return redirect(url_for("admin.admin_tenant_detail",id=id))
 
 
@@ -435,6 +441,8 @@ def admin_tenant_cabinet(id):
             flash("Cabinet cible invalide.", "error")
             return redirect(url_for("admin.admin_tenant_detail", id=id))
         t.cabinet_id = cab.id
+        db.session.flush()
+        cab.synchroniser_abonnement_entreprises()   # elle prend l'abonnement du cabinet
         flash(f"{t.denomination} est maintenant gérée par {cab.denomination}.", "success")
     elif action == "detacher":
         t.cabinet_id = None
@@ -1007,6 +1015,7 @@ def admin_paiement_valider(id):
     t.date_expiration = nouvelle_expiration
     t.statut = "ACTIF"
     t.alerte_expiration_envoyee = None  # nouveau cycle → l'alerte 72h pourra repartir
+    nb_ent = t.synchroniser_abonnement_entreprises()   # cabinet : ses entreprises suivent
     db.session.commit()
 
     log_action("VALIDATE", "paiement", p.id,
@@ -1023,7 +1032,9 @@ def admin_paiement_valider(id):
         current_app.logger.error(f"[PAIEMENT] Email confirmation échoué : {e}")
 
     flash(f"Paiement validé. {t.denomination} est actif jusqu'au "
-          f"{nouvelle_expiration.strftime('%d/%m/%Y')}.", "success")
+          f"{nouvelle_expiration.strftime('%d/%m/%Y')}."
+          + (f" {nb_ent} entreprise(s) gérée(s) par le cabinet alignée(s) sur ce renouvellement." if nb_ent else ""),
+          "success")
     return redirect(url_for("admin.admin_paiements"))
 
 
@@ -1039,6 +1050,7 @@ def admin_paiement_rejeter(id):
     # Si le tenant était en attente à cause de ce paiement, on le repasse en attente
     if p.tenant.statut == "PAIEMENT_EN_ATTENTE":
         p.tenant.statut = "ESSAI" if not p.tenant.date_expiration else p.tenant.statut
+    p.tenant.synchroniser_abonnement_entreprises()
     db.session.commit()
     log_action("CANCEL", "paiement", p.id,
                f"Paiement rejeté ({p.moyen}, réf {p.reference_externe}) — {motif}",

@@ -553,6 +553,25 @@ def init_db():
     db.session.commit()
     logger.info("✅ Base initialisée.")
 
+def aligner_abonnements_cabinets():
+    """Cabinets : leurs entreprises suivent l'abonnement du cabinet. Avant le 28/10/2026,
+    un renouvellement du cabinet ne se recopiait pas sur les entreprises qu'il gère
+    (statut / forfait / échéance figés à leur création). Idempotent : ne modifie que les
+    entreprises encore décalées. Retourne le nombre d'entreprises alignées."""
+    try:
+        from models import Tenant
+        n = sum(c.synchroniser_abonnement_entreprises()
+                for c in Tenant.query.filter_by(est_cabinet=True).all())
+        if n:
+            db.session.commit()
+            logger.info(f"[Cabinets] {n} entreprise(s) gérée(s) alignée(s) sur l'abonnement de leur cabinet.")
+        return n
+    except Exception as e:
+        db.session.rollback()
+        logger.warning(f"[Cabinets] alignement des abonnements ignoré : {e}")
+        return 0
+
+
 def run_migrations():
     migrations = [
         "ALTER TABLE bulletins_paie ADD COLUMN IF NOT EXISTS numero VARCHAR(30)",
@@ -737,6 +756,8 @@ def run_migrations():
     except Exception as e:
         db.session.rollback()
         logger.warning(f"[M4] Backfill des tokens API ignoré : {e}")
+
+    aligner_abonnements_cabinets()
 
     logger.info("✅ Migrations terminées.")
 

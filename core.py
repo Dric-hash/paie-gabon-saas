@@ -159,6 +159,8 @@ def tenant_required(f):
             not current_user.tenant_id
             or not current_user.tenant
             or current_user.tenant.statut not in ("ACTIF", "ESSAI", "PAIEMENT_EN_ATTENTE")
+            # entreprise gérée : le cabinet doit être actif lui aussi
+            or current_user.tenant.tenant_abonnement.statut not in ("ACTIF", "ESSAI", "PAIEMENT_EN_ATTENTE")
         ):
             flash("Compte suspendu ou non associé à une entreprise.", "error")
             return redirect(url_for("auth.login"))
@@ -220,6 +222,8 @@ def plan_required(*codes):
             tc = get_tenant()
             if tc is not None:
                 t = tc
+            if t is not None:
+                t = t.tenant_abonnement      # forfait du cabinet pour ses entreprises
             plan_code = (t.plan.code.upper() if t and t.plan and t.plan.code else None)
             if plan_code not in codes_norm:
                 flash("Cette fonctionnalité est réservée aux abonnements supérieurs. "

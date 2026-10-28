@@ -343,10 +343,75 @@ def mes_conges():
         return redirect(url_for("espace.mes_conges"))
     from conges_avance import solde_annee
     from datetime import date as _date
+    import planning_conges as pc
+    from models import PrevisionConge, PlanningConges
     annee = _date.today().year
+    souhaits = (PrevisionConge.query.join(PlanningConges)
+                .filter(PrevisionConge.tenant_id == t.id, PrevisionConge.salarie_id == s.id,
+                        PlanningConges.annee >= annee)
+                .order_by(PrevisionConge.date_debut).all())
+    plannings = {a: pc.obtenir(t, a) for a in (annee, annee + 1)}
     return render_template("espace/conges.html", t=t, s=s, solde=solde_annee(t, s, annee),
                            conges=ps.conges(s), TYPES=ps.TYPES_CONGE, STATUTS=ps.STATUTS_CONGE,
-                           aujourd_hui=_date.today().isoformat())
+                           aujourd_hui=_date.today().isoformat(), souhaits=souhaits,
+                           STATUTS_SOUHAIT=pc.STATUTS_PREVISION,
+                           annees_ouvertes=[a for a, p in plannings.items() if pc.propositions_ouvertes(p)],
+                           limite_fin=f"{annee + 1}-12-31")
+
+
+@bp.route("/conges/souhaits", methods=["POST"])
+@connexion_requise
+def proposer_souhait():
+    """Le salarié propose ses dates de congé pour le planning prévisionnel."""
+    from datetime import date as _date
+    import planning_conges as pc
+    t, s = g.esp_tenant, g.esp_salarie
+    f = request.form
+    try:
+        debut = _date.fromisoformat((f.get("date_debut") or "").strip())
+        fin = _date.fromisoformat((f.get("date_fin") or "").strip())
+    except ValueError:
+        flash("Dates invalides.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    aujourd_hui = _date.today()
+    if debut < aujourd_hui or debut.year > aujourd_hui.year + 1:
+        flash(f"Proposez des dates entre aujourd'hui et la fin de {aujourd_hui.year + 1}.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    p = pc.obtenir(t, debut.year)
+    if not pc.propositions_ouvertes(p, aujourd_hui):
+        flash(f"Les propositions pour le planning {debut.year} sont closes : adressez-vous à votre service RH.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    try:
+        p = pc.obtenir(t, debut.year, creer=True)
+        x = pc.ajouter(p, s, debut, fin, "PORTAIL", f.get("commentaire"))
+        from audit import log_action
+        log_action("CREATE", "prevision_conge", x.id,
+                   f"Portail des employés : souhait de congé {s.matricule} du {debut:%d/%m/%Y} au {fin:%d/%m/%Y}",
+                   tenant_id=t.id)
+        db.session.commit()
+        flash(f"Souhait envoyé ({x.jours} jour(s)) : votre service RH l'étudiera pour le planning {debut.year}.", "success")
+    except pc.ErreurPlanning as e:
+        db.session.rollback()
+        flash(f"Souhait impossible : {e}.", "error")
+    return redirect(url_for("espace.mes_conges"))
+
+
+@bp.route("/conges/souhaits/<int:pid>/annuler", methods=["POST"])
+@connexion_requise
+def annuler_souhait(pid):
+    from models import PrevisionConge
+    t, s = g.esp_tenant, g.esp_salarie
+    x = PrevisionConge.query.filter_by(id=pid, tenant_id=t.id, salarie_id=s.id).first_or_404()
+    if x.statut != "PROPOSEE":
+        flash("Ce souhait a déjà été traité par le service RH.", "error")
+        return redirect(url_for("espace.mes_conges"))
+    from audit import log_action
+    log_action("DELETE", "prevision_conge", x.id, f"Portail des employés : souhait de congé retiré par {s.matricule}",
+               tenant_id=t.id)
+    db.session.delete(x)
+    db.session.commit()
+    flash("Souhait retiré.", "success")
+    return redirect(url_for("espace.mes_conges"))
 
 
 @bp.route("/conges/<int:conge_id>/annuler", methods=["POST"])

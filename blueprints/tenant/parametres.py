@@ -526,6 +526,7 @@ def demande_changement_plan():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     if not current_user.is_tenant_admin: abort(403)
+    t = t.tenant_abonnement          # entreprise gérée : l'abonnement est celui du cabinet
     plan_souhaite_id = request.form.get("plan_id", type=int)
     motif = request.form.get("motif", "").strip()
     plan_souhaite = db.session.get(Plan, plan_souhaite_id) if plan_souhaite_id else None
@@ -542,6 +543,7 @@ def demande_changement_plan():
     # Ajouter à la suite des notes existantes
     t.notes = (t.notes or "") + ("\n" if t.notes else "") + note_demande
     t.statut = "PAIEMENT_EN_ATTENTE"
+    t.synchroniser_abonnement_entreprises()
     db.session.commit()
     flash(f"Demande de passage au plan « {plan_souhaite.nom} » enregistrée. L'équipe PaieGabon vous contactera sous 24h pour finaliser.", "success")
     return redirect(url_for("tenant.parametres"))
@@ -553,6 +555,7 @@ def annuler_abonnement():
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
     if not current_user.is_tenant_admin: abort(403)
+    t = t.tenant_abonnement          # entreprise gérée : l'abonnement est celui du cabinet
     motif = request.form.get("motif", "").strip()
     t.statut = "ANNULATION_DEMANDEE"
     t.notes = f"Annulation demandée le {datetime.now().strftime('%d/%m/%Y')}. Motif: {motif}"

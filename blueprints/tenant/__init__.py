@@ -175,6 +175,8 @@ POST_AUTORISES_LECTURE = {
     "tenant.basculer_2fa",
     # Déclaration du règlement de l'abonnement (paiement manuel)
     "tenant.paiement_confirmer",
+    # Validation du planning des congés par la direction (rôle DIRECTEUR, contrôlé dans la route)
+    "tenant.conges_previsionnel_valider", "tenant.conges_previsionnel_rouvrir",
 }
 
 
@@ -715,3 +717,4 @@ from blueprints.tenant import medailles  # noqa: E402,F401
 from blueprints.tenant import developpement  # noqa: E402,F401
 from blueprints.tenant import cycle  # noqa: E402,F401
 from blueprints.tenant import portail_employes  # noqa: E402,F401
+from blueprints.tenant import planning_conges  # noqa: E402,F401
