@@ -284,7 +284,13 @@ def bulletins_bordereau():
         .filter_by(tenant_id=t.id, periode_id=pid)
     if statut_f:
         q = q.filter_by(statut=statut_f)
-    bulletins = q.join(Salarie).order_by(Salarie.nom).all()
+    bulletins = q.join(Salarie).order_by(Salarie.nom, Salarie.prenom).all()
+    import impression_sites as imp
+    par_site, site_id = _classement_par_site()
+    groupes_b = (imp.grouper(t, bulletins, "salarie_id", site_id, personne=lambda b: b.salarie) if par_site
+                 else [{"site": None, "nom": None, "personnes": bulletins}])
+    site_de_b = {b.id: g["nom"] for g in groupes_b for b in g["personnes"]}
+    bulletins = [b for g in groupes_b for b in g["personnes"]]
 
     lignes = []
     recap_mode = {"ESPECES": {"total": 0.0, "nb": 0}, "VIREMENT": {"total": 0.0, "nb": 0}}
@@ -302,13 +308,29 @@ def bulletins_bordereau():
             "matricule": b.salarie.matricule if b.salarie else "—",
             "nom": b.salarie.nom_complet if b.salarie else "—",
             "emploi": (b.salarie.emploi if b.salarie else "") or "—",
-            "net": net, "mode": mode, "statut": b.statut,
+            "net": net, "mode": mode, "statut": b.statut, "site": site_de_b.get(b.id),
         })
+    groupes = []
+    for l in lignes:
+        if not groupes or groupes[-1]["nom"] != l["site"]:
+            groupes.append({"nom": l["site"], "lignes": [], "total": 0.0})
+        groupes[-1]["lignes"].append(l)
+        groupes[-1]["total"] += l["net"]
 
     return render_template("tenant/bulletins_bordereau_print.html",
-        tenant=t, periode=ps, lignes=lignes, recap_mode=recap_mode,
+        tenant=t, periode=ps, lignes=lignes, groupes=groupes, par_site=par_site, recap_mode=recap_mode,
         total_general=total_general, nb_total=len(lignes),
         statut=statut_f, now=datetime.now())
+
+
+def _classement_par_site():
+    """(par_site, site_id) : classement par site par défaut (?classement=alpha pour l'ordre
+    alphabétique) ; ?site_id=<id> (ou ?site=) limite l'impression à un site, 0 = sans site."""
+    par_site = request.args.get("classement") != "alpha"
+    site_id = request.args.get("site_id", type=int)
+    if site_id is None:
+        site_id = request.args.get("site", type=int)
+    return par_site or site_id is not None, site_id
 
 @bp.route("/bulletins/generer-lot", methods=["POST"])
 @login_required
@@ -1007,10 +1029,19 @@ def bulletins_export_zip(periode_id):
         return redirect(url_for("auth.login"))
     p = PeriodePaie.query.filter_by(id=periode_id, tenant_id=t.id).first_or_404()
     bulletins = (BulletinPaie.query.filter_by(periode_id=periode_id, tenant_id=t.id)
-                 .join(Salarie).order_by(Salarie.nom).all())
+                 .join(Salarie).order_by(Salarie.nom, Salarie.prenom).all())
     if not bulletins:
         flash("Aucun bulletin à exporter pour cette période.", "error")
         return redirect(url_for("tenant.bulletins"))
+    # Classés par site (distribution par chantier), sauf ?classement=alpha ; ?site_id= : un seul site
+    par_site, site_id = _classement_par_site()
+    if par_site:
+        import impression_sites as imp
+        bulletins = [b for g in imp.grouper(t, bulletins, "salarie_id", site_id, personne=lambda b: b.salarie)
+                     for b in g["personnes"]]
+        if not bulletins:
+            flash("Aucun bulletin pour ce site sur cette période.", "error")
+            return redirect(url_for("tenant.bulletins"))
 
     from pdf_bulletin import generer_bulletins_pdf
     try:
@@ -1402,25 +1433,53 @@ def export_journal(periode_id):
     from openpyxl.styles import Font, PatternFill, Alignment
     t=get_tenant()
     p=PeriodePaie.query.filter_by(id=periode_id,tenant_id=t.id).first_or_404()
-    buls=BulletinPaie.query.filter_by(periode_id=periode_id,tenant_id=t.id).join(Salarie).order_by(Salarie.nom).all()
-    wb=Workbook(); ws=wb.active; ws.title=f"Journal {p.libelle_complet}"
-    ws.merge_cells("A1:R1"); ws["A1"]=f"JOURNAL DE PAIE — {p.libelle_complet} — {t.denomination}"
+    buls=BulletinPaie.query.filter_by(periode_id=periode_id,tenant_id=t.id).join(Salarie).order_by(Salarie.nom,Salarie.prenom).all()
+    import impression_sites as imp
+    par_site, site_id = _classement_par_site()
+    groupes = (imp.grouper(t, buls, "salarie_id", site_id, personne=lambda b: b.salarie) if par_site
+               else [{"site": None, "nom": None, "personnes": buls}])
+    buls = [b for g in groupes for b in g["personnes"]]
+    wb=Workbook(); ws=wb.active; ws.title=f"Journal {p.libelle_complet}"[:31]
+    ws.merge_cells("A1:S1"); ws["A1"]=f"JOURNAL DE PAIE — {p.libelle_complet} — {t.denomination}"
     ws["A1"].font=Font(bold=True,size=13); ws["A1"].alignment=Alignment(horizontal="center")
-    hdrs=["Matricule","Nom","Prénom","Emploi","Cat.","Base","Brut","CNSS Sal.","CNAMGS Sal.","TCS","IRPP","Net","Net à Payer","CNSS Pat.","CNAMGS Pat.","FNH","CFP","Statut"]
+    if par_site:
+        ws["A2"]="Classé par site (chantier d'affectation en cours), sous-total par site"
+        ws["A2"].font=Font(italic=True,size=9,color="666666")
+    hdrs=["Site","Matricule","Nom","Prénom","Emploi","Cat.","Base","Brut","CNSS Sal.","CNAMGS Sal.","TCS","IRPP","Net","Net à Payer","CNSS Pat.","CNAMGS Pat.","FNH","CFP","Statut"]
     for col,h in enumerate(hdrs,1):
         c=ws.cell(row=3,column=col,value=h); c.font=Font(bold=True,color="FFFFFF")
         c.fill=PatternFill("solid",fgColor="1a2332"); c.alignment=Alignment(horizontal="center")
-    for row,b in enumerate(buls,4):
-        s=b.salarie
-        vals=[s.matricule,s.nom,s.prenom,s.emploi,s.categorie.code if s.categorie else "",
-              float(b.salaire_base or 0),float(b.salaire_brut or 0),float(b.cnss_salarie or 0),
-              float(b.cnamgs_salarie or 0),float(b.tcs or 0),float(b.irpp or 0),
-              float(b.salaire_net or 0),float(b.net_a_payer or 0),float(b.cnss_patronale or 0),
-              float(b.cnamgs_patronale or 0),float(b.fnh or 0),float(b.cfp or 0),b.statut]
-        for col,v in enumerate(vals,1):
-            cell=ws.cell(row=row,column=col,value=csv_safe(v) if isinstance(v,str) else v)
-            if isinstance(v,float): cell.number_format='#,##0'
-            if row%2==0: cell.fill=PatternFill("solid",fgColor="F5F5F5")
+    NUM = range(7, 19)                       # colonnes de montants (Base … CFP)
+    def ligne_total(row, libelle, cumul, couleur):
+        ws.cell(row=row, column=1, value=libelle).font = Font(bold=True)
+        for col in NUM:
+            c = ws.cell(row=row, column=col, value=round(cumul[col], 2)); c.number_format = '#,##0'; c.font = Font(bold=True)
+        for col in range(1, len(hdrs) + 1):
+            ws.cell(row=row, column=col).fill = PatternFill("solid", fgColor=couleur)
+    row = 4
+    general = {col: 0.0 for col in NUM}
+    for g in groupes:
+        cumul = {col: 0.0 for col in NUM}
+        for b in g["personnes"]:
+            s=b.salarie
+            vals=[g["nom"] or "",s.matricule,s.nom,s.prenom,s.emploi,s.categorie.code if s.categorie else "",
+                  float(b.salaire_base or 0),float(b.salaire_brut or 0),float(b.cnss_salarie or 0),
+                  float(b.cnamgs_salarie or 0),float(b.tcs or 0),float(b.irpp or 0),
+                  float(b.salaire_net or 0),float(b.net_a_payer or 0),float(b.cnss_patronale or 0),
+                  float(b.cnamgs_patronale or 0),float(b.fnh or 0),float(b.cfp or 0),b.statut]
+            for col,v in enumerate(vals,1):
+                cell=ws.cell(row=row,column=col,value=csv_safe(v) if isinstance(v,str) else v)
+                if isinstance(v,float): cell.number_format='#,##0'
+                if row%2==0: cell.fill=PatternFill("solid",fgColor="F5F5F5")
+            for col in NUM:
+                cumul[col] += vals[col - 1]
+                general[col] += vals[col - 1]
+            row += 1
+        if par_site and g["personnes"]:
+            ligne_total(row, f"Sous-total {g['nom']} ({len(g['personnes'])})", cumul, "E8F1EE")
+            row += 2
+    if buls:
+        ligne_total(row, f"TOTAL GÉNÉRAL ({len(buls)})", general, "D9E7E2")
     out=io.BytesIO(); wb.save(out); out.seek(0)
     return send_file(out,mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         as_attachment=True,download_name=f"Journal_{p.libelle_mois}_{p.annee}_{t.slug}.xlsx")

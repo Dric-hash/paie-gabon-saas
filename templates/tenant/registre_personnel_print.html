@@ -22,10 +22,25 @@
     .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
     @media print { body { margin:0; padding:8px; } .noprint { display:none; } tr { page-break-inside:avoid; } thead { display:table-header-group; } }
     @page { size: A4 landscape; margin:10mm; }
+    .site-row td { background:#e8f1ee; color:#0f3d36; font-weight:800; }
+    .site-row td span { font-weight:400; color:#555; }
   </style>
 </head>
 <body>
-  <div class="noprint" style="margin-bottom:10px; text-align:right;">
+  <div class="noprint" style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; font-size:12px">
+    <form method="get" style="display:flex;gap:8px;align-items:center;margin:0">
+      <label>Ordre
+        <select name="classement" onchange="this.form.submit()" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:6px">
+          <option value="" {{ 'selected' if not par_site }}>chronologique (registre)</option>
+          <option value="site" {{ 'selected' if par_site }}>par site</option>
+        </select></label>
+      {% if par_site %}
+      <select name="site" onchange="this.form.submit()" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:6px">
+        <option value="">Tous les sites</option>
+        {% for x in sites %}<option value="{{ x.id }}" {{ 'selected' if site_id == x.id }}>{{ x.nom }}</option>{% endfor %}
+        <option value="0" {{ 'selected' if site_id == 0 }}>Sans site affecté</option>
+      </select>{% endif %}
+    </form>
     <button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button>
   </div>
 
@@ -39,7 +54,7 @@
     </div>
     <div>
       <h1>REGISTRE DU PERSONNEL</h1>
-      <div class="sub">{{ salaries|length }} salarié(s) · édité le {{ now.strftime('%d/%m/%Y') }}</div>
+      <div class="sub">{{ salaries|length }} salarié(s){% if par_site %} · classé par site (n° d'inscription conservé){% endif %} · édité le {{ now.strftime('%d/%m/%Y') }}</div>
     </div>
   </div>
 
@@ -61,9 +76,11 @@
       </tr>
     </thead>
     <tbody>
-      {% for s in salaries %}
+      {% for g in groupes %}
+      {% if par_site %}<tr class="site-row"><td colspan="12">{{ g.nom }} <span>· {{ g.personnes|length }} salarié(s)</span></td></tr>{% endif %}
+      {% for s in g.personnes %}
       <tr>
-        <td class="c mono">{{ loop.index }}</td>
+        <td class="c mono">{{ s._numero }}</td>
         <td class="mono">{{ s.matricule }}</td>
         <td><strong>{{ s.nom }}</strong> {{ s.prenom }}</td>
         <td class="c">{{ s.sexe or '—' }}</td>
@@ -79,6 +96,7 @@
         </td>
         <td class="mono">{{ s.numero_cnss or '—' }}</td>
       </tr>
+      {% endfor %}
       {% endfor %}
       {% if not salaries %}
       <tr><td colspan="12" class="c" style="padding:16px;color:#999">Aucun salarié enregistré.</td></tr>

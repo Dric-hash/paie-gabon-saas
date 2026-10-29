@@ -53,8 +53,19 @@ def acomptes_imprimer():
         Acompte.id.in_(ids)
     ).options(joinedload(Acompte.salarie)).order_by(Acompte.date_acompte).all()
     total = sum(float(a.montant or 0) for a in liste if a.statut != "ANNULE")
+    # Classés par site (chantier d'affectation), sous-total par site ; « classement=alpha » pour l'ancien ordre
+    par_site = request.form.get("classement", request.args.get("classement")) != "alpha"
+    if par_site:
+        import impression_sites as imp
+        groupes = imp.grouper(t, liste, "salarie_id", personne=lambda a: a.salarie,
+                              tri=lambda a: ((a.salarie.nom or "").upper(), a.date_acompte or date.min))
+    else:
+        groupes = [{"site": None, "nom": None, "personnes": liste}]
+    for g in groupes:
+        g["total"] = sum(float(a.montant or 0) for a in g["personnes"] if a.statut != "ANNULE")
+    liste = [a for g in groupes for a in g["personnes"]]
     return render_template("tenant/acomptes_print.html",
-        tenant=t, liste=liste, total=total, mois=mois, annee=annee,
+        tenant=t, liste=liste, groupes=groupes, par_site=par_site, total=total, mois=mois, annee=annee,
         MOIS_NOMS=PeriodePaie.MOIS_NOMS, now=datetime.now())
 
 
