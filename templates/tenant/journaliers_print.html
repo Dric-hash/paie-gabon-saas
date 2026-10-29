@@ -16,6 +16,20 @@
     .actif{background:#d1fae5;color:#065f46;}
     .inactif{background:#fee2e2;color:#991b1b;}
     .footer{margin-top:20px;text-align:right;font-size:9px;color:#9ca3af;}
+    .site{margin:16px 0 6px;font-size:12px;font-weight:800;color:#1a2332;border-left:4px solid #1a2332;padding-left:8px;}
+    .site span{font-weight:400;color:#6b7280;font-size:10px;}
+    .site-bloc{break-inside:auto;}
+    .saut{break-before:page;page-break-before:always;}
+    table{table-layout:fixed;}
+    th:nth-child(1){width:4%;}
+    th:nth-child(2){width:26%;}
+    th:nth-child(3){width:20%;}
+    th:nth-child(4){width:14%;}
+    th:nth-child(5){width:12%;}
+    th:nth-child(6){width:14%;}
+    th:nth-child(7){width:10%;}
+    td{overflow:hidden;text-overflow:ellipsis;}
+    thead{display:table-header-group;}
     @media print{.no-print{display:none;}body{padding:0;}}
   </style>
 </head>
@@ -23,13 +37,17 @@
 <div class="no-print" style="margin-bottom:15px;">
   <button onclick="window.print()" style="background:#1a2332;color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700;">🖨️ Imprimer</button>
   <a href="/journaliers" style="margin-left:10px;color:#1a2332;font-weight:700;text-decoration:none;">← Retour</a>
+  {% include "tenant/_options_impression_sites.html" %}
 </div>
 <div class="header">
   <h1>{{ tenant.denomination }}</h1>
   <p>{{ tenant.adresse or '' }}{{ ' · ' + tenant.ville if tenant.ville else '' }}</p>
   <h2 style="font-size:13px;margin:8px 0 2px;">LISTE DES TRAVAILLEURS JOURNALIERS</h2>
-  <p>Éditée le {{ now.strftime('%d/%m/%Y à %H:%M') }} — {{ journaliers|length }} journalier(s)</p>
+  <p>Éditée le {{ now.strftime('%d/%m/%Y à %H:%M') }} — {{ journaliers|length }} journalier(s){% if par_site %} · classée par site{% if site_id is not none %} — {{ groupes[0].nom }}{% endif %}{% endif %}</p>
 </div>
+{% for g in groupes %}
+<div class="site-bloc{{ ' saut' if saut and not loop.first }}">
+  {% if g.nom %}<div class="site">{{ g.nom }} <span>· {{ g.personnes|length }} journalier(s){% if g.site and g.site.responsable %} · responsable : {{ g.site.responsable }}{% endif %}</span></div>{% endif %}
 <table>
   <thead>
     <tr>
@@ -38,7 +56,7 @@
     </tr>
   </thead>
   <tbody>
-    {% for j in journaliers %}
+    {% for j in g.personnes %}
     <tr>
       <td>{{ loop.index }}</td>
       <td style="font-weight:700;">{{ j.nom }} {{ j.prenom }}</td>
@@ -49,8 +67,11 @@
       <td><span class="badge {{ 'actif' if j.statut=='ACTIF' else 'inactif' }}">{{ j.statut }}</span></td>
     </tr>
     {% endfor %}
+    {% if not g.personnes %}<tr><td colspan="7" style="color:#9ca3af;text-align:center">Personne</td></tr>{% endif %}
   </tbody>
 </table>
+</div>
+{% endfor %}
 <div class="footer">Ameriack I.T. Solutions — PaieGabon · {{ now.strftime('%d/%m/%Y') }}</div>
 </body>
 </html>

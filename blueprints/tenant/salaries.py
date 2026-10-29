@@ -995,10 +995,24 @@ def salaries_imprimer():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t = get_tenant(); 
     if not t: return redirect(url_for("auth.login"))
-    salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom).all()
+    salaries_list = Salarie.query.filter_by(tenant_id=t.id).order_by(Salarie.nom, Salarie.prenom).all()
     for s in salaries_list:
         s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
-    return render_template("tenant/salaries_print.html", salaries=salaries_list, tenant=t, now=datetime.now())
+    import impression_sites as imp
+    par_site, site_id, saut = _options_impression()
+    groupes = imp.grouper(t, salaries_list, "salarie_id", site_id) if par_site \
+        else [{"site": None, "nom": None, "personnes": salaries_list}]
+    return render_template("tenant/salaries_print.html", salaries=[p for g in groupes for p in g["personnes"]],
+                           groupes=groupes, par_site=par_site, site_id=site_id, saut=saut,
+                           sites=imp.sites_du_tenant(t), tenant=t, now=datetime.now())
+
+
+def _options_impression():
+    """Options des listes imprimées : classement par site (par défaut) ou alphabétique,
+    un seul site (?site=<id>, 0 = sans site), une page par site (?saut=1)."""
+    par_site = request.args.get("classement", "site") != "alpha"
+    site_id = request.args.get("site", type=int)
+    return par_site, (site_id if par_site else None), request.args.get("saut") == "1"
 
 
 @bp.route("/salaries/registre")

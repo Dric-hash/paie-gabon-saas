@@ -148,10 +148,11 @@ def test_suppression_complete_sans_toucher_aux_autres(env):
             M.DemandeDocument(tenant_id=t, salarie_id=s_id, type_doc="ATTESTATION_TRAVAIL"),
             M.DemandeProfil(tenant_id=t, salarie_id=s_id, champ="telephone"),
             M.CompetenceSalarie(tenant_id=t, salarie_id=s_id, competence_id=comp.id, niveau=2),
-            M.Evaluation(tenant_id=t, salarie_id=s_id),
-            M.Formation(tenant_id=t, salarie_id=s_id, intitule="CACES"),
-            M.Sanction(tenant_id=t, salarie_id=s_id, type="AVERTISSEMENT", date_sanction=D),
         ])
+        if s_id == autre:                       # dossier RH : bloquerait la suppression
+            db.session.add_all([M.Evaluation(tenant_id=t, salarie_id=s_id),
+                                M.Formation(tenant_id=t, salarie_id=s_id, intitule="CACES"),
+                                M.Sanction(tenant_id=t, salarie_id=s_id, type="AVERTISSEMENT", date_sanction=D)])
     db.session.commit()
     pointeur_id = pointeur.id
     pid = _pret(env, statut="ANNULE")
@@ -185,3 +186,18 @@ def test_echec_inattendu_ne_supprime_rien(env, monkeypatch):
     assert "rien n'a été supprimé" in _flash(cli)
     db.session.expire_all()
     assert M.Contrat.query.filter_by(salarie_id=env["s"]).count() == 1
+
+
+@pytest.mark.parametrize("dossier,texte", [
+    (lambda e: M.Sanction(tenant_id=e["t"], salarie_id=e["s"], type="AVERTISSEMENT", date_sanction=D), "1 sanction(s)"),
+    (lambda e: M.Evaluation(tenant_id=e["t"], salarie_id=e["s"]), "1 évaluation(s)"),
+    (lambda e: M.Formation(tenant_id=e["t"], salarie_id=e["s"], intitule="CACES"), "1 formation(s)"),
+])
+def test_dossier_rh_bloque(env, dossier, texte):
+    db.session.add(dossier(env))
+    db.session.commit()
+    cli = _cli(env["admin"])
+    cli.post(f"/salaries/{env['s']}/supprimer")
+    m = _flash(cli)
+    assert "Impossible de supprimer" in m and f"{texte} dans son dossier" in m
+    assert db.session.get(M.Salarie, env["s"]) is not None

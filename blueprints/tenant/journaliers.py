@@ -1997,7 +1997,15 @@ def journaliers_imprimer():
     if current_user.is_super_admin: return redirect(url_for("admin.admin_dashboard"))
     t = get_tenant()
     if not t: return redirect(url_for("auth.login"))
-    return render_template("tenant/journaliers_print.html", journaliers=Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom).all(), tenant=t, now=datetime.now())
+    import impression_sites as imp
+    from blueprints.tenant.salaries import _options_impression
+    liste = Journalier.query.filter_by(tenant_id=t.id).order_by(Journalier.nom, Journalier.prenom).all()
+    par_site, site_id, saut = _options_impression()
+    groupes = imp.grouper(t, liste, "journalier_id", site_id) if par_site \
+        else [{"site": None, "nom": None, "personnes": liste}]
+    return render_template("tenant/journaliers_print.html", journaliers=[p for g in groupes for p in g["personnes"]],
+                           groupes=groupes, par_site=par_site, site_id=site_id, saut=saut,
+                           sites=imp.sites_du_tenant(t), tenant=t, now=datetime.now())
 
 # ── Export & API ──────────────────────────────────────────────────────────────
 

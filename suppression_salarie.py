@@ -3,7 +3,8 @@
 La suppression est réservée aux fiches créées par erreur. Elle est refusée quand elle
 ferait disparaître un historique qui engage l'entreprise :
   - un bulletin validé ou payé (passer plutôt le salarié en INACTIF) ;
-  - un prêt en cours, soldé ou déjà remboursé en partie (somme due ou remboursements).
+  - un prêt en cours, soldé ou déjà remboursé en partie (somme due ou remboursements) ;
+  - un dossier RH : sanction, évaluation ou formation.
 
 Sinon, toutes les données attachées au salarié sont supprimées, dans l'ordre imposé par
 les clés étrangères. Un compte pointeur rattaché au salarié est conservé, détaché.
@@ -46,6 +47,11 @@ def obstacles(s):
         else:
             raisons.append(f"un prêt {p.statut_libelle.lower() if hasattr(p, 'statut_libelle') else 'en cours'} "
                            f"de {_fcfa(p.montant_total)} F (supprimez-le ou annulez-le d'abord dans Prêts)")
+    # Dossier RH (décision du 29/10/2026) : sanctions, évaluations et formations sont conservés
+    for modele, libelle in ((Sanction, "sanction(s)"), (Evaluation, "évaluation(s)"), (Formation, "formation(s)")):
+        n = modele.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).count()
+        if n:
+            raisons.append(f"{n} {libelle} dans son dossier")
     return raisons
 
 
