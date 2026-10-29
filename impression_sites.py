@@ -20,14 +20,18 @@ def site_de(t, champ):
     return out
 
 
-def grouper(t, personnes, champ, site_id=None):
+def grouper(t, personnes, champ, site_id=None, personne=None, tri=None):
     """[{"site": Site|None, "nom": str, "personnes": [...]}] dans l'ordre d'impression.
-    site_id : ne garder qu'un site (0 = les personnes sans site)."""
+    site_id : ne garder qu'un site (0 = les personnes sans site).
+    personne : pour grouper d'autres éléments (bulletins, acomptes…) — fonction qui donne
+    la personne de l'élément (ex. lambda b: b.salarie).
+    tri : clé de tri dans chaque site (par défaut : nom puis prénom de la personne)."""
+    personne = personne or (lambda x: x)
     affect = site_de(t, champ)
     sites = {s.id: s for s in Site.query.filter_by(tenant_id=t.id).all()}
     groupes = {}
     for p in personnes:
-        sid = affect.get(p.id)
+        sid = affect.get(getattr(personne(p), "id", None))
         if sid not in sites:
             sid = None
         groupes.setdefault(sid, []).append(p)
@@ -37,7 +41,7 @@ def grouper(t, personnes, champ, site_id=None):
     ordre = sorted((k for k in groupes if k is not None), key=lambda k: (sites[k].nom or "").upper())
     if None in groupes:
         ordre.append(None)
-    tri = lambda p: ((p.nom or "").upper(), (p.prenom or "").upper())  # noqa: E731
+    tri = tri or (lambda x: ((personne(x).nom or "").upper(), (personne(x).prenom or "").upper()))
     return [{"site": sites.get(k), "nom": sites[k].nom if k is not None else SANS_SITE,
              "personnes": sorted(groupes[k], key=tri)} for k in ordre]
 

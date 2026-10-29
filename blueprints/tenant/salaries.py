@@ -1026,10 +1026,18 @@ def salaries_registre():
     # Ordre chronologique d'embauche (usage du registre d'employeur)
     salaries_list = (Salarie.query.filter_by(tenant_id=t.id)
                      .order_by(Salarie.date_embauche.asc().nullslast(), Salarie.id.asc()).all())
-    for s in salaries_list:
+    for i, s in enumerate(salaries_list, 1):
         s._contrat_actif = Contrat.query.filter_by(salarie_id=s.id, tenant_id=t.id, actif=True).first()
+        s._numero = i                  # n° d'inscription au registre (ordre d'embauche), conservé par site
+    # Par défaut : ordre chronologique d'embauche (usage du registre). Option : par site.
+    import impression_sites as imp
+    par_site = request.args.get("classement") == "site"
+    site_id = request.args.get("site", type=int) if par_site else None
+    groupes = (imp.grouper(t, salaries_list, "salarie_id", site_id, tri=lambda s: s._numero) if par_site
+               else [{"site": None, "nom": None, "personnes": salaries_list}])
     return render_template("tenant/registre_personnel_print.html",
-        salaries=salaries_list, tenant=t, now=datetime.now())
+        salaries=[s for g in groupes for s in g["personnes"]], groupes=groupes, par_site=par_site,
+        site_id=site_id, sites=imp.sites_du_tenant(t), tenant=t, now=datetime.now())
 
 
 

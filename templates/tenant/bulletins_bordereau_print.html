@@ -22,6 +22,11 @@
   .b-esp { background:#fef3c7; color:#92400e; }
   .b-vir { background:#dbeafe; color:#1e40af; }
   .footer { margin-top:30px; font-size:11px; color:#888; display:flex; justify-content:space-between; }
+  .site-row td { background:#e8f1ee; color:#0f3d36; font-weight:800; padding-top:10px; border-bottom:1px solid #0f3d36; }
+  .site-row td span { font-weight:400; color:#555; font-size:11px; }
+  .sous-tot td { font-weight:700; background:#f8faf9; border-bottom:2px solid #d1d5db; }
+  thead { display:table-header-group; }
+  tr { page-break-inside:avoid; }
   @media print { body { padding:0; } }
 </style>
 </head>
@@ -30,7 +35,7 @@
     <div>
       <h1>BORDEREAU DE PAIE</h1>
       <div class="sub">{{ tenant.denomination }}</div>
-      <div class="sub">Période : <b>{{ periode.libelle_complet }}</b>{% if statut %} · Statut : {{ statut }}{% endif %}</div>
+      <div class="sub">Période : <b>{{ periode.libelle_complet }}</b>{% if statut %} · Statut : {{ statut }}{% endif %}{% if par_site %} · classé par site{% endif %}</div>
     </div>
     <div class="sub">Édité le {{ now.strftime('%d/%m/%Y') }}</div>
   </div>
@@ -46,7 +51,9 @@
       </tr>
     </thead>
     <tbody>
-      {% for l in lignes %}
+      {% for g in groupes %}
+      {% if par_site %}<tr class="site-row"><td colspan="5">{{ g.nom }} <span>· {{ g.lignes|length }} salarié(s)</span></td></tr>{% endif %}
+      {% for l in g.lignes %}
       <tr>
         <td>{{ l.matricule }}</td>
         <td><b>{{ l.nom }}</b></td>
@@ -57,6 +64,8 @@
         </td>
         <td class="num">{{ l.net|int }} FCFA</td>
       </tr>
+      {% endfor %}
+      {% if par_site %}<tr class="sous-tot"><td colspan="4" class="num">Sous-total {{ g.nom }} ({{ g.lignes|length }})</td><td class="num">{{ g.total|int }} FCFA</td></tr>{% endif %}
       {% else %}
       <tr><td colspan="5" class="center" style="padding:20px;color:#9ca3af">Aucun bulletin pour cette période.</td></tr>
       {% endfor %}

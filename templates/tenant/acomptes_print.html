@@ -25,7 +25,11 @@
     .tot-row td{font-weight:900;background:#eef3f1 !important;border-top:2px solid #0f3d36;}
     .footer{margin-top:24px;text-align:right;font-size:9px;color:#9ca3af;}
     @media print{.no-print{display:none;}body{padding:0;}}
-  </style>
+    .site-row td { background:#e8f1ee; color:#0f3d36; font-weight:800; padding-top:8px; }
+  .site-row td span { font-weight:400; color:#555; font-size:10px; }
+  .sous-tot td { font-weight:700; background:#f8faf9; }
+  thead { display:table-header-group; }
+</style>
 </head>
 <body>
 <div class="no-print" style="margin-bottom:15px;">
@@ -42,7 +46,7 @@
 <div class="infos">
   <div>
     {% if mois and annee %}<b>Période :</b> {{ MOIS_NOMS[mois] }} {{ annee }}<br/>{% endif %}
-    <b>Nombre d'acomptes :</b> {{ liste|length }}
+    <b>Nombre d'acomptes :</b> {{ liste|length }}{% if par_site %} · classés par site{% endif %}
   </div>
   <div style="text-align:right">
     <b>Édité le :</b> {{ now.strftime('%d/%m/%Y à %H:%M') }}
@@ -61,7 +65,9 @@
     </tr>
   </thead>
   <tbody>
-    {% for a in liste %}
+    {% for g in groupes %}
+    {% if par_site %}<tr class="site-row"><td colspan="6">{{ g.nom }} <span>· {{ g.personnes|length }} acompte(s)</span></td></tr>{% endif %}
+    {% for a in g.personnes %}
     <tr>
       <td>
         <b>{{ a.salarie.nom }} {{ a.salarie.prenom }}</b>
@@ -77,6 +83,8 @@
       <td class="num"><b>{{ a.montant|int }}</b></td>
       <td class="sig-cell">&nbsp;</td>
     </tr>
+    {% endfor %}
+    {% if par_site %}<tr class="sous-tot"><td colspan="4" class="num">Sous-total {{ g.nom }} (hors annulés)</td><td class="num">{{ g.total|int }}</td><td></td></tr>{% endif %}
     {% else %}
     <tr><td colspan="6" class="center" style="padding:20px;color:#9ca3af">Aucun acompte sélectionné.</td></tr>
     {% endfor %}
