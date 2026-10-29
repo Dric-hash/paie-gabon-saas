@@ -794,26 +794,21 @@ def salarie_supprimer(id):
         return redirect(url_for("tenant.salaries"))
     s = Salarie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     nom = s.nom_complet
-    bulletins_actifs = BulletinPaie.query.filter_by(salarie_id=id).filter(
-        BulletinPaie.statut.in_(["VALIDÉ","PAYÉ"])).count()
-    if bulletins_actifs > 0:
-        flash(f"Impossible de supprimer {nom} : {bulletins_actifs} bulletin(s) validé(s). Passez-le en INACTIF.", "error")
+    import suppression_salarie
+    raisons = suppression_salarie.obstacles(s)
+    if raisons:
+        flash(f"Impossible de supprimer {nom} : " + " ; ".join(raisons) +
+              ". Pour un salarié qui a quitté l'entreprise, passez-le plutôt en INACTIF.", "error")
         return redirect(url_for("tenant.salarie_detail", id=id))
     try:
-        BulletinPaie.query.filter_by(salarie_id=id).delete()
-        Contrat.query.filter_by(salarie_id=id).delete()
-        Pointage.query.filter_by(salarie_id=id).delete()
-        Acompte.query.filter_by(salarie_id=id).delete()
-        Conge.query.filter_by(salarie_id=id).delete()
-        from models import DocumentSalarie, AffectationSite
-        DocumentSalarie.query.filter_by(salarie_id=id).delete()
-        AffectationSite.query.filter_by(salarie_id=id).delete()
-        db.session.delete(s); db.session.commit()
+        suppression_salarie.supprimer(s)
         log_action("DELETE", "salarie", id, f"Suppression salarié {nom}")
         db.session.commit()
         flash(f"Salarié {nom} supprimé.", "success")
     except Exception as e:
-        db.session.rollback(); flash(f"Erreur: {str(e)}", "error")
+        db.session.rollback()
+        current_app.logger.exception(f"[SALARIÉ] Suppression impossible ({id}) : {e}")
+        flash("La suppression a échoué : rien n'a été supprimé. L'erreur a été signalée.", "error")
         return redirect(url_for("tenant.salarie_detail", id=id))
     return redirect(url_for("tenant.salaries"))
 
