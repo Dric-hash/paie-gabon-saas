@@ -1,0 +1,16 @@
+{# Options des listes imprimées (non imprimées) : classement par site ou alphabétique #}
+<form method="get" class="no-print" style="display:inline-flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-left:14px;font-size:12px">
+  <label>Classement
+    <select name="classement" onchange="this.form.submit()" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:6px">
+      <option value="site" {{ 'selected' if par_site }}>par site</option>
+      <option value="alpha" {{ 'selected' if not par_site }}>alphabétique</option>
+    </select></label>
+  {% if par_site %}
+  <select name="site" onchange="this.form.submit()" style="padding:4px 6px;border:1px solid #d1d5db;border-radius:6px">
+    <option value="">Tous les sites</option>
+    {% for s in sites %}<option value="{{ s.id }}" {{ 'selected' if site_id == s.id }}>{{ s.nom }}</option>{% endfor %}
+    <option value="0" {{ 'selected' if site_id == 0 }}>Sans site affecté</option>
+  </select>
+  <label><input type="checkbox" name="saut" value="1" {{ 'checked' if saut }} onchange="this.form.submit()"/> une page par site</label>
+  {% endif %}
+</form>
