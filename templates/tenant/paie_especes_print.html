@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Paie en espèces — {{ periode.libelle_complet }} — {{ t.denomination }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color:#111; margin:22px; font-size:10px; background:#fff; }
+    h1 { font-size:15px; margin:0 0 2px; color:#0f3d36; }
+    .sub { color:#666; margin-bottom:10px; }
+    table { width:100%; border-collapse:collapse; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px 6px; font-size:9px; text-transform:uppercase; }
+    td { padding:9px 6px; border-bottom:1px solid #ddd; }
+    .r { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    .sig { width:28%; }
+    tfoot td { font-weight:bold; border-top:2px solid #0f3d36; padding:6px; font-size:11px; }
+    .bas { margin-top:26px; display:flex; justify-content:space-between; }
+    .bas div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:44px; padding-top:3px; color:#555; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    @media print { body { margin:0; padding:10px; } .noprint { display:none; } tr { page-break-inside:avoid; } thead { display:table-header-group; } }
+  </style>
+</head>
+<body>
+  <div class="noprint" style="margin-bottom:12px; text-align:right;"><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+  <h1>ÉTAT DE PAIE EN ESPÈCES — {{ periode.libelle_complet }}</h1>
+  <div class="sub">{{ t.denomination }} · bulletins validés ou payés, salariés payés en espèces · édité le {{ now.strftime('%d/%m/%Y') }}</div>
+  <table>
+    <thead><tr><th>#</th><th>Matricule</th><th>Salarié</th><th>Emploi</th><th class="r">Net à payer (FCFA)</th><th class="sig">Émargement</th></tr></thead>
+    <tbody>
+      {% for b in bulletins %}
+      <tr><td>{{ loop.index }}</td><td>{{ b.salarie.matricule }}</td><td><b>{{ b.salarie.nom_complet }}</b></td><td>{{ b.salarie.emploi or '' }}</td>
+        <td class="r">{{ '{:,.0f}'.format(b.net_a_payer).replace(',', ' ') }}</td><td></td></tr>
+      {% else %}<tr><td colspan="6" style="text-align:center;color:#999">Aucun salarié payé en espèces sur cette période.</td></tr>{% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="4" class="r">TOTAL — {{ bulletins|length }} salarié(s)</td><td class="r">{{ '{:,.0f}'.format(total).replace(',', ' ') }}</td><td></td></tr></tfoot>
+  </table>
+  <p>Arrêté à la somme de <b>{{ total_lettres }}</b>.</p>
+  <div class="bas"><div><div class="ligne">Payé par (caissier)</div></div><div><div class="ligne">Visa du responsable</div></div></div>
+</body>
+</html>

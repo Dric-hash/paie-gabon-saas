@@ -725,6 +725,12 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS idx_contrats_tenant_salarie ON contrats (tenant_id, salarie_id)",
         # ── Pointages par chantier (relevé multi-sites) ──────────────────────────
         "CREATE INDEX IF NOT EXISTS idx_pointages_tenant_site ON pointages (tenant_id, site_id)",
+        # ── 29/10/2026 — contrôle de la paie et virements des salaires ───────────
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS banque VARCHAR(100)",
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS rib VARCHAR(50)",
+        "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS titulaire_compte VARCHAR(150)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS controle_seuil_variation NUMERIC(5,2)",
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS controle_salaire_minimum NUMERIC(15,2)",
     ]
     for sql in migrations:
         try:

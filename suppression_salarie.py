@@ -22,6 +22,7 @@ TABLES_TRAITEES = {
     "pointages", "pointeurs_chantier", "acomptes", "conges", "previsions_conges", "documents_salarie",
     "affectations_sites", "affectations_mad", "prets_personnel", "acces_salaries", "demandes_documents",
     "demandes_profil", "competences_salarie", "evaluations", "formations", "sanctions",
+    "lignes_ordre_virement",   # bloque : un ordre de virement (même annulé) est un historique bancaire
 }
 
 STATUTS_BULLETIN_FIGES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
@@ -47,6 +48,10 @@ def obstacles(s):
         else:
             raisons.append(f"un prêt {p.statut_libelle.lower() if hasattr(p, 'statut_libelle') else 'en cours'} "
                            f"de {_fcfa(p.montant_total)} F (supprimez-le ou annulez-le d'abord dans Prêts)")
+    from models import LigneOrdreVirement
+    n = LigneOrdreVirement.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).count()
+    if n:
+        raisons.append(f"{n} ligne(s) d'ordre de virement de salaire")
     # Dossier RH (décision du 29/10/2026) : sanctions, évaluations et formations sont conservés
     for modele, libelle in ((Sanction, "sanction(s)"), (Evaluation, "évaluation(s)"), (Formation, "formation(s)")):
         n = modele.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).count()

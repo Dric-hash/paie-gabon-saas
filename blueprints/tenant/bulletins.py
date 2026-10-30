@@ -218,7 +218,7 @@ def bulletins():
     periodes     = PeriodePaie.query.filter_by(tenant_id=t.id)                    .order_by(PeriodePaie.annee.desc(), PeriodePaie.mois.desc()).all()
     sites_list   = Site.query.filter_by(tenant_id=t.id, actif=True).order_by(Site.nom).all()
     site_filtre  = Site.query.filter_by(id=site_filtre_id, tenant_id=t.id).first() if site_filtre_id else None
-    ps = None; buls = []; masse = {}; pagination = None
+    ps = None; buls = []; masse = {}; pagination = None; controle = None
 
     if pid:
         ps = PeriodePaie.query.filter_by(id=pid, tenant_id=t.id).first_or_404()
@@ -242,6 +242,12 @@ def bulletins():
         q_joined   = q.join(Salarie).order_by(Salarie.nom)
         buls_tous  = q_joined.all()
         masse      = calculer_masse_salariale(buls_tous)
+        try:
+            import controle_paie
+            controle = controle_paie.resume(controle_paie.controler(t, ps))
+        except Exception as _e:   # le contrôle n'empêche jamais d'afficher les bulletins
+            logger.warning(f"Contrôle de la paie indisponible : {_e}")
+            controle = None
         pagination = q_joined.paginate(page=page_bul, per_page=25, error_out=False)
         buls       = pagination.items
 
@@ -258,7 +264,7 @@ def bulletins():
         bulletins=buls, masse=masse, statut_filtre=sf,
         sites=sites_list, site_filtre=site_filtre, aff_sal=aff_sal,
         pagination=pagination if pid else None,
-        pagination_base=_base + _sep,
+        pagination_base=_base + _sep, controle=controle,
         tenant=t)
 
 @bp.route("/bulletins/bordereau")
@@ -496,9 +502,14 @@ def bulletins_valider_lot():
         buls = q.all()
 
     nb = 0
+    from blueprints.tenant.virements import bulletins_en_ordre
+    en_ordre = {k: v for k, v in bulletins_en_ordre(t.id).items() if v.statut == "PREPARE"}
+    nb_bloques = 0
     if action == "valider":
         for b in buls:
             if b.statut != "BROUILLON": continue
+            if float(b.net_a_payer or 0) < 0:      # contrôle de la paie : bloquant
+                nb_bloques += 1; continue
             b.statut          = "VALIDÉ"
             b.date_validation = utcnow()
             attribuer_numero_bulletin(b)
@@ -508,6 +519,8 @@ def bulletins_valider_lot():
                 a.statut = "DEDUIT"
             nb += 1
         msg = f"✅ {nb} bulletin(s) validé(s)."
+        if nb_bloques:
+            msg += f" {nb_bloques} bulletin(s) à net négatif non validé(s) : voir le contrôle de la paie."
         log_action("VALIDATE", "bulletin", pid,
                    f"Validation de {nb} bulletin(s) — période {pid}")
 
@@ -515,6 +528,8 @@ def bulletins_valider_lot():
         # ── NOUVEAU : annuler la validation → repasser en BROUILLON ──────────
         for b in buls:
             if b.statut not in ("VALIDÉ", "VALIDE"): continue
+            if b.id in en_ordre:                   # déjà sur un ordre de virement en attente
+                nb_bloques += 1; continue
             b.statut          = "BROUILLON"
             b.date_validation = None
             # Remettre les acomptes déduits en attente
@@ -524,6 +539,8 @@ def bulletins_valider_lot():
                 a.statut = "EN_ATTENTE"
             nb += 1
         msg = f"↩️ {nb} bulletin(s) remis en brouillon."
+        if nb_bloques:
+            msg += f" {nb_bloques} bulletin(s) sur un ordre de virement en attente laissé(s) tel(s) quel(s)."
         log_action("CANCEL", "bulletin", pid,
                    f"Annulation validation de {nb} bulletin(s) — période {pid}")
 
@@ -536,6 +553,8 @@ def bulletins_valider_lot():
             if b.statut == "BROUILLON":
                 nb_brouillons += 1; continue
             if b.statut not in ("VALIDÉ", "VALIDE"): continue
+            if b.id in en_ordre:                   # payé par l'exécution de l'ordre de virement
+                nb_bloques += 1; continue
             b.statut = "PAYÉ"
             b.date_paiement = date.today()
             b.mode_paiement = ((b.salarie.mode_paiement if b.salarie else None) or "ESPECES")
@@ -544,6 +563,8 @@ def bulletins_valider_lot():
         msg = f"💰 {nb} bulletin(s) marqué(s) comme payé(s)."
         if nb_brouillons:
             msg += f" {nb_brouillons} brouillon(s) ignoré(s) : validez-les d'abord."
+        if nb_bloques:
+            msg += f" {nb_bloques} bulletin(s) sur un ordre de virement en attente : exécutez l'ordre."
         # Interconnexion Caisse, comme pour le paiement unitaire (ne bloque jamais).
         for b in payes:
             try:
@@ -561,10 +582,15 @@ def bulletins_valider_lot():
                    f"{nb} bulletin(s) marqué(s) payé(s) — période {pid}")
 
     elif action == "supprimer_brouillons":
+        from blueprints.tenant.virements import detacher_bulletins
         for b in buls:
             if b.statut != "BROUILLON": continue
+            if not detacher_bulletins(t.id, [b.id]):
+                nb_bloques += 1; continue
             db.session.delete(b); nb += 1
         msg = f"🗑️ {nb} brouillon(s) supprimé(s)."
+        if nb_bloques:
+            msg += f" {nb_bloques} brouillon(s) liés à un ordre de virement conservé(s)."
         log_action("DELETE", "bulletin", pid,
                    f"Suppression de {nb} brouillon(s) — période {pid}")
 
@@ -848,6 +874,9 @@ def bulletin_valider(id):
     if b.statut in ("VALIDÉ", "VALIDE", "PAYÉ"):
         flash("Ce bulletin est déjà validé.", "info")
         return redirect(url_for("tenant.bulletin_detail", id=id))
+    if float(b.net_a_payer or 0) < 0:
+        flash("Net à payer négatif : corrigez les retenues (acompte, prêt…) avant de valider.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
     acomptes = Acompte.query.filter_by(
         tenant_id=t.id, salarie_id=b.salarie_id,
         mois=b.periode.mois, annee=b.periode.annee, statut="EN_ATTENTE").all()
@@ -936,6 +965,11 @@ def bulletin_paye(id):
     if b.statut not in ("VALIDÉ", "VALIDE"):
         flash("Validez d'abord le bulletin avant de le marquer comme payé.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
+    from blueprints.tenant.virements import bulletins_en_ordre
+    _ov = bulletins_en_ordre(t.id).get(b.id)
+    if _ov is not None and _ov.statut == "PREPARE":
+        flash(f"Ce bulletin figure sur l'ordre de virement {_ov.numero} : il sera payé à l'exécution de l'ordre.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
     mode = (request.form.get("mode_paiement") or "").strip()
     if mode not in ("ESPECES", "VIREMENT"):
         mode = (b.salarie.mode_paiement if b.salarie else "ESPECES") or "ESPECES"
@@ -975,6 +1009,10 @@ def bulletin_supprimer(id):
     if current_user.is_super_admin:
         b = BulletinPaie.query.get_or_404(id)
         salarie_id = b.salarie_id
+        from blueprints.tenant.virements import detacher_bulletins
+        if not detacher_bulletins(b.tenant_id, [b.id]):
+            flash("Ce bulletin figure sur un ordre de virement en cours ou exécuté.", "error")
+            return redirect(url_for("tenant.salarie_detail", id=salarie_id))
         db.session.delete(b); db.session.commit()
         flash("Bulletin supprimé (super admin).", "success")
         return redirect(url_for("tenant.salarie_detail", id=salarie_id))
@@ -983,6 +1021,10 @@ def bulletin_supprimer(id):
     b = BulletinPaie.query.filter_by(id=id, tenant_id=t.id).first_or_404()
     if b.statut == "VALIDÉ":
         flash("Impossible de supprimer un bulletin validé.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    from blueprints.tenant.virements import detacher_bulletins
+    if not detacher_bulletins(t.id, [b.id]):
+        flash("Ce bulletin figure sur un ordre de virement : il ne peut pas être supprimé.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
     db.session.delete(b); db.session.commit()
     flash("Bulletin supprimé.", "success")

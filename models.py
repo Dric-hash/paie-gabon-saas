@@ -124,6 +124,9 @@ class Tenant(db.Model):
     # d'une dérogation portant ce seuil à 45h ou 48h : en deçà, les heures restent
     # payées au taux normal. Bornes admises : 40h (légal) → 48h (max contractuel).
     seuil_heures_sup_hebdo = db.Column(db.Numeric(4, 1), default=40.0)
+    # Contrôle de la paie avant validation (controle_paie.py) : réglages de l'entreprise
+    controle_seuil_variation = db.Column(db.Numeric(5, 2))   # % d'écart du net vs mois précédent (défaut 20)
+    controle_salaire_minimum = db.Column(db.Numeric(15, 2))  # minimum mensuel de référence (vide : valeur du code)
 
     # ── MODE CABINET (multi-entreprises) ──────────────────────────────────
     # est_cabinet : ce tenant est un cabinet comptable qui gère plusieurs
@@ -684,6 +687,10 @@ class Salarie(db.Model):
     statut                 = db.Column(db.String(20), default="ACTIF")
     date_creation          = db.Column(db.DateTime, default=utcnow)
     mode_paiement          = db.Column(db.String(30), default="ESPECES")  # ESPECES | VIREMENT
+    # Coordonnées bancaires (ordres de virement des salaires, 29/10/2026)
+    banque                 = db.Column(db.String(100))
+    rib                    = db.Column(db.String(50))     # RIB ou IBAN, tel que fourni par la banque
+    titulaire_compte       = db.Column(db.String(150))    # si différent du salarié
     date_modification      = db.Column(db.DateTime, onupdate=utcnow)
 
     bulletins = db.relationship("BulletinPaie", backref="salarie", lazy=True)
@@ -2692,3 +2699,65 @@ class DemandeProfil(db.Model):
     traite_par      = db.Column(db.String(150))
     motif_refus     = db.Column(db.String(300))
     salarie = db.relationship("Salarie")
+
+
+# ═══════════════════ VIREMENTS DES SALAIRES (29/10/2026) — blueprints/tenant/virements.py ═══════════════════
+class CompteBancaire(db.Model):
+    """Compte bancaire de l'entreprise, donneur d'ordre des virements de salaires."""
+    __tablename__ = "comptes_bancaires"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    banque        = db.Column(db.String(100), nullable=False)
+    intitule      = db.Column(db.String(150))          # libellé du compte (ex. « Compte salaires »)
+    rib           = db.Column(db.String(50), nullable=False)
+    agence        = db.Column(db.String(150))
+    actif         = db.Column(db.Boolean, default=True)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    __table_args__ = (db.Index("idx_comptes_bancaires_tenant", "tenant_id"),)
+
+
+class OrdreVirement(db.Model):
+    """Ordre de virement des salaires d'une période, adressé à la banque de l'entreprise.
+    PREPARE → EXECUTE (bulletins payés) ; ou ANNULE (les bulletins redeviennent disponibles)."""
+    __tablename__ = "ordres_virement"
+    id             = db.Column(db.Integer, primary_key=True)
+    tenant_id      = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    periode_id     = db.Column(db.Integer, db.ForeignKey("periodes_paie.id"), nullable=False)
+    compte_id      = db.Column(db.Integer, db.ForeignKey("comptes_bancaires.id"), nullable=False)
+    numero         = db.Column(db.String(30), nullable=False)        # OV-2026-0001
+    statut         = db.Column(db.String(20), default="PREPARE")
+    date_ordre     = db.Column(db.Date, nullable=False)
+    date_execution = db.Column(db.Date)                              # date de valeur demandée / constatée
+    auteur         = db.Column(db.String(150))
+    motif_annulation = db.Column(db.String(300))
+    date_creation  = db.Column(db.DateTime, default=utcnow)
+    periode = db.relationship("PeriodePaie")
+    compte  = db.relationship("CompteBancaire")
+    lignes  = db.relationship("LigneOrdreVirement", back_populates="ordre", cascade="all, delete-orphan",
+                              order_by="LigneOrdreVirement.nom")
+    __table_args__ = (db.UniqueConstraint("tenant_id", "numero", name="uq_ordre_virement_numero"),
+                      db.Index("idx_ordres_virement_tenant", "tenant_id", "periode_id"))
+
+    @property
+    def total(self):
+        return round(sum(float(l.montant or 0) for l in self.lignes), 2)
+
+
+class LigneOrdreVirement(db.Model):
+    """Bénéficiaire d'un ordre : coordonnées et montant figés au moment de l'ordre."""
+    __tablename__ = "lignes_ordre_virement"
+    id          = db.Column(db.Integer, primary_key=True)
+    tenant_id   = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    ordre_id    = db.Column(db.Integer, db.ForeignKey("ordres_virement.id"), nullable=False)
+    # vide quand le bulletin d'un ordre ANNULÉ a ensuite été supprimé (brouillon) : la ligne garde
+    # nom, RIB et montant figés pour l'historique bancaire
+    bulletin_id = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id"))
+    salarie_id  = db.Column(db.Integer, db.ForeignKey("salaries.id"))
+    matricule   = db.Column(db.String(50))
+    nom         = db.Column(db.String(250), nullable=False)
+    banque      = db.Column(db.String(100))
+    rib         = db.Column(db.String(50), nullable=False)
+    montant     = db.Column(db.Numeric(15, 2), nullable=False)
+    ordre    = db.relationship("OrdreVirement", back_populates="lignes")
+    bulletin = db.relationship("BulletinPaie")
+    __table_args__ = (db.Index("idx_lignes_ov_bulletin", "tenant_id", "bulletin_id"),)

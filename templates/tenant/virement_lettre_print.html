@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Ordre de virement {{ o.numero }} — {{ t.denomination }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color:#111; margin:28px; font-size:11px; background:#fff; }
+    .tete { display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .dest { margin-top:22px; margin-left:auto; width:46%; min-width:240px; }
+    h1 { font-size:14px; margin:24px 0 6px; text-transform:uppercase; letter-spacing:.4px; }
+    p { line-height:1.55; }
+    table { width:100%; border-collapse:collapse; margin-top:10px; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px 6px; font-size:9px; text-transform:uppercase; }
+    td { padding:5px 6px; border-bottom:1px solid #e5e5e5; font-size:10px; }
+    .r { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    .m { font-family:'Courier New',monospace; }
+    tfoot td { font-weight:bold; border-top:2px solid #0f3d36; font-size:11px; }
+    .sig { margin-top:40px; display:flex; justify-content:flex-end; }
+    .sig div { width:45%; text-align:center; }
+    .ligne { border-top:1px solid #888; margin-top:56px; padding-top:4px; color:#555; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    .foot { margin-top:20px; color:#999; font-size:8px; border-top:1px solid #eee; padding-top:6px; }
+    @media print { body { margin:0; padding:12px; } .noprint { display:none; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+  <div class="noprint" style="margin-bottom:12px; text-align:right;"><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+  <div class="tete">
+    <div>
+      <div style="font-size:13px;font-weight:bold">{{ t.denomination }}</div>
+      {% if t.adresse %}<div>{{ t.adresse }}</div>{% endif %}
+      {% if t.boite_postale or t.ville %}<div>{% if t.boite_postale %}BP {{ t.boite_postale }} {% endif %}{{ t.ville or '' }}</div>{% endif %}
+      {% if t.telephone %}<div>Tél. {{ t.telephone }}</div>{% endif %}
+      {% if t.nif %}<div>NIF {{ t.nif }}</div>{% endif %}
+    </div>
+    <div style="text-align:right">{{ t.ville or '' }}{% if t.ville %}, le{% else %}Le{% endif %} {{ o.date_ordre.strftime('%d/%m/%Y') }}</div>
+  </div>
+  <div class="dest">
+    <b>{{ o.compte.banque }}</b>{% if o.compte.agence %}<br>{{ o.compte.agence }}{% endif %}
+  </div>
+
+  <h1>Ordre de virement n° {{ o.numero }} — salaires {{ o.periode.libelle_complet|lower }}</h1>
+  <p>Madame, Monsieur,</p>
+  <p>Nous vous prions de bien vouloir débiter notre compte n° <b class="m">{{ o.compte.rib }}</b>{% if o.compte.intitule %} ({{ o.compte.intitule }}){% endif %}
+    de la somme de <b>{{ '{:,.0f}'.format(o.total).replace(',', ' ') }} FCFA</b> ({{ total_lettres }}), et de virer les montants ci-dessous
+    aux bénéficiaires désignés{% if o.date_execution %}, avec une date de valeur au <b>{{ o.date_execution.strftime('%d/%m/%Y') }}</b>{% endif %}.</p>
+
+  <table>
+    <thead><tr><th>#</th><th>Matricule</th><th>Bénéficiaire</th><th>Banque</th><th>RIB / IBAN</th><th class="r">Montant (FCFA)</th></tr></thead>
+    <tbody>
+      {% for l in o.lignes %}
+      <tr><td>{{ loop.index }}</td><td>{{ l.matricule or '' }}</td><td>{{ l.nom }}</td><td>{{ l.banque or '' }}</td><td class="m">{{ l.rib }}</td>
+        <td class="r">{{ '{:,.0f}'.format(l.montant).replace(',', ' ') }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="5" class="r">TOTAL — {{ o.lignes|length }} virement(s)</td><td class="r">{{ '{:,.0f}'.format(o.total).replace(',', ' ') }}</td></tr></tfoot>
+  </table>
+
+  <p style="margin-top:14px">Nous vous prions d'agréer, Madame, Monsieur, l'expression de nos salutations distinguées.</p>
+  <div class="sig"><div>
+    <div class="ligne">{{ t.representant_nom or 'Signature autorisée' }}{% if t.representant_fonction %}<br>{{ t.representant_fonction }}{% endif %}<br>(signature et cachet)</div>
+  </div></div>
+  <div class="foot">{{ t.denomination }} · ordre de virement {{ o.numero }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</div>
+</body>
+</html>
