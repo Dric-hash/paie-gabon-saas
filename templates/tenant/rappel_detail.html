@@ -12,6 +12,13 @@
     <p style="font-size:.78rem;color:#6b7280;margin:.2rem 0 0">
       Salaire de base {{ '{:,.0f}'.format(r.ancien_salaire).replace(',', ' ') }} → <b>{{ '{:,.0f}'.format(r.nouveau_salaire).replace(',', ' ') }} FCFA</b>
       à partir de {{ r.date_effet.strftime('%m/%Y') }} · versé sur <b>{{ r.periode.libelle_complet }}</b> · par {{ r.auteur }}</p>
+    <p style="font-size:.78rem;color:#6b7280;margin:.2rem 0 0">Contrat :
+      {% if r.contrat_maj == 'AVENANT' and avenant %}avenant à <b>{{ '{:,.0f}'.format(avenant.salaire_base).replace(',', ' ') }} FCFA</b> à compter du {{ avenant.date_debut.strftime('%d/%m/%Y') }}{% if not avenant.actif %} (plus le contrat actif){% endif %}
+        · <a href="/salaries/{{ r.salarie_id }}/carriere" style="color:#0f3d36">frise de carrière</a>
+      {% elif r.contrat_maj == 'DEJA_A_JOUR' %}déjà au nouveau salaire lors du rappel (pas d'avenant)
+      {% elif r.contrat_maj == 'RETABLI' %}avenant supprimé à l'annulation, contrat précédent réactivé
+      {% elif r.contrat_maj == 'CONSERVE' %}<span style="color:#b45309">avenant conservé à l'annulation (contrat modifié depuis ou bulletin validé à ce salaire) : vérifiez le contrat</span>
+      {% else %}non modifié{% endif %}</p>
     {% if r.motif_annulation %}<p style="font-size:.78rem;color:#b91c1c;margin:.2rem 0 0">Annulé : {{ r.motif_annulation }}</p>{% endif %}
   </div>
   <a href="/rappels/{{ r.id }}/imprimer" target="_blank" style="background:#ecfdf5;color:#065f46;{{ btn }}">🖨 État de rappel</a>
@@ -20,7 +27,7 @@
 {% if a_reenregistrer %}
 <div class="card" style="padding:.75rem 1.25rem;margin-bottom:1rem;background:#fef2f2;border:1px solid #fecaca;font-size:.84rem;color:#991b1b">
   Le bulletin de {{ r.periode.libelle_complet }} existe déjà en brouillon : <a href="/bulletins/{{ bulletin_versement.id }}" style="color:#991b1b;font-weight:700">ouvrez-le</a>
-  en modification et enregistrez-le pour {{ 'retirer' if r.statut == 'ANNULE' else 'inclure' }} le rappel. Sa validation est bloquée d'ici là.
+  en modification et enregistrez-le pour {{ 'retirer' if r.statut == 'ANNULE' else 'inclure' }} le rappel et reprendre le salaire de base du contrat. Sa validation est bloquée d'ici là.
 </div>
 {% elif bulletin_versement and r.statut != 'ANNULE' %}
 <div class="card" style="padding:.6rem 1.25rem;margin-bottom:1rem;font-size:.82rem;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0">

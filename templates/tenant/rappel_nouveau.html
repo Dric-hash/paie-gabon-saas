@@ -71,7 +71,7 @@
   <label style="display:block;margin-top:.6rem;font-size:.75rem;color:#6b7280">Justification des ajustements (obligatoire s'il y en a)
     <input name="justif_ajustement" style="{{ champ }}" placeholder="ex. effet au 15 du mois : demi-mois"></label>
   <p style="font-size:.72rem;color:#6b7280;margin:.6rem 0 0">Le total sera versé sur le bulletin de {{ periode.libelle_complet }} comme un gain soumis à la CNSS, à la CNAMGS et à l'IRPP du mois de versement.
-    Le contrat n'est pas modifié : appliquez le nouveau salaire pour les mois suivants par la fiche contrat ou la gestion de carrière.</p>
+    Le contrat est mis à jour automatiquement : un avenant au nouveau salaire est créé à compter du mois d'effet (il s'applique aux bulletins suivants) et l'augmentation figure dans la frise de carrière.</p>
   <div style="display:flex;gap:.5rem;margin-top:.9rem">
     <button name="action" value="calculer" style="background:#f3f4f6;color:#374151;{{ btn }}">Recalculer</button>
     <button name="action" value="enregistrer" style="background:#0f3d36;color:white;{{ btn }}">Enregistrer le rappel</button>

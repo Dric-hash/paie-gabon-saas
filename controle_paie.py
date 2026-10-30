@@ -7,6 +7,8 @@ Repère ce qui mérite une vérification avant de valider les bulletins et de pa
     - net à payer négatif ;
     - deux bulletins pour le même salarié sur la période ;
     - rappel de salaire à verser mais absent du bulletin (brouillon à ré-enregistrer).
+    - salaire de base d'un brouillon pas aligné sur un rappel (ancien salaire après avenant,
+      ou nouveau salaire après annulation et rétablissement du contrat).
   ATTENTION (à vérifier, la validation reste possible)
     - salarié actif sans bulletin ;
     - net à payer nul ;
@@ -167,6 +169,12 @@ def controler(tenant, periode):
                 res.append(_anomalie("bloquant", "RAPPEL_ANNULE", "Rappel annulé encore sur le bulletin",
                                      f"{rappels_salaire.libelle_composant(r)} a été annulé : ré-enregistrez le bulletin "
                                      f"pour le retirer.", s, b))
+            r = rappels_salaire.base_perimee(b)
+            if r is not None:
+                res.append(_anomalie("bloquant", "RAPPEL_BASE", "Salaire de base non aligné sur le rappel",
+                                     f"Salaire de base {_fcfa(b.salaire_base)} alors que le contrat a été "
+                                     f"{'rétabli à ' + _fcfa(r.ancien_salaire) if r.statut == 'ANNULE' else 'porté à ' + _fcfa(r.nouveau_salaire)} "
+                                     f"(rappel de salaire) : ouvrez le bulletin en modification et enregistrez-le.", s, b))
         if (s.mode_paiement or "ESPECES") == "VIREMENT" and not (s.rib or "").strip():
             res.append(_anomalie("attention", "SANS_RIB", "Virement sans RIB",
                                  "Mode de paiement « virement » mais aucun RIB sur la fiche du salarié.", s, b))

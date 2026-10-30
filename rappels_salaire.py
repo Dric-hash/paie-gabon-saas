@@ -16,13 +16,23 @@ salaire de base, au rapport « nouveau salaire / ancien salaire » :
 Écart du mois = Σ (montant versé × rapport − montant versé), arrondi au franc par rubrique,
 plus un ajustement manuel éventuel (justifié). Le total est versé sur le bulletin de la
 période d'imputation comme un gain soumis à la CNSS, à la CNAMGS et à l'IRPP du mois de
-versement (traitement à valider par le gestionnaire de paie).
+versement (règle confirmée par le client le 30/10/2026).
+
+Contrat : à l'enregistrement du rappel, un avenant au nouveau salaire est créé à compter du
+mois d'effet (comme une promotion de la gestion de carrière : le contrat actif est désactivé,
+ses autres conditions sont reprises) et la frise de carrière reçoit un événement
+« Augmentation de salaire ». Si le contrat actif est déjà au nouveau salaire, rien n'est
+créé. L'annulation du rappel supprime l'avenant et réactive le contrat précédent, sauf si le
+contrat a changé depuis ou si un bulletin validé a déjà été calculé au nouveau salaire.
+Un brouillon d'un mois ≥ effet resté à l'ancien salaire (ou au nouveau après rétablissement)
+doit être ré-enregistré avant validation.
 """
 import json
 from collections import OrderedDict
 from datetime import date
 
-from models import db, BulletinPaie, PeriodePaie, BulletinComposant, RappelSalaire, LigneRappel
+from models import (db, BulletinPaie, PeriodePaie, BulletinComposant, RappelSalaire, LigneRappel, Contrat,
+                    EvenementCarriere)
 
 RUBRIQUES = OrderedDict([
     ("salaire_base", ("Salaire de base", ("salaire_base",), True)),
@@ -158,14 +168,103 @@ def annules_inclus(bulletin):
     return RappelSalaire.query.filter(RappelSalaire.id.in_(ids), RappelSalaire.statut == "ANNULE").all()
 
 
+def base_perimee(bulletin):
+    """Rappel dont le salaire de base contredit ce bulletin non validé d'un mois ≥ effet :
+    encore à l'ancien salaire alors que le rappel est actif, ou au nouveau salaire alors que
+    le rappel est annulé et le contrat rétabli. None sinon."""
+    if bulletin.statut in STATUTS_VALIDES or bulletin.periode is None:
+        return None
+    cle = (bulletin.periode.annee, bulletin.periode.mois)
+    base = _f(bulletin.salaire_base)
+    for r in (RappelSalaire.query.filter_by(tenant_id=bulletin.tenant_id, salarie_id=bulletin.salarie_id)
+              .order_by(RappelSalaire.id.desc()).all()):
+        if (r.date_effet.year, r.date_effet.month) > cle:
+            continue
+        if r.statut != "ANNULE":
+            return r if abs(base - _f(r.ancien_salaire)) < 0.5 else None
+        if r.contrat_maj == "RETABLI":
+            return r if abs(base - _f(r.nouveau_salaire)) < 0.5 else None
+    return None
+
+
 def a_reenregistrer(bulletin):
-    """True si le bulletin doit être ré-enregistré avant validation (rappel manquant ou annulé inclus)."""
-    return bool(manquants(bulletin) or annules_inclus(bulletin))
+    """True si le bulletin doit être ré-enregistré avant validation (rappel manquant ou annulé
+    inclus, salaire de base pas aligné sur le rappel)."""
+    return bool(manquants(bulletin) or annules_inclus(bulletin) or base_perimee(bulletin))
+
+
+def _fcfa(x):
+    return f"{_f(x):,.0f}".replace(",", " ")
+
+
+def contrat_actif(tenant_id, salarie_id):
+    return (Contrat.query.filter_by(tenant_id=tenant_id, salarie_id=salarie_id, actif=True)
+            .order_by(Contrat.date_debut.desc(), Contrat.id.desc()).first())
+
+
+def appliquer_au_contrat(r, user_id=None):
+    """Avenant au nouveau salaire à compter du mois d'effet (sauf contrat déjà à jour).
+    Renvoie l'avenant créé ou None."""
+    actif = contrat_actif(r.tenant_id, r.salarie_id)
+    if actif is not None and abs(_f(actif.salaire_base) - _f(r.nouveau_salaire)) < 0.5:
+        r.contrat_maj = "DEJA_A_JOUR"
+        return None
+    Contrat.query.filter_by(tenant_id=r.tenant_id, salarie_id=r.salarie_id, actif=True).update(
+        {"actif": False}, synchronize_session=False)
+    c = Contrat(tenant_id=r.tenant_id, salarie_id=r.salarie_id,
+                type_contrat=(actif.type_contrat if actif else "CDI"), date_debut=r.date_effet,
+                date_fin=(actif.date_fin if actif else None),
+                date_fin_essai=(actif.date_fin_essai if actif else None),
+                salaire_base=r.nouveau_salaire,
+                poste=(actif.poste if actif else r.salarie.emploi),
+                categorie_id=(actif.categorie_id if actif else r.salarie.categorie_id),
+                elements_recurrents=(actif.elements_recurrents if actif else None), actif=True)
+    db.session.add(c)
+    db.session.flush()
+    db.session.add(EvenementCarriere(
+        tenant_id=r.tenant_id, salarie_id=r.salarie_id, type="AUGMENTATION", date_effet=r.date_effet,
+        titre="Augmentation de salaire (rappel)", details=r.motif,
+        ancienne_valeur=f"{_fcfa(actif.salaire_base if actif else r.ancien_salaire)} FCFA",
+        nouvelle_valeur=f"{_fcfa(r.nouveau_salaire)} FCFA", contrat_id=c.id,
+        cree_par=user_id, cree_par_nom=r.auteur))
+    r.contrat_id, r.contrat_precedent_id, r.contrat_maj = c.id, (actif.id if actif else None), "AVENANT"
+    db.session.flush()
+    return c
+
+
+def retablir_contrat(r):
+    """À l'annulation : supprime l'avenant créé par le rappel et réactive le contrat précédent.
+    Renvoie RETABLI, CONSERVE (contrat modifié depuis, ou bulletin validé au nouveau salaire)
+    ou None (le rappel n'avait pas créé d'avenant)."""
+    if r.contrat_maj != "AVENANT" or not r.contrat_id:
+        return None
+    c = db.session.get(Contrat, r.contrat_id)
+    actif = contrat_actif(r.tenant_id, r.salarie_id)
+    deja_paye = (BulletinPaie.query.join(PeriodePaie, BulletinPaie.periode_id == PeriodePaie.id)
+                 .filter(BulletinPaie.tenant_id == r.tenant_id, BulletinPaie.salarie_id == r.salarie_id,
+                         BulletinPaie.statut.in_(STATUTS_VALIDES), BulletinPaie.salaire_base == r.nouveau_salaire,
+                         (PeriodePaie.annee * 100 + PeriodePaie.mois) >= r.date_effet.year * 100 + r.date_effet.month)
+                 .first())
+    if (c is None or actif is None or actif.id != c.id or abs(_f(c.salaire_base) - _f(r.nouveau_salaire)) >= 0.5
+            or deja_paye is not None):
+        r.contrat_maj = "CONSERVE"
+        return "CONSERVE"
+    EvenementCarriere.query.filter_by(tenant_id=r.tenant_id, contrat_id=c.id).delete(synchronize_session=False)
+    r.contrat_id = None
+    db.session.flush()
+    db.session.delete(c)
+    if r.contrat_precedent_id:
+        prec = db.session.get(Contrat, r.contrat_precedent_id)
+        if prec is not None:
+            prec.actif = True
+    r.contrat_maj = "RETABLI"
+    db.session.flush()
+    return "RETABLI"
 
 
 def enregistrer(tenant_id, salarie, periode_versement, date_effet, ancien, nouveau, rubriques, motif, auteur,
-                ajustements=None):
-    """Crée le rappel et ses lignes. ajustements : {bulletin_id: (montant, )}."""
+                ajustements=None, user_id=None):
+    """Crée le rappel, ses lignes et l'avenant au contrat. ajustements : {bulletin_id: montant}."""
     lignes, _ = preparer(tenant_id, salarie.id, date_effet, periode_versement, ancien, nouveau, rubriques)
     r = RappelSalaire(tenant_id=tenant_id, salarie_id=salarie.id, periode_id=periode_versement.id, motif=motif,
                       date_effet=date_effet, ancien_salaire=ancien, nouveau_salaire=nouveau,
@@ -180,6 +279,7 @@ def enregistrer(tenant_id, salarie, periode_versement, date_effet, ancien, nouve
                                    detail=json.dumps(detail), ecart_calcule=ecart, ajustement=aj,
                                    montant=_franc(ecart + aj)))
     db.session.flush()
+    appliquer_au_contrat(r, user_id)
     return r
 
 

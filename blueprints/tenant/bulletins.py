@@ -860,6 +860,14 @@ def bulletin_saisie():
         valeurs_edit["__composants"]={f"composant_{c.composant_id}":float(c.montant or 0) for c in _comps}
     ss=Salarie.query.filter_by(id=sid,tenant_id=t.id).first() if sid else None
     c=Contrat.query.filter_by(salarie_id=sid,tenant_id=t.id,actif=True).first() if sid else None
+    if bulletin_edit is not None and c is not None and c.salaire_base:
+        import rappels_salaire as _rs
+        if _rs.base_perimee(bulletin_edit):
+            # brouillon resté à l'ancien salaire (rappel enregistré) ou au nouveau (rappel annulé) : on reprend le contrat
+            valeurs_edit["salaire_base"]=float(c.salaire_base)
+            flash("Salaire de base repris du contrat ({} FCFA) suite à un rappel de salaire : vérifiez les heures, "
+                  "absences et primes proportionnelles puis enregistrez.".format(
+                  f"{float(c.salaire_base):,.0f}".replace(",", " ")),"info")
     acomptes_attente = Acompte.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_ATTENTE").all() if sid else []
     total_acomptes = sum(float(a.montant) for a in acomptes_attente)
     prets_actifs = (PretPersonnel.query.filter_by(tenant_id=t.id, salarie_id=sid, statut="EN_COURS")
@@ -902,8 +910,8 @@ def bulletin_valider(id):
         return redirect(url_for("tenant.bulletin_detail", id=id))
     import rappels_salaire as _rs
     if _rs.a_reenregistrer(b):
-        flash("Rappel de salaire à mettre à jour sur ce bulletin (à inclure, ou annulé) : ouvrez-le en "
-              "modification et enregistrez-le, puis validez.", "error")
+        flash("Rappel de salaire à mettre à jour sur ce bulletin (rappel à inclure ou annulé, ou salaire de base "
+              "à aligner sur le contrat) : ouvrez-le en modification et enregistrez-le, puis validez.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
     acomptes = Acompte.query.filter_by(
         tenant_id=t.id, salarie_id=b.salarie_id,
