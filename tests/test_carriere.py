@@ -103,6 +103,24 @@ def test_promotion_cree_avenant_et_evenement(client):
         assert "300" in (evt.nouvelle_valeur or "")
 
 
+def test_promotion_reprend_primes_recurrentes_et_fin_essai(client):
+    """L'avenant reprend les éléments récurrents et la fin de période d'essai du contrat en cours."""
+    sid = client._ids["sal"]
+    with flask_app.app_context():
+        c = Contrat.query.filter_by(salarie_id=sid, actif=True).one()
+        c.elements_recurrents = '{"prime_transport": 25000}'
+        c.date_fin_essai = date(2026, 9, 30)
+        c.date_fin = date(2027, 12, 31)
+        db.session.commit()
+    client.post(f"/salaries/{sid}/promouvoir", data={"type_evt": "AUGMENTATION", "date_effet": "2026-07-01",
+                                                    "salaire_base": "220000"})
+    with flask_app.app_context():
+        av = Contrat.query.filter_by(salarie_id=sid, actif=True).one()
+        assert float(av.salaire_base) == 220000
+        assert (av.elements_recurrents, av.date_fin_essai, av.date_fin) == (
+            '{"prime_transport": 25000}', date(2026, 9, 30), date(2027, 12, 31))
+
+
 def test_promotion_ne_touche_pas_bulletin_valide(client):
     """Un bulletin déjà validé n'est jamais modifié par une promotion."""
     sid = client._ids["sal"]
