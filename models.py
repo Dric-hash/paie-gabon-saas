@@ -978,6 +978,7 @@ class BulletinComposant(db.Model):
     base          = db.Column(db.Numeric(15, 2))
     taux          = db.Column(db.Numeric(8, 4))
     montant       = db.Column(db.Numeric(15, 2), nullable=False, default=0)
+    rappel_id     = db.Column(db.Integer, db.ForeignKey("rappels_salaire.id"))   # composant issu d'un rappel
     __table_args__ = (db.Index("idx_bulcomp_bulletin", "bulletin_id"),)
 
     @property
@@ -2761,3 +2762,52 @@ class LigneOrdreVirement(db.Model):
     ordre    = db.relationship("OrdreVirement", back_populates="lignes")
     bulletin = db.relationship("BulletinPaie")
     __table_args__ = (db.Index("idx_lignes_ov_bulletin", "tenant_id", "bulletin_id"),)
+
+
+# ═══════════════════ RAPPELS DE SALAIRE (30/10/2026) — rappels_salaire.py ═══════════════════
+class RappelSalaire(db.Model):
+    """Rappel de salaire : augmentation ou reclassement à effet rétroactif. Les bulletins déjà
+    validés ne sont jamais modifiés ; la différence due, mois par mois, est versée sur le
+    bulletin de la période d'imputation (composant soumis aux cotisations et à l'IRPP).
+    Statut : A_VERSER (en attente du bulletin) → VERSE quand ce bulletin est validé ; ANNULE."""
+    __tablename__ = "rappels_salaire"
+    id                 = db.Column(db.Integer, primary_key=True)
+    tenant_id          = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    salarie_id         = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    periode_id         = db.Column(db.Integer, db.ForeignKey("periodes_paie.id"), nullable=False)  # versement
+    motif              = db.Column(db.String(300), nullable=False)
+    date_effet         = db.Column(db.Date, nullable=False)          # 1er mois concerné
+    ancien_salaire     = db.Column(db.Numeric(15, 2), nullable=False)
+    nouveau_salaire    = db.Column(db.Numeric(15, 2), nullable=False)
+    rubriques          = db.Column(db.String(200))                   # rubriques réévaluées (codes, séparés par ,)
+    statut             = db.Column(db.String(20), default="A_VERSER")
+    auteur             = db.Column(db.String(150))
+    motif_annulation   = db.Column(db.String(300))
+    date_creation      = db.Column(db.DateTime, default=utcnow)
+    salarie = db.relationship("Salarie")
+    periode = db.relationship("PeriodePaie")
+    lignes  = db.relationship("LigneRappel", back_populates="rappel", cascade="all, delete-orphan",
+                              order_by="LigneRappel.id")
+    __table_args__ = (db.Index("idx_rappels_tenant", "tenant_id", "periode_id", "statut"),)
+
+    @property
+    def total(self):
+        return round(sum(float(l.montant or 0) for l in self.lignes), 2)
+
+
+class LigneRappel(db.Model):
+    """Un mois rappelé : bulletin validé de référence, détail recalculé, ajustement éventuel."""
+    __tablename__ = "lignes_rappel"
+    id           = db.Column(db.Integer, primary_key=True)
+    tenant_id    = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    rappel_id    = db.Column(db.Integer, db.ForeignKey("rappels_salaire.id"), nullable=False)
+    periode_id   = db.Column(db.Integer, db.ForeignKey("periodes_paie.id"), nullable=False)
+    bulletin_id  = db.Column(db.Integer, db.ForeignKey("bulletins_paie.id", ondelete="SET NULL"))   # référence (détail figé)
+    libelle_mois = db.Column(db.String(30))
+    detail       = db.Column(db.Text)                          # JSON {rubrique: [versé, dû, écart]}
+    ecart_calcule = db.Column(db.Numeric(15, 2), default=0)
+    ajustement   = db.Column(db.Numeric(15, 2), default=0)    # correction manuelle (+/-)
+    montant      = db.Column(db.Numeric(15, 2), default=0)    # écart calculé + ajustement
+    rappel   = db.relationship("RappelSalaire", back_populates="lignes")
+    periode  = db.relationship("PeriodePaie")
+    __table_args__ = (db.Index("idx_lignes_rappel", "rappel_id"),)

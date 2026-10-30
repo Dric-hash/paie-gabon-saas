@@ -1,0 +1,68 @@
+{% extends "tenant/base.html" %}
+{% block title %}Rappel de salaire — {{ r.salarie.nom_complet }}{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set st = statuts[r.statut] %}
+<a href="/rappels" style="font-size:.78rem;color:#0f3d36">← Rappels de salaire</a>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin:.25rem 0 1rem">
+  <div>
+    <h1 style="font-size:1.4rem;font-weight:900;color:#0f3d36;margin:0">Rappel de salaire — {{ r.salarie.nom_complet }}
+      <span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;vertical-align:middle;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></h1>
+    <p style="font-size:.82rem;color:#374151;margin:.3rem 0 0">{{ r.motif }}</p>
+    <p style="font-size:.78rem;color:#6b7280;margin:.2rem 0 0">
+      Salaire de base {{ '{:,.0f}'.format(r.ancien_salaire).replace(',', ' ') }} → <b>{{ '{:,.0f}'.format(r.nouveau_salaire).replace(',', ' ') }} FCFA</b>
+      à partir de {{ r.date_effet.strftime('%m/%Y') }} · versé sur <b>{{ r.periode.libelle_complet }}</b> · par {{ r.auteur }}</p>
+    {% if r.motif_annulation %}<p style="font-size:.78rem;color:#b91c1c;margin:.2rem 0 0">Annulé : {{ r.motif_annulation }}</p>{% endif %}
+  </div>
+  <a href="/rappels/{{ r.id }}/imprimer" target="_blank" style="background:#ecfdf5;color:#065f46;{{ btn }}">🖨 État de rappel</a>
+</div>
+
+{% if a_reenregistrer %}
+<div class="card" style="padding:.75rem 1.25rem;margin-bottom:1rem;background:#fef2f2;border:1px solid #fecaca;font-size:.84rem;color:#991b1b">
+  Le bulletin de {{ r.periode.libelle_complet }} existe déjà en brouillon : <a href="/bulletins/{{ bulletin_versement.id }}" style="color:#991b1b;font-weight:700">ouvrez-le</a>
+  en modification et enregistrez-le pour {{ 'retirer' if r.statut == 'ANNULE' else 'inclure' }} le rappel. Sa validation est bloquée d'ici là.
+</div>
+{% elif bulletin_versement and r.statut != 'ANNULE' %}
+<div class="card" style="padding:.6rem 1.25rem;margin-bottom:1rem;font-size:.82rem;color:#065f46;background:#ecfdf5;border:1px solid #a7f3d0">
+  Inclus dans le <a href="/bulletins/{{ bulletin_versement.id }}" style="color:#065f46;font-weight:700">bulletin de {{ r.periode.libelle_complet }}</a> ({{ bulletin_versement.statut|lower }}).
+</div>
+{% endif %}
+
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <table style="width:100%;border-collapse:collapse;font-size:.82rem;min-width:720px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.7rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem 1rem">Mois</th><th style="padding:.6rem .5rem">Rubrique</th><th style="padding:.6rem .5rem;text-align:right">Versé</th>
+      <th style="padding:.6rem .5rem;text-align:right">Dû</th><th style="padding:.6rem 1rem;text-align:right">Écart</th></tr></thead>
+    <tbody>
+      {% for l in r.lignes %}{% set det = detail(l) %}
+      {% for code, v in det.items() %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.45rem 1rem;font-weight:{{ '700' if loop.first else '400' }}">{{ l.libelle_mois if loop.first else '' }}</td>
+        <td style="padding:.45rem .5rem">{{ rubriques[code][0] if code in rubriques else code }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ '{:,.0f}'.format(v[0]).replace(',', ' ') }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ '{:,.0f}'.format(v[1]).replace(',', ' ') }}</td>
+        <td style="padding:.45rem 1rem;text-align:right;font-family:monospace">{{ '{:+,.0f}'.format(v[2]).replace(',', ' ') }}</td>
+      </tr>
+      {% endfor %}
+      {% if l.ajustement %}<tr><td></td><td style="padding:.45rem .5rem;font-style:italic">Ajustement manuel</td><td></td><td></td>
+        <td style="padding:.45rem 1rem;text-align:right;font-family:monospace">{{ '{:+,.0f}'.format(l.ajustement).replace(',', ' ') }}</td></tr>{% endif %}
+      <tr style="background:#f9fafb"><td colspan="4" style="padding:.45rem 1rem;text-align:right;font-size:.75rem;color:#6b7280">Total {{ l.libelle_mois }}</td>
+        <td style="padding:.45rem 1rem;text-align:right;font-family:monospace;font-weight:700">{{ '{:+,.0f}'.format(l.montant).replace(',', ' ') }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="4" style="padding:.7rem 1rem;text-align:right;font-weight:800">Rappel brut à verser</td>
+      <td style="padding:.7rem 1rem;text-align:right;font-family:monospace;font-weight:800;white-space:nowrap">{{ '{:,.0f}'.format(r.total).replace(',', ' ') }} FCFA</td></tr></tfoot>
+  </table>
+</div>
+
+{% if current_user.can_edit and r.statut == 'A_VERSER' %}
+<details class="card" style="padding:1rem 1.25rem">
+  <summary style="cursor:pointer;font-size:.85rem;color:#b91c1c;font-weight:700">Annuler ce rappel</summary>
+  <form method="post" action="/rappels/{{ r.id }}/annuler" style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input name="motif" required placeholder="Motif de l'annulation" style="flex:1;min-width:220px;border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.85rem">
+    <button style="background:#b91c1c;color:white;{{ btn }}">Annuler le rappel</button>
+  </form>
+</details>
+{% endif %}
+{% endblock %}

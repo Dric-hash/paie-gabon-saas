@@ -1,0 +1,81 @@
+{% extends "tenant/base.html" %}
+{% block title %}Nouveau rappel de salaire{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.5rem .65rem;font-size:.85rem;background:#fff;width:100%" %}
+{% set btn = "padding:.55rem 1.1rem;border-radius:.625rem;font-size:.82rem;font-weight:700;border:none;cursor:pointer" %}
+<a href="/rappels" style="font-size:.78rem;color:#0f3d36">← Rappels de salaire</a>
+<h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:.25rem 0 1rem">Nouveau rappel de salaire</h1>
+
+<form method="post" class="card" style="padding:1.25rem">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:.85rem">
+    <label style="font-size:.75rem;color:#6b7280">Salarié *
+      <select name="salarie_id" required style="{{ champ }}" onchange="location='/rappels/nouveau?salarie_id='+this.value">
+        <option value="">— Choisir —</option>
+        {% for x in salaries %}<option value="{{ x.id }}" {% if s and s.id == x.id %}selected{% endif %}>{{ x.nom_complet }} ({{ x.matricule }})</option>{% endfor %}
+      </select></label>
+    <label style="font-size:.75rem;color:#6b7280">Nouveau salaire applicable à partir de (mois) *
+      <input type="month" name="mois_effet" required value="{{ valeurs.mois_effet }}" style="{{ champ }}"></label>
+    <label style="font-size:.75rem;color:#6b7280">Ancien salaire de base mensuel *
+      <input name="ancien" required inputmode="decimal" value="{{ valeurs.ancien or ('%.0f'|format(contrat.salaire_base) if contrat and contrat.salaire_base else '') }}" style="{{ champ }};font-family:monospace;text-align:right">
+      {% if contrat %}<span style="font-size:.68rem">Contrat actif : {{ '{:,.0f}'.format(contrat.salaire_base or 0).replace(',', ' ') }} FCFA</span>{% endif %}</label>
+    <label style="font-size:.75rem;color:#6b7280">Nouveau salaire de base mensuel *
+      <input name="nouveau" required inputmode="decimal" value="{{ valeurs.nouveau }}" style="{{ champ }};font-family:monospace;text-align:right"></label>
+    <label style="font-size:.75rem;color:#6b7280">Versé sur la période *
+      <select name="periode_id" required style="{{ champ }}">
+        {% for p in periodes %}<option value="{{ p.id }}" {% if valeurs.periode_id|string == p.id|string %}selected{% endif %}>{{ p.libelle_complet }}</option>{% endfor %}
+      </select></label>
+    <label style="font-size:.75rem;color:#6b7280;grid-column:1/-1">Motif *
+      <input name="motif" required value="{{ valeurs.motif }}" placeholder="Augmentation accordée le …, reclassement catégorie …, accord d'entreprise …" style="{{ champ }}"></label>
+  </div>
+  <div style="margin-top:1rem;font-size:.78rem;color:#374151">
+    <b>Rubriques réévaluées au prorata du nouveau salaire</b>
+    <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.2rem;margin-top:.4rem">
+      {% for code, (lib, _, _) in rubriques.items() %}
+      <label><input type="checkbox" name="rub_{{ code }}" {% if code in choisies %}checked{% endif %} {% if code in obligatoires %}disabled{% endif %}> {{ lib }}</label>
+      {% endfor %}
+    </div>
+    <p style="font-size:.7rem;color:#6b7280;margin:.35rem 0 0">Cochez la prime de nuit ou d'assiduité seulement si elle est calculée en pourcentage du salaire de base dans votre entreprise.
+      Les autres éléments (primes fixes, indemnités) ne changent pas ; un écart particulier se corrige par l'ajustement d'un mois.</p>
+  </div>
+  {% if not apercu %}
+  <button name="action" value="calculer" style="margin-top:1rem;background:#0f3d36;color:white;{{ btn }}">Calculer le rappel</button>
+  {% endif %}
+
+  {% if apercu %}
+  <hr style="margin:1.25rem 0;border:none;border-top:1px solid #f3f4f6">
+  <h2 style="font-size:1rem;font-weight:800;color:#0f3d36;margin:0 0 .25rem">Calcul mois par mois — {{ s.nom_complet }}</h2>
+  <p style="font-size:.75rem;color:#6b7280;margin:0 0 .6rem">Rapport nouveau / ancien salaire : {{ '%.4f'|format((valeurs.nouveau|replace(' ', '')|replace(',', '.')|float) / (valeurs.ancien|replace(' ', '')|replace(',', '.')|float)) }}. Versement sur {{ periode.libelle_complet }}.</p>
+  {% if brouillons %}<div style="font-size:.78rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:.5rem;padding:.5rem .75rem;margin-bottom:.6rem">
+    {{ brouillons|length }} bulletin(s) non validé(s) sur la période ignoré(s) ({% for b in brouillons %}{{ b.periode.libelle_complet }}{% if not loop.last %}, {% endif %}{% endfor %}) : calculez-les directement au nouveau salaire.</div>{% endif %}
+  <div style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:720px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.7rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.5rem">Mois</th><th style="padding:.5rem">Détail (versé → dû)</th><th style="padding:.5rem;text-align:right">Écart calculé</th>
+      <th style="padding:.5rem;text-align:right;width:150px">Ajustement (+/−)</th></tr></thead>
+    <tbody>
+      {% set ns = namespace(total=0) %}
+      {% for b, det, ecart in apercu %}{% set ns.total = ns.total + ecart %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.5rem;white-space:nowrap">{{ b.periode.libelle_complet }}</td>
+        <td style="padding:.5rem;color:#374151">{% for code, v in det.items() %}{{ rubriques[code][0] }} : {{ '{:,.0f}'.format(v[0]).replace(',', ' ') }} → {{ '{:,.0f}'.format(v[1]).replace(',', ' ') }}{% if not loop.last %} · {% endif %}{% endfor %}</td>
+        <td style="padding:.5rem;text-align:right;font-family:monospace;white-space:nowrap">{{ '{:+,.0f}'.format(ecart).replace(',', ' ') }}</td>
+        <td style="padding:.5rem"><input name="ajustement_{{ b.id }}" inputmode="decimal" placeholder="0" style="{{ champ }};text-align:right;font-family:monospace"></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="2" style="padding:.6rem .5rem;text-align:right;font-weight:800">Total brut calculé</td>
+      <td style="padding:.6rem .5rem;text-align:right;font-family:monospace;font-weight:800;white-space:nowrap">{{ '{:+,.0f}'.format(ns.total).replace(',', ' ') }} FCFA</td><td></td></tr></tfoot>
+  </table>
+  </div>
+  <label style="display:block;margin-top:.6rem;font-size:.75rem;color:#6b7280">Justification des ajustements (obligatoire s'il y en a)
+    <input name="justif_ajustement" style="{{ champ }}" placeholder="ex. effet au 15 du mois : demi-mois"></label>
+  <p style="font-size:.72rem;color:#6b7280;margin:.6rem 0 0">Le total sera versé sur le bulletin de {{ periode.libelle_complet }} comme un gain soumis à la CNSS, à la CNAMGS et à l'IRPP du mois de versement.
+    Le contrat n'est pas modifié : appliquez le nouveau salaire pour les mois suivants par la fiche contrat ou la gestion de carrière.</p>
+  <div style="display:flex;gap:.5rem;margin-top:.9rem">
+    <button name="action" value="calculer" style="background:#f3f4f6;color:#374151;{{ btn }}">Recalculer</button>
+    <button name="action" value="enregistrer" style="background:#0f3d36;color:white;{{ btn }}">Enregistrer le rappel</button>
+  </div>
+  {% endif %}
+</form>
+{% endblock %}

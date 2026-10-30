@@ -417,6 +417,10 @@ def bulletins_generer_lot():
                                     statut="EN_ATTENTE").scalar() or 0)
         if total_ac > 0:
             donnees["acompte"] = total_ac
+        import rappels_salaire as _rs
+        _rappels = _rs.composants(t.id, s.id, pid)
+        if _rappels:
+            donnees["composants"] = _rappels
 
         res = calculer_bulletin(dict(donnees, convention=t.convention),
                                 nb_parts=float(s.nombre_parts or 1))
@@ -427,6 +431,13 @@ def bulletins_generer_lot():
         b.statut = "BROUILLON"
         b.mode_paiement = s.mode_paiement or "ESPECES"
         db.session.add(b)
+        if _rappels:
+            db.session.flush()
+            for cs in _rappels:
+                db.session.add(BulletinComposant(
+                    bulletin_id=b.id, composant_id=None, libelle=cs["libelle"], sens=cs["sens"],
+                    montant=cs["montant"], position=cs["position"], soumis_cnss=True, soumis_cnamgs=True,
+                    soumis_irpp=True, rappel_id=cs["rappel_id"]))
         crees += 1
 
     db.session.commit()
@@ -505,10 +516,13 @@ def bulletins_valider_lot():
     from blueprints.tenant.virements import bulletins_en_ordre
     en_ordre = {k: v for k, v in bulletins_en_ordre(t.id).items() if v.statut == "PREPARE"}
     nb_bloques = 0
+    from rappels_salaire import a_reenregistrer as _rs_manquants
     if action == "valider":
         for b in buls:
             if b.statut != "BROUILLON": continue
             if float(b.net_a_payer or 0) < 0:      # contrôle de la paie : bloquant
+                nb_bloques += 1; continue
+            if _rs_manquants(b):                    # rappel de salaire non inclus : bloquant
                 nb_bloques += 1; continue
             b.statut          = "VALIDÉ"
             b.date_validation = utcnow()
@@ -520,7 +534,8 @@ def bulletins_valider_lot():
             nb += 1
         msg = f"✅ {nb} bulletin(s) validé(s)."
         if nb_bloques:
-            msg += f" {nb_bloques} bulletin(s) à net négatif non validé(s) : voir le contrôle de la paie."
+            msg += (f" {nb_bloques} bulletin(s) non validé(s) (net négatif ou rappel de salaire à inclure) : "
+                    f"voir le contrôle de la paie.")
         log_action("VALIDATE", "bulletin", pid,
                    f"Validation de {nb} bulletin(s) — période {pid}")
 
@@ -654,6 +669,14 @@ def bulletin_saisie():
                     "base": request.form.get(f"base_composant_{comp.id}", type=float),
                     "taux": request.form.get(f"taux_composant_{comp.id}", type=float),
                 })
+        # Rappels de salaire à verser sur ce bulletin (rappels_salaire.py) : ajoutés
+        # automatiquement, comme les acomptes ; ils ne se saisissent pas à la main.
+        import rappels_salaire as _rs
+        _rappels = _rs.composants(t.id, sid, pid)
+        if _rappels:
+            composants_saisis.extend(_rappels)
+            flash(f"{len(_rappels)} rappel(s) de salaire inclus automatiquement : "
+                  + ", ".join(f"{c['libelle']} ({c['montant']:,.0f} FCFA)".replace(",", " ") for c in _rappels), "info")
         donnees["composants"] = composants_saisis
 
         # ── Prime d'ancienneté automatique (selon convention collective) ───────
@@ -765,7 +788,7 @@ def bulletin_saisie():
                 position=cs.get("position") or "BAS",
                 base=cs.get("base"), taux=cs.get("taux"),
                 soumis_cnss=cs["soumis_cnss"], soumis_cnamgs=cs["soumis_cnamgs"],
-                soumis_irpp=cs["soumis_irpp"]))
+                soumis_irpp=cs["soumis_irpp"], rappel_id=cs.get("rappel_id")))
 
         # ── Remboursement de prêt : imputation sur les prêts du salarié ────────
         # La retenue prêt saisie est imputée sur les prêts EN_COURS (plus anciens
@@ -876,6 +899,11 @@ def bulletin_valider(id):
         return redirect(url_for("tenant.bulletin_detail", id=id))
     if float(b.net_a_payer or 0) < 0:
         flash("Net à payer négatif : corrigez les retenues (acompte, prêt…) avant de valider.", "error")
+        return redirect(url_for("tenant.bulletin_detail", id=id))
+    import rappels_salaire as _rs
+    if _rs.a_reenregistrer(b):
+        flash("Rappel de salaire à mettre à jour sur ce bulletin (à inclure, ou annulé) : ouvrez-le en "
+              "modification et enregistrez-le, puis validez.", "error")
         return redirect(url_for("tenant.bulletin_detail", id=id))
     acomptes = Acompte.query.filter_by(
         tenant_id=t.id, salarie_id=b.salarie_id,
@@ -1576,6 +1604,14 @@ def api_calculer():
                         "soumis_cnss": comp.soumis_cnss, "soumis_cnamgs": comp.soumis_cnamgs,
                         "soumis_irpp": comp.soumis_irpp,
                         "entre_dans_brut": comp.entre_dans_brut, "position": comp.position})
+            # rappels de salaire à verser sur la période (inclus automatiquement)
+            try:
+                _per = PeriodePaie.query.filter_by(tenant_id=t.id, mois=int(mois), annee=int(annee)).first()
+                if _per and sid:
+                    import rappels_salaire as _rs
+                    comps_live.extend(_rs.composants(t.id, int(sid), _per.id))
+            except (TypeError, ValueError):
+                pass
             data["composants"] = comps_live
         if t:
             data["convention"] = t.convention

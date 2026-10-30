@@ -731,6 +731,8 @@ def run_migrations():
         "ALTER TABLE salaries ADD COLUMN IF NOT EXISTS titulaire_compte VARCHAR(150)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS controle_seuil_variation NUMERIC(5,2)",
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS controle_salaire_minimum NUMERIC(15,2)",
+        # ── 30/10/2026 — rappels de salaire ───────────────────────────────────────
+        "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS rappel_id INTEGER REFERENCES rappels_salaire(id)",
     ]
     for sql in migrations:
         try:

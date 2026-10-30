@@ -68,7 +68,7 @@ def test_controle_de_la_paie(env):
     assert "Contrôler la paie (" in cli.get(f"/bulletins?periode_id={ids['oct']}").get_data(as_text=True)
     # validation : le net négatif est refusé, le reste passe
     cli.post("/bulletins/valider-lot", data={"periode_id": ids["oct"], "action_lot": "valider", "tout_valider": "1"})
-    assert "net négatif non validé" in _flash(cli)
+    assert "1 bulletin(s) non validé(s) (net négatif" in _flash(cli)
     assert db.session.get(M.BulletinPaie, ids["b_s"]).statut == "VALIDÉ"
     assert db.session.get(M.BulletinPaie, ids["b_3"]).statut == "BROUILLON"
     cli.post(f"/bulletins/{ids['b_3']}/valider")

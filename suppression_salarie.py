@@ -23,6 +23,7 @@ TABLES_TRAITEES = {
     "affectations_sites", "affectations_mad", "prets_personnel", "acces_salaries", "demandes_documents",
     "demandes_profil", "competences_salarie", "evaluations", "formations", "sanctions",
     "lignes_ordre_virement",   # bloque : un ordre de virement (même annulé) est un historique bancaire
+    "rappels_salaire",         # bloque s'il est versé ; sinon supprimé avec la fiche
 }
 
 STATUTS_BULLETIN_FIGES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
@@ -52,6 +53,12 @@ def obstacles(s):
     n = LigneOrdreVirement.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).count()
     if n:
         raisons.append(f"{n} ligne(s) d'ordre de virement de salaire")
+    from models import RappelSalaire
+    import rappels_salaire
+    n = sum(1 for r in RappelSalaire.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).all()
+            if rappels_salaire.statut_effectif(r) == "VERSE")
+    if n:
+        raisons.append(f"{n} rappel(s) de salaire versé(s)")
     # Dossier RH (décision du 29/10/2026) : sanctions, évaluations et formations sont conservés
     for modele, libelle in ((Sanction, "sanction(s)"), (Evaluation, "évaluation(s)"), (Formation, "formation(s)")):
         n = modele.query.filter_by(tenant_id=s.tenant_id, salarie_id=s.id).count()
@@ -70,6 +77,14 @@ def supprimer(s):
         ConsultationBulletin.query.filter(ConsultationBulletin.bulletin_id.in_(bulletins)).delete(synchronize_session=False)
         RemboursementPret.query.filter(RemboursementPret.bulletin_id.in_(bulletins)).update(
             {"bulletin_id": None}, synchronize_session=False)
+    # rappels de salaire non versés (les versés bloquent la suppression) : lignes puis rappels
+    from models import RappelSalaire, LigneRappel
+    rids = [r.id for r in RappelSalaire.query.filter_by(salarie_id=sid).all()]
+    if rids:
+        BulletinComposant.query.filter(BulletinComposant.rappel_id.in_(rids)).update(
+            {"rappel_id": None}, synchronize_session=False)
+        LigneRappel.query.filter(LigneRappel.rappel_id.in_(rids)).delete(synchronize_session=False)
+        RappelSalaire.query.filter(RappelSalaire.id.in_(rids)).delete(synchronize_session=False)
     ConsultationBulletin.query.filter_by(salarie_id=sid).delete(synchronize_session=False)
     BulletinPaie.query.filter_by(salarie_id=sid).delete(synchronize_session=False)
     # prêts annulés sans remboursement (les autres bloquent la suppression)
