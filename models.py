@@ -97,6 +97,8 @@ class Tenant(db.Model):
     comptes_paie = db.Column(db.Text)
     # Comptes de l'écriture de provision pour congés payés (JSON {clé: compte}), vide = SYSCOHADA par défaut
     comptes_provision_conges = db.Column(db.Text)
+    # Diviseur de la provision pour congés payés (jours) : vide = 24
+    diviseur_provision_conges = db.Column(db.Numeric(5, 2))
     # Portail des employés (consultation des bulletins) : activé par l'administrateur
     portail_salaries_actif = db.Column(db.Boolean, default=False)
     # Attestations demandées sur le portail : délivrées sans validation du RH si activé
@@ -2831,6 +2833,7 @@ class ProvisionConges(db.Model):
     mois          = db.Column(db.Integer, nullable=False)
     date_arrete   = db.Column(db.Date, nullable=False)
     statut        = db.Column(db.String(20), default="BROUILLON")
+    diviseur      = db.Column(db.Numeric(5, 2), default=24)       # figé au calcul (paramètre de l'entreprise)
     auteur        = db.Column(db.String(150))
     valide_par    = db.Column(db.String(150))
     date_validation = db.Column(db.DateTime)
@@ -2890,6 +2893,8 @@ class LigneBudget(db.Model):
     salarie_id        = db.Column(db.Integer, db.ForeignKey("salaries.id"))
     libelle           = db.Column(db.String(200), nullable=False)
     site_id           = db.Column(db.Integer, db.ForeignKey("sites.id"))
+    nouveau_site_id   = db.Column(db.Integer, db.ForeignKey("sites.id"))   # transfert : site à partir de mois_transfert
+    mois_transfert    = db.Column(db.Integer)
     mois_debut        = db.Column(db.Integer, default=1)
     mois_fin          = db.Column(db.Integer, default=12)
     salaire_base      = db.Column(db.Numeric(15, 2), nullable=False)
@@ -2899,5 +2904,6 @@ class LigneBudget(db.Model):
     mensuel           = db.Column(db.Text)                          # JSON {mois: [brut, coût employeur]}
     budget  = db.relationship("BudgetMasseSalariale", back_populates="lignes")
     salarie = db.relationship("Salarie")
-    site    = db.relationship("Site")
+    site    = db.relationship("Site", foreign_keys=[site_id])
+    nouveau_site = db.relationship("Site", foreign_keys=[nouveau_site_id])
     __table_args__ = (db.Index("idx_lignes_budget", "budget_id"),)

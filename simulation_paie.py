@@ -19,7 +19,7 @@ Trois modes de simulation :
        - le taux de charge global
 """
 
-from calculs_paie import calculer_bulletin
+from calculs_paie import calculer_bulletin, cout_employeur
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -49,14 +49,7 @@ def comparer_scenarios(scenarios: list, nb_parts: float = 1.0) -> dict:
             res = calculer_bulletin(donnees, nb_parts=nb_parts)
             res["label"]         = label
             res["scenario_input"]= sc
-            res["cout_employeur"]= (
-                res.get("salaire_brut", 0)
-                + res.get("cnss_patronale", 0)
-                + res.get("cnamgs_patronale", 0)
-                + res.get("fnh", 0)
-                + res.get("cfp", 0)
-                + res.get("tcs", 0)
-            )
+            res["cout_employeur"]= cout_employeur(res)  # sans la TCS (retenue salariale)
             resultats.append(res)
         except Exception as e:
             resultats.append({"label": label, "error": str(e)})
@@ -163,14 +156,7 @@ def simuler_depuis_net(net_cible: float, nb_parts: float = 1.0,
     except Exception as e:
         return {"error": f"Erreur de calcul : {e}"}
 
-    cout_emp = (
-        res_final.get("salaire_brut", 0)
-        + res_final.get("cnss_patronale", 0)
-        + res_final.get("cnamgs_patronale", 0)
-        + res_final.get("fnh", 0)
-        + res_final.get("cfp", 0)
-        + res_final.get("tcs", 0)
-    )
+    cout_emp = cout_employeur(res_final)  # sans la TCS (retenue salariale)
 
     taux_charge = ((cout_emp - res_final.get("salaire_brut",0)) /
                    res_final.get("salaire_brut",1) * 100) if res_final.get("salaire_brut") else 0
@@ -233,14 +219,7 @@ def simuler_augmentation(
     def _calc(salaire):
         d   = {**base, "salaire_base": salaire}
         res = calculer_bulletin(d, nb_parts=nb_parts)
-        cout = (
-            res.get("salaire_brut", 0)
-            + res.get("cnss_patronale", 0)
-            + res.get("cnamgs_patronale", 0)
-            + res.get("fnh", 0)
-            + res.get("cfp", 0)
-            + res.get("tcs", 0)
-        )
+        cout = cout_employeur(res)  # sans la TCS (retenue salariale)
         return {**res, "cout_employeur": round(cout)}
 
     avant  = _calc(salaire_actuel)

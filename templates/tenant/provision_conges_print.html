@@ -46,8 +46,8 @@
     <tbody>{% for e in ecriture %}<tr><td>{{ e.compte }}</td><td>{{ e.libelle }}</td><td class="r">{{ fc(e.debit) if e.debit else '' }}</td><td class="r">{{ fc(e.credit) if e.credit else '' }}</td></tr>
       {% else %}<tr><td colspan="4">Aucune variation.</td></tr>{% endfor %}</tbody>
   </table>
-  <p class="note">Jours dus = congés acquis non pris de l'année et reliquat de l'année précédente (page Congés). Provision = allocation de congé
-    (moyenne du brut des 12 derniers bulletins validés hors primes de rendement et d'assiduité, ÷ 26 jours ouvrables) ; charges et taxes aux taux patronaux constatés sur ces bulletins.</p>
+  <p class="note">Jours dus = congés acquis non pris de l'année et reliquat de l'année précédente (page Congés). Provision = jours dus × base journalière
+    (moyenne du brut des 12 derniers bulletins validés hors primes de rendement et d'assiduité, ÷ {{ '%g'|format(p.diviseur|float) }} jours) ; charges et taxes aux taux patronaux constatés sur ces bulletins.</p>
   <div class="sig"><div><div class="ligne">Établi par {{ p.auteur or '' }}</div></div><div><div class="ligne">Visa de la direction / du comptable</div></div></div>
   <p class="note" style="margin-top:16px;color:#999">{{ t.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
 </body>

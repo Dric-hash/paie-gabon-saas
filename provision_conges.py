@@ -6,10 +6,12 @@ provision_conges.py — Provision pour congés payés (arrêté mensuel ou de cl
   jours dus      = jours de congé restants (acquis − pris) de l'année de l'arrêté
                    + reliquat positif de l'année précédente (même calcul que la page
                    Congés : la ligne de solde saisie fait foi, sinon calcul automatique) ;
-  provision      = allocation de congé de ces jours (conges_avance.allocation_conge,
-                   Art. 225 : moyenne du brut des 12 derniers bulletins validés, hors
-                   primes de rendement et d'assiduité, ÷ 26 jours ouvrables × jours dus) ;
-                   sans bulletin validé : salaire de base du contrat ÷ 26 × jours dus ;
+  provision      = moyenne du brut des 12 derniers bulletins validés, hors primes de
+                   rendement et d'assiduité (assiette de l'allocation de congé, Art. 225),
+                   ÷ diviseur × jours dus ; sans bulletin validé : salaire de base du
+                   contrat ÷ diviseur × jours dus. Diviseur au choix de l'entreprise,
+                   24 par défaut (décision du 30/10/2026, comme l'indemnité compensatrice
+                   du solde de tout compte) ; il est figé sur chaque arrêté ;
   charges        = provision × taux patronaux effectivement constatés sur les mêmes
                    bulletins : CNSS + CNAMGS patronales (charges sociales), FNH + CFP
                    (taxes sur salaires). Sans bulletin : taux du moteur de paie appliqué
@@ -35,7 +37,26 @@ import conges_avance as ca
 from plan_comptable_paie import est_national
 
 STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
-JOURS_OUVRABLES_MOIS = ca.JOURS_OUVRABLES_MOIS
+DIVISEUR_DEFAUT = 24.0
+
+
+def diviseur(tenant) -> float:
+    try:
+        v = float(tenant.diviseur_provision_conges or 0)
+    except (TypeError, ValueError):
+        v = 0.0
+    return v if v > 0 else DIVISEUR_DEFAUT
+
+
+def lire_diviseur(valeur) -> float:
+    v = (str(valeur or "")).replace(" ", "").replace(",", ".").strip()
+    try:
+        d = float(v)
+    except ValueError:
+        d = 0.0
+    if not 1 <= d <= 31:
+        raise ValueError("Diviseur invalide : un nombre de jours entre 1 et 31 (24 par défaut).")
+    return round(d, 2)
 
 # clé, libellé, compte proposé (SYSCOHADA révisé)
 COMPTES = [
@@ -111,11 +132,12 @@ def _taux_moteur(base, salarie):
     return soc / brut, tax / brut
 
 
-def calculer_ligne(tenant, s, d):
+def calculer_ligne(tenant, s, d, div=None):
+    from calculs_paie import fcfa
+    div = div or diviseur(tenant)
     jours, det = jours_dus(tenant, s, d)
     buls = bulletins_reference(tenant.id, s.id, d)
     if buls:
-        provision = ca.allocation_conge(buls, jours) if jours > 0 else 0.0
         assiette = sum(max(0.0, _f(b.salaire_brut) - _f(b.prime_rendement) - _f(getattr(b, "prime_assiduité", 0)))
                        for b in buls) / len(buls)
         brut = sum(_f(b.salaire_brut) for b in buls)
@@ -126,13 +148,12 @@ def calculer_ligne(tenant, s, d):
         c = (Contrat.query.filter_by(tenant_id=tenant.id, salarie_id=s.id, actif=True)
              .order_by(Contrat.date_debut.desc()).first())
         assiette = _f(c.salaire_base) if c else 0.0
-        provision = round(assiette / JOURS_OUVRABLES_MOIS * jours) if jours > 0 else 0.0
         t_soc, t_tax = _taux_moteur(assiette, s) if assiette else (0.0, 0.0)
         source = "contrat" if c else "aucune base"
-    provision = round(provision)
+    provision = fcfa(assiette / div * jours, 0) if jours > 0 else 0.0
     det.update(source=source)
     return dict(salarie_id=s.id, national=est_national(s.nationalite), jours=jours,
-                base_journaliere=round(assiette / JOURS_OUVRABLES_MOIS, 2), provision=provision,
+                base_journaliere=round(assiette / div, 2), provision=provision,
                 taux_charges=round(t_soc, 6), charges=round(provision * t_soc),
                 taux_taxes=round(t_tax, 6), taxes=round(provision * t_tax), detail=json.dumps(det))
 
@@ -146,11 +167,11 @@ def calculer(tenant, annee, mois, auteur):
         db.session.add(p)
     elif p.statut != "BROUILLON":
         raise ValueError("Cet arrêté est validé : annulez sa validation pour le recalculer.")
-    p.date_arrete, p.auteur = d, auteur
+    p.date_arrete, p.auteur, p.diviseur = d, auteur, diviseur(tenant)
     db.session.flush()
     LigneProvisionConges.query.filter_by(provision_id=p.id).delete(synchronize_session=False)
     for s in salaries_presents(tenant.id, d):
-        db.session.add(LigneProvisionConges(tenant_id=tenant.id, provision_id=p.id, **calculer_ligne(tenant, s, d)))
+        db.session.add(LigneProvisionConges(tenant_id=tenant.id, provision_id=p.id, **calculer_ligne(tenant, s, d, float(p.diviseur))))
     db.session.flush()
     db.session.refresh(p)
     return p

@@ -1,4 +1,4 @@
-"""Provision pour congés payés : jours dus (année + reliquat), allocation sur 12 bulletins (÷ 26),
+"""Provision pour congés payés : jours dus (année + reliquat), base sur 12 bulletins ÷ diviseur (24 par défaut, au choix),
 charges aux taux constatés, écriture d'ajustement équilibrée, validation / arrêté suivant,
 exports, comptes, droits, cloisonnement et suppression d'un salarié."""
 from datetime import date
@@ -52,25 +52,25 @@ def test_calcul_a_la_main(env):
     la = lig[a]
     # 2026 : 01/01 → 31/05 = 150 j / 30,44 = 4,9 mois × 2 j = 9,8 acquis − 3 pris = 6,8 ; + reliquat 2025 : 4 → 10,8
     assert float(la.jours) == 10.8
-    # moyenne : (11 × 300 000 + (360 000 − 30 000)) / 12 = 302 500 ; ÷ 26 = 11 634,62 ; × 10,8 = 125 653,85 → 125 654
-    assert (float(la.base_journaliere), float(la.provision)) == (11634.62, 125654)
+    # moyenne : (11 × 300 000 + (360 000 − 30 000)) / 12 = 302 500 ; ÷ 24 = 12 604,17 ; × 10,8 = 136 125
+    assert (float(la.base_journaliere), float(la.provision), float(p.diviseur)) == (12604.17, 136125, 24)
     # taux : 12 × 42 300 / 3 660 000 et 12 × 7 500 / 3 660 000
-    assert float(la.charges) == round(125654 * 507600 / 3660000) == 17427
-    assert float(la.taxes) == round(125654 * 90000 / 3660000) == 3090
+    assert float(la.charges) == round(136125 * 507600 / 3660000) == 18879
+    assert float(la.taxes) == round(136125 * 90000 / 3660000) == 3347
     assert la.national
     lb = lig[b]
-    # 01/03 → 31/05 = 91 j / 30,44 = 3,0 mois × 2 = 6 jours ; 260 000 ÷ 26 × 6 = 60 000
-    assert (float(lb.jours), float(lb.provision), lb.national) == (6.0, 60000, False)
+    # 01/03 → 31/05 = 91 j / 30,44 = 3,0 mois × 2 = 6 jours ; 260 000 ÷ 24 × 6 = 65 000
+    assert (float(lb.jours), float(lb.provision), lb.national) == (6.0, 65000, False)
     r = calculer_bulletin({"salaire_base": 260000}, nb_parts=1.0)
     t_soc = (r["cnss_patronale"] + r["cnamgs_patronale"]) / r["salaire_brut"]
-    assert float(lb.charges) == round(60000 * t_soc)
+    assert float(lb.charges) == round(65000 * t_soc)
     tot = pc.totaux(p)
-    assert tot["provision"] == 185654
+    assert tot["provision"] == 201125
     # écriture du premier arrêté : de zéro à la provision, équilibrée, comptes SYSCOHADA
     e = pc.ecriture(p, t)
     assert sum(x["debit"] for x in e) == sum(x["credit"] for x in e) == tot["total"]
-    assert {(x["compte"], x["debit"]) for x in e if x["debit"]} >= {("6613", 125654), ("6623", 60000),
-                                                                    ("6641", 17427), ("6413", 3090 + float(lb.taxes))}
+    assert {(x["compte"], x["debit"]) for x in e if x["debit"]} >= {("6613", 136125), ("6623", 65000),
+                                                                    ("6641", 18879), ("6413", 3347 + float(lb.taxes))}
     assert {x["compte"] for x in e if x["credit"]} == {"4281", "4382", "4486"}
 
 
@@ -120,11 +120,11 @@ def test_exports_et_comptes(env):
     cli.post("/provisions-conges/calculer", data={"annee": 2026, "mois": 5})
     pid = M.ProvisionConges.query.one().id
     txt = cli.get(f"/provisions-conges/{pid}/ecriture.txt").data.decode("windows-1252")
-    assert "\t6613\t" in txt and "125 654,00" in txt and "PCP202605" in txt
+    assert "\t6613\t" in txt and "136 125,00" in txt and "PCP202605" in txt
     csv_ = cli.get(f"/provisions-conges/{pid}/export.csv").get_data(as_text=True)
     assert "M0;NOM0" in csv_.replace('"', "") and ";10.8;" in csv_ and "12 bulletin(s)" in csv_
     etat = cli.get(f"/provisions-conges/{pid}/imprimer").get_data(as_text=True)
-    assert "Provision pour congés payés au 31/05/2026" in etat and "185 654" in etat
+    assert "Provision pour congés payés au 31/05/2026" in etat and "201 125" in etat and "÷ 24 jours" in etat
     # comptes personnalisés
     data = {f"compte_{k}": c for k, _, c in pc.COMPTES}
     data["compte_dette_conges"] = "42810"
@@ -178,3 +178,24 @@ def test_droits_cloisonnement_suppression(env):
     ss.supprimer(sb)
     db.session.commit()
     assert {l.salarie_id for l in db.session.get(M.ProvisionConges, pid).lignes} == {a}
+
+
+def test_diviseur_au_choix(env):
+    """Diviseur paramétrable (26 ici) : appliqué au calcul suivant, figé sur l'arrêté ; contrôle de saisie."""
+    a, b, c = _scenario(env)
+    cli = _cli(env["admin"])
+    cli.post("/provisions-conges/diviseur", data={"diviseur": "0"})
+    assert "Diviseur invalide" in _flash(cli)
+    cli.post("/provisions-conges/diviseur", data={"diviseur": "26"})
+    assert "Diviseur enregistré : 26 jours" in _flash(cli)
+    cli.post("/provisions-conges/calculer", data={"annee": 2026, "mois": 5})
+    _flash(cli)
+    p = M.ProvisionConges.query.one()
+    la = [l for l in p.lignes if l.salarie_id == a][0]
+    # 302 500 ÷ 26 × 10,8 = 125 653,85 → 125 654
+    assert (float(p.diviseur), float(la.base_journaliere), float(la.provision)) == (26, 11634.62, 125654)
+    cli.post(f"/provisions-conges/{p.id}/valider")
+    cli.post("/provisions-conges/diviseur", data={"diviseur": "24"})
+    _flash(cli)
+    assert float(db.session.get(M.ProvisionConges, p.id).diviseur) == 26          # arrêté validé inchangé
+    assert "÷ 24 jours" in cli.get("/provisions-conges").get_data(as_text=True)

@@ -6,7 +6,7 @@
 <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🏖️ Provision pour congés payés</h1>
 <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 1rem;max-width:52rem">
   À chaque fin de mois (ou à la clôture), la dette envers les salariés pour les congés acquis et non pris :
-  jours dus × allocation de congé (moyenne du brut des 12 derniers bulletins validés ÷ 26), plus les charges patronales
+  jours dus × (moyenne du brut des 12 derniers bulletins validés ÷ {{ '%g'|format(diviseur) }} jours), plus les charges patronales
   constatées sur ces bulletins. L'écriture comptable passe l'ajustement depuis le dernier arrêté validé.</p>
 
 {% if current_user.can_edit %}
@@ -44,6 +44,16 @@
     </tbody>
   </table>
 </div>
+
+<form method="post" action="/provisions-conges/diviseur" class="card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <label style="font-size:.75rem;color:#6b7280">Diviseur (jours)
+    <input name="diviseur" list="diviseurs" value="{{ '%g'|format(diviseur) }}" inputmode="decimal" {% if not current_user.can_edit %}disabled{% endif %} style="{{ champ }};display:block;width:7rem;text-align:right"></label>
+  <datalist id="diviseurs"><option value="24"><option value="26"><option value="30"></datalist>
+  {% if current_user.can_edit %}<button style="background:#f3f4f6;color:#374151;{{ btn }}">Enregistrer</button>{% endif %}
+  <span style="font-size:.72rem;color:#6b7280;max-width:34rem">Base journalière = moyenne mensuelle ÷ diviseur. 24 par défaut (comme l'indemnité compensatrice du solde de tout compte) ;
+    au choix de l'entreprise (26 jours ouvrables, 30 jours calendaires…). Chaque arrêté garde le diviseur de son calcul.</span>
+</form>
 
 <details class="card" style="padding:1rem 1.25rem">
   <summary style="cursor:pointer;font-size:.85rem;font-weight:700;color:#0f3d36">Comptes de l'écriture</summary>

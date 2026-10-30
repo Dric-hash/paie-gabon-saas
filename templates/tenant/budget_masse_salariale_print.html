@@ -44,7 +44,7 @@
       <td class="r">{{ '%+.1f'|format(s.ecart_cumul_pct) if s.ecart_cumul_pct is not none else '' }}</td></tr></tfoot>
   </table>
   {% if sites %}
-  <h2>Par site (réalisé rattaché au site d'affectation actuel)</h2>
+  <h2>Par site (réalisé réparti au prorata des jours d'affectation de chaque mois)</h2>
   <table><thead><tr><th>Site</th><th class="r">Budget annuel</th><th class="r">Budget à date</th><th class="r">Réalisé à date</th><th class="r">Écart</th></tr></thead>
     <tbody>{% for x in sites %}<tr><td>{{ x.site }}</td><td class="r">{{ fc(x.annuel) }}</td><td class="r">{{ fc(x.budget) }}</td><td class="r">{{ fc(x.realise) }}</td><td class="r">{{ fs(x.ecart) }}</td></tr>{% endfor %}</tbody></table>
   {% endif %}
