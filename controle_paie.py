@@ -7,6 +7,7 @@ Repère ce qui mérite une vérification avant de valider les bulletins et de pa
     - net à payer négatif ;
     - deux bulletins pour le même salarié sur la période ;
     - rappel de salaire à verser mais absent du bulletin (brouillon à ré-enregistrer).
+    - budget de masse salariale adopté dépassé au-delà du seuil (attention).
     - salaire de base d'un brouillon pas aligné sur un rappel (ancien salaire après avenant,
       ou nouveau salaire après annulation et rétablissement du contrat).
   ATTENTION (à vérifier, la validation reste possible)
@@ -184,6 +185,14 @@ def controler(tenant, periode):
         if sortie and debut <= sortie <= fin:
             res.append(_anomalie("info", "SORTIE", f"Sortie le {sortie:%d/%m/%Y}",
                                  "Vérifiez le solde de tout compte (congés, préavis, indemnités).", s, b))
+    # Budget de masse salariale adopté : dépassement du coût cumulé au-delà du seuil
+    import budget_masse_salariale
+    al = budget_masse_salariale.alerte_periode(tenant, periode)
+    if al is not None:
+        res.append(_anomalie("attention", "BUDGET_DEPASSE", "Budget de masse salariale dépassé",
+                             f"Coût employeur cumulé à fin {periode.libelle_mois.lower()} {periode.annee} (bulletins de la "
+                             f"période compris) : {_fcfa(al['cumul_realise'])} pour un budget de {_fcfa(al['cumul_budget'])}, "
+                             f"soit {al['ecart_pct']:+.1f} % (seuil {float(al['budget'].seuil_alerte_pct):g} %)."))
     ordre = {"bloquant": 0, "attention": 1, "info": 2}
     res.sort(key=lambda a: (ordre[a["niveau"]], (a["salarie"].nom or "") if a["salarie"] else ""))
     return res

@@ -1,0 +1,49 @@
+{% extends "tenant/base.html" %}
+{% block title %}Budget de masse salariale{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.85rem;background:#fff" %}
+<h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🎯 Budget de masse salariale</h1>
+<p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 1rem;max-width:52rem">
+  Préparez le budget de l'année depuis les contrats (calculé mois par mois par le moteur de paie), ajoutez les recrutements
+  prévus, adoptez-le, puis suivez chaque mois le coût employeur réalisé par rapport au budget.</p>
+
+{% if current_user.can_edit %}
+<form method="post" action="/budget-masse-salariale/preparer" class="card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <label style="font-size:.75rem;color:#6b7280">Année
+    <select name="annee" style="{{ champ }};display:block">{% for a in annees %}<option value="{{ a }}" {% if a == annee_defaut %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+  <label style="font-size:.75rem;color:#6b7280">Augmentation générale (%)
+    <input name="augmentation_pct" inputmode="decimal" placeholder="0" style="{{ champ }};display:block;width:9rem;text-align:right"></label>
+  <label style="font-size:.75rem;color:#6b7280">à partir de
+    <select name="mois_augmentation" style="{{ champ }};display:block"><option value="">—</option>{% for m in range(1, 13) %}<option value="{{ m }}">{{ mois[m] }}</option>{% endfor %}</select></label>
+  <label style="font-size:.75rem;color:#6b7280">Seuil d'alerte (%)
+    <input name="seuil_alerte_pct" inputmode="decimal" value="5" style="{{ champ }};display:block;width:7rem;text-align:right"></label>
+  <button style="background:#0f3d36;color:white;{{ btn }}">Préparer le budget</button>
+</form>
+{% endif %}
+
+<div class="card" style="padding:0;overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.83rem;min-width:760px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem 1rem">Année</th><th style="padding:.6rem .5rem;text-align:right">Lignes</th><th style="padding:.6rem .5rem;text-align:right">Coût employeur budgété</th>
+      <th style="padding:.6rem .5rem;text-align:right">Consommé à date</th><th style="padding:.6rem .5rem;text-align:right">Écart cumulé</th><th style="padding:.6rem 1rem">Statut</th></tr></thead>
+    <tbody>
+      {% for b in budgets %}{% set s = suivi(b) %}{% set st = statuts[b.statut] %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1rem"><a href="/budget-masse-salariale/{{ b.id }}" style="color:#0f3d36;font-weight:700">{{ b.annee }}</a></td>
+        <td style="padding:.6rem .5rem;text-align:right">{{ b.lignes|length }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace">{{ '{:,.0f}'.format(s.total_budget).replace(',', ' ') }} FCFA</td>
+        <td style="padding:.6rem .5rem;text-align:right">{{ '%.1f %%'|format(s.consomme_pct) if s.consomme_pct is not none else '—' }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace;color:{{ '#b91c1c' if s.alerte else '#374151' }}">
+          {% if s.dernier_mois %}{{ '{:+,.0f}'.format(s.ecart_cumul).replace(',', ' ') }}{% if s.ecart_cumul_pct is not none %} ({{ '%+.1f'|format(s.ecart_cumul_pct) }} %){% endif %}{% else %}—{% endif %}</td>
+        <td style="padding:.6rem 1rem"><span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span>
+          {% if s.alerte and b.statut == 'ADOPTE' %}<span style="font-size:.72rem;font-weight:700;color:#b91c1c"> ⚠ dépassement</span>{% endif %}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="padding:1.5rem;text-align:center;color:#9ca3af">Aucun budget pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

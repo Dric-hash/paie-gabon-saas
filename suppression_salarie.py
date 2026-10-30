@@ -25,6 +25,7 @@ TABLES_TRAITEES = {
     "lignes_ordre_virement",   # bloque : un ordre de virement (même annulé) est un historique bancaire
     "rappels_salaire",         # bloque s'il est versé ; sinon supprimé avec la fiche
     "lignes_provision_conges", # bloque dans un arrêté validé ; sinon retiré des brouillons
+    "lignes_budget",           # la ligne du budget reste (poste budgété), détachée du salarié
 }
 
 STATUTS_BULLETIN_FIGES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
@@ -91,7 +92,8 @@ def supprimer(s):
             {"rappel_id": None}, synchronize_session=False)
         LigneRappel.query.filter(LigneRappel.rappel_id.in_(rids)).delete(synchronize_session=False)
         RappelSalaire.query.filter(RappelSalaire.id.in_(rids)).delete(synchronize_session=False)
-    from models import LigneProvisionConges
+    from models import LigneProvisionConges, LigneBudget
+    LigneBudget.query.filter_by(salarie_id=sid).update({"salarie_id": None}, synchronize_session=False)
     LigneProvisionConges.query.filter_by(salarie_id=sid).delete(synchronize_session=False)  # brouillons seulement
     ConsultationBulletin.query.filter_by(salarie_id=sid).delete(synchronize_session=False)
     BulletinPaie.query.filter_by(salarie_id=sid).delete(synchronize_session=False)
