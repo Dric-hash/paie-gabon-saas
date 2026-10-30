@@ -225,7 +225,7 @@ def generer_livre_paie(bulletins, periode, tenant) -> bytes:
         net_av_irpp = _f(b, "net_avant_irpp")
 
         # Coût total employeur = brut + charges patronales
-        cout_employeur = brut + cnss_pat + cnamgs_pat + fnh + cfp   # sans la TCS : retenue sur le salarié
+        cout_employeur = brut + cnss_pat + cnamgs_pat + fnh + cfp + tcs   # TCS comprise (décision du 30/10/2026)
 
         cat_nom = s.categorie.libelle if s.categorie else "—"
 
@@ -357,7 +357,7 @@ def _calculer_totaux(bulletins) -> dict:
         "total_cnamgs_pat": total_cnamgs_pat,
         "total_fnh":        total_fnh,
         "total_cfp":        total_cfp,
-        "total_cout_employeur": total_brut + total_cnss_pat + total_cnamgs_pat + total_fnh + total_cfp,  # sans la TCS
+        "total_cout_employeur": total_brut + total_cnss_pat + total_cnamgs_pat + total_fnh + total_cfp + s("tcs"),
     }
 
 

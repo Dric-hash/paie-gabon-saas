@@ -49,7 +49,7 @@ def comparer_scenarios(scenarios: list, nb_parts: float = 1.0) -> dict:
             res = calculer_bulletin(donnees, nb_parts=nb_parts)
             res["label"]         = label
             res["scenario_input"]= sc
-            res["cout_employeur"]= cout_employeur(res)  # sans la TCS (retenue salariale)
+            res["cout_employeur"]= cout_employeur(res)  # TCS comprise
             resultats.append(res)
         except Exception as e:
             resultats.append({"label": label, "error": str(e)})
@@ -156,7 +156,7 @@ def simuler_depuis_net(net_cible: float, nb_parts: float = 1.0,
     except Exception as e:
         return {"error": f"Erreur de calcul : {e}"}
 
-    cout_emp = cout_employeur(res_final)  # sans la TCS (retenue salariale)
+    cout_emp = cout_employeur(res_final)  # TCS comprise
 
     taux_charge = ((cout_emp - res_final.get("salaire_brut",0)) /
                    res_final.get("salaire_brut",1) * 100) if res_final.get("salaire_brut") else 0
@@ -219,7 +219,7 @@ def simuler_augmentation(
     def _calc(salaire):
         d   = {**base, "salaire_base": salaire}
         res = calculer_bulletin(d, nb_parts=nb_parts)
-        cout = cout_employeur(res)  # sans la TCS (retenue salariale)
+        cout = cout_employeur(res)  # TCS comprise
         return {**res, "cout_employeur": round(cout)}
 
     avant  = _calc(salaire_actuel)

@@ -299,16 +299,15 @@ def calculer_irpp(base_imposable: float, nb_parts: float) -> float:
 
 def cout_employeur(r) -> float:
     """Coût employeur d'un bulletin (dict de calculer_bulletin ou objet BulletinPaie) :
-    salaire brut + CNSS et CNAMGS patronales + FNH + CFP. La TCS n'en fait pas partie :
-    elle est retenue sur le salaire du salarié (déjà comprise dans le brut).
-    Définition unique : livre de paie, simulateur, budget de masse salariale."""
+    salaire brut + CNSS et CNAMGS patronales + FNH + CFP + TCS (TCS comprise : décision du
+    30/10/2026). Définition unique : livre de paie, simulateur, budget de masse salariale."""
     def g(k):
         v = r.get(k) if isinstance(r, dict) else getattr(r, k, 0)
         try:
             return float(v or 0)
         except (TypeError, ValueError):
             return 0.0
-    return g("salaire_brut") + g("cnss_patronale") + g("cnamgs_patronale") + g("fnh") + g("cfp")
+    return g("salaire_brut") + g("cnss_patronale") + g("cnamgs_patronale") + g("fnh") + g("cfp") + g("tcs")
 
 
 def calculer_bulletin(donnees: dict, nb_parts: float = 1.0) -> dict:
