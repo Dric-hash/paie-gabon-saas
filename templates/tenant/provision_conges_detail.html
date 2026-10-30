@@ -10,6 +10,7 @@
     <h1 style="font-size:1.4rem;font-weight:900;color:#0f3d36;margin:0">Provision congés payés au {{ p.date_arrete.strftime('%d/%m/%Y') }}
       <span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;vertical-align:middle;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></h1>
     <p style="font-size:.78rem;color:#6b7280;margin:.25rem 0 0">Calculé par {{ p.auteur or '—' }}{% if p.valide_par %} · validé par {{ p.valide_par }}{% endif %}
+      · diviseur {{ '%g'|format(p.diviseur|float) }} jours
       · arrêté précédent validé : {{ prec.date_arrete.strftime('%d/%m/%Y') if prec else 'aucun' }}</p>
   </div>
   <div style="display:flex;gap:.4rem;flex-wrap:wrap">

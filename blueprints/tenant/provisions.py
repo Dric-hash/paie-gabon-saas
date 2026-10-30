@@ -8,6 +8,7 @@
   /provisions-conges/<id>/export.csv      détail par salarié
   /provisions-conges/<id>/imprimer        état signable
   /provisions-conges/comptes              comptes de l'écriture (POST)
+  /provisions-conges/diviseur             diviseur de la provision, 24 par défaut (POST)
 """
 import csv
 import io
@@ -55,7 +56,7 @@ def provisions_conges():
     defaut = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
     return render_template("tenant/provisions_conges.html", arretes=arretes, totaux=pc.totaux, statuts=STATUTS,
                            mois=MOIS, defaut=defaut, annees=range(today.year + 1, today.year - 4, -1),
-                           comptes=pc.comptes(t), liste_comptes=pc.COMPTES)
+                           comptes=pc.comptes(t), liste_comptes=pc.COMPTES, diviseur=pc.diviseur(t))
 
 
 @bp.route("/provisions-conges/calculer", methods=["POST"])
@@ -204,4 +205,26 @@ def provision_conges_comptes():
     db.session.commit()
     log_action("UPDATE", "parametres", t.id, "Comptes de la provision pour congés payés modifiés")
     flash("Comptes enregistrés.", "success")
+    return redirect(url_for("tenant.provisions_conges"))
+
+
+@bp.route("/provisions-conges/diviseur", methods=["POST"])
+@login_required
+@tenant_required
+def provision_conges_diviseur():
+    if not current_user.can_edit:
+        abort(403)
+    t = get_tenant()
+    try:
+        d = pc.lire_diviseur(request.form.get("diviseur"))
+    except ValueError as e:
+        flash(str(e), "error")
+        return redirect(url_for("tenant.provisions_conges"))
+    avant = pc.diviseur(t)
+    t.diviseur_provision_conges = d
+    db.session.commit()
+    log_action("UPDATE", "parametres", t.id, f"Diviseur de la provision pour congés : {avant:g} → {d:g}",
+               avant={"diviseur": avant}, apres={"diviseur": d})
+    flash(f"Diviseur enregistré : {d:g} jours. Il s'applique aux prochains calculs (recalculez les brouillons ; "
+          f"les arrêtés validés gardent leur diviseur).", "success")
     return redirect(url_for("tenant.provisions_conges"))

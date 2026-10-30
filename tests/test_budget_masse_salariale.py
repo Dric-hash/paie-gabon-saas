@@ -181,3 +181,53 @@ def test_droits_cloisonnement_suppression(env):
     l = M.LigneBudget.query.filter_by(libelle="NOM1 P").one() if M.LigneBudget.query.filter_by(libelle="NOM1 P").first() \
         else [x for x in M.LigneBudget.query.all() if x.salarie_id is None][0]
     assert l.salarie_id is None and len(db.session.get(M.BudgetMasseSalariale, bid).lignes) == 3
+
+
+def test_transfert_de_site_en_cours_d_annee(env):
+    """Transfert le 10/02/2026 de Chantier Nord vers Chantier Sud : le budget change de site dès février,
+    le réalisé de février est réparti 9/28 Nord et 19/28 Sud."""
+    a, b, c, nord = _scenario(env)
+    t = env["t"]
+    sud = M.Site(tenant_id=t, nom="Chantier Sud")
+    db.session.add(sud)
+    db.session.flush()
+    aff = M.AffectationSite.query.filter_by(salarie_id=a).one()
+    aff.actif, aff.date_fin = False, date(2026, 2, 10)
+    db.session.add(M.AffectationSite(tenant_id=t, site_id=sud.id, salarie_id=a, date_debut=date(2026, 2, 10), actif=True))
+    db.session.commit()
+    rep = bms.repartition_mois(bms.affectations(t)[a], 2026, 2)
+    assert rep == {nord: 9 / 28, sud.id: 19 / 28}
+    cli = _cli(env["admin"])
+    _preparer(cli, augmentation_pct="0", mois_augmentation="")
+    _flash(cli)
+    bu = M.BudgetMasseSalariale.query.one()
+    la = M.LigneBudget.query.filter_by(salarie_id=a).one()
+    assert (la.site_id, la.nouveau_site_id, la.mois_transfert) == (nord, sud.id, 2)
+    # réalisé : janvier et février, 280 000 de coût chacun
+    for mo in (1, 2):
+        p = _periode(t, 2026, mo)
+        db.session.add(M.BulletinPaie(tenant_id=t, salarie_id=a, periode_id=p.id, salaire_base=280000,
+                                      salaire_brut=280000, net_a_payer=1, statut="VALIDÉ"))
+    db.session.commit()
+    sites = {x["site"]: x for x in bms.par_site(bu)}
+    m = bms.mensuel(la)
+    assert round(sites["Chantier Nord"]["realise"]) == 280000 + round(280000 * 9 / 28) == 370000
+    assert round(sites["Chantier Sud"]["realise"]) == round(280000 * 19 / 28) == 190000
+    assert sites["Chantier Nord"]["budget"] == m[1][1] and sites["Chantier Sud"]["budget"] == m[2][1]
+    assert sites["Chantier Sud"]["annuel"] == sum(v[1] for k, v in m.items() if k >= 2)
+    page = cli.get(f"/budget-masse-salariale/{bu.id}").get_data(as_text=True)
+    assert "Chantier Nord → Chantier Sud" not in page          # brouillon : formulaire d'édition
+    # modification : transfert vers Nord depuis Nord refusé ; mois de transfert obligatoire
+    base = {"ligne_id": la.id, "libelle": la.libelle, "site_id": nord, "mois_debut": 1, "mois_fin": 12,
+            "salaire_base": "300000"}
+    cli.post(f"/budget-masse-salariale/{bu.id}/ligne", data=dict(base, nouveau_site_id=nord, mois_transfert=5))
+    assert "doit être différent" in _flash(cli)
+    cli.post(f"/budget-masse-salariale/{bu.id}/ligne", data=dict(base, nouveau_site_id=sud.id))
+    assert "Transfert : choisissez un mois" in _flash(cli)
+    cli.post(f"/budget-masse-salariale/{bu.id}/ligne", data=dict(base, nouveau_site_id=sud.id, mois_transfert=7))
+    _flash(cli)
+    assert db.session.get(M.LigneBudget, la.id).mois_transfert == 7
+    cli.post(f"/budget-masse-salariale/{bu.id}/adopter")
+    page = cli.get(f"/budget-masse-salariale/{bu.id}").get_data(as_text=True)
+    assert "Chantier Nord → Chantier Sud" in page and "dès Juil." in page
+    assert "Chantier Sud" in cli.get(f"/budget-masse-salariale/{bu.id}/export.csv").get_data(as_text=True)

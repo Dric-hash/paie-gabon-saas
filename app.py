@@ -739,6 +739,14 @@ def run_migrations():
         "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_maj VARCHAR(20)",
         # ── 30/10/2026 — provision pour congés payés : comptes de l'écriture ─────
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS comptes_provision_conges TEXT",
+        # ── 30/10/2026 — provision congés : diviseur au choix (24 par défaut) ─────
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS diviseur_provision_conges NUMERIC(5,2)",
+        "ALTER TABLE provisions_conges ADD COLUMN IF NOT EXISTS diviseur NUMERIC(5,2)",
+        # arrêtés calculés avant cette date : diviseur 26 (calcul d'origine)
+        "UPDATE provisions_conges SET diviseur = 26 WHERE diviseur IS NULL",
+        # ── 30/10/2026 — budget : transfert de site en cours d'année ─────────────
+        "ALTER TABLE lignes_budget ADD COLUMN IF NOT EXISTS nouveau_site_id INTEGER REFERENCES sites(id)",
+        "ALTER TABLE lignes_budget ADD COLUMN IF NOT EXISTS mois_transfert INTEGER",
     ]
     for sql in migrations:
         try:

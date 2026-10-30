@@ -86,7 +86,7 @@
         <td style="padding:.45rem 1rem;text-align:right;font-family:monospace;color:{{ '#b91c1c' if x.ecart > 0 else '#065f46' }}">{{ fs(x.ecart) }}{% if x.ecart_pct is not none %} ({{ '%+.1f'|format(x.ecart_pct) }} %){% endif %}</td></tr>
     {% endfor %}</tbody>
   </table>
-  <p style="font-size:.7rem;color:#9ca3af;margin:.4rem 1rem .6rem">Réalisé rattaché au site d'affectation actuel de chaque salarié.</p>
+  <p style="font-size:.7rem;color:#9ca3af;margin:.4rem 1rem .6rem">Budget : site de chaque mois de la ligne (transfert compris). Réalisé : coût du mois réparti au prorata des jours d'affectation du salarié à chaque site.</p>
 </div>
 {% endif %}
 
@@ -106,6 +106,9 @@
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><input type="hidden" name="ligne_id" value="{{ l.id }}">
             <input name="libelle" value="{{ l.libelle }}" style="{{ champ }};width:12rem" {% if l.salarie_id %}readonly title="Salarié"{% endif %}>
             <select name="site_id" style="{{ champ }};width:9rem"><option value="">Sans site</option>{% for x in liste_sites %}<option value="{{ x.id }}" {% if x.id == l.site_id %}selected{% endif %}>{{ x.nom }}</option>{% endfor %}</select>
+            <span style="font-size:.7rem;color:#6b7280">puis</span>
+            <select name="nouveau_site_id" style="{{ champ }};width:8.5rem" title="Transfert en cours d'année"><option value="">— (pas de transfert)</option>{% for x in liste_sites %}<option value="{{ x.id }}" {% if x.id == l.nouveau_site_id %}selected{% endif %}>{{ x.nom }}</option>{% endfor %}</select>
+            <select name="mois_transfert" style="{{ champ }}" title="À partir du mois"><option value="">dès…</option>{% for i in range(2, 13) %}<option value="{{ i }}" {% if i == l.mois_transfert %}selected{% endif %}>dès {{ mois_courts[i] }}</option>{% endfor %}</select>
             <select name="mois_debut" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == l.mois_debut %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>→
             <select name="mois_fin" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == l.mois_fin %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>
             <input name="salaire_base" value="{{ '%.0f'|format(l.salaire_base|float) }}" inputmode="decimal" style="{{ champ }};width:7.5rem;text-align:right;font-family:monospace">
@@ -118,7 +121,7 @@
           <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><button style="background:none;border:none;color:#b91c1c;cursor:pointer" title="Supprimer">✕</button></form></td>
         {% else %}
         <td style="padding:.45rem 1rem">{{ l.libelle }}{% if not l.salarie_id %} <span style="font-size:.66rem;color:#6b7280">· poste prévu</span>{% endif %}</td>
-        <td style="padding:.45rem .4rem">{{ l.site.nom if l.site else '—' }}</td>
+        <td style="padding:.45rem .4rem">{{ l.site.nom if l.site else '—' }}{% if l.nouveau_site %} → {{ l.nouveau_site.nom }} <span style="color:#6b7280;font-size:.7rem">dès {{ mois_courts[l.mois_transfert] }}</span>{% endif %}</td>
         <td style="padding:.45rem .4rem">{{ mois_courts[l.mois_debut] }} → {{ mois_courts[l.mois_fin] }}</td>
         <td style="padding:.45rem .4rem;text-align:right;font-family:monospace">{{ fc(l.salaire_base) }}</td>
         <td style="padding:.45rem .4rem">{% if l.augmentation_pct %}{{ '%+g'|format(l.augmentation_pct|float) }} % dès {{ mois_courts[l.mois_augmentation] }}{% endif %}</td>

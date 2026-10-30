@@ -137,6 +137,9 @@ def budget_masse_salariale_ligne(bid):
     deb, fin, mois_aug = _mois("mois_debut"), _mois("mois_fin"), _mois("mois_augmentation")
     site_id = request.form.get("site_id", type=int)
     site = Site.query.filter_by(id=site_id, tenant_id=t.id).first() if site_id else None
+    nsite_id = request.form.get("nouveau_site_id", type=int)
+    nsite = Site.query.filter_by(id=nsite_id, tenant_id=t.id).first() if nsite_id else None
+    mois_tr = _mois("mois_transfert")
     erreurs = []
     if not libelle:
         erreurs.append("Indiquez le poste ou le salarié.")
@@ -148,6 +151,11 @@ def budget_masse_salariale_ligne(bid):
         erreurs.append("Augmentation : un pourcentage entre −50 et 100.")
     elif aug and not mois_aug:
         erreurs.append("Indiquez le mois d'effet de l'augmentation.")
+    if nsite is not None:
+        if nsite.id == (site.id if site else None):
+            erreurs.append("Le site après transfert doit être différent du site de départ.")
+        elif not mois_tr or not deb or not fin or not deb < mois_tr <= fin:
+            erreurs.append("Transfert : choisissez un mois après le premier mois de la ligne.")
     if erreurs:
         for e in erreurs:
             flash(e, "error")
@@ -158,6 +166,7 @@ def budget_masse_salariale_ligne(bid):
         db.session.add(l)
         l.budget = b
     l.libelle, l.site_id, l.mois_debut, l.mois_fin = libelle, (site.id if site else None), deb, fin
+    l.nouveau_site_id, l.mois_transfert = (nsite.id, mois_tr) if nsite else (None, None)
     l.salaire_base, l.augmentation_pct, l.mois_augmentation = base, aug or 0, (mois_aug if aug else None)
     bms.calculer_ligne(l, t)
     db.session.commit()
@@ -268,11 +277,12 @@ def budget_masse_salariale_csv(bid):
                     "" if x["ecart"] is None else round(x["ecart"]),
                     "" if x["ecart_pct"] is None else f"{x['ecart_pct']:.1f}".replace(".", ",")])
     w.writerow([])
-    w.writerow(["Ligne", "Site", "Du mois", "Au mois", "Salaire de base", "Augmentation %", "À partir de",
+    w.writerow(["Ligne", "Site", "Puis site", "À partir du mois", "Du mois", "Au mois", "Salaire de base", "Augmentation %", "À partir de",
                 "Coût annuel"] + bms.MOIS[1:])
     for l in sorted(b.lignes, key=lambda l: (l.libelle or "").upper()):
         m = bms.mensuel(l)
-        w.writerow([csv_safe(l.libelle), csv_safe(l.site.nom if l.site else ""), l.mois_debut, l.mois_fin,
+        w.writerow([csv_safe(l.libelle), csv_safe(l.site.nom if l.site else ""),
+                    csv_safe(l.nouveau_site.nom if l.nouveau_site else ""), l.mois_transfert or "", l.mois_debut, l.mois_fin,
                     round(float(l.salaire_base)), float(l.augmentation_pct or 0), l.mois_augmentation or "",
                     sum(v[1] for v in m.values())] + [m.get(i, [0, 0])[1] for i in range(1, 13)])
     return Response("﻿" + out.getvalue(), mimetype="text/csv; charset=utf-8",
