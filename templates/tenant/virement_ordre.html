@@ -1,0 +1,68 @@
+{% extends "tenant/base.html" %}
+{% block title %}Ordre de virement {{ o.numero }}{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.8rem;background:#fff" %}
+{% set btn = "padding:.4rem .8rem;border-radius:.5rem;font-size:.78rem;font-weight:700;border:none;cursor:pointer" %}
+{% macro fcfa(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }} FCFA{% endmacro %}
+{% set st = statuts[o.statut] %}
+
+<a href="/virements?periode_id={{ o.periode_id }}" style="font-size:.78rem;color:#0f3d36">← Virements {{ o.periode.libelle_complet }}</a>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin:.25rem 0 1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">Ordre de virement {{ o.numero }}
+      <span style="font-size:.72rem;font-weight:700;padding:.2rem .6rem;border-radius:9999px;vertical-align:middle;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></h1>
+    <p style="font-size:.82rem;color:#6b7280;margin:.25rem 0 0">Salaires {{ o.periode.libelle_complet }} · compte débité : <b>{{ o.compte.banque }}</b> {{ o.compte.rib }}
+      · préparé le {{ o.date_ordre.strftime('%d/%m/%Y') }}{% if o.auteur %} par {{ o.auteur }}{% endif %}
+      {% if o.date_execution %}· {{ 'exécuté' if o.statut == 'EXECUTE' else 'exécution souhaitée' }} le {{ o.date_execution.strftime('%d/%m/%Y') }}{% endif %}</p>
+    {% if o.motif_annulation %}<p style="font-size:.8rem;color:#b91c1c;margin:.25rem 0 0">Annulé : {{ o.motif_annulation }}</p>{% endif %}
+  </div>
+  <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+    <a href="/virements/ordres/{{ o.id }}/lettre" target="_blank" style="background:#0f3d36;color:white;{{ btn }};text-decoration:none">🖨 Lettre à la banque</a>
+    <a href="/virements/ordres/{{ o.id }}/excel" style="background:#ecfdf5;color:#065f46;{{ btn }};text-decoration:none">📥 Excel</a>
+  </div>
+</div>
+
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:1.25rem">
+  <div style="overflow-x:auto">
+  <table style="width:100%;min-width:640px;border-collapse:collapse;font-size:.82rem">
+    <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem .9rem">#</th><th style="padding:.6rem .5rem">Bénéficiaire</th><th style="padding:.6rem .5rem">Banque</th>
+      <th style="padding:.6rem .5rem">RIB / IBAN</th><th style="padding:.6rem .9rem;text-align:right">Montant</th>
+    </tr></thead>
+    <tbody>
+      {% for l in o.lignes %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.5rem .9rem;color:#9ca3af">{{ loop.index }}</td>
+        <td style="padding:.5rem;font-weight:600">{{ l.nom }} <span style="color:#9ca3af;font-weight:400">{{ l.matricule or '' }}</span>
+          {% if l.bulletin and l.bulletin.statut not in ('VALIDÉ', 'VALIDE', 'PAYÉ', 'PAYE') %}<span style="font-size:.7rem;color:#b91c1c"> — bulletin repassé en {{ l.bulletin.statut|lower }}</span>{% endif %}</td>
+        <td style="padding:.5rem">{{ l.banque or '—' }}</td>
+        <td style="padding:.5rem;font-family:monospace">{{ l.rib }}</td>
+        <td style="padding:.5rem .9rem;text-align:right;font-family:monospace;white-space:nowrap">{{ fcfa(l.montant) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr style="background:#f9fafb"><td colspan="4" style="padding:.6rem .9rem;text-align:right;font-weight:800">Total ({{ o.lignes|length }} virement(s))</td>
+      <td style="padding:.6rem .9rem;text-align:right;font-family:monospace;font-weight:800;white-space:nowrap">{{ fcfa(o.total) }}</td></tr></tfoot>
+  </table>
+  </div>
+</div>
+
+{% if o.statut == 'PREPARE' and current_user.can_edit %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem">
+  <form method="post" action="/virements/ordres/{{ o.id }}/executer" class="card" style="padding:1rem 1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="font-weight:800;color:#065f46;margin-bottom:.35rem">Le virement est passé</div>
+    <p style="font-size:.78rem;color:#6b7280;margin:0 0 .6rem">Les bulletins de l'ordre seront marqués payés (mode virement) à cette date et proposés à la Caisse.</p>
+    <input type="date" name="date_execution" required value="{{ (o.date_execution if o.date_execution and o.date_execution <= aujourdhui else aujourdhui).isoformat() }}" max="{{ aujourdhui.isoformat() }}" style="{{ champ }}">
+    <button style="background:#059669;color:white;{{ btn }}" onclick="return confirm('Marquer l\'ordre exécuté et les bulletins payés ?')">Marquer exécuté</button>
+  </form>
+  <form method="post" action="/virements/ordres/{{ o.id }}/annuler" class="card" style="padding:1rem 1.25rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <div style="font-weight:800;color:#b91c1c;margin-bottom:.35rem">Annuler l'ordre</div>
+    <p style="font-size:.78rem;color:#6b7280;margin:0 0 .6rem">Si la banque ne l'a pas exécuté : les bulletins redeviennent disponibles pour un nouvel ordre.</p>
+    <input name="motif" required placeholder="Motif" style="{{ champ }};width:60%">
+    <button style="background:#fee2e2;color:#b91c1c;{{ btn }}">Annuler</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}

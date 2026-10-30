@@ -1,0 +1,103 @@
+{% extends "tenant/base.html" %}
+{% block title %}Virements des salaires{% if periode %} — {{ periode.libelle_complet }}{% endif %}{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.8rem;background:#fff" %}
+{% set btn = "padding:.4rem .8rem;border-radius:.5rem;font-size:.78rem;font-weight:700;border:none;cursor:pointer" %}
+{% macro fcfa(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }} FCFA{% endmacro %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🏦 Paiement des salaires{% if periode %} — {{ periode.libelle_complet }}{% endif %}</h1>
+    <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0;max-width:46rem">
+      Les bulletins <b>validés</b> des salariés payés par virement forment l'ordre de virement à remettre à votre banque.
+      Une fois le virement passé, marquez l'ordre exécuté : les bulletins deviennent payés et sont proposés à la Caisse.</p>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    {% if periodes %}
+    <form method="get" style="margin:0">
+      <select name="periode_id" onchange="this.form.submit()" style="{{ champ }}">
+        {% for p in periodes %}<option value="{{ p.id }}" {{ 'selected' if periode and p.id == periode.id }}>{{ p.libelle_complet }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+    {% if periode %}<a href="/virements/especes?periode_id={{ periode.id }}" target="_blank" style="background:#fef3c7;color:#92400e;{{ btn }};text-decoration:none">💵 État de paie en espèces</a>{% endif %}
+    <a href="/virements/comptes" style="background:#f3f4f6;color:#374151;{{ btn }};text-decoration:none">Comptes de l'entreprise</a>
+  </div>
+</div>
+
+{% if periode %}
+{% if nb_brouillons %}
+<div class="card" style="padding:.8rem 1.1rem;margin-bottom:1rem;background:#fffbeb;color:#92400e;font-size:.82rem">
+  {{ nb_brouillons }} bulletin(s) encore en brouillon sur la période : <a href="/paie/controle?periode_id={{ periode.id }}" style="font-weight:700;color:#92400e">contrôlez</a> puis validez-les pour les inclure.</div>
+{% endif %}
+
+<div class="card" style="padding:1.1rem 1.25rem;margin-bottom:1.25rem">
+  <div style="font-weight:800;color:#0f3d36;margin-bottom:.6rem">Bulletins à virer ({{ prets|length }})</div>
+  {% if prets %}
+  <form method="post" action="/virements/ordres">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="periode_id" value="{{ periode.id }}"/>
+    <div style="overflow-x:auto">
+    <table style="width:100%;min-width:640px;border-collapse:collapse;font-size:.82rem">
+      <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #f3f4f6">
+        <th style="padding:.4rem"><input type="checkbox" checked onchange="document.querySelectorAll('.ov-b').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:.4rem">Salarié</th><th style="padding:.4rem">Banque</th><th style="padding:.4rem">RIB / IBAN</th><th style="padding:.4rem;text-align:right">Net à payer</th>
+      </tr></thead>
+      <tbody>
+        {% for b in prets %}
+        <tr style="border-bottom:1px solid #f9fafb">
+          <td style="padding:.4rem"><input type="checkbox" class="ov-b" name="bulletin_id" value="{{ b.id }}" checked></td>
+          <td style="padding:.4rem;font-weight:600">{{ b.salarie.nom_complet }} <span style="color:#9ca3af;font-weight:400">{{ b.salarie.matricule }}</span></td>
+          <td style="padding:.4rem">{{ b.salarie.banque or '—' }}</td>
+          <td style="padding:.4rem;font-family:monospace">{{ b.salarie.rib }}</td>
+          <td style="padding:.4rem;text-align:right;font-family:monospace;white-space:nowrap">{{ fcfa(b.net_a_payer) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr><td colspan="4" style="padding:.5rem .4rem;text-align:right;font-weight:800">Total</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-family:monospace;font-weight:800;white-space:nowrap">{{ fcfa(prets|sum(attribute='net_a_payer')) }}</td></tr></tfoot>
+    </table>
+    </div>
+    {% if current_user.can_edit %}
+    <div style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-top:.8rem">
+      <label style="font-size:.72rem;color:#6b7280">Compte à débiter<br>
+        <select name="compte_id" required style="{{ champ }};min-width:16rem">
+          {% for c in comptes %}<option value="{{ c.id }}">{{ c.banque }}{% if c.intitule %} — {{ c.intitule }}{% endif %} ({{ c.rib }})</option>{% endfor %}
+        </select></label>
+      <label style="font-size:.72rem;color:#6b7280">Date d'exécution souhaitée<br>
+        <input type="date" name="date_execution" style="{{ champ }}"></label>
+      {% if comptes %}<button style="background:#0f3d36;color:white;{{ btn }}">Préparer l'ordre de virement</button>
+      {% else %}<span style="font-size:.8rem;color:#b91c1c">Ajoutez d'abord le compte bancaire de l'entreprise : <a href="/virements/comptes" style="font-weight:700;color:#b91c1c">Comptes de l'entreprise</a>.</span>{% endif %}
+    </div>
+    {% endif %}
+  </form>
+  {% else %}
+  <p style="font-size:.82rem;color:#6b7280;margin:0">Aucun bulletin validé à virer sur cette période (ou déjà sur un ordre).</p>
+  {% endif %}
+</div>
+
+{% if sans_rib %}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1.25rem;background:#fef2f2">
+  <div style="font-weight:800;color:#b91c1c;margin-bottom:.4rem">Virement impossible : RIB manquant ({{ sans_rib|length }})</div>
+  <div style="font-size:.82rem;color:#7f1d1d">
+    {% for b in sans_rib %}<a href="/salaries/{{ b.salarie.id }}/modifier" style="color:#7f1d1d;font-weight:600">{{ b.salarie.nom_complet }}</a> ({{ fcfa(b.net_a_payer) }}){% if not loop.last %}, {% endif %}{% endfor %}
+    — complétez leur fiche (section « Paiement du salaire »).</div>
+</div>
+{% endif %}
+
+<div class="card" style="padding:0;overflow:hidden">
+  <div style="padding:.9rem 1.25rem;font-weight:800;color:#0f3d36;border-bottom:1px solid #f3f4f6">Ordres de virement de la période</div>
+  {% for o in ordres %}{% set st = statuts[o.statut] %}
+  <a href="/virements/ordres/{{ o.id }}" style="display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;padding:.7rem 1.25rem;border-bottom:1px solid #f9fafb;color:inherit;text-decoration:none;font-size:.85rem">
+    <span><b style="color:#0f3d36">{{ o.numero }}</b> · {{ o.compte.banque }} · {{ o.lignes|length }} salarié(s) · du {{ o.date_ordre.strftime('%d/%m/%Y') }}</span>
+    <span style="display:flex;gap:.75rem;align-items:center"><span style="font-family:monospace">{{ fcfa(o.total) }}</span>
+      <span style="font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></span>
+  </a>
+  {% else %}
+  <div style="padding:1rem 1.25rem;font-size:.82rem;color:#9ca3af">Aucun ordre pour cette période.</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="padding:2rem;text-align:center;color:#6b7280">Aucune période de paie.</div>
+{% endif %}
+{% endblock %}

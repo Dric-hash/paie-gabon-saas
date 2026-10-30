@@ -1,0 +1,80 @@
+{% extends "tenant/base.html" %}
+{% block title %}Contrôle de la paie{% if periode %} — {{ periode.libelle_complet }}{% endif %}{% endblock %}
+{% block content %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .6rem;font-size:.8rem;background:#fff" %}
+{% set btn = "padding:.4rem .8rem;border-radius:.5rem;font-size:.78rem;font-weight:700;border:none;cursor:pointer" %}
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🔎 Contrôle de la paie{% if periode %} — {{ periode.libelle_complet }}{% endif %}</h1>
+    <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0;max-width:46rem">
+      À consulter avant de valider les bulletins. Les points bloquants empêchent la validation ; les autres sont des
+      vérifications à faire (une variation peut être normale : prime, absence, augmentation).</p>
+  </div>
+  <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+    {% if periodes %}
+    <form method="get" style="margin:0">
+      <select name="periode_id" onchange="this.form.submit()" style="{{ champ }}">
+        {% for p in periodes %}<option value="{{ p.id }}" {{ 'selected' if periode and p.id == periode.id }}>{{ p.libelle_complet }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+    {% if periode %}<a href="/bulletins?periode_id={{ periode.id }}" style="background:#0f3d36;color:white;{{ btn }};text-decoration:none">📊 Bulletins de la période</a>{% endif %}
+  </div>
+</div>
+
+{% if not periode %}
+<div class="card" style="padding:2rem;text-align:center;color:#6b7280">Aucune période de paie : créez-en une dans « Périodes ».</div>
+{% else %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin-bottom:1.25rem">
+  <div class="card" style="padding:1rem"><div style="font-size:.72rem;color:#6b7280">Bulletins de la période</div><div style="font-size:1.5rem;font-weight:900;color:#0f3d36">{{ nb_bulletins }}</div></div>
+  {% for code, (lib, fg, bg) in niveaux.items() %}
+  <div class="card" style="padding:1rem;background:{{ bg if resume[code] else '#fff' }}"><div style="font-size:.72rem;color:{{ fg }}">{{ lib }}</div><div style="font-size:1.5rem;font-weight:900;color:{{ fg }}">{{ resume[code] }}</div></div>
+  {% endfor %}
+</div>
+
+{% if not anomalies %}
+<div class="card" style="padding:1.5rem;text-align:center;background:#ecfdf5;color:#065f46;font-weight:700;margin-bottom:1.25rem">✓ Rien à signaler sur cette période.</div>
+{% else %}
+<div class="card" style="padding:0;overflow:hidden;margin-bottom:1.25rem">
+  <div style="overflow-x:auto">
+  <table style="width:100%;min-width:720px;border-collapse:collapse;font-size:.82rem">
+    <thead><tr style="text-align:left;color:#6b7280;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem .9rem">Niveau</th><th style="padding:.6rem .5rem">Salarié</th><th style="padding:.6rem .5rem">Point</th><th style="padding:.6rem .5rem">Détail</th><th></th>
+    </tr></thead>
+    <tbody>
+      {% for a in anomalies %}{% set n = niveaux[a.niveau] %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.55rem .9rem"><span style="font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px;color:{{ n[1] }};background:{{ n[2] }};white-space:nowrap">{{ n[0] }}</span></td>
+        <td style="padding:.55rem .5rem;font-weight:600;white-space:nowrap">{% if a.salarie %}<a href="/salaries/{{ a.salarie.id }}" style="color:#0f3d36">{{ a.salarie.nom_complet }}</a> <span style="color:#9ca3af;font-weight:400">{{ a.salarie.matricule }}</span>{% endif %}</td>
+        <td style="padding:.55rem .5rem;font-weight:600">{{ a.titre }}</td>
+        <td style="padding:.55rem .5rem;color:#4b5563">{{ a.detail }}</td>
+        <td style="padding:.55rem .9rem;text-align:right;white-space:nowrap">{% if a.bulletin %}<a href="/bulletins/{{ a.bulletin.id }}" style="font-size:.75rem;color:#0f3d36;font-weight:700">Bulletin →</a>{% elif a.salarie %}<a href="/bulletins/saisie?salarie_id={{ a.salarie.id }}&periode_id={{ periode.id }}" style="font-size:.75rem;color:#0f3d36;font-weight:700">Saisir →</a>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<details class="card" style="padding:1rem 1.25rem">
+  <summary style="cursor:pointer;font-weight:700;color:#0f3d36;font-size:.85rem">Réglages du contrôle</summary>
+  <p style="font-size:.78rem;color:#6b7280;margin:.5rem 0">
+    Variation du net signalée au-delà de <b>{{ '%g'|format(seuil) }} %</b> par rapport au mois précédent.
+    Minimum mensuel de référence : <b>{{ '{:,.0f}'.format(minimum).replace(',', ' ') }} FCFA</b> ({{ source_minimum }}).
+    Heures supplémentaires signalées au-delà de 2 fois la moyenne des 3 mois précédents.</p>
+  {% if current_user.is_tenant_admin %}
+  <form method="post" action="/paie/controle/parametres" style="display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <input type="hidden" name="periode_id" value="{{ periode.id }}"/>
+    <label style="font-size:.72rem;color:#6b7280">Seuil de variation (%)<br>
+      <input type="number" step="any" min="1" max="100" name="seuil" value="{{ '%g'|format(tenant.controle_seuil_variation) if tenant.controle_seuil_variation is not none else '' }}" placeholder="20" style="{{ champ }};width:8rem"></label>
+    <label style="font-size:.72rem;color:#6b7280">Minimum mensuel de référence (FCFA)<br>
+      <input type="number" step="any" min="0" name="minimum" value="{{ '%.0f'|format(tenant.controle_salaire_minimum) if tenant.controle_salaire_minimum else '' }}" placeholder="vide : valeur du moteur de paie" style="{{ champ }};width:16rem"></label>
+    <button style="background:#0f3d36;color:white;{{ btn }}">Enregistrer</button>
+  </form>
+  {% endif %}
+</details>
+{% endif %}
+{% endblock %}

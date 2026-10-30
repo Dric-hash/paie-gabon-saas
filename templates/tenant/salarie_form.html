@@ -220,6 +220,36 @@
     </div>
   </div>
 
+  <!-- Paiement du salaire -->
+  <div class="card p-6 space-y-4 col-span-2">
+    <h2 class="text-xs font-bold text-gray-400 uppercase tracking-widest">Paiement du salaire</h2>
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Mode de paiement</label>
+        <select name="mode_paiement" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm">
+          <option value="ESPECES" {% if not salarie or (salarie.mode_paiement or 'ESPECES') == 'ESPECES' %}selected{% endif %}>Espèces</option>
+          <option value="VIREMENT" {% if salarie and salarie.mode_paiement == 'VIREMENT' %}selected{% endif %}>Virement bancaire</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Banque</label>
+        <input type="text" name="banque" value="{{ salarie.banque or '' if salarie else '' }}" placeholder="Nom de la banque"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm"/>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">RIB / IBAN</label>
+        <input type="text" name="rib" value="{{ salarie.rib or '' if salarie else '' }}" placeholder="Tel qu'indiqué sur le relevé d'identité bancaire"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-mono"/>
+      </div>
+      <div class="md:col-span-2">
+        <label class="block text-xs font-bold text-gray-500 mb-1.5">Titulaire du compte (si différent du salarié)</label>
+        <input type="text" name="titulaire_compte" value="{{ salarie.titulaire_compte or '' if salarie else '' }}"
+          class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm"/>
+      </div>
+    </div>
+    <p class="text-[0.68rem] text-gray-400">Le RIB sert à l'ordre de virement des salaires (menu Paie → Virements). Vérifiez-le sur le relevé fourni par le salarié.</p>
+  </div>
+
   <!-- ── Affectation site — col-span-2 pour prendre toute la largeur ── -->
   {% if sites %}
   <div class="card p-6 col-span-2">

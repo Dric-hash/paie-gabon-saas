@@ -346,6 +346,18 @@ def salaries_import_modele():
                      download_name="modele_import_salaries.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
+def _paiement_salarie(s):
+    """Mode de paiement et coordonnées bancaires saisis sur la fiche (ordres de virement)."""
+    if "mode_paiement" in request.form:
+        mode = (request.form.get("mode_paiement") or "ESPECES").strip().upper()
+        s.mode_paiement = mode if mode in ("ESPECES", "VIREMENT") else "ESPECES"
+    for champ, n in (("banque", 100), ("titulaire_compte", 150)):
+        if champ in request.form:
+            setattr(s, champ, (request.form.get(champ) or "").strip()[:n] or None)
+    if "rib" in request.form:
+        s.rib = " ".join((request.form.get("rib") or "").split())[:50] or None
+
+
 @bp.route("/salaries/nouveau", methods=["GET","POST"])
 @login_required
 def salarie_nouveau():
@@ -384,6 +396,7 @@ def salarie_nouveau():
             numero_cnss=request.form.get("numero_cnss"), numero_cnamgs=request.form.get("numero_cnamgs"),
             emploi=request.form.get("emploi"), assujetti_cnamgs=request.form.get("assujetti_cnamgs")=="OUI", travail_de_nuit=request.form.get("travail_de_nuit")=="OUI",
             nif=request.form.get("nif"), niveau=request.form.get("niveau"), code_emploi=request.form.get("code_emploi"), statut="ACTIF")
+        _paiement_salarie(s)
         db.session.add(s)
         sb=float(request.form.get("salaire_base") or 0)
         if sb: db.session.add(Contrat(tenant_id=t.id,salarie=s,type_contrat=request.form.get("type_contrat","CDI"),date_debut=s.date_embauche,salaire_base=sb,poste=s.emploi,actif=True))
@@ -496,9 +509,11 @@ def salarie_modifier(id):
             ("nombre_parts",calculer_parts_irpp(request.form.get("situation_matrimoniale",""),int(request.form.get("nb_enfants",0) or 0))),
             ("numero_cnss",request.form.get("numero_cnss")),("numero_cnamgs",request.form.get("numero_cnamgs")),
             ("emploi",request.form.get("emploi")),("categorie_id",id_du_tenant(CategorieEmploi, request.form.get("categorie_id"), t)),
-            ("mode_paiement",(request.form.get("mode_paiement","ESPECES") or "ESPECES").strip()),
             ("statut",request.form.get("statut","ACTIF")),("date_modification",utcnow())]:
             setattr(s,f,v)
+        # Paiement du salaire : modifié seulement s'il figure dans le formulaire
+        # (auparavant, chaque enregistrement remettait le salarié en « espèces »).
+        _paiement_salarie(s)
 
         # ── Historique des changements d'embauche / fonction ──────────────
         from models import HistoriqueSalarie

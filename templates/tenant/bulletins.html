@@ -158,6 +158,14 @@
         style="background:#fee2e2;color:#dc2626;padding:.375rem .875rem;border-radius:.625rem;font-size:.75rem;font-weight:700;border:none;cursor:pointer;display:none">
         🗑️ Supprimer brouillons
       </button>
+      <a href="/paie/controle?periode_id={{ periode_sel.id }}"
+         style="background:{{ '#fee2e2' if controle and controle.bloquant else ('#fef3c7' if controle and controle.attention else '#e0f2fe') }};color:{{ '#b91c1c' if controle and controle.bloquant else ('#92400e' if controle and controle.attention else '#075985') }};padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+        🔎 Contrôler la paie{% if controle and (controle.bloquant or controle.attention) %} ({{ controle.bloquant + controle.attention }}){% endif %}
+      </a>
+      <a href="/virements?periode_id={{ periode_sel.id }}"
+         style="background:#ecfdf5;color:#065f46;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
+        🏦 Virements / espèces
+      </a>
       <!-- Export Excel (dans le formulaire, simple lien) -->
       <a href="/bulletins/export/{{ periode_sel.id }}{% if site_filtre %}?site_id={{ site_filtre.id }}{% endif %}"
          style="background:#0f3d36;color:white;padding:.375rem .75rem;border-radius:.625rem;font-size:.75rem;font-weight:700;text-decoration:none">
@@ -176,7 +184,7 @@
       {% set nb_valides_total = bulletins|selectattr('statut','in',['VALIDÉ','VALIDE'])|list|length %}
       {% if nb_brouillons_total > 0 %}
       <button type="button"
-        onclick="if(confirm('Valider TOUS les {{ nb_brouillons_total }} brouillon(s) de cette période ?')) {
+        onclick="if(confirm('Valider TOUS les {{ nb_brouillons_total }} brouillon(s) de cette période ?{% if controle and (controle.bloquant or controle.attention) %}\n\nLe contrôle de la paie signale {{ controle.bloquant }} point(s) bloquant(s) et {{ controle.attention }} point(s) à vérifier.{% endif %}')) {
           document.getElementById('inp-ids').value='';
           document.getElementById('inp-action').value='valider';
           document.getElementById('inp-tout-valider').value='1';
