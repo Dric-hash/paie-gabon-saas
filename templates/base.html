@@ -93,8 +93,11 @@
       <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
         📅 <span>Périodes</span>
       </a>
-      <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
+      <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep and 'provision' not in ep else 'text-white/80 hover:bg-white/10' }}">
         🏖️ <span>Congés</span>
+      </a>
+      <a href="/provisions-conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'provision' in (ep or '') else 'text-white/80 hover:bg-white/10' }}">
+        🧾 <span>Provision congés</span>
       </a>
       <a href="/acomptes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'acompte' in ep else 'text-white/80 hover:bg-white/10' }}">
         💵 <span>Acomptes</span>

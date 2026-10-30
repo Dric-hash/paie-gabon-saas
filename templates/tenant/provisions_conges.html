@@ -1,0 +1,65 @@
+{% extends "tenant/base.html" %}
+{% block title %}Provision pour congés payés{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.45rem .6rem;font-size:.85rem;background:#fff" %}
+<h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">🏖️ Provision pour congés payés</h1>
+<p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 1rem;max-width:52rem">
+  À chaque fin de mois (ou à la clôture), la dette envers les salariés pour les congés acquis et non pris :
+  jours dus × allocation de congé (moyenne du brut des 12 derniers bulletins validés ÷ 26), plus les charges patronales
+  constatées sur ces bulletins. L'écriture comptable passe l'ajustement depuis le dernier arrêté validé.</p>
+
+{% if current_user.can_edit %}
+<form method="post" action="/provisions-conges/calculer" class="card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+  <label style="font-size:.75rem;color:#6b7280">Arrêté à la fin de
+    <select name="mois" style="{{ champ }};display:block">{% for m in range(1, 13) %}<option value="{{ m }}" {% if m == defaut[1] %}selected{% endif %}>{{ mois[m] }}</option>{% endfor %}</select></label>
+  <label style="font-size:.75rem;color:#6b7280">Année
+    <select name="annee" style="{{ champ }};display:block">{% for a in annees %}<option value="{{ a }}" {% if a == defaut[0] %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+  <button style="background:#0f3d36;color:white;{{ btn }}">Calculer la provision</button>
+  <span style="font-size:.72rem;color:#6b7280">Un arrêté en brouillon du même mois est recalculé.</span>
+</form>
+{% endif %}
+
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <table style="width:100%;border-collapse:collapse;font-size:.83rem;min-width:760px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem 1rem">Arrêté au</th><th style="padding:.6rem .5rem;text-align:right">Salariés</th><th style="padding:.6rem .5rem;text-align:right">Jours dus</th>
+      <th style="padding:.6rem .5rem;text-align:right">Provision</th><th style="padding:.6rem .5rem;text-align:right">Charges et taxes</th>
+      <th style="padding:.6rem .5rem;text-align:right">Total</th><th style="padding:.6rem 1rem">Statut</th></tr></thead>
+    <tbody>
+      {% for a in arretes %}{% set tt = totaux(a) %}{% set st = statuts[a.statut] %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1rem"><a href="/provisions-conges/{{ a.id }}" style="color:#0f3d36;font-weight:700">{{ a.date_arrete.strftime('%d/%m/%Y') }}</a></td>
+        <td style="padding:.6rem .5rem;text-align:right">{{ a.lignes|length }}</td>
+        <td style="padding:.6rem .5rem;text-align:right">{{ '%.1f'|format(tt.jours) }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace">{{ '{:,.0f}'.format(tt.provision).replace(',', ' ') }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace">{{ '{:,.0f}'.format(tt.charges + tt.taxes).replace(',', ' ') }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace;font-weight:700">{{ '{:,.0f}'.format(tt.total).replace(',', ' ') }} FCFA</td>
+        <td style="padding:.6rem 1rem"><span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="padding:1.5rem;text-align:center;color:#9ca3af">Aucun arrêté pour l'instant.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<details class="card" style="padding:1rem 1.25rem">
+  <summary style="cursor:pointer;font-size:.85rem;font-weight:700;color:#0f3d36">Comptes de l'écriture</summary>
+  <p style="font-size:.72rem;color:#6b7280;margin:.5rem 0">Proposés selon le SYSCOHADA révisé ; adaptez-les à votre plan de comptes. Journal : celui du journal de paie.</p>
+  <form method="post" action="/provisions-conges/comptes" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    {% for k, lib, _ in liste_comptes %}
+    <label style="font-size:.75rem;color:#6b7280">{{ lib }}
+      <input name="compte_{{ k }}" value="{{ comptes[k] }}" {% if not current_user.can_edit %}disabled{% endif %} style="{{ champ }};width:100%;font-family:monospace"></label>
+    {% endfor %}
+    {% if current_user.can_edit %}
+    <div style="display:flex;gap:.5rem;align-items:flex-end">
+      <button style="background:#0f3d36;color:white;{{ btn }}">Enregistrer</button>
+      <button name="action" value="defaut" style="background:#f3f4f6;color:#374151;{{ btn }}">Comptes par défaut</button>
+    </div>
+    {% endif %}
+  </form>
+</details>
+{% endblock %}

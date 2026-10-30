@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Provision congés payés au {{ p.date_arrete.strftime('%d/%m/%Y') }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color:#111; margin:24px; font-size:10px; background:#fff; }
+    h1 { font-size:15px; margin:12px 0 4px; color:#0f3d36; text-transform:uppercase; }
+    .sub { color:#555; margin-bottom:8px; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px 5px; font-size:8px; text-transform:uppercase; }
+    td { padding:3px 5px; border-bottom:1px solid #eee; }
+    .r { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    tfoot td { font-weight:bold; border-top:2px solid #0f3d36; }
+    .note { margin-top:8px; font-size:8.5px; color:#555; }
+    .sig { margin-top:30px; display:flex; justify-content:space-between; } .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:42px; padding-top:3px; color:#555; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    @media print { body { margin:0; padding:10px; } .noprint { display:none; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+  <div class="noprint" style="text-align:right;margin-bottom:10px"><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+  <div style="font-size:13px;font-weight:bold">{{ t.denomination }}</div>
+  <h1>Provision pour congés payés au {{ p.date_arrete.strftime('%d/%m/%Y') }}</h1>
+  <div class="sub">{{ statuts[p.statut][0] }}{% if p.valide_par %} par {{ p.valide_par }}{% endif %} · {{ lignes|length }} salarié(s) ·
+    arrêté précédent : {{ prec.date_arrete.strftime('%d/%m/%Y') + ' (' + fc(tot_prec.total) + ' FCFA)' if prec else 'aucun' }}</div>
+  <table>
+    <thead><tr><th>Matricule</th><th>Salarié</th><th class="r">Jours dus</th><th class="r">Base / jour</th><th class="r">Provision</th><th class="r">Charges</th><th class="r">Taxes</th><th class="r">Total</th></tr></thead>
+    <tbody>
+      {% for l in lignes %}
+      <tr><td>{{ l.salarie.matricule }}</td><td>{{ l.salarie.nom_complet }}</td><td class="r">{{ '%g'|format(l.jours|float) }}</td>
+        <td class="r">{{ fc(l.base_journaliere) }}</td><td class="r">{{ fc(l.provision) }}</td><td class="r">{{ fc(l.charges) }}</td>
+        <td class="r">{{ fc(l.taxes) }}</td><td class="r">{{ fc(l.provision + l.charges + l.taxes) }}</td></tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="2" class="r">TOTAUX</td><td class="r">{{ '%.1f'|format(tot.jours) }}</td><td></td><td class="r">{{ fc(tot.provision) }}</td>
+      <td class="r">{{ fc(tot.charges) }}</td><td class="r">{{ fc(tot.taxes) }}</td><td class="r">{{ fc(tot.total) }} FCFA</td></tr></tfoot>
+  </table>
+  <h1 style="font-size:12px;margin-top:16px">Écriture d'ajustement</h1>
+  <table style="max-width:640px">
+    <thead><tr><th>Compte</th><th>Libellé</th><th class="r">Débit</th><th class="r">Crédit</th></tr></thead>
+    <tbody>{% for e in ecriture %}<tr><td>{{ e.compte }}</td><td>{{ e.libelle }}</td><td class="r">{{ fc(e.debit) if e.debit else '' }}</td><td class="r">{{ fc(e.credit) if e.credit else '' }}</td></tr>
+      {% else %}<tr><td colspan="4">Aucune variation.</td></tr>{% endfor %}</tbody>
+  </table>
+  <p class="note">Jours dus = congés acquis non pris de l'année et reliquat de l'année précédente (page Congés). Provision = allocation de congé
+    (moyenne du brut des 12 derniers bulletins validés hors primes de rendement et d'assiduité, ÷ 26 jours ouvrables) ; charges et taxes aux taux patronaux constatés sur ces bulletins.</p>
+  <div class="sig"><div><div class="ligne">Établi par {{ p.auteur or '' }}</div></div><div><div class="ligne">Visa de la direction / du comptable</div></div></div>
+  <p class="note" style="margin-top:16px;color:#999">{{ t.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
+</body>
+</html>

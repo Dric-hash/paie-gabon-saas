@@ -1,0 +1,98 @@
+{% extends "tenant/base.html" %}
+{% block title %}Provision congés au {{ p.date_arrete.strftime('%d/%m/%Y') }}{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set st = statuts[p.statut] %}
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+<a href="/provisions-conges" style="font-size:.78rem;color:#0f3d36">← Provision pour congés payés</a>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin:.25rem 0 1rem">
+  <div>
+    <h1 style="font-size:1.4rem;font-weight:900;color:#0f3d36;margin:0">Provision congés payés au {{ p.date_arrete.strftime('%d/%m/%Y') }}
+      <span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;vertical-align:middle;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></h1>
+    <p style="font-size:.78rem;color:#6b7280;margin:.25rem 0 0">Calculé par {{ p.auteur or '—' }}{% if p.valide_par %} · validé par {{ p.valide_par }}{% endif %}
+      · arrêté précédent validé : {{ prec.date_arrete.strftime('%d/%m/%Y') if prec else 'aucun' }}</p>
+  </div>
+  <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+    <a href="/provisions-conges/{{ p.id }}/imprimer" target="_blank" style="background:#ecfdf5;color:#065f46;{{ btn }}">🖨 État</a>
+    <a href="/provisions-conges/{{ p.id }}/export.csv" style="background:#f3f4f6;color:#374151;{{ btn }}">⬇ Détail CSV</a>
+    <a href="/provisions-conges/{{ p.id }}/ecriture.txt" style="background:#f3f4f6;color:#374151;{{ btn }}">⬇ Écriture (Sage)</a>
+    {% if current_user.can_edit %}
+      {% if p.statut == 'BROUILLON' %}
+      <form method="post" action="/provisions-conges/calculer" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <input type="hidden" name="annee" value="{{ p.annee }}"><input type="hidden" name="mois" value="{{ p.mois }}">
+        <button style="background:#f3f4f6;color:#374151;{{ btn }}">↻ Recalculer</button></form>
+      <form method="post" action="/provisions-conges/{{ p.id }}/valider" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#0f3d36;color:white;{{ btn }}">Valider l'arrêté</button></form>
+      <form method="post" action="/provisions-conges/{{ p.id }}/supprimer" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#fee2e2;color:#b91c1c;{{ btn }}">Supprimer</button></form>
+      {% else %}
+      <form method="post" action="/provisions-conges/{{ p.id }}/devalider" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#f3f4f6;color:#374151;{{ btn }}">Annuler la validation</button></form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.75rem;margin-bottom:1rem">
+  {% for lib, v, sub in [("Jours dus", '%.1f'|format(tot.jours), (lignes|length)|string + " salarié(s)"),
+                         ("Provision congés", fc(tot.provision) + " FCFA", "allocation des jours dus"),
+                         ("Charges sociales", fc(tot.charges) + " FCFA", "CNSS + CNAMGS patronales"),
+                         ("Taxes", fc(tot.taxes) + " FCFA", "FNH + CFP"),
+                         ("Total à provisionner", fc(tot.total) + " FCFA", "variation : " + ('{:+,.0f}'.format(tot.total - tot_prec.total)).replace(',', ' ') + " FCFA")] %}
+  <div class="card" style="padding:.8rem 1rem"><div style="font-size:.7rem;color:#6b7280;text-transform:uppercase">{{ lib }}</div>
+    <div style="font-size:1.1rem;font-weight:800;color:#0f3d36;font-family:monospace">{{ v }}</div><div style="font-size:.7rem;color:#9ca3af">{{ sub }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:900px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.68rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.55rem 1rem">Salarié</th><th style="padding:.55rem .4rem;text-align:right">Acquis</th><th style="padding:.55rem .4rem;text-align:right">Pris</th>
+      <th style="padding:.55rem .4rem;text-align:right">Reliquat N-1</th><th style="padding:.55rem .4rem;text-align:right">Jours dus</th>
+      <th style="padding:.55rem .4rem;text-align:right">Base / jour</th><th style="padding:.55rem .4rem;text-align:right">Provision</th>
+      <th style="padding:.55rem .4rem;text-align:right">Charges</th><th style="padding:.55rem .4rem;text-align:right">Taxes</th><th style="padding:.55rem 1rem;text-align:right">Total</th></tr></thead>
+    <tbody>
+      {% for l in lignes %}{% set d = detail(l) %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.5rem 1rem">{{ l.salarie.nom_complet }} <span style="color:#9ca3af">{{ l.salarie.matricule }}</span>
+          {% if not l.national %}<span style="font-size:.65rem;color:#6b7280">· non national</span>{% endif %}
+          {% if 'bulletin' not in (d.source or '') %}<span style="font-size:.65rem;color:#b45309">· base : {{ d.source }}</span>{% endif %}</td>
+        <td style="padding:.5rem .4rem;text-align:right">{{ d.acquis }}</td>
+        <td style="padding:.5rem .4rem;text-align:right">{{ d.pris }}</td>
+        <td style="padding:.5rem .4rem;text-align:right">{{ d.reliquat or '' }}</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-weight:700">{{ '%g'|format(l.jours|float) }}</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-family:monospace">{{ fc(l.base_journaliere) }}</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-family:monospace">{{ fc(l.provision) }}</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-family:monospace" title="{{ '%.2f'|format((l.taux_charges|float) * 100) }} %">{{ fc(l.charges) }}</td>
+        <td style="padding:.5rem .4rem;text-align:right;font-family:monospace" title="{{ '%.2f'|format((l.taux_taxes|float) * 100) }} %">{{ fc(l.taxes) }}</td>
+        <td style="padding:.5rem 1rem;text-align:right;font-family:monospace;font-weight:700">{{ fc(l.provision + l.charges + l.taxes) }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="10" style="padding:1.5rem;text-align:center;color:#9ca3af">Aucun salarié présent à cette date.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card" style="padding:1rem 1.25rem">
+  <h2 style="font-size:.95rem;font-weight:800;color:#0f3d36;margin:0 0 .2rem">Écriture d'ajustement</h2>
+  <p style="font-size:.74rem;color:#6b7280;margin:0 0 .6rem">Variation depuis {{ "l'arrêté du " + prec.date_arrete.strftime('%d/%m/%Y') if prec else "zéro (premier arrêté validé)" }} :
+    dotation si la dette augmente, reprise si elle diminue.</p>
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem;max-width:760px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.68rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.4rem .5rem">Compte</th><th style="padding:.4rem .5rem">Libellé</th><th style="padding:.4rem .5rem;text-align:right">Débit</th><th style="padding:.4rem .5rem;text-align:right">Crédit</th></tr></thead>
+    <tbody>
+      {% for e in ecriture %}
+      <tr style="border-bottom:1px solid #f9fafb"><td style="padding:.4rem .5rem;font-family:monospace">{{ e.compte }}</td><td style="padding:.4rem .5rem">{{ e.libelle }}</td>
+        <td style="padding:.4rem .5rem;text-align:right;font-family:monospace">{{ fc(e.debit) if e.debit else '' }}</td>
+        <td style="padding:.4rem .5rem;text-align:right;font-family:monospace">{{ fc(e.credit) if e.credit else '' }}</td></tr>
+      {% else %}
+      <tr><td colspan="4" style="padding:.8rem;text-align:center;color:#9ca3af">Aucune variation : pas d'écriture.</td></tr>
+      {% endfor %}
+    </tbody>
+    {% if ecriture %}<tfoot><tr><td colspan="2" style="padding:.5rem;text-align:right;font-weight:700">Totaux</td>
+      <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:700">{{ fc(ecriture|sum(attribute='debit')) }}</td>
+      <td style="padding:.5rem;text-align:right;font-family:monospace;font-weight:700">{{ fc(ecriture|sum(attribute='credit')) }}</td></tr></tfoot>{% endif %}
+  </table>
+</div>
+{% endblock %}
