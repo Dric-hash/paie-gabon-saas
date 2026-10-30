@@ -5,7 +5,8 @@ Repère ce qui mérite une vérification avant de valider les bulletins et de pa
 
   BLOQUANT (la validation est refusée)
     - net à payer négatif ;
-    - deux bulletins pour le même salarié sur la période.
+    - deux bulletins pour le même salarié sur la période ;
+    - rappel de salaire à verser mais absent du bulletin (brouillon à ré-enregistrer).
   ATTENTION (à vérifier, la validation reste possible)
     - salarié actif sans bulletin ;
     - net à payer nul ;
@@ -156,6 +157,16 @@ def controler(tenant, periode):
         if sortie and sortie < debut:
             res.append(_anomalie("attention", "SORTI_PAYE", "Salarié sorti avant la période",
                                  f"Sorti le {sortie:%d/%m/%Y} : ce bulletin est-il voulu (solde, rappel) ?", s, b))
+        if b.statut not in STATUTS_VALIDES:
+            import rappels_salaire
+            for r in rappels_salaire.manquants(b):
+                res.append(_anomalie("bloquant", "RAPPEL_ABSENT", "Rappel de salaire non inclus",
+                                     f"{rappels_salaire.libelle_composant(r)} ({_fcfa(r.total)}) doit être versé sur ce "
+                                     f"bulletin : ouvrez-le en modification et enregistrez-le.", s, b))
+            for r in rappels_salaire.annules_inclus(b):
+                res.append(_anomalie("bloquant", "RAPPEL_ANNULE", "Rappel annulé encore sur le bulletin",
+                                     f"{rappels_salaire.libelle_composant(r)} a été annulé : ré-enregistrez le bulletin "
+                                     f"pour le retirer.", s, b))
         if (s.mode_paiement or "ESPECES") == "VIREMENT" and not (s.rib or "").strip():
             res.append(_anomalie("attention", "SANS_RIB", "Virement sans RIB",
                                  "Mode de paiement « virement » mais aucun RIB sur la fiche du salarié.", s, b))

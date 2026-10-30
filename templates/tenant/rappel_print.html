@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>État de rappel de salaire — {{ r.salarie.nom_complet }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color:#111; margin:26px; font-size:10.5px; background:#fff; }
+    h1 { font-size:15px; margin:14px 0 4px; color:#0f3d36; text-transform:uppercase; }
+    .sub { color:#555; margin-bottom:10px; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px 6px; font-size:8.5px; text-transform:uppercase; }
+    td { padding:4px 6px; border-bottom:1px solid #eee; }
+    .r { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    .mois td { background:#f6f8f7; font-weight:bold; }
+    tfoot td { font-weight:bold; border-top:2px solid #0f3d36; font-size:11.5px; }
+    .note { margin-top:10px; font-size:9px; color:#555; }
+    .sig { margin-top:34px; display:flex; justify-content:space-between; }
+    .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:46px; padding-top:3px; color:#555; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    @media print { body { margin:0; padding:12px; } .noprint { display:none; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+  <div class="noprint" style="text-align:right;margin-bottom:10px"><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+  <div style="font-size:13px;font-weight:bold">{{ t.denomination }}</div>
+  <h1>État de rappel de salaire</h1>
+  <div class="sub">
+    <b>{{ r.salarie.nom_complet }}</b> — matricule {{ r.salarie.matricule }}{% if r.salarie.emploi %} — {{ r.salarie.emploi }}{% endif %}<br>
+    Motif : {{ r.motif }}<br>
+    Salaire de base mensuel : {{ '{:,.0f}'.format(r.ancien_salaire).replace(',', ' ') }} FCFA → {{ '{:,.0f}'.format(r.nouveau_salaire).replace(',', ' ') }} FCFA
+    à compter de {{ r.date_effet.strftime('%m/%Y') }} · versement sur le bulletin de {{ r.periode.libelle_complet }}
+    {% if r.statut == 'ANNULE' %}<br><b style="color:#b91c1c">ANNULÉ : {{ r.motif_annulation }}</b>{% endif %}
+  </div>
+  <table>
+    <thead><tr><th>Mois / rubrique</th><th class="r">Versé</th><th class="r">Dû</th><th class="r">Écart</th></tr></thead>
+    <tbody>
+      {% for l in r.lignes %}
+      <tr class="mois"><td colspan="3">{{ l.libelle_mois }}</td><td class="r">{{ '{:+,.0f}'.format(l.montant).replace(',', ' ') }}</td></tr>
+      {% for code, v in detail(l).items() %}
+      <tr><td>&nbsp;&nbsp;{{ rubriques[code][0] if code in rubriques else code }}</td><td class="r">{{ '{:,.0f}'.format(v[0]).replace(',', ' ') }}</td>
+        <td class="r">{{ '{:,.0f}'.format(v[1]).replace(',', ' ') }}</td><td class="r">{{ '{:+,.0f}'.format(v[2]).replace(',', ' ') }}</td></tr>
+      {% endfor %}
+      {% if l.ajustement %}<tr><td>&nbsp;&nbsp;<i>Ajustement manuel</i></td><td></td><td></td><td class="r">{{ '{:+,.0f}'.format(l.ajustement).replace(',', ' ') }}</td></tr>{% endif %}
+      {% endfor %}
+    </tbody>
+    <tfoot><tr><td colspan="3" class="r">RAPPEL BRUT À VERSER</td><td class="r">{{ '{:,.0f}'.format(r.total).replace(',', ' ') }} FCFA</td></tr></tfoot>
+  </table>
+  <p class="note">Les bulletins des mois rappelés ne sont pas modifiés. Le rappel est porté sur le bulletin de {{ r.periode.libelle_complet }}, où il est soumis aux cotisations et à l'impôt du mois de versement.</p>
+  <div class="sig">
+    <div><div class="ligne">Établi par {{ r.auteur or '' }}</div></div>
+    <div><div class="ligne">Visa de la direction</div></div>
+  </div>
+  <p class="note" style="margin-top:18px;color:#999">{{ t.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
+</body>
+</html>

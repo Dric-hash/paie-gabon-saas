@@ -1,0 +1,43 @@
+{% extends "tenant/base.html" %}
+{% block title %}Rappels de salaire{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:1rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">↩️ Rappels de salaire</h1>
+    <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0;max-width:46rem">
+      Augmentation ou reclassement avec effet rétroactif : les bulletins déjà validés ne sont pas modifiés ; la différence due
+      est calculée mois par mois et versée sur le bulletin d'une période ouverte.</p>
+  </div>
+  {% if current_user.can_edit %}<a href="/rappels/nouveau" style="background:#0f3d36;color:white;{{ btn }}">+ Nouveau rappel</a>{% endif %}
+</div>
+
+{% if a_verser %}
+<div class="card" style="padding:.75rem 1.25rem;margin-bottom:1rem;background:#fffbeb;border:1px solid #fde68a;font-size:.85rem;color:#92400e">
+  À verser : <b>{{ '{:,.0f}'.format(a_verser).replace(',', ' ') }} FCFA</b> sur les prochains bulletins.
+</div>
+{% endif %}
+
+<div class="card" style="padding:0;overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.83rem;min-width:760px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.6rem 1rem">Salarié</th><th style="padding:.6rem .5rem">Motif</th><th style="padding:.6rem .5rem">Mois rappelés</th>
+      <th style="padding:.6rem .5rem">Versé sur</th><th style="padding:.6rem .5rem;text-align:right">Montant brut</th><th style="padding:.6rem 1rem">Statut</th>
+    </tr></thead>
+    <tbody>
+      {% for r in rappels %}{% set st = statuts[r.statut] %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.6rem 1rem"><a href="/rappels/{{ r.id }}" style="color:#0f3d36;font-weight:700">{{ r.salarie.nom_complet }}</a></td>
+        <td style="padding:.6rem .5rem;color:#374151">{{ r.motif[:70] }}{% if r.motif|length > 70 %}…{% endif %}</td>
+        <td style="padding:.6rem .5rem">{{ r.lignes|length }} mois{% if r.lignes %} ({{ r.lignes[0].libelle_mois }}{% if r.lignes|length > 1 %} → {{ r.lignes[-1].libelle_mois }}{% endif %}){% endif %}</td>
+        <td style="padding:.6rem .5rem">{{ r.periode.libelle_complet }}</td>
+        <td style="padding:.6rem .5rem;text-align:right;font-family:monospace;white-space:nowrap">{{ '{:,.0f}'.format(r.total).replace(',', ' ') }} FCFA</td>
+        <td style="padding:.6rem 1rem"><span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" style="padding:1.5rem;text-align:center;color:#9ca3af">Aucun rappel de salaire.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
