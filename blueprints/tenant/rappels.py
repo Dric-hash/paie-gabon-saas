@@ -115,15 +115,20 @@ def rappel_nouveau():
         return render_template("tenant/rappel_nouveau.html", **ctx)
     if ajustements:
         motif = f"{motif} — ajustement : {request.form.get('justif_ajustement').strip()}"[:300]
-    r = rs.enregistrer(t.id, s, periode, effet, ancien, nouveau, choisies, motif, _auteur(), ajustements)
+    r = rs.enregistrer(t.id, s, periode, effet, ancien, nouveau, choisies, motif, _auteur(), ajustements,
+                       user_id=current_user.id)
     db.session.commit()
     log_action("CREATE", "rappel_salaire", r.id,
                f"Rappel de salaire {s.nom_complet} : {r.total:,.0f} FCFA sur {periode.libelle_complet}".replace(",", " "),
-               apres={"ancien": ancien, "nouveau": nouveau, "effet": effet.isoformat(), "mois": len(r.lignes)})
+               apres={"ancien": ancien, "nouveau": nouveau, "effet": effet.isoformat(), "mois": len(r.lignes),
+                      "contrat": r.contrat_maj, "avenant_id": r.contrat_id})
     bv = BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=s.id, periode_id=periode.id).first()
+    contrat_msg = (f" Contrat mis à jour : avenant à {nouveau:,.0f} FCFA à compter de {effet:%m/%Y}.".replace(",", " ")
+                   if r.contrat_maj == "AVENANT" else " Le contrat était déjà au nouveau salaire.")
     flash(f"Rappel enregistré : {r.total:,.0f} FCFA à verser sur {periode.libelle_complet}. ".replace(",", " ")
-          + ("Ouvrez le brouillon existant de cette période et enregistrez-le pour l'inclure."
-             if bv is not None else "Il sera inclus automatiquement dans le bulletin de cette période."), "success")
+          + ("Ouvrez le brouillon existant de cette période et enregistrez-le pour l'inclure (au nouveau salaire)."
+             if bv is not None else "Il sera inclus automatiquement dans le bulletin de cette période.")
+          + contrat_msg, "success")
     return redirect(url_for("tenant.rappel_detail", rid=r.id))
 
 
@@ -140,8 +145,9 @@ def rappel_detail(rid):
     rs.synchroniser_statuts(t.id, salarie_id=r.salarie_id)
     db.session.commit()
     bv = BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=r.salarie_id, periode_id=r.periode_id).first()
+    avenant = db.session.get(Contrat, r.contrat_id) if r.contrat_id else None
     return render_template("tenant/rappel_detail.html", r=r, statuts=rs.STATUTS, rubriques=rs.RUBRIQUES,
-                           detail=rs.detail_ligne, bulletin_versement=bv,
+                           detail=rs.detail_ligne, bulletin_versement=bv, avenant=avenant,
                            a_reenregistrer=bool(bv and bv.statut not in rs.STATUTS_VALIDES and rs.a_reenregistrer(bv)))
 
 
@@ -162,11 +168,20 @@ def rappel_annuler(rid):
             flash("Indiquez le motif de l'annulation.", "error")
         else:
             r.statut, r.motif_annulation = "ANNULE", motif
+            contrat = rs.retablir_contrat(r)
             db.session.commit()
-            log_action("CANCEL", "rappel_salaire", r.id, f"Rappel annulé : {motif}")
+            log_action("CANCEL", "rappel_salaire", r.id, f"Rappel annulé : {motif}", apres={"contrat": contrat})
             bv = BulletinPaie.query.filter_by(tenant_id=t.id, salarie_id=r.salarie_id, periode_id=r.periode_id).first()
-            flash("Rappel annulé." + (" Ré-enregistrez le brouillon de la période pour le retirer du bulletin."
-                                      if bv is not None and rs.annules_inclus(bv) else ""), "success")
+            msg = "Rappel annulé."
+            if contrat == "RETABLI":
+                msg += (f" L'avenant a été supprimé : le contrat revient à {float(r.ancien_salaire):,.0f} FCFA."
+                        .replace(",", " "))
+            elif contrat == "CONSERVE":
+                msg += (" L'avenant au nouveau salaire est conservé (contrat modifié depuis ou bulletin déjà validé "
+                        "à ce salaire) : vérifiez le contrat.")
+            if bv is not None and rs.a_reenregistrer(bv):
+                msg += " Ré-enregistrez le brouillon de la période pour mettre le bulletin à jour."
+            flash(msg, "warning" if contrat == "CONSERVE" else "success")
     return redirect(url_for("tenant.rappel_detail", rid=r.id))
 
 

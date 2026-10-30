@@ -733,6 +733,10 @@ def run_migrations():
         "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS controle_salaire_minimum NUMERIC(15,2)",
         # ── 30/10/2026 — rappels de salaire ───────────────────────────────────────
         "ALTER TABLE bulletin_composants ADD COLUMN IF NOT EXISTS rappel_id INTEGER REFERENCES rappels_salaire(id)",
+        # ── 30/10/2026 — rappel de salaire : mise à jour automatique du contrat (avenant) ──
+        "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_id INTEGER REFERENCES contrats(id)",
+        "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_precedent_id INTEGER REFERENCES contrats(id)",
+        "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_maj VARCHAR(20)",
     ]
     for sql in migrations:
         try:

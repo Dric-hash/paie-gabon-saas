@@ -2784,6 +2784,12 @@ class RappelSalaire(db.Model):
     auteur             = db.Column(db.String(150))
     motif_annulation   = db.Column(db.String(300))
     date_creation      = db.Column(db.DateTime, default=utcnow)
+    # Mise à jour du contrat : avenant au nouveau salaire à compter du mois d'effet.
+    # contrat_maj : AVENANT (créé par le rappel) | DEJA_A_JOUR (contrat déjà au nouveau salaire)
+    #               | RETABLI (rappel annulé, contrat précédent réactivé) | CONSERVE (annulé, avenant gardé)
+    contrat_id           = db.Column(db.Integer, db.ForeignKey("contrats.id"))   # avenant créé
+    contrat_precedent_id = db.Column(db.Integer, db.ForeignKey("contrats.id"))   # contrat désactivé par l'avenant
+    contrat_maj          = db.Column(db.String(20))
     salarie = db.relationship("Salarie")
     periode = db.relationship("PeriodePaie")
     lignes  = db.relationship("LigneRappel", back_populates="rappel", cascade="all, delete-orphan",

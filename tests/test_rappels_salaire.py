@@ -25,7 +25,8 @@ def _scenario(env):
     t, sid = env["t"], env["s"]
     s = db.session.get(M.Salarie, sid)
     s.date_embauche = date(2020, 1, 1)
-    db.session.add(M.Contrat(tenant_id=t, salarie_id=sid, date_debut=date(2020, 1, 1), salaire_base=230000, actif=True))
+    db.session.add(M.Contrat(tenant_id=t, salarie_id=sid, date_debut=date(2020, 1, 1), salaire_base=200000, actif=True,
+                             poste="Comptable", type_contrat="CDI", elements_recurrents='{"prime_transport": 20000}'))
     p = {m: _periode(t, 2026, m) for m in (7, 8, 9, 10, 11)}
     _bul(t, sid, p[7], 200000)                                                      # avant l'effet : pas rappelé
     _bul(t, sid, p[8], 200000, heures_sup_10=11538, prime_anciennete=6000)
@@ -67,7 +68,19 @@ def test_versement_automatique_et_validation(env):
     rid = int(r.headers["Location"].rstrip("/").split("/")[-1])
     rap = db.session.get(M.RappelSalaire, rid)
     assert (rap.total, rap.statut, len(rap.lignes)) == (92123, "A_VERSER", 3)
-    assert "Rappel enregistré : 92 123 FCFA" in _flash(cli)
+    msg = _flash(cli)
+    assert "Rappel enregistré : 92 123 FCFA" in msg and "avenant à 230 000 FCFA à compter de 08/2026" in msg
+    # contrat mis à jour : avenant au nouveau salaire, conditions reprises, événement de carrière
+    contrats = M.Contrat.query.filter_by(salarie_id=env["s"]).order_by(M.Contrat.id).all()
+    assert [(float(c.salaire_base), c.actif) for c in contrats] == [(200000, False), (230000, True)]
+    av = contrats[1]
+    assert (av.date_debut, av.poste, av.type_contrat, av.elements_recurrents) == (
+        date(2026, 8, 1), "Comptable", "CDI", '{"prime_transport": 20000}')
+    assert (rap.contrat_maj, rap.contrat_id, rap.contrat_precedent_id) == ("AVENANT", av.id, contrats[0].id)
+    evt = M.EvenementCarriere.query.filter_by(salarie_id=env["s"]).one()
+    assert (evt.type, evt.contrat_id, evt.ancienne_valeur, evt.nouvelle_valeur) == (
+        "AUGMENTATION", av.id, "200 000 FCFA", "230 000 FCFA")
+    assert "avenant à <b>230 000 FCFA</b> à compter du 01/08/2026" in cli.get(f"/rappels/{rid}").get_data(as_text=True)
     # génération du bulletin de novembre : le rappel y est inclus, soumis au brut
     cli.post("/bulletins/generer-lot", data={"periode_id": p[11]})
     b = M.BulletinPaie.query.filter_by(salarie_id=env["s"], periode_id=p[11]).one()
@@ -81,10 +94,12 @@ def test_versement_automatique_et_validation(env):
     # validation : le rappel est versé, il ne s'annule plus
     cli.post(f"/bulletins/{b.id}/valider")
     assert db.session.get(M.BulletinPaie, b.id).statut == "VALIDÉ"
+    assert float(db.session.get(M.BulletinPaie, b.id).salaire_base) == 230000     # repris de l'avenant
     assert "Versé" in cli.get(f"/rappels/{rid}").get_data(as_text=True)
     assert db.session.get(M.RappelSalaire, rid).statut == "VERSE"
     cli.post(f"/rappels/{rid}/annuler", data={"motif": "x"})
     assert "annulez d'abord la validation" in _flash(cli)
+    assert M.Contrat.query.filter_by(salarie_id=env["s"], actif=True).one().id == av.id
     # état imprimable
     etat = cli.get(f"/rappels/{rid}/imprimer").get_data(as_text=True)
     assert "ÉTAT DE RAPPEL DE SALAIRE".lower() in etat.lower() and "92 123 FCFA" in etat and "Août 2026" in etat
@@ -93,7 +108,7 @@ def test_versement_automatique_et_validation(env):
 def test_brouillon_existant_a_reenregistrer(env):
     p = _scenario(env)
     t, sid = env["t"], env["s"]
-    brouillon = _bul(t, sid, db.session.get(M.PeriodePaie, p[11]), 230000, statut="BROUILLON")
+    brouillon = _bul(t, sid, db.session.get(M.PeriodePaie, p[11]), 200000, statut="BROUILLON")  # avant l'augmentation
     db.session.commit()
     bid = brouillon.id
     cli = _cli(env["admin"])
@@ -107,18 +122,30 @@ def test_brouillon_existant_a_reenregistrer(env):
     assert db.session.get(M.BulletinPaie, bid).statut == "BROUILLON"
     an = cp.controler(db.session.get(M.Tenant, t), db.session.get(M.PeriodePaie, p[11]))
     assert any(a["code"] == "RAPPEL_ABSENT" and a["niveau"] == "bloquant" for a in an)
+    base = [a for a in an if a["code"] == "RAPPEL_BASE"]
+    assert base and base[0]["niveau"] == "bloquant" and "porté à 230 000 FCFA" in base[0]["detail"]
+    # ouverture en modification : le salaire de base est repris du contrat (avenant)
+    page = cli.get(f"/bulletins/saisie?id={bid}").get_data(as_text=True)
+    assert "Salaire de base repris du contrat (230 000 FCFA)" in page
     # ré-enregistrement de la saisie : le rappel est inclus automatiquement
     cli.post("/bulletins/saisie", data={"salarie_id": sid, "periode_id": p[11], "salaire_base": "230000",
                                         "action": "brouillon"})
     assert "rappel(s) de salaire inclus automatiquement" in _flash(cli)
     assert M.BulletinComposant.query.filter_by(bulletin_id=bid, rappel_id=rid).count() == 1
     assert not rs.a_reenregistrer(db.session.get(M.BulletinPaie, bid))
-    # annulation : le rappel annulé encore présent bloque, jusqu'au ré-enregistrement
+    # annulation : avenant supprimé, contrat précédent réactivé ; le brouillon (rappel + base 230 000) bloque
     cli.post(f"/rappels/{rid}/annuler", data={"motif": "Augmentation reportée"})
-    assert "Ré-enregistrez le brouillon" in _flash(cli)
+    msg = _flash(cli)
+    assert "le contrat revient à 200 000 FCFA" in msg and "Ré-enregistrez le brouillon" in msg
+    assert [(float(c.salaire_base), c.actif) for c in M.Contrat.query.filter_by(salarie_id=sid).all()] == [(200000, True)]
+    assert M.EvenementCarriere.query.filter_by(salarie_id=sid).count() == 0
+    assert db.session.get(M.RappelSalaire, rid).contrat_maj == "RETABLI"
     an = cp.controler(db.session.get(M.Tenant, t), db.session.get(M.PeriodePaie, p[11]))
-    assert any(a["code"] == "RAPPEL_ANNULE" for a in an)
-    cli.post("/bulletins/saisie", data={"salarie_id": sid, "periode_id": p[11], "salaire_base": "230000",
+    assert {"RAPPEL_ANNULE", "RAPPEL_BASE"} <= {a["code"] for a in an}
+    assert "rétabli à 200 000 FCFA" in [a for a in an if a["code"] == "RAPPEL_BASE"][0]["detail"]
+    cli.post(f"/bulletins/{bid}/valider")
+    assert db.session.get(M.BulletinPaie, bid).statut == "BROUILLON"
+    cli.post("/bulletins/saisie", data={"salarie_id": sid, "periode_id": p[11], "salaire_base": "200000",
                                         "action": "brouillon"})
     assert M.BulletinComposant.query.filter_by(bulletin_id=bid).count() == 0
     cli.post(f"/bulletins/{bid}/valider")
@@ -196,3 +223,35 @@ def test_droits_cloisonnement_et_suppression(env):
     ss.supprimer(s)
     db.session.commit()
     assert M.RappelSalaire.query.filter_by(salarie_id=env["autre"]).count() == 0
+
+
+def test_contrat_deja_a_jour_ou_modifie_depuis(env):
+    """Contrat déjà au nouveau salaire : pas d'avenant. Contrat modifié après le rappel : l'annulation le conserve."""
+    p = _scenario(env)
+    t, sid = env["t"], env["s"]
+    cli = _cli(env["admin"])
+    # 1) promotion déjà saisie par la gestion de carrière (contrat à 230 000) : le rappel ne crée rien
+    c0 = M.Contrat.query.filter_by(salarie_id=sid).one()
+    c0.salaire_base = 230000
+    db.session.commit()
+    r = _creer(cli, sid, p[11])
+    rid = int(r.headers["Location"].rstrip("/").split("/")[-1])
+    assert "Le contrat était déjà au nouveau salaire" in _flash(cli)
+    rap = db.session.get(M.RappelSalaire, rid)
+    assert (rap.contrat_maj, rap.contrat_id) == ("DEJA_A_JOUR", None) and M.Contrat.query.filter_by(salarie_id=sid).count() == 1
+    cli.post(f"/rappels/{rid}/annuler", data={"motif": "doublon"})
+    assert float(M.Contrat.query.filter_by(salarie_id=sid).one().salaire_base) == 230000
+    # 2) contrat ramené à 200 000, nouveau rappel (avenant), puis promotion à 250 000 avant l'annulation
+    c0.salaire_base = 200000
+    db.session.commit()
+    r = _creer(cli, sid, p[11])
+    rid2 = int(r.headers["Location"].rstrip("/").split("/")[-1])
+    _flash(cli)
+    assert db.session.get(M.RappelSalaire, rid2).contrat_maj == "AVENANT"
+    cli.post(f"/salaries/{sid}/promouvoir", data={"type_evt": "AUGMENTATION", "date_effet": "2026-11-01",
+                                                 "salaire_base": "250000"})
+    cli.post(f"/rappels/{rid2}/annuler", data={"motif": "erreur de taux"})
+    assert "avenant au nouveau salaire est conservé" in _flash(cli)
+    actif = M.Contrat.query.filter_by(salarie_id=sid, actif=True).one()
+    assert float(actif.salaire_base) == 250000 and db.session.get(M.RappelSalaire, rid2).contrat_maj == "CONSERVE"
+    assert M.Contrat.query.filter_by(salarie_id=sid).count() == 3
