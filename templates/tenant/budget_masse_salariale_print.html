@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Budget de masse salariale {{ b.annee }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; color:#111; margin:24px; font-size:10px; background:#fff; }
+    h1 { font-size:15px; margin:12px 0 4px; color:#0f3d36; text-transform:uppercase; }
+    h2 { font-size:12px; margin:16px 0 4px; color:#0f3d36; }
+    .sub { color:#555; margin-bottom:8px; }
+    table { width:100%; border-collapse:collapse; margin-top:6px; }
+    th { background:#0f3d36; color:#fff; text-align:left; padding:5px; font-size:8px; text-transform:uppercase; }
+    td { padding:3px 5px; border-bottom:1px solid #eee; }
+    .r { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    tfoot td { font-weight:bold; border-top:2px solid #0f3d36; }
+    .alerte { border:1px solid #fecaca; background:#fef2f2; color:#991b1b; padding:6px 8px; margin:8px 0; }
+    .note { margin-top:8px; font-size:8.5px; color:#555; }
+    .sig { margin-top:30px; display:flex; justify-content:space-between; } .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:42px; padding-top:3px; color:#555; }
+    .btn { background:#0f3d36; color:#fff; border:none; padding:9px 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; }
+    @media print { body { margin:0; padding:10px; } .noprint { display:none; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+{% macro fs(v) %}{{ '{:+,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+  <div class="noprint" style="text-align:right;margin-bottom:10px"><button class="btn" onclick="window.print()">🖨 Imprimer / Enregistrer en PDF</button></div>
+  <div style="font-size:13px;font-weight:bold">{{ t.denomination }}</div>
+  <h1>Budget de masse salariale {{ b.annee }} — suivi budget / réalisé</h1>
+  <div class="sub">{{ statuts[b.statut][0] }}{% if b.adopte_par %} par {{ b.adopte_par }}{% endif %} · {{ b.lignes|length }} ligne(s) · budget annuel {{ fc(s.total_budget) }} FCFA (coût employeur)
+    · seuil d'alerte {{ '%g'|format(b.seuil_alerte_pct|float) }} %</div>
+  {% if s.alerte %}<div class="alerte">Dépassement à fin {{ mois[s.dernier_mois] }} : {{ fs(s.ecart_cumul) }} FCFA ({{ '%+.1f'|format(s.ecart_cumul_pct) }} %) par rapport au budget cumulé.</div>{% endif %}
+  <table>
+    <thead><tr><th>Mois</th><th class="r">Budget brut</th><th class="r">Budget coût</th><th class="r">Réalisé brut</th><th class="r">Réalisé coût</th><th class="r">Écart</th><th class="r">Écart %</th></tr></thead>
+    <tbody>{% for x in s.lignes %}
+      <tr><td style="text-transform:capitalize">{{ mois[x.mois] }}</td><td class="r">{{ fc(x.budget_brut) }}</td><td class="r">{{ fc(x.budget_cout) }}</td>
+        <td class="r">{{ fc(x.realise_brut) if x.realise_brut is not none else '' }}</td><td class="r">{{ fc(x.realise_cout) if x.realise_cout is not none else '' }}</td>
+        <td class="r">{{ fs(x.ecart) if x.ecart is not none else '' }}</td><td class="r">{{ '%+.1f'|format(x.ecart_pct) if x.ecart_pct is not none else '' }}</td></tr>
+    {% endfor %}</tbody>
+    <tfoot><tr><td>Année / à date</td><td class="r">{{ fc(s.total_budget_brut) }}</td><td class="r">{{ fc(s.total_budget) }}</td><td></td>
+      <td class="r">{{ fc(s.cumul_realise) }}</td><td class="r">{{ fs(s.ecart_cumul) if s.dernier_mois else '' }}</td>
+      <td class="r">{{ '%+.1f'|format(s.ecart_cumul_pct) if s.ecart_cumul_pct is not none else '' }}</td></tr></tfoot>
+  </table>
+  {% if sites %}
+  <h2>Par site (réalisé rattaché au site d'affectation actuel)</h2>
+  <table><thead><tr><th>Site</th><th class="r">Budget annuel</th><th class="r">Budget à date</th><th class="r">Réalisé à date</th><th class="r">Écart</th></tr></thead>
+    <tbody>{% for x in sites %}<tr><td>{{ x.site }}</td><td class="r">{{ fc(x.annuel) }}</td><td class="r">{{ fc(x.budget) }}</td><td class="r">{{ fc(x.realise) }}</td><td class="r">{{ fs(x.ecart) }}</td></tr>{% endfor %}</tbody></table>
+  {% endif %}
+  <p class="note">Coût employeur = salaire brut + CNSS et CNAMGS patronales + FNH + CFP. Réalisé : bulletins validés ou payés. Budget calculé par le moteur de paie à partir des contrats et des postes prévus.</p>
+  <div class="sig"><div><div class="ligne">Établi par {{ b.auteur or '' }}</div></div><div><div class="ligne">Visa de la direction</div></div></div>
+  <p class="note" style="margin-top:16px;color:#999">{{ t.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
+</body>
+</html>

@@ -1,0 +1,160 @@
+{% extends "tenant/base.html" %}
+{% block title %}Budget de masse salariale {{ b.annee }}{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.45rem;padding:.35rem .45rem;font-size:.8rem;background:#fff" %}
+{% set st = statuts[b.statut] %}
+{% set edit = current_user.can_edit and b.statut == 'BROUILLON' %}
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+{% macro fs(v) %}{{ '{:+,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+<a href="/budget-masse-salariale" style="font-size:.78rem;color:#0f3d36">← Budgets de masse salariale</a>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin:.25rem 0 1rem">
+  <div>
+    <h1 style="font-size:1.4rem;font-weight:900;color:#0f3d36;margin:0">Budget de masse salariale {{ b.annee }}
+      <span style="font-size:.72rem;font-weight:700;padding:.15rem .55rem;border-radius:999px;vertical-align:middle;color:{{ st[1] }};background:{{ st[2] }}">{{ st[0] }}</span></h1>
+    <p style="font-size:.78rem;color:#6b7280;margin:.25rem 0 0">Préparé par {{ b.auteur or '—' }}{% if b.adopte_par %} · adopté par {{ b.adopte_par }}{% endif %}
+      · seuil d'alerte {{ '%g'|format(b.seuil_alerte_pct|float) }} %{% if b.commentaire %} · {{ b.commentaire }}{% endif %}</p>
+  </div>
+  <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+    <a href="/budget-masse-salariale/{{ b.id }}/imprimer" target="_blank" style="background:#ecfdf5;color:#065f46;{{ btn }}">🖨 État</a>
+    <a href="/budget-masse-salariale/{{ b.id }}/export.csv" style="background:#f3f4f6;color:#374151;{{ btn }}">⬇ CSV</a>
+    {% if current_user.can_edit %}
+      {% if b.statut == 'BROUILLON' %}
+      <form method="post" action="/budget-masse-salariale/{{ b.id }}/adopter" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#0f3d36;color:white;{{ btn }}">Adopter le budget</button></form>
+      <form method="post" action="/budget-masse-salariale/{{ b.id }}/supprimer" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#fee2e2;color:#b91c1c;{{ btn }}">Supprimer</button></form>
+      {% else %}
+      <form method="post" action="/budget-masse-salariale/{{ b.id }}/rouvrir" style="margin:0"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button style="background:#f3f4f6;color:#374151;{{ btn }}">Rouvrir pour modifier</button></form>
+      {% endif %}
+    {% endif %}
+  </div>
+</div>
+
+{% if s.alerte %}
+<div class="card" style="padding:.75rem 1.25rem;margin-bottom:1rem;background:#fef2f2;border:1px solid #fecaca;font-size:.85rem;color:#991b1b">
+  ⚠ Dépassement : le coût employeur réalisé de janvier à {{ mois[s.dernier_mois] }} ({{ fc(s.cumul_realise) }} FCFA) dépasse le budget de la même période
+  de <b>{{ fc(s.ecart_cumul) }} FCFA ({{ '%+.1f'|format(s.ecart_cumul_pct) }} %)</b>, au-delà du seuil de {{ '%g'|format(b.seuil_alerte_pct|float) }} %.
+</div>
+{% endif %}
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;margin-bottom:1rem">
+  {% for lib, v, sub in [("Budget annuel", fc(s.total_budget) + " FCFA", "coût employeur · brut " + fc(s.total_budget_brut)),
+                         ("Budget à date", fc(s.cumul_budget) + " FCFA", ("janvier → " + mois[s.dernier_mois]) if s.dernier_mois else "aucun mois réalisé"),
+                         ("Réalisé à date", fc(s.cumul_realise) + " FCFA", "bulletins validés"),
+                         ("Écart cumulé", fs(s.ecart_cumul) + " FCFA", ('%+.1f %%'|format(s.ecart_cumul_pct)) if s.ecart_cumul_pct is not none else "—"),
+                         ("Budget consommé", ('%.1f %%'|format(s.consomme_pct)) if s.consomme_pct is not none else "—", "du budget annuel")] %}
+  <div class="card" style="padding:.8rem 1rem"><div style="font-size:.7rem;color:#6b7280;text-transform:uppercase">{{ lib }}</div>
+    <div style="font-size:1.1rem;font-weight:800;color:#0f3d36;font-family:monospace">{{ v }}</div><div style="font-size:.7rem;color:#9ca3af">{{ sub }}</div></div>
+  {% endfor %}
+</div>
+
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:820px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.68rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.55rem 1rem">Mois</th><th style="padding:.55rem .5rem;text-align:right">Budget brut</th><th style="padding:.55rem .5rem;text-align:right">Budget coût employeur</th>
+      <th style="padding:.55rem .5rem;text-align:right">Réalisé brut</th><th style="padding:.55rem .5rem;text-align:right">Réalisé coût employeur</th>
+      <th style="padding:.55rem .5rem;text-align:right">Écart</th><th style="padding:.55rem 1rem;text-align:right">Écart %</th></tr></thead>
+    <tbody>
+      {% for x in s.lignes %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        <td style="padding:.45rem 1rem;text-transform:capitalize">{{ mois[x.mois] }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.budget_brut) }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.budget_cout) }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.realise_brut) if x.realise_brut is not none else '' }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.realise_cout) if x.realise_cout is not none else '' }}{% if x.nb %} <span style="color:#9ca3af;font-size:.7rem">({{ x.nb }})</span>{% endif %}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace;color:{{ '#b91c1c' if x.ecart and x.ecart > 0 else '#065f46' }}">{{ fs(x.ecart) if x.ecart is not none else '' }}</td>
+        <td style="padding:.45rem 1rem;text-align:right">{{ '%+.1f %%'|format(x.ecart_pct) if x.ecart_pct is not none else '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if sites|length > 1 or (sites and sites[0].site != 'Sans site') %}
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <table style="width:100%;border-collapse:collapse;font-size:.8rem;min-width:620px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.68rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.55rem 1rem">Site</th><th style="padding:.55rem .5rem;text-align:right">Budget annuel</th><th style="padding:.55rem .5rem;text-align:right">Budget à date</th>
+      <th style="padding:.55rem .5rem;text-align:right">Réalisé à date</th><th style="padding:.55rem 1rem;text-align:right">Écart</th></tr></thead>
+    <tbody>{% for x in sites %}
+      <tr style="border-bottom:1px solid #f9fafb"><td style="padding:.45rem 1rem;font-weight:600">{{ x.site }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.annuel) }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.budget) }}</td>
+        <td style="padding:.45rem .5rem;text-align:right;font-family:monospace">{{ fc(x.realise) }}</td>
+        <td style="padding:.45rem 1rem;text-align:right;font-family:monospace;color:{{ '#b91c1c' if x.ecart > 0 else '#065f46' }}">{{ fs(x.ecart) }}{% if x.ecart_pct is not none %} ({{ '%+.1f'|format(x.ecart_pct) }} %){% endif %}</td></tr>
+    {% endfor %}</tbody>
+  </table>
+  <p style="font-size:.7rem;color:#9ca3af;margin:.4rem 1rem .6rem">Réalisé rattaché au site d'affectation actuel de chaque salarié.</p>
+</div>
+{% endif %}
+
+<div class="card" style="padding:0;overflow-x:auto;margin-bottom:1rem">
+  <div style="padding:.8rem 1rem .2rem;font-weight:800;color:#0f3d36;font-size:.95rem">Lignes du budget</div>
+  <table style="width:100%;border-collapse:collapse;font-size:.78rem;min-width:960px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.66rem;text-transform:uppercase;border-bottom:1px solid #f3f4f6">
+      <th style="padding:.5rem 1rem">Salarié / poste</th><th style="padding:.5rem .4rem">Site</th><th style="padding:.5rem .4rem">Mois</th>
+      <th style="padding:.5rem .4rem;text-align:right">Salaire de base</th><th style="padding:.5rem .4rem">Augmentation</th>
+      <th style="padding:.5rem .4rem;text-align:right">Coût annuel</th><th style="padding:.5rem 1rem"></th></tr></thead>
+    <tbody>
+      {% for l in lignes %}{% set m = mensuel(l) %}
+      <tr style="border-bottom:1px solid #f9fafb">
+        {% if edit %}
+        <td style="padding:.4rem 1rem" colspan="6">
+          <form method="post" action="/budget-masse-salariale/{{ b.id }}/ligne" style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;margin:0">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><input type="hidden" name="ligne_id" value="{{ l.id }}">
+            <input name="libelle" value="{{ l.libelle }}" style="{{ champ }};width:12rem" {% if l.salarie_id %}readonly title="Salarié"{% endif %}>
+            <select name="site_id" style="{{ champ }};width:9rem"><option value="">Sans site</option>{% for x in liste_sites %}<option value="{{ x.id }}" {% if x.id == l.site_id %}selected{% endif %}>{{ x.nom }}</option>{% endfor %}</select>
+            <select name="mois_debut" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == l.mois_debut %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>→
+            <select name="mois_fin" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == l.mois_fin %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>
+            <input name="salaire_base" value="{{ '%.0f'|format(l.salaire_base|float) }}" inputmode="decimal" style="{{ champ }};width:7.5rem;text-align:right;font-family:monospace">
+            <input name="augmentation_pct" value="{{ '%g'|format((l.augmentation_pct or 0)|float) }}" inputmode="decimal" style="{{ champ }};width:4rem;text-align:right" title="Augmentation %">%
+            <select name="mois_augmentation" style="{{ champ }}"><option value="">—</option>{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == l.mois_augmentation %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>
+            <span style="margin-left:auto;font-family:monospace;font-weight:700">{{ fc(m.values()|map(attribute=1)|sum) }}</span>
+            <button style="background:#f3f4f6;color:#374151;{{ btn }};padding:.3rem .6rem">✓</button>
+          </form></td>
+        <td style="padding:.4rem 1rem"><form method="post" action="/budget-masse-salariale/{{ b.id }}/ligne/{{ l.id }}/supprimer" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/><button style="background:none;border:none;color:#b91c1c;cursor:pointer" title="Supprimer">✕</button></form></td>
+        {% else %}
+        <td style="padding:.45rem 1rem">{{ l.libelle }}{% if not l.salarie_id %} <span style="font-size:.66rem;color:#6b7280">· poste prévu</span>{% endif %}</td>
+        <td style="padding:.45rem .4rem">{{ l.site.nom if l.site else '—' }}</td>
+        <td style="padding:.45rem .4rem">{{ mois_courts[l.mois_debut] }} → {{ mois_courts[l.mois_fin] }}</td>
+        <td style="padding:.45rem .4rem;text-align:right;font-family:monospace">{{ fc(l.salaire_base) }}</td>
+        <td style="padding:.45rem .4rem">{% if l.augmentation_pct %}{{ '%+g'|format(l.augmentation_pct|float) }} % dès {{ mois_courts[l.mois_augmentation] }}{% endif %}</td>
+        <td style="padding:.45rem .4rem;text-align:right;font-family:monospace;font-weight:700">{{ fc(m.values()|map(attribute=1)|sum) }}</td><td></td>
+        {% endif %}
+      </tr>
+      {% else %}
+      <tr><td colspan="7" style="padding:1.2rem;text-align:center;color:#9ca3af">Aucune ligne.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if edit %}
+  <form method="post" action="/budget-masse-salariale/{{ b.id }}/ligne" style="display:flex;gap:.35rem;align-items:center;flex-wrap:wrap;padding:.7rem 1rem;border-top:1px solid #f3f4f6;background:#f9fafb">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <b style="font-size:.78rem;color:#0f3d36">+ Poste prévu</b>
+    <input name="libelle" required placeholder="Recrutement : conducteur d'engins…" style="{{ champ }};width:14rem">
+    <select name="site_id" style="{{ champ }};width:9rem"><option value="">Sans site</option>{% for x in liste_sites %}<option value="{{ x.id }}">{{ x.nom }}</option>{% endfor %}</select>
+    <select name="mois_debut" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}">{{ mois_courts[i] }}</option>{% endfor %}</select>→
+    <select name="mois_fin" style="{{ champ }}">{% for i in range(1, 13) %}<option value="{{ i }}" {% if i == 12 %}selected{% endif %}>{{ mois_courts[i] }}</option>{% endfor %}</select>
+    <input name="salaire_base" required placeholder="Salaire de base" inputmode="decimal" style="{{ champ }};width:8rem;text-align:right">
+    <button style="background:#0f3d36;color:white;{{ btn }};padding:.35rem .8rem">Ajouter</button>
+  </form>
+  {% endif %}
+</div>
+
+{% if current_user.can_edit %}
+<details class="card" style="padding:1rem 1.25rem">
+  <summary style="cursor:pointer;font-size:.85rem;font-weight:700;color:#0f3d36">Paramètres du budget</summary>
+  <form method="post" action="/budget-masse-salariale/{{ b.id }}/parametres" style="display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap;margin-top:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+    <label style="font-size:.75rem;color:#6b7280">Seuil d'alerte (%)<input name="seuil_alerte_pct" value="{{ '%g'|format(b.seuil_alerte_pct|float) }}" style="{{ champ }};display:block;width:7rem;text-align:right"></label>
+    <label style="font-size:.75rem;color:#6b7280;flex:1;min-width:240px">Commentaire<input name="commentaire" value="{{ b.commentaire or '' }}" style="{{ champ }};display:block;width:100%"></label>
+    <button style="background:#0f3d36;color:white;{{ btn }}">Enregistrer</button>
+  </form>
+</details>
+{% endif %}
+<p style="font-size:.72rem;color:#6b7280;margin-top:.8rem">Coût employeur = salaire brut + CNSS et CNAMGS patronales + FNH + CFP. Le budget est calculé par le moteur de paie
+  (salaire de base, éléments récurrents du contrat, prime d'ancienneté) ; heures supplémentaires, absences, primes ponctuelles et rappels apparaissent dans l'écart.</p>
+{% endblock %}

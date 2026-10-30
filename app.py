@@ -737,6 +737,8 @@ def run_migrations():
         "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_id INTEGER REFERENCES contrats(id)",
         "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_precedent_id INTEGER REFERENCES contrats(id)",
         "ALTER TABLE rappels_salaire ADD COLUMN IF NOT EXISTS contrat_maj VARCHAR(20)",
+        # ── 30/10/2026 — provision pour congés payés : comptes de l'écriture ─────
+        "ALTER TABLE tenants ADD COLUMN IF NOT EXISTS comptes_provision_conges TEXT",
     ]
     for sql in migrations:
         try:

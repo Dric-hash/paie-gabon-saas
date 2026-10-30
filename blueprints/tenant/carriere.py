@@ -153,6 +153,9 @@ def promouvoir(id):
             type_contrat=(contrat.type_contrat if contrat else "CDI"),
             date_debut=date_effet,
             date_fin=(contrat.date_fin if contrat else None),
+            # conditions reprises du contrat en cours (sinon perdues à chaque avenant)
+            date_fin_essai=(contrat.date_fin_essai if contrat else None),
+            elements_recurrents=(contrat.elements_recurrents if contrat else None),
             salaire_base=nouveau_salaire,
             poste=nouveau_poste,
             categorie_id=(cat_id or (s.categorie_id if s.categorie_id else None)),

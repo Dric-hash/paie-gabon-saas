@@ -95,6 +95,8 @@ class Tenant(db.Model):
     # Comptes du journal de paie (export comptable), JSON {"comptes": {...}, "journal": "PAI"}.
     # Vide = comptes proposés par défaut (SYSCOHADA révisé), voir plan_comptable_paie.py.
     comptes_paie = db.Column(db.Text)
+    # Comptes de l'écriture de provision pour congés payés (JSON {clé: compte}), vide = SYSCOHADA par défaut
+    comptes_provision_conges = db.Column(db.Text)
     # Portail des employés (consultation des bulletins) : activé par l'administrateur
     portail_salaries_actif = db.Column(db.Boolean, default=False)
     # Attestations demandées sur le portail : délivrées sans validation du RH si activé
@@ -2817,3 +2819,85 @@ class LigneRappel(db.Model):
     rappel   = db.relationship("RappelSalaire", back_populates="lignes")
     periode  = db.relationship("PeriodePaie")
     __table_args__ = (db.Index("idx_lignes_rappel", "rappel_id"),)
+
+
+class ProvisionConges(db.Model):
+    """Arrêté de la provision pour congés payés à une fin de mois (voir provision_conges.py).
+    BROUILLON (recalculable) → VALIDE (figé ; sert de point de départ à l'arrêté suivant)."""
+    __tablename__ = "provisions_conges"
+    id            = db.Column(db.Integer, primary_key=True)
+    tenant_id     = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    annee         = db.Column(db.Integer, nullable=False)
+    mois          = db.Column(db.Integer, nullable=False)
+    date_arrete   = db.Column(db.Date, nullable=False)
+    statut        = db.Column(db.String(20), default="BROUILLON")
+    auteur        = db.Column(db.String(150))
+    valide_par    = db.Column(db.String(150))
+    date_validation = db.Column(db.DateTime)
+    date_creation = db.Column(db.DateTime, default=utcnow)
+    lignes = db.relationship("LigneProvisionConges", back_populates="arrete", cascade="all, delete-orphan",
+                             order_by="LigneProvisionConges.id")
+    __table_args__ = (db.UniqueConstraint("tenant_id", "annee", "mois", name="uq_provision_conges_mois"),)
+
+
+class LigneProvisionConges(db.Model):
+    """Provision d'un salarié à la date d'arrêté (montants figés au calcul)."""
+    __tablename__ = "lignes_provision_conges"
+    id               = db.Column(db.Integer, primary_key=True)
+    tenant_id        = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    provision_id     = db.Column(db.Integer, db.ForeignKey("provisions_conges.id"), nullable=False)
+    salarie_id       = db.Column(db.Integer, db.ForeignKey("salaries.id"), nullable=False)
+    national         = db.Column(db.Boolean, default=True)
+    jours            = db.Column(db.Numeric(7, 2), default=0)       # jours de congé dus
+    base_journaliere = db.Column(db.Numeric(15, 2), default=0)      # moyenne mensuelle ÷ 26
+    provision        = db.Column(db.Numeric(15, 2), default=0)
+    taux_charges     = db.Column(db.Numeric(9, 6), default=0)
+    charges          = db.Column(db.Numeric(15, 2), default=0)       # CNSS + CNAMGS patronales
+    taux_taxes       = db.Column(db.Numeric(9, 6), default=0)
+    taxes            = db.Column(db.Numeric(15, 2), default=0)       # FNH + CFP
+    detail           = db.Column(db.Text)                            # JSON : acquis, pris, reliquat, source
+    arrete   = db.relationship("ProvisionConges", back_populates="lignes")
+    salarie  = db.relationship("Salarie")
+    __table_args__ = (db.Index("idx_lignes_provision_conges", "provision_id"),)
+
+
+class BudgetMasseSalariale(db.Model):
+    """Budget annuel de la masse salariale (voir budget_masse_salariale.py).
+    BROUILLON (lignes modifiables) → ADOPTE (figé ; sert au suivi et à l'alerte du contrôle de la paie)."""
+    __tablename__ = "budgets_masse_salariale"
+    id               = db.Column(db.Integer, primary_key=True)
+    tenant_id        = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    annee            = db.Column(db.Integer, nullable=False)
+    statut           = db.Column(db.String(20), default="BROUILLON")
+    seuil_alerte_pct = db.Column(db.Numeric(5, 2), default=5)      # dépassement toléré du coût cumulé (%)
+    commentaire      = db.Column(db.String(500))
+    auteur           = db.Column(db.String(150))
+    adopte_par       = db.Column(db.String(150))
+    date_adoption    = db.Column(db.DateTime)
+    date_creation    = db.Column(db.DateTime, default=utcnow)
+    tenant = db.relationship("Tenant")
+    lignes = db.relationship("LigneBudget", back_populates="budget", cascade="all, delete-orphan",
+                             order_by="LigneBudget.id")
+    __table_args__ = (db.UniqueConstraint("tenant_id", "annee", name="uq_budget_masse_salariale_annee"),)
+
+
+class LigneBudget(db.Model):
+    """Ligne du budget : un salarié (depuis son contrat) ou un poste prévu (salarie_id vide)."""
+    __tablename__ = "lignes_budget"
+    id                = db.Column(db.Integer, primary_key=True)
+    tenant_id         = db.Column(db.Integer, db.ForeignKey("tenants.id"), nullable=False)
+    budget_id         = db.Column(db.Integer, db.ForeignKey("budgets_masse_salariale.id"), nullable=False)
+    salarie_id        = db.Column(db.Integer, db.ForeignKey("salaries.id"))
+    libelle           = db.Column(db.String(200), nullable=False)
+    site_id           = db.Column(db.Integer, db.ForeignKey("sites.id"))
+    mois_debut        = db.Column(db.Integer, default=1)
+    mois_fin          = db.Column(db.Integer, default=12)
+    salaire_base      = db.Column(db.Numeric(15, 2), nullable=False)
+    elements          = db.Column(db.Text)                          # JSON {champ: montant} (éléments récurrents)
+    augmentation_pct  = db.Column(db.Numeric(6, 2), default=0)
+    mois_augmentation = db.Column(db.Integer)
+    mensuel           = db.Column(db.Text)                          # JSON {mois: [brut, coût employeur]}
+    budget  = db.relationship("BudgetMasseSalariale", back_populates="lignes")
+    salarie = db.relationship("Salarie")
+    site    = db.relationship("Site")
+    __table_args__ = (db.Index("idx_lignes_budget", "budget_id"),)
