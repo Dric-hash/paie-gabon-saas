@@ -78,3 +78,32 @@ def test_page_3d_garde_fous(env):
     assert ".hero3d{display:none}" in bloc and ".reflet::after{display:none}" in bloc
     # Aucune émoji (icônes SVG uniquement)
     assert not re.search("[\U0001F300-\U0001FAFF☀-⛿]", page)
+
+
+def test_css_de_la_page_bien_forme(env):
+    """Une accolade de trop dans le <style> casse toute la mise en page qui suit (vu le 31/10/2026)."""
+    page = _page()
+    css = page[page.index("<style"):page.index("</style>")]
+    css = re.sub(r"\{\{.*?\}\}|\{%.*?%\}", "", css)
+    prof = 0
+    for ch in css:
+        prof += {"{": 1, "}": -1}.get(ch, 0)
+        assert prof >= 0
+    assert prof == 0
+
+
+def test_3d_dans_toutes_les_sections(env):
+    page = _page()
+    for section in ("comment", "fonctions", "conventions", "tarifs"):
+        bloc = page[page.index(f'id="{section}"'):]
+        bloc = bloc[:bloc.index("</section>")]
+        assert 'c3d reflet' in bloc, section
+    conv = page[page.index('id="conventions"'):]
+    assert conv[:conv.index("</section>")].count("conv-carte") == 9      # 8 conventions + « Et la vôtre ? »
+    assert page.count("secu-carte c3d") == 4
+    assert 'class="final-scene" aria-hidden="true"' in page
+    bloc = page[page.index("@media (prefers-reduced-motion: reduce){\n    .scene-3d"):]
+    bloc = bloc[:bloc.index("}\n  }") + 4]
+    for attendu in (".c3d.visible.inclinee{transform:none}", ".conv-carte.reveal,.secu-carte.reveal{transform:none}",
+                    ".final-scene{display:none}"):
+        assert attendu in bloc, attendu
