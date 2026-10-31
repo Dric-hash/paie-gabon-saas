@@ -22,7 +22,11 @@
     .contractant td span { font-weight:400; color:#555; font-size:9.5px; }
     .sous-tot td { font-weight:700; background:#f8faf9; border-bottom:1.5px solid #0f3d36; }
     .detail td { font-size:9.5px; color:#374151; background:#fff; border-bottom:none; padding:2px 6px 2px 22px; }
-    .detail.fin td { border-bottom:1px solid #e5e7eb; padding-bottom:6px; }
+    .detail.fin > td { border-bottom:1px solid #e5e7eb; padding-bottom:8px; }
+    .mens-titre { font-size:9px; font-weight:800; color:#0f3d36; margin:2px 0 3px; text-transform:uppercase; }
+    table.mens { margin:0; } table.mens th { background:#e8f1ee; color:#0f3d36; font-size:8px; padding:3px 5px; }
+    table.mens td { font-size:9px; padding:2px 5px; border-bottom:1px solid #f0f0f0; }
+    table.mens tr.avenir td { color:#9ca3af; }
     .tot-row td { font-weight:900; background:#eef3f1; border-top:2px solid #0f3d36; font-size:11px; }
     .badge { padding:1px 6px; border-radius:9999px; font-size:8px; font-weight:700; }
     .b-EN_COURS { background:#fef3c7; color:#92400e; } .b-SOLDE { background:#d1fae5; color:#065f46; } .b-ANNULE { background:#f3f4f6; color:#6b7280; }
@@ -53,7 +57,7 @@
     <b>Contractant :</b> {{ releve.nom_complet }} — matricule {{ releve.matricule }}{% if releve.emploi %} — {{ releve.emploi }}{% endif %}<br/>
     {% else %}
     <b>Sélection :</b> {{ filtres|join(' · ') }}<br/>
-    <b>Contractants :</b> {{ groupes|length }} · <b>Prêts :</b> {{ tot.nb }}{% if detail %} · avec le détail des remboursements{% endif %}
+    <b>Contractants :</b> {{ groupes|length }} · <b>Prêts :</b> {{ tot.nb }}{% if detail %} · avec l'échéancier mensuel et les remboursements{% endif %}
     {% endif %}
   </div>
   <div style="text-align:right"><b>Situation au :</b> {{ au.strftime('%d/%m/%Y') }}<br/><b>Édité le :</b> {{ now.strftime('%d/%m/%Y à %H:%M') }}</div>
@@ -82,13 +86,20 @@
       <td><span class="badge b-{{ p.statut }}">{{ p.statut_libelle }}</span></td>
     </tr>
     {% if detail %}
-      {% for r in x.remboursements %}
-      <tr class="detail{{ ' fin' if loop.last else '' }}"><td colspan="5">↳ {{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}
-          {% if r.mois %}· {{ MOIS[r.mois] }} {{ r.annee }}{% endif %} · {{ 'retenue sur bulletin' if r.bulletin_id else 'remboursement direct' }}{% if r.note %} · {{ r.note }}{% endif %}</td>
-        <td class="num">{{ fc(r.montant) }}</td><td colspan="3"></td></tr>
-      {% else %}
-      <tr class="detail fin"><td colspan="9">↳ Aucun remboursement à cette date.</td></tr>
-      {% endfor %}
+      <tr class="detail fin"><td colspan="9">
+        <div class="mens-titre">Échéancier mensuel et remboursements — prêt N° {{ p.id }}</div>
+        <table class="mens">
+          <thead><tr><th>Mois</th><th>Éch.</th><th class="num">Mensualité prévue</th><th class="num">Remboursé</th><th>Date(s) · mode</th>
+            <th class="num">Cumul prévu</th><th class="num">Cumul remboursé</th><th class="num">Restant dû</th><th class="num">Retard</th></tr></thead>
+          <tbody>{% for m in x.mensuel %}
+            <tr class="{{ '' if m.echu else 'avenir' }}"><td>{{ MOIS[m.mois] }} {{ m.annee }}</td><td>{{ m.num or '—' }}</td>
+              <td class="num">{{ fc(m.prevu) if m.prevu else '—' }}</td><td class="num">{{ fc(m.paye) if m.paye else ('—' if m.echu else '') }}</td>
+              <td>{% if m.paye %}{{ m.dates }} · {{ m.modes }}{% if m.notes %} · {{ m.notes }}{% endif %}{% elif not m.echu %}à venir{% endif %}</td>
+              <td class="num">{{ fc(m.cum_prevu) }}</td><td class="num">{{ fc(m.cum_paye) }}</td><td class="num">{{ fc(m.restant) }}</td>
+              <td class="num {{ 'retard' if m.retard else '' }}">{% if m.retard %}{{ fc(m.retard) }}{% elif m.echu %}{{ '—' if not m.avance else 'avance ' + fc(m.avance) }}{% endif %}</td></tr>
+          {% else %}<tr><td colspan="9">Aucune échéance.</td></tr>{% endfor %}</tbody>
+        </table>
+      </td></tr>
     {% endif %}
     {% endfor %}
     <tr class="sous-tot">
@@ -110,7 +121,7 @@
   {% endif %}
 </table>
 <p class="note">Remboursé et restant dû : remboursements enregistrés jusqu'au {{ au.strftime('%d/%m/%Y') }} (retenues sur bulletin et remboursements directs).
-  Retard : mensualités échues d'après l'échéancier indicatif et non encore remboursées. Les prêts annulés ne sont pas comptés dans les totaux.</p>
+  Retard : mensualités échues d'après l'échéancier indicatif et non encore remboursées (cumul prévu − cumul remboursé à la fin de chaque mois). Les prêts annulés ne sont pas comptés dans les totaux.</p>
 
 {% if releve %}
 <div class="sig"><div><div class="ligne">Le contractant : {{ releve.nom_complet }} (lu et approuvé)</div></div><div><div class="ligne">Pour l'employeur</div></div></div>

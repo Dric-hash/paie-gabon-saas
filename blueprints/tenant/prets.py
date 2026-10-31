@@ -210,6 +210,42 @@ def pret_recu(id):
 MOIS_COURTS = ["", "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
 
 
+def _tableau_mensuel(ech, rembs, total, au, annule=False):
+    """Échéancier mois par mois rapproché des remboursements : pour chaque mois, mensualité prévue,
+    remboursé dans le mois (période du remboursement, à défaut sa date), cumuls, restant dû et retard.
+    Couvre les mois de l'échéancier et ceux où un remboursement a eu lieu ; les mois postérieurs à la
+    date de situation sont marqués « à venir ». Prêt annulé : ni retard ni restant dû."""
+    prevu = {(e["annee"], e["mois"]): e for e in ech}
+    paye = {}
+    for r in rembs:
+        if r.annee and r.mois:
+            cle = (r.annee, r.mois)
+        elif r.date_remboursement:
+            cle = (r.date_remboursement.year, r.date_remboursement.month)
+        else:
+            continue
+        paye.setdefault(cle, []).append(r)
+    mois = sorted(set(prevu) | set(paye))
+    lignes, cum_prevu, cum_paye = [], 0.0, 0.0
+    for (an, mo) in mois:
+        e = prevu.get((an, mo))
+        rs = paye.get((an, mo), [])
+        montant_prevu = e["montant"] if e else 0.0
+        montant_paye = round(sum(float(r.montant or 0) for r in rs), 2)
+        cum_prevu += montant_prevu
+        cum_paye += montant_paye
+        echu = (an, mo) <= (au.year, au.month)
+        lignes.append({"annee": an, "mois": mo, "num": e["num"] if e else None, "prevu": montant_prevu,
+                       "paye": montant_paye, "cum_prevu": cum_prevu, "cum_paye": cum_paye,
+                       "restant": 0.0 if annule else max(round(total - cum_paye, 2), 0.0),
+                       "retard": max(round(cum_prevu - cum_paye, 2), 0.0) if echu and not annule else None,
+                       "avance": max(round(cum_paye - cum_prevu, 2), 0.0), "echu": echu,
+                       "modes": ", ".join(sorted({"bulletin" if r.bulletin_id else "direct" for r in rs})),
+                       "dates": ", ".join(r.date_remboursement.strftime("%d/%m/%Y") for r in rs if r.date_remboursement),
+                       "notes": " · ".join(r.note for r in rs if r.note)})
+    return lignes
+
+
 def _situation(p, au):
     """Situation d'un prêt à la date « au » : remboursements jusqu'à cette date, restant dû,
     montant attendu d'après l'échéancier (mois échus) et retard éventuel."""
@@ -221,6 +257,7 @@ def _situation(p, au):
     attendu = sum(e["montant"] for e in ech if (e["annee"], e["mois"]) <= (au.year, au.month))
     annule = p.statut == "ANNULE"
     return {"pret": p, "remboursements": rembs, "rembourse": rembourse,
+            "mensuel": _tableau_mensuel(ech, rembs, total, au, annule),
             "restant": 0.0 if annule else max(round(total - rembourse, 2), 0.0),
             "attendu": attendu, "retard": 0.0 if annule else max(round(attendu - rembourse, 2), 0.0),
             "echeancier": ech, "nb_regles": len(rembs)}

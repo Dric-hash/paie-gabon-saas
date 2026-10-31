@@ -13,6 +13,11 @@ def _page(cli, url):
     return re.sub(r"\s+", " ", cli.get(url).get_data(as_text=True))
 
 
+def _txt(page):
+    """Texte visible (balises retirées, espaces normalisés) pour vérifier une ligne de tableau."""
+    return re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", page)).strip()
+
+
 def _scenario(env):
     t = env["t"]
     a = db.session.get(M.Salarie, env["s"])
@@ -61,13 +66,19 @@ def test_etat_par_contractant(env):
     assert "Loyer" in page and "2 / 4" in page and "60 000" in page and "30 000" in page
     # sous-total A : prêté 170 000, remboursé 60 000, restant 110 000 ; prêt de septembre exclu
     assert "170 000" in page and "110 000" in page and "N° " in page and "15/09/2026" not in page
-    assert "↳ 30/06/2026 · Juin 2026 · remboursement direct · retenue juin" in page
+    assert "Échéancier mensuel et remboursements — prêt N° " in page
+    assert "Juin 2026 1 30 000 30 000 30/06/2026 · direct · retenue juin 30 000 30 000 90 000 —" in _txt(page)
+    assert "Août 2026 3 30 000 — 90 000 60 000 60 000 30 000" in _txt(page)          # août : rien payé → retard
+    assert "Sept. 2026 4 30 000 à venir 120 000 60 000 60 000" in _txt(page)
     assert "TOTAL GÉNÉRAL (2 prêt(s))" in page
     # tous les statuts : B apparaît (soldé et annulé), l'annulé n'entre pas dans les totaux
     page = _page(cli, "/prets/imprimer?au=2026-08-31&statut=")
     assert "Sous-total NDONG Alice" in page and "Annulé" in page and "TOTAL GÉNÉRAL (3 prêt(s))" in page
     assert "270 000" in page and "160 000" in page        # prêté 170 000 + 100 000 ; remboursé 60 000 + 100 000
-    assert "↳" not in page                                   # sans détail
+    from blueprints.tenant.prets import _situation
+    annule = M.PretPersonnel.query.filter_by(statut="ANNULE").one()
+    assert [(l["retard"], l["restant"]) for l in _situation(annule, date(2026, 8, 31))["mensuel"]] == [(None, 0.0)]
+    assert "Échéancier mensuel" not in page                  # sans détail
     # situation au 15/07 : remboursement du 31/07 non compté (remboursé 30 000, retard 30 000)
     page = _page(cli, "/prets/imprimer?au=2026-07-15&detail=1")
     assert "1 / 4" in page and "31/07/2026" not in page
@@ -85,10 +96,12 @@ def test_releve_contractant_et_fiche(env):
     cli = _cli(env["admin"])
     page = _page(cli, f"/prets/contractant/{a}/imprimer?au=2026-08-31")
     assert "Relevé des prêts du contractant" in page and "MOUSSAVOU Jean — matricule D014" in page
-    assert "Loyer" in page and "Scolarité" in page and "↳ 31/07/2026" in page and "(lu et approuvé)" in page
+    assert "Loyer" in page and "Scolarité" in page and "Juil. 2026 2 30 000 30 000 31/07/2026 · direct" in _txt(page)
+    assert "(lu et approuvé)" in page
     page = _page(cli, f"/prets/{p1}/imprimer?au=2026-08-31")
     assert "Fiche de prêt au personnel N° " in page and "4 mensualité(s) de 30 000 F" in page
-    assert "Sept. 2026" in page and "90 000 F attendus" in page and "Total remboursé" in page
+    assert "Sept. 2026 4 30 000 à venir" in _txt(page) and "90 000 F attendus" in page and "Total remboursé" in page
+    assert "Août 2026 3 30 000 — 90 000 60 000 60 000 30 000" in _txt(page)
     # liens depuis la liste et le détail
     assert "Imprimer l'état des prêts" in _page(cli, "/prets")
     det = _page(cli, f"/prets/{p1}")
@@ -115,3 +128,25 @@ def test_cloisonnement(env):
     assert c2.get(f"/prets/imprimer?site_id={site}").status_code == 404
     page = c2.get("/prets/imprimer?statut=").get_data(as_text=True)
     assert "MOUSSAVOU" not in page and "Aucun prêt pour cette sélection" in page
+
+
+def test_tableau_mensuel_avance_et_mois_hors_echeancier(env):
+    """Remboursement anticipé (deux mensualités en juin) : avance en juin, plus de retard en juillet ;
+    un remboursement d'un mois hors échéancier apparaît sur sa propre ligne."""
+    from blueprints.tenant.prets import _situation
+    t = env["t"]
+    p = M.PretPersonnel(tenant_id=t, salarie_id=env["s"], montant_total=90000, date_octroi=date(2026, 5, 2),
+                        nb_echeances=3, statut="EN_COURS")
+    db.session.add(p)
+    db.session.flush()
+    db.session.add_all([
+        M.RemboursementPret(tenant_id=t, pret_id=p.id, montant=60000, mois=6, annee=2026, date_remboursement=date(2026, 6, 30)),
+        M.RemboursementPret(tenant_id=t, pret_id=p.id, montant=5000, mois=5, annee=2026, date_remboursement=date(2026, 5, 20)),
+    ])
+    db.session.commit()
+    m = {(l["annee"], l["mois"]): l for l in _situation(p, date(2026, 7, 31))["mensuel"]}
+    assert list(m) == [(2026, 5), (2026, 6), (2026, 7), (2026, 8)]
+    assert (m[(2026, 5)]["num"], m[(2026, 5)]["prevu"], m[(2026, 5)]["paye"], m[(2026, 5)]["avance"]) == (None, 0, 5000, 5000)
+    assert (m[(2026, 6)]["cum_paye"], m[(2026, 6)]["avance"], m[(2026, 6)]["restant"]) == (65000, 35000, 25000)
+    assert (m[(2026, 7)]["retard"], m[(2026, 7)]["avance"]) == (0, 5000)
+    assert m[(2026, 8)]["echu"] is False and m[(2026, 8)]["retard"] is None
