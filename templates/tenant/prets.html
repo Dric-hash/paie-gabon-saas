@@ -41,7 +41,7 @@
         <option value="">Tous</option>{% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}<option value="0">Sans site affecté</option></select></label>{% endif %}
     <label style="font-size:.75rem;color:#6b7280">Situation au
       <input type="date" name="au" value="{{ aujourdhui.isoformat() }}" style="display:block;padding:.35rem;border:1px solid #d1d5db;border-radius:.5rem"></label>
-    <label style="font-size:.8rem;color:#374151;align-self:center"><input type="checkbox" name="detail" value="1" checked> avec le détail des remboursements</label>
+    <label style="font-size:.8rem;color:#374151;align-self:center"><input type="checkbox" name="detail" value="1" checked> avec l'échéancier mensuel et les remboursements</label>
     <button style="background:#0f3d36;color:#fff;border:none;padding:.5rem 1rem;border-radius:.5rem;font-weight:700;cursor:pointer">Imprimer</button>
   </form>
 

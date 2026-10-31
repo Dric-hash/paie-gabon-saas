@@ -24,7 +24,8 @@
     .num { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
     tfoot td { font-weight:800; border-top:2px solid #0f3d36; }
     .ok { color:#065f46; font-weight:700; } .ko { color:#b91c1c; font-weight:700; }
-    .deux { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    table.mens th { background:#e8f1ee; color:#0f3d36; } table.mens tr.avenir td { color:#9ca3af; }
+    .retard { color:#b91c1c; font-weight:700; }
     .sig { margin-top:28px; display:flex; justify-content:space-between; } .sig div { width:42%; }
     .ligne { border-top:1px solid #888; margin-top:44px; padding-top:3px; color:#555; }
     .note { font-size:8.5px; color:#555; margin-top:6px; }
@@ -59,28 +60,27 @@
   <div class="carte"><span>Restant dû</span><b>{{ fc(x.restant) }} F</b></div>
   <div class="carte"><span>Retard</span><b class="{{ 'ko' if x.retard else '' }}">{{ fc(x.retard) if x.retard else '—' }}</b></div>
 </div>
-<div class="deux">
-  <div>
-    <h3>Échéancier indicatif</h3>
-    <table>
-      <thead><tr><th>N°</th><th>Mois</th><th class="num">Mensualité</th><th class="num">Restant après</th></tr></thead>
-      <tbody>{% for e in x.echeancier %}
-        <tr><td>{{ e.num }}</td><td>{{ MOIS[e.mois] }} {{ e.annee }}</td><td class="num">{{ fc(e.montant) }}</td><td class="num">{{ fc(e.restant) }}</td></tr>
-      {% endfor %}</tbody>
-    </table>
-  </div>
-  <div>
-    <h3>Remboursements au {{ au.strftime('%d/%m/%Y') }}</h3>
-    <table>
-      <thead><tr><th>Date</th><th>Période</th><th>Mode</th><th class="num">Montant</th></tr></thead>
-      <tbody>{% for r in x.remboursements %}
-        <tr><td>{{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}</td><td>{% if r.mois %}{{ MOIS[r.mois] }} {{ r.annee }}{% else %}—{% endif %}</td>
-          <td>{{ 'Retenue sur bulletin' if r.bulletin_id else 'Direct' }}{% if r.note %} · {{ r.note }}{% endif %}</td><td class="num">{{ fc(r.montant) }}</td></tr>
-      {% else %}<tr><td colspan="4" style="color:#6b7280">Aucun remboursement.</td></tr>{% endfor %}</tbody>
-      <tfoot><tr><td colspan="3">Total remboursé</td><td class="num">{{ fc(x.rembourse) }}</td></tr></tfoot>
-    </table>
-  </div>
-</div>
+<h3>Échéancier mensuel et remboursements</h3>
+<table class="mens">
+          <thead><tr><th>Mois</th><th>Éch.</th><th class="num">Mensualité prévue</th><th class="num">Remboursé</th><th>Date(s) · mode</th>
+            <th class="num">Cumul prévu</th><th class="num">Cumul remboursé</th><th class="num">Restant dû</th><th class="num">Retard</th></tr></thead>
+          <tbody>{% for m in x.mensuel %}
+            <tr class="{{ '' if m.echu else 'avenir' }}"><td>{{ MOIS[m.mois] }} {{ m.annee }}</td><td>{{ m.num or '—' }}</td>
+              <td class="num">{{ fc(m.prevu) if m.prevu else '—' }}</td><td class="num">{{ fc(m.paye) if m.paye else ('—' if m.echu else '') }}</td>
+              <td>{% if m.paye %}{{ m.dates }} · {{ m.modes }}{% if m.notes %} · {{ m.notes }}{% endif %}{% elif not m.echu %}à venir{% endif %}</td>
+              <td class="num">{{ fc(m.cum_prevu) }}</td><td class="num">{{ fc(m.cum_paye) }}</td><td class="num">{{ fc(m.restant) }}</td>
+              <td class="num {{ 'retard' if m.retard else '' }}">{% if m.retard %}{{ fc(m.retard) }}{% elif m.echu %}{{ '—' if not m.avance else 'avance ' + fc(m.avance) }}{% endif %}</td></tr>
+          {% else %}<tr><td colspan="9">Aucune échéance.</td></tr>{% endfor %}</tbody>
+        </table>
+<h3>Remboursements enregistrés au {{ au.strftime('%d/%m/%Y') }}</h3>
+<table>
+  <thead><tr><th>Date</th><th>Période</th><th>Mode</th><th>Note</th><th class="num">Montant</th></tr></thead>
+  <tbody>{% for r in x.remboursements %}
+    <tr><td>{{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}</td><td>{% if r.mois %}{{ MOIS[r.mois] }} {{ r.annee }}{% else %}—{% endif %}</td>
+      <td>{{ 'Retenue sur bulletin' if r.bulletin_id else 'Direct' }}</td><td>{{ r.note or '' }}</td><td class="num">{{ fc(r.montant) }}</td></tr>
+  {% else %}<tr><td colspan="5" style="color:#6b7280">Aucun remboursement.</td></tr>{% endfor %}</tbody>
+  <tfoot><tr><td colspan="4">Total remboursé</td><td class="num">{{ fc(x.rembourse) }}</td></tr></tfoot>
+</table>
 <p class="note">Retard : mensualités échues d'après l'échéancier indicatif ({{ fc(x.attendu) }} F attendus au {{ au.strftime('%d/%m/%Y') }}) non encore remboursées.</p>
 <div class="sig"><div><div class="ligne">Le contractant : {{ p.salarie.nom_complet }} (lu et approuvé)</div></div><div><div class="ligne">Pour l'employeur</div></div></div>
 <p class="note" style="margin-top:16px;color:#9ca3af;text-align:right">{{ tenant.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
