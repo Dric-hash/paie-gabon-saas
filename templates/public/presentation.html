@@ -79,7 +79,8 @@
 
   a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--accent-warm);outline-offset:2px;border-radius:.4rem}
 
-  .reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+  .reveal{opacity:0;transform:perspective(900px) translateY(26px) rotateX(11deg);transform-origin:50% 0;
+    transition:opacity .7s cubic-bezier(.2,.7,.2,1),transform .7s cubic-bezier(.2,.7,.2,1)}
   .reveal.visible{opacity:1;transform:none}
   @media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none;transition:none}*{scroll-behavior:auto!important}}
 
@@ -151,6 +152,67 @@
   .step-card .ic svg{width:26px;height:26px}
   .step-card h3{font-family:'Plus Jakarta Sans',sans-serif;font-weight:700;font-size:1.12rem;color:var(--brand);margin:0 0 .5rem}
   .step-card p{color:var(--sub);font-size:.93rem;line-height:1.6;margin:0}
+  /* ═══ 3D (31/10/2026) : fond animé, scène du calculateur, aperçu de l'application ═══ */
+  .hero3d{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:0;transition:opacity 1.2s ease}
+  .hero3d.pret{opacity:.9}
+  .hero-voile{position:absolute;inset:0;pointer-events:none;
+    background:linear-gradient(90deg,rgba(10,43,37,.92) 0%,rgba(10,43,37,.55) 45%,rgba(10,43,37,.1) 100%)}
+  .scene{perspective:1300px;position:relative}
+  .scene-3d{position:relative;transform-style:preserve-3d;transform:rotateY(-11deg) rotateX(5deg);
+    transition:transform .5s cubic-bezier(.2,.7,.2,1);will-change:transform}
+  .scene-3d > #demo{transform:translateZ(36px);transform-style:preserve-3d;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .flottante{position:absolute;border-radius:1rem;padding:.8rem 1rem;color:#fff;
+    background:linear-gradient(150deg,rgba(255,255,255,.14),rgba(255,255,255,.05));border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 18px 40px rgba(0,0,0,.35);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);pointer-events:none}
+  .flottante .t{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);font-weight:700}
+  .flottante .v{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1rem;margin-top:.15rem}
+  .fl-bulletin{top:-78px;right:-58px;width:200px;transform:translateZ(-70px);animation:flotte 7s ease-in-out infinite}
+  .fl-cnss{bottom:-30px;left:-34px;transform:translateZ(110px);animation:flotte 6s ease-in-out -2s infinite;display:flex;align-items:center;gap:.6rem}
+  .fl-cnss .ok{width:30px;height:30px;border-radius:9px;background:rgba(31,174,122,.25);color:#7ee2b8;display:flex;align-items:center;justify-content:center}
+  .lignes-fictives span{display:block;height:6px;border-radius:4px;background:rgba(255,255,255,.18);margin-top:.4rem}
+  @keyframes flotte{0%,100%{translate:0 0}50%{translate:0 -10px}}
+  .drapeau{display:inline-flex;flex-direction:column;width:18px;height:12px;border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
+  .drapeau i{flex:1;display:block}
+  /* Bande de chiffres */
+  .chiffres{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1rem}
+  @media(max-width:820px){.chiffres{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  .chiffre{text-align:center;padding:1.4rem 1rem;border-radius:1rem;background:var(--surface);border:1px solid var(--border)}
+  .chiffre .n{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:2.4rem;line-height:1;color:var(--brand);font-variant-numeric:tabular-nums}
+  .chiffre .l{color:var(--sub);font-size:.88rem;margin-top:.45rem;line-height:1.4}
+  /* Aperçu de l'application en perspective */
+  .apercu-scene{perspective:1600px;margin-top:2.5rem}
+  .apercu{transform-origin:50% 100%;transform:rotateX(var(--rx,24deg)) scale(var(--sc,.92));transition:transform .1s linear;
+    border-radius:1.1rem;background:#f3f4f1;border:1px solid #dfe3dc;overflow:hidden;
+    box-shadow:0 50px 100px -30px rgba(10,43,37,.45),0 30px 60px -40px rgba(0,0,0,.4)}
+  .apercu-barre{display:flex;align-items:center;gap:.4rem;padding:.6rem .9rem;background:#e9ece6;border-bottom:1px solid #dfe3dc}
+  .apercu-barre i{width:10px;height:10px;border-radius:50%;display:block}
+  .apercu-barre .url{margin-left:.8rem;flex:1;max-width:340px;height:22px;border-radius:6px;background:#fff;border:1px solid #dfe3dc;font-size:.7rem;color:#56625f;display:flex;align-items:center;padding:0 .6rem}
+  .apercu-corps{display:grid;grid-template-columns:170px 1fr}
+  .apercu-menu{background:linear-gradient(180deg,#0c342e,#0f3d36);padding:1rem .7rem}
+  .apercu-menu b{display:block;height:9px;border-radius:5px;background:rgba(255,255,255,.18);margin:.75rem .3rem}
+  .apercu-menu b.actif{background:#e2b04a;width:70%}
+  .apercu-main{padding:1.1rem}
+  .apercu-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem}
+  .apercu-kpi{background:#fff;border:1px solid #e3e5df;border-radius:.7rem;padding:.65rem .75rem}
+  .apercu-kpi .t{font-size:.58rem;color:#56625f;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
+  .apercu-kpi .v{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1rem;color:#15201e;margin-top:.2rem;white-space:nowrap}
+  .apercu-kpi.vedette{background:#0f3d36;border-color:#0f3d36}.apercu-kpi.vedette .t{color:rgba(255,255,255,.7)}.apercu-kpi.vedette .v{color:#fff}
+  .apercu-ligne{display:flex;align-items:center;gap:.6rem;margin-top:.55rem;background:#fff;border:1px solid #e3e5df;border-radius:.6rem;padding:.45rem .6rem}
+  .apercu-ligne .pastille{width:20px;height:20px;border-radius:6px;font-size:.7rem;font-weight:800;display:flex;align-items:center;justify-content:center}
+  .apercu-ligne b{display:block;height:8px;border-radius:4px;background:#e3e5df}
+  .apercu-ligne i{margin-left:auto;font-style:normal;font-size:.62rem;font-weight:700;color:#0f3d36}
+  .apercu-graph{margin-top:.7rem;background:#fff;border:1px solid #e3e5df;border-radius:.7rem;padding:.8rem;display:flex;align-items:flex-end;gap:.6rem;height:150px}
+  .apercu-graph span{flex:1;border-radius:5px 5px 0 0;background:#0f3d36;transform-origin:bottom;transform:scaleY(0);transition:transform .9s cubic-bezier(.2,.7,.2,1)}
+  .apercu-graph span.or{background:#e2b04a}
+  .apercu.vu .apercu-graph span{transform:scaleY(1)}
+  @media(max-width:720px){.apercu-corps{grid-template-columns:1fr}.apercu-menu{display:none}.apercu-kpis{grid-template-columns:repeat(2,1fr)}}
+  /* Mobile et préférence « moins d'animations » : scènes à plat, aucune animation continue */
+  @media(max-width:919px){.scene-3d{transform:none!important}.scene-3d > #demo{transform:none}.flottante{display:none}}
+  @media (prefers-reduced-motion: reduce){
+    .scene-3d,.scene-3d > #demo{transform:none!important}.flottante{animation:none}
+    .apercu{transform:none!important}.apercu-graph span{transform:none;transition:none}
+    .hero3d{display:none}
+  }
   /* Menu mobile */
   .burger{display:none}
   #mnav{display:none}
@@ -191,6 +253,9 @@
   "plane": '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   "hotel": '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/><circle cx="8" cy="12" r="1.5"/>',
   "tree": '<path d="M12 22v-7"/><path d="M9 8a3 3 0 1 1 6 0"/><path d="M12 2a5 5 0 0 0-5 5c0 1 .3 2 .8 2.8A4 4 0 0 0 6 17h12a4 4 0 0 0-1.8-7.2c.5-.8.8-1.8.8-2.8a5 5 0 0 0-5-5z"/>',
+  "message-circle": '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  "smartphone": '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
+  "check": '<path d="M20 6 9 17l-5-5"/>',
   "pickaxe": '<path d="M14.531 12.469 6.619 20.38a1 1 0 1 1-3-3l7.912-7.912"/><path d="M15.686 4.314A12.5 12.5 0 0 0 5.461 2.958 1 1 0 0 0 5.58 4.71a22 22 0 0 1 6.318 3.393"/><path d="M17.7 3.7a1 1 0 0 0-1.4 0l-4.6 4.6a1 1 0 0 0 0 1.4l2.6 2.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4z"/><path d="M19.686 8.314a12.501 12.501 0 0 1 1.356 10.225 1 1 0 0 1-1.751-.119 22 22 0 0 0-3.393-6.319"/>'
 } %}
 {% macro icon(name, size=24, sw=1.85) -%}
@@ -233,11 +298,13 @@
 </header>
 
 <!-- ══════════════ HÉROS ══════════════ -->
-<section class="ledger" style="background:radial-gradient(125% 95% at 80% 6%,#16564a 0%,#0f3d36 46%,#0a2b25 100%);color:#fff;overflow:hidden">
-  <div class="wrap hero-grid" style="padding-top:4.5rem;padding-bottom:5rem">
+<section class="ledger" style="background:radial-gradient(125% 95% at 80% 6%,#16564a 0%,#0f3d36 46%,#0a2b25 100%);color:#fff;overflow:hidden;position:relative">
+  <canvas class="hero3d" id="hero3d" aria-hidden="true"></canvas>
+  <div class="hero-voile" aria-hidden="true"></div>
+  <div class="wrap hero-grid" style="padding-top:4.5rem;padding-bottom:5.5rem">
     <div>
       <div class="eyebrow" style="background:rgba(184,134,47,.18);color:var(--accent-light);padding:.4rem .9rem;border-radius:9999px;margin-bottom:1.5rem">
-        <span aria-hidden="true">🇬🇦</span> Conçu pour la réglementation gabonaise
+        <span class="drapeau" aria-hidden="true"><i style="background:#009e60"></i><i style="background:#fcd116"></i><i style="background:#3a75c4"></i></span> Conçu pour la réglementation gabonaise
       </div>
       <h1 class="display" style="font-size:3.1rem;line-height:1.03;font-weight:800;margin:0 0 1.25rem">
         La paie juste,<br/><span style="color:var(--accent-light)">sans un seul calcul.</span>
@@ -255,7 +322,14 @@
       </p>
     </div>
 
-    <!-- Signature : la promesse, calculée réellement en direct -->
+    <!-- Signature : la promesse, calculée réellement en direct, dans une scène en perspective -->
+    <div class="scene" id="scene">
+    <div class="scene-3d" id="scene3d">
+    <div class="flottante fl-bulletin" aria-hidden="true">
+      <div class="t">Bulletin de paie</div>
+      <div class="v">Octobre · validé</div>
+      <div class="lignes-fictives"><span style="width:90%"></span><span style="width:70%"></span><span style="width:80%"></span></div>
+    </div>
     <div id="demo" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.25rem;padding:1.75rem;box-shadow:0 24px 60px rgba(0,0,0,.25)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.1rem">
         <span style="font-size:.78rem;color:rgba(255,255,255,.55);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Calculez un net en direct</span>
@@ -283,6 +357,12 @@
         les primes et indemnités, et votre convention collective.
       </p>
     </div>
+    <div class="flottante fl-cnss" aria-hidden="true">
+      <span class="ok">{{ icon("check", 18, 2.4) }}</span>
+      <div><div class="t">Déclaration CNSS</div><div class="v">Prête à transmettre</div></div>
+    </div>
+    </div>
+    </div>
   </div>
 </section>
 
@@ -299,6 +379,15 @@
     <div style="display:flex;align-items:center;gap:.5rem;color:var(--sub);font-size:.88rem;font-weight:600">
       <span style="color:var(--accent);display:inline-flex">{{ icon(ic, 18) }}</span> {{ txt }}
     </div>
+    {% endfor %}
+  </div>
+</section>
+
+<!-- ══════════════ CHIFFRES ══════════════ -->
+<section class="wrap" style="padding-top:3rem">
+  <div class="chiffres">
+    {% for n, suf, lib in [(8, "", "conventions collectives intégrées"), (6, "", "cotisations et impôts calculés : CNSS, CNAMGS, FNH, CFP, TCS, IRPP"), (3, "", "langues : français, anglais, arabe"), (30, " j", "d'essai gratuit, sans carte bancaire")] %}
+    <div class="chiffre reveal"><div class="n"><span class="compteur" data-fin="{{ n }}">{{ n }}</span>{{ suf }}</div><div class="l">{{ lib }}</div></div>
     {% endfor %}
   </div>
 </section>
@@ -332,6 +421,36 @@
     </div>
     {% endfor %}
   </div>
+</section>
+
+<!-- ══════════════ APERÇU DE L'APPLICATION ══════════════ -->
+<section class="wrap" style="padding-top:4.5rem" aria-labelledby="titre-apercu">
+  <span class="sec-eyebrow reveal">L'application</span>
+  <h2 id="titre-apercu" class="display reveal" style="font-size:1.95rem;font-weight:800;text-align:center;margin:0 0 .75rem">Toute votre paie sur un seul tableau de bord</h2>
+  <p class="reveal" style="text-align:center;color:var(--sub);font-size:1.05rem;margin:0 auto;max-width:640px">
+    Effectif, bulletins du mois, net à payer et coût employeur d'un coup d'œil, avec ce qui reste à traiter avant la clôture.</p>
+  <div class="apercu-scene">
+    <div class="apercu" id="apercu" role="img" aria-label="Aperçu du tableau de bord PaieGabon : chiffres clés du mois et évolution de la masse salariale">
+      <div class="apercu-barre" aria-hidden="true"><i style="background:#ef6b5b"></i><i style="background:#f2c14e"></i><i style="background:#58c27d"></i><span class="url">paiegabon.com/dashboard</span></div>
+      <div class="apercu-corps" aria-hidden="true">
+        <div class="apercu-menu"><b class="actif"></b><b></b><b style="width:80%"></b><b></b><b style="width:60%"></b><b></b><b style="width:75%"></b></div>
+        <div class="apercu-main">
+          <div class="apercu-kpis">
+            <div class="apercu-kpi"><div class="t">Effectif</div><div class="v">24</div></div>
+            <div class="apercu-kpi"><div class="t">Bulletins</div><div class="v">24 validés</div></div>
+            <div class="apercu-kpi"><div class="t">Net à payer</div><div class="v">7,9 M</div></div>
+            <div class="apercu-kpi vedette"><div class="t">Coût employeur</div><div class="v">11,4 M</div></div>
+          </div>
+          <div class="apercu-ligne"><span class="pastille" style="background:#fdecea;color:#b42318">!</span><b style="width:38%"></b><i>Valider</i></div>
+          <div class="apercu-ligne"><span class="pastille" style="background:#fdf3e1;color:#9a6412">!</span><b style="width:52%"></b><i>Voir</i></div>
+          <div class="apercu-graph">
+            {% for h in [62, 70, 66, 74, 71, 80, 77, 86, 83, 90, 88, 96] %}<span class="{{ 'or' if loop.index is even else '' }}" style="height:{{ h }}%;transition-delay:{{ loop.index0 * 45 }}ms"></span>{% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <p style="text-align:center;color:var(--sub);font-size:.8rem;margin:1rem 0 0">Illustration avec des données d'exemple.</p>
 </section>
 
 <!-- ══════════════ FONCTIONS ══════════════ -->
@@ -473,7 +592,7 @@
 
   <!-- ── Estimateur de tarif ─────────────────────────────────────── -->
   <div class="reveal" style="max-width:640px;margin:0 auto 3.5rem;background:#fff;border:1px solid var(--border);border-radius:1rem;padding:1.75rem;box-shadow:0 10px 40px rgba(15,61,54,.08)">
-    <div style="font-weight:800;color:var(--brand);font-size:1.15rem;text-align:center;margin-bottom:.25rem">🧮 Estimez votre tarif en 5 secondes</div>
+    <div style="font-weight:800;color:var(--brand);font-size:1.15rem;text-align:center;margin-bottom:.25rem;display:flex;align-items:center;justify-content:center;gap:.5rem"><span style="color:var(--accent);display:inline-flex">{{ icon("calculator", 20) }}</span> Estimez votre tarif en 5 secondes</div>
     <p style="text-align:center;color:var(--sub);font-size:.9rem;margin:0 0 1.25rem">Sans inscription. Combien de salariés à gérer ?</p>
 
     <div style="display:flex;align-items:center;gap:1rem;justify-content:center;margin-bottom:1.25rem">
@@ -493,7 +612,7 @@
 
     <div style="display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center;margin-top:1.25rem">
       <a href="/essai" class="btn-primary" style="flex:1;min-width:200px;text-align:center;padding:.8rem">Démarrer l'essai gratuit →</a>
-      <a id="estDevis" href="#" target="_blank" style="flex:1;min-width:200px;text-align:center;padding:.8rem;border:1px solid var(--brand);color:var(--brand);border-radius:.75rem;text-decoration:none;font-weight:700;background:#fff">💬 Recevoir un devis</a>
+      <a id="estDevis" href="#" target="_blank" style="flex:1;min-width:200px;text-align:center;padding:.8rem;border:1px solid var(--brand);color:var(--brand);border-radius:.75rem;text-decoration:none;font-weight:700;background:#fff;display:inline-flex;align-items:center;justify-content:center;gap:.45rem">{{ icon("message-circle", 18) }} Recevoir un devis</a>
     </div>
     <p style="text-align:center;color:var(--sub);font-size:.78rem;margin:.9rem 0 0">Essai gratuit 30 jours · sans carte bancaire · sans engagement</p>
   </div>
@@ -693,7 +812,7 @@
     var brut = parseInt(slider.value,10)||0;
     var cnss   = Math.min(brut,1500000)*0.05;
     var cnamgs = Math.min(brut,2500000)*0.02;
-    var imp    = irpp(brut - cnss - cnamgs);
+    var imp    = Math.round(irpp(brut - cnss - cnamgs));   // arrondi au franc, comme sur le bulletin
     var net    = brut - cnss - cnamgs - imp;
     set('calc-brut-val', fmt(brut));
     set('calc-cnss',   fmt(cnss));
@@ -708,9 +827,125 @@
 })();
 </script>
 
+<script nonce="{{ csp_nonce }}">
+// ── 3D : inclinaison de la scène du calculateur, aperçu qui se redresse, compteurs ──
+(function(){
+  var reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var large = window.matchMedia('(min-width: 920px)').matches;
+  var pointeurFin = window.matchMedia('(pointer: fine)').matches;
+
+  // Scène du calculateur : légère inclinaison qui suit la souris (bornée à ±7°), retour au repos en sortie
+  var scene = document.getElementById('scene'), s3d = document.getElementById('scene3d');
+  if (scene && s3d && !reduit && large && pointeurFin) {
+    var raf = null;
+    scene.addEventListener('pointermove', function(e){
+      var r = scene.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(function(){
+        s3d.style.transform = 'rotateY(' + (-11 + x * 14).toFixed(2) + 'deg) rotateX(' + (5 - y * 10).toFixed(2) + 'deg)';
+      });
+    });
+    scene.addEventListener('pointerleave', function(){ s3d.style.transform = ''; });
+  }
+
+  // Aperçu de l'application : incliné en arrivant, à plat quand il est au centre de l'écran
+  var ap = document.getElementById('apercu');
+  if (ap) {
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(function(es){ es.forEach(function(e){ if (e.isIntersecting) ap.classList.add('vu'); }); }, { threshold: .3 }).observe(ap);
+    } else { ap.classList.add('vu'); }
+    if (!reduit) {
+      var maj = function(){
+        var r = ap.getBoundingClientRect(), h = window.innerHeight;
+        var p = Math.min(1, Math.max(0, (h - r.top) / (h * .75)));       // 0 en bas de l'écran → 1 aux trois quarts
+        ap.style.setProperty('--rx', (24 * (1 - p)).toFixed(2) + 'deg');
+        ap.style.setProperty('--sc', (.92 + .08 * p).toFixed(3));
+      };
+      window.addEventListener('scroll', maj, { passive: true }); window.addEventListener('resize', maj); maj();
+    }
+  }
+
+  // Compteurs : de 0 à la valeur quand la bande devient visible
+  var cs = document.querySelectorAll('.compteur');
+  if (cs.length && !reduit && 'IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function(es){
+      es.forEach(function(e){
+        if (!e.isIntersecting) return;
+        io.unobserve(e.target);
+        var el = e.target, fin = parseInt(el.dataset.fin, 10), t0 = null;
+        var pas = function(t){ if (!t0) t0 = t; var k = Math.min(1, (t - t0) / 1100);
+          el.textContent = Math.round(fin * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(pas); };
+        el.textContent = '0'; requestAnimationFrame(pas);
+      });
+    }, { threshold: .6 });
+    cs.forEach(function(c){ io.observe(c); });
+  }
+})();
+</script>
+<script type="module" nonce="{{ csp_nonce }}">
+// ── 3D : surface de points ondulante en fond du héros (Three.js 0.160, WebGL) ──
+// Désactivée si l'utilisateur préfère moins d'animations ou si WebGL manque ; en pause hors écran
+// et quand l'onglet est caché ; densité réduite sur mobile.
+const canvas = document.getElementById('hero3d');
+const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (canvas && !reduit) {
+  try {
+    const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
+    const section = canvas.parentElement;
+    const mobile = window.matchMedia('(max-width: 767px)').matches;
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.75));
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(55, 1, .1, 200);
+    camera.position.set(0, 9, 26); camera.lookAt(0, 0, -4);
+    const NX = mobile ? 60 : 120, NZ = mobile ? 30 : 56, ECART = .55;
+    const n = NX * NZ, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
+    const vert = new THREE.Color('#2a8f7c'), or = new THREE.Color('#e9b043'), c = new THREE.Color();
+    let i = 0;
+    for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++, i++) {
+      pos[i * 3] = (ix - NX / 2) * ECART; pos[i * 3 + 1] = 0; pos[i * 3 + 2] = (iz - NZ / 2) * ECART - 4;
+      c.copy(vert).lerp(or, Math.pow(ix / NX, 2.2)); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const mat = new THREE.PointsMaterial({ size: mobile ? .12 : .1, vertexColors: true, transparent: true, opacity: .85, depthWrite: false });
+    const points = new THREE.Points(geo, mat);
+    points.rotation.y = -.35;
+    scene.add(points);
+    scene.fog = new THREE.Fog('#0a2b25', 14, 40);
+
+    const taille = () => { const w = section.clientWidth, h = section.clientHeight;
+      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+    taille(); window.addEventListener('resize', taille);
+
+    let visible = true, actif = !document.hidden, t = 0, dernier = performance.now();
+    new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(section);
+    document.addEventListener('visibilitychange', () => { actif = !document.hidden; });
+    const boucle = (now) => {
+      requestAnimationFrame(boucle);
+      const dt = Math.min(50, now - dernier); dernier = now;
+      if (!visible || !actif) return;
+      t += dt * .00045;
+      const a = geo.attributes.position.array;
+      for (let k = 0; k < n; k++) {
+        const x = a[k * 3], z = a[k * 3 + 2];
+        a[k * 3 + 1] = Math.sin(x * .35 + t * 2.1) * .7 + Math.cos(z * .45 + t * 1.6) * .55;
+      }
+      geo.attributes.position.needsUpdate = true;
+      points.rotation.y = -.35 + Math.sin(t * .6) * .06;
+      renderer.render(scene, camera);
+    };
+    requestAnimationFrame(boucle);
+    canvas.classList.add('pret');
+  } catch (e) { /* pas de WebGL ou CDN indisponible : le dégradé du héros reste affiché */ }
+}
+</script>
+
 <!-- Bouton flottant d'installation PWA (apparaît si installable) -->
 <button id="pwa-install-landing" style="display:none;position:fixed;bottom:1.1rem;right:1.1rem;z-index:60;background:#0f3d36;color:#fff;border:none;border-radius:999px;padding:.75rem 1.2rem;font-weight:700;font-size:.9rem;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;align-items:center;gap:.5rem">
-  📲 Installer l'application
+  {{ icon("smartphone", 18) }} Installer l'application
 </button>
 <script nonce="{{ csp_nonce }}">
 // PWA — enregistrement du service worker (rend la landing installable)
