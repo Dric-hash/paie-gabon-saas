@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Fiche de prêt N° {{ x.pret.id }} — {{ x.pret.salarie.nom_complet }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; font-size:10.5px; color:#111; margin:0; padding:22px; background:#fff; }
+    .header { text-align:center; margin-bottom:12px; border-bottom:2px solid #0f3d36; padding-bottom:8px; }
+    .header h1 { font-size:15px; font-weight:900; margin:0; color:#0f3d36; }
+    .header p { margin:2px 0; color:#555; font-size:9.5px; }
+    .header h2 { font-size:13px; margin:7px 0 2px; color:#0f3d36; text-transform:uppercase; }
+    .grille { display:grid; grid-template-columns:1fr 1fr; gap:4px 24px; margin:10px 0 12px; }
+    .grille div b { color:#0f3d36; display:inline-block; min-width:130px; }
+    .cartes { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px; }
+    .carte { border:1px solid #d1d5db; border-radius:6px; padding:6px 8px; }
+    .carte span { display:block; font-size:8px; color:#6b7280; text-transform:uppercase; }
+    .carte b { font-size:13px; color:#0f3d36; font-family:'Courier New',monospace; }
+    h3 { font-size:11.5px; color:#0f3d36; margin:12px 0 4px; }
+    table { width:100%; border-collapse:collapse; }
+    th { background:#0f3d36; color:#fff; padding:5px 6px; text-align:left; font-size:8.5px; text-transform:uppercase; }
+    td { padding:4px 6px; border-bottom:1px solid #e5e7eb; }
+    .num { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    tfoot td { font-weight:800; border-top:2px solid #0f3d36; }
+    .ok { color:#065f46; font-weight:700; } .ko { color:#b91c1c; font-weight:700; }
+    .deux { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+    .sig { margin-top:28px; display:flex; justify-content:space-between; } .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:44px; padding-top:3px; color:#555; }
+    .note { font-size:8.5px; color:#555; margin-top:6px; }
+    @media print { .no-print { display:none; } body { padding:6px; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+{% set p = x.pret %}
+<div class="no-print" style="margin-bottom:12px">
+  <button onclick="window.print()" style="background:#0f3d36;color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button>
+  <a href="/prets/{{ p.id }}" style="margin-left:10px;color:#0f3d36;font-weight:700;text-decoration:none">← Le prêt</a>
+</div>
+<div class="header">
+  <h1>{{ tenant.denomination }}</h1>
+  {% if tenant.nif %}<p>NIF : {{ tenant.nif }}{% if tenant.ville %} — {{ tenant.ville }}{% endif %}</p>{% endif %}
+  <h2>Fiche de prêt au personnel N° {{ p.id }}</h2>
+</div>
+<div class="grille">
+  <div><b>Contractant</b> {{ p.salarie.nom_complet }}</div>
+  <div><b>Date d'octroi</b> {{ p.date_octroi.strftime('%d/%m/%Y') }}</div>
+  <div><b>Matricule</b> {{ p.salarie.matricule }}</div>
+  <div><b>Durée</b> {{ p.nb_echeances }} mensualité(s) de {{ fc(p.montant_echeance) }} F</div>
+  <div><b>Fonction</b> {{ p.salarie.emploi or '—' }}</div>
+  <div><b>Motif</b> {{ p.motif or '—' }}</div>
+  <div><b>Statut</b> {{ p.statut_libelle }}</div>
+  <div><b>Accordé par</b> {{ p.cree_par_nom or '—' }}</div>
+</div>
+<div class="cartes">
+  <div class="carte"><span>Montant prêté</span><b>{{ fc(p.montant_total) }} F</b></div>
+  <div class="carte"><span>Remboursé au {{ au.strftime('%d/%m/%Y') }}</span><b>{{ fc(x.rembourse) }} F</b></div>
+  <div class="carte"><span>Restant dû</span><b>{{ fc(x.restant) }} F</b></div>
+  <div class="carte"><span>Retard</span><b class="{{ 'ko' if x.retard else '' }}">{{ fc(x.retard) if x.retard else '—' }}</b></div>
+</div>
+<div class="deux">
+  <div>
+    <h3>Échéancier indicatif</h3>
+    <table>
+      <thead><tr><th>N°</th><th>Mois</th><th class="num">Mensualité</th><th class="num">Restant après</th></tr></thead>
+      <tbody>{% for e in x.echeancier %}
+        <tr><td>{{ e.num }}</td><td>{{ MOIS[e.mois] }} {{ e.annee }}</td><td class="num">{{ fc(e.montant) }}</td><td class="num">{{ fc(e.restant) }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  <div>
+    <h3>Remboursements au {{ au.strftime('%d/%m/%Y') }}</h3>
+    <table>
+      <thead><tr><th>Date</th><th>Période</th><th>Mode</th><th class="num">Montant</th></tr></thead>
+      <tbody>{% for r in x.remboursements %}
+        <tr><td>{{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}</td><td>{% if r.mois %}{{ MOIS[r.mois] }} {{ r.annee }}{% else %}—{% endif %}</td>
+          <td>{{ 'Retenue sur bulletin' if r.bulletin_id else 'Direct' }}{% if r.note %} · {{ r.note }}{% endif %}</td><td class="num">{{ fc(r.montant) }}</td></tr>
+      {% else %}<tr><td colspan="4" style="color:#6b7280">Aucun remboursement.</td></tr>{% endfor %}</tbody>
+      <tfoot><tr><td colspan="3">Total remboursé</td><td class="num">{{ fc(x.rembourse) }}</td></tr></tfoot>
+    </table>
+  </div>
+</div>
+<p class="note">Retard : mensualités échues d'après l'échéancier indicatif ({{ fc(x.attendu) }} F attendus au {{ au.strftime('%d/%m/%Y') }}) non encore remboursées.</p>
+<div class="sig"><div><div class="ligne">Le contractant : {{ p.salarie.nom_complet }} (lu et approuvé)</div></div><div><div class="ligne">Pour l'employeur</div></div></div>
+<p class="note" style="margin-top:16px;color:#9ca3af;text-align:right">{{ tenant.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
+</body>
+</html>

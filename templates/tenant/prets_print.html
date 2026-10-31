@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{{ titre }} — {{ tenant.denomination }}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; font-size:10.5px; color:#111; margin:0; padding:20px; background:#fff; }
+    .header { text-align:center; margin-bottom:12px; border-bottom:2px solid #0f3d36; padding-bottom:8px; }
+    .header h1 { font-size:15px; font-weight:900; margin:0; color:#0f3d36; }
+    .header p { margin:2px 0; color:#555; font-size:9.5px; }
+    .header h2 { font-size:13px; margin:7px 0 2px; color:#0f3d36; text-transform:uppercase; }
+    .infos { display:flex; justify-content:space-between; gap:12px; margin:10px 0; font-size:10.5px; }
+    .infos b { color:#0f3d36; }
+    table { width:100%; border-collapse:collapse; margin-bottom:12px; }
+    thead { display:table-header-group; }
+    th { background:#0f3d36; color:#fff; padding:5px 6px; text-align:left; font-size:8.5px; text-transform:uppercase; }
+    td { padding:5px 6px; border-bottom:1px solid #e5e7eb; vertical-align:top; }
+    .num { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    .contractant td { background:#e8f1ee; color:#0f3d36; font-weight:800; padding-top:7px; }
+    .contractant td span { font-weight:400; color:#555; font-size:9.5px; }
+    .sous-tot td { font-weight:700; background:#f8faf9; border-bottom:1.5px solid #0f3d36; }
+    .detail td { font-size:9.5px; color:#374151; background:#fff; border-bottom:none; padding:2px 6px 2px 22px; }
+    .detail.fin td { border-bottom:1px solid #e5e7eb; padding-bottom:6px; }
+    .tot-row td { font-weight:900; background:#eef3f1; border-top:2px solid #0f3d36; font-size:11px; }
+    .badge { padding:1px 6px; border-radius:9999px; font-size:8px; font-weight:700; }
+    .b-EN_COURS { background:#fef3c7; color:#92400e; } .b-SOLDE { background:#d1fae5; color:#065f46; } .b-ANNULE { background:#f3f4f6; color:#6b7280; }
+    .retard { color:#b91c1c; font-weight:700; }
+    .sig { margin-top:30px; display:flex; justify-content:space-between; } .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:44px; padding-top:3px; color:#555; }
+    .note { font-size:8.5px; color:#555; margin-top:6px; }
+    .footer { margin-top:18px; text-align:right; font-size:8.5px; color:#9ca3af; }
+    @media print { .no-print { display:none; } body { padding:6px; } tr { page-break-inside:avoid; } }
+  </style>
+</head>
+<body>
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+<div class="no-print" style="margin-bottom:12px">
+  <button onclick="window.print()" style="background:#0f3d36;color:white;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button>
+  <a href="/prets" style="margin-left:10px;color:#0f3d36;font-weight:700;text-decoration:none">← Prêts</a>
+</div>
+
+<div class="header">
+  <h1>{{ tenant.denomination }}</h1>
+  {% if tenant.nif %}<p>NIF : {{ tenant.nif }}{% if tenant.ville %} — {{ tenant.ville }}{% endif %}</p>{% endif %}
+  <h2>{{ titre }}</h2>
+</div>
+
+<div class="infos">
+  <div>
+    {% if releve %}
+    <b>Contractant :</b> {{ releve.nom_complet }} — matricule {{ releve.matricule }}{% if releve.emploi %} — {{ releve.emploi }}{% endif %}<br/>
+    {% else %}
+    <b>Sélection :</b> {{ filtres|join(' · ') }}<br/>
+    <b>Contractants :</b> {{ groupes|length }} · <b>Prêts :</b> {{ tot.nb }}{% if detail %} · avec le détail des remboursements{% endif %}
+    {% endif %}
+  </div>
+  <div style="text-align:right"><b>Situation au :</b> {{ au.strftime('%d/%m/%Y') }}<br/><b>Édité le :</b> {{ now.strftime('%d/%m/%Y à %H:%M') }}</div>
+</div>
+
+<table>
+  <thead><tr>
+    <th>Prêt</th><th>Motif</th><th class="num">Montant prêté</th><th class="num">Mensualité</th><th class="num">Échéances</th>
+    <th class="num">Remboursé</th><th class="num">Restant dû</th><th class="num">Retard</th><th>Statut</th>
+  </tr></thead>
+  <tbody>
+  {% for g in groupes %}
+    {% if not releve %}
+    <tr class="contractant"><td colspan="9">{{ g.salarie.nom_complet }} <span>· matricule {{ g.salarie.matricule }}{% if g.salarie.emploi %} · {{ g.salarie.emploi }}{% endif %} · {{ g.prets|length }} prêt(s)</span></td></tr>
+    {% endif %}
+    {% for x in g.prets %}{% set p = x.pret %}
+    <tr>
+      <td>N° {{ p.id }} du {{ p.date_octroi.strftime('%d/%m/%Y') }}</td>
+      <td>{{ p.motif or '—' }}</td>
+      <td class="num">{{ fc(p.montant_total) }}</td>
+      <td class="num">{{ fc(p.montant_echeance) }}</td>
+      <td class="num">{{ x.nb_regles }} / {{ p.nb_echeances }}</td>
+      <td class="num">{{ fc(x.rembourse) }}</td>
+      <td class="num"><b>{{ fc(x.restant) }}</b></td>
+      <td class="num {{ 'retard' if x.retard else '' }}">{{ fc(x.retard) if x.retard else '—' }}</td>
+      <td><span class="badge b-{{ p.statut }}">{{ p.statut_libelle }}</span></td>
+    </tr>
+    {% if detail %}
+      {% for r in x.remboursements %}
+      <tr class="detail{{ ' fin' if loop.last else '' }}"><td colspan="5">↳ {{ r.date_remboursement.strftime('%d/%m/%Y') if r.date_remboursement else '—' }}
+          {% if r.mois %}· {{ MOIS[r.mois] }} {{ r.annee }}{% endif %} · {{ 'retenue sur bulletin' if r.bulletin_id else 'remboursement direct' }}{% if r.note %} · {{ r.note }}{% endif %}</td>
+        <td class="num">{{ fc(r.montant) }}</td><td colspan="3"></td></tr>
+      {% else %}
+      <tr class="detail fin"><td colspan="9">↳ Aucun remboursement à cette date.</td></tr>
+      {% endfor %}
+    {% endif %}
+    {% endfor %}
+    <tr class="sous-tot">
+      <td colspan="2">{% if releve %}Total{% else %}Sous-total {{ g.salarie.nom_complet }}{% endif %}</td>
+      <td class="num">{{ fc(g.prete) }}</td><td></td><td></td>
+      <td class="num">{{ fc(g.rembourse) }}</td><td class="num">{{ fc(g.restant) }}</td>
+      <td class="num {{ 'retard' if g.retard else '' }}">{{ fc(g.retard) if g.retard else '—' }}</td><td></td>
+    </tr>
+  {% else %}
+    <tr><td colspan="9" style="text-align:center;color:#6b7280;padding:16px">Aucun prêt pour cette sélection.</td></tr>
+  {% endfor %}
+  </tbody>
+  {% if groupes and not releve %}
+  <tfoot><tr class="tot-row">
+    <td colspan="2">TOTAL GÉNÉRAL ({{ tot.nb }} prêt(s))</td><td class="num">{{ fc(tot.prete) }}</td><td></td><td></td>
+    <td class="num">{{ fc(tot.rembourse) }}</td><td class="num">{{ fc(tot.restant) }} F</td>
+    <td class="num">{{ fc(tot.retard) if tot.retard else '—' }}</td><td></td>
+  </tr></tfoot>
+  {% endif %}
+</table>
+<p class="note">Remboursé et restant dû : remboursements enregistrés jusqu'au {{ au.strftime('%d/%m/%Y') }} (retenues sur bulletin et remboursements directs).
+  Retard : mensualités échues d'après l'échéancier indicatif et non encore remboursées. Les prêts annulés ne sont pas comptés dans les totaux.</p>
+
+{% if releve %}
+<div class="sig"><div><div class="ligne">Le contractant : {{ releve.nom_complet }} (lu et approuvé)</div></div><div><div class="ligne">Pour l'employeur</div></div></div>
+{% else %}
+<div class="sig"><div><div class="ligne">Établi par</div></div><div><div class="ligne">Visa de la direction</div></div></div>
+{% endif %}
+<div class="footer">{{ tenant.denomination }} · édité avec PaieGabon</div>
+</body>
+</html>

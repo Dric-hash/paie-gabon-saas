@@ -28,6 +28,23 @@
     </div>
   </div>
 
+  <form method="get" action="{{ url_for('tenant.prets_imprimer') }}" target="_blank" style="background:#fff;border:1px solid #e5e7eb;border-radius:.85rem;padding:.9rem 1rem;margin-bottom:1rem;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+    <b style="font-size:.85rem;color:#0f3d36;align-self:center">🖨 Imprimer l'état des prêts</b>
+    <label style="font-size:.75rem;color:#6b7280">Statut
+      <select name="statut" style="display:block;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem">
+        <option value="EN_COURS">En cours</option><option value="SOLDE">Soldés</option><option value="ANNULE">Annulés</option><option value="">Tous</option></select></label>
+    <label style="font-size:.75rem;color:#6b7280">Contractant
+      <select name="salarie_id" style="display:block;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem;max-width:14rem">
+        <option value="">Tous (regroupés par contractant)</option>{% for c in contractants %}<option value="{{ c.id }}">{{ c.nom }} {{ c.prenom }}</option>{% endfor %}</select></label>
+    {% if sites %}<label style="font-size:.75rem;color:#6b7280">Site
+      <select name="site_id" style="display:block;padding:.4rem;border:1px solid #d1d5db;border-radius:.5rem">
+        <option value="">Tous</option>{% for s in sites %}<option value="{{ s.id }}">{{ s.nom }}</option>{% endfor %}<option value="0">Sans site affecté</option></select></label>{% endif %}
+    <label style="font-size:.75rem;color:#6b7280">Situation au
+      <input type="date" name="au" value="{{ aujourdhui.isoformat() }}" style="display:block;padding:.35rem;border:1px solid #d1d5db;border-radius:.5rem"></label>
+    <label style="font-size:.8rem;color:#374151;align-self:center"><input type="checkbox" name="detail" value="1" checked> avec le détail des remboursements</label>
+    <button style="background:#0f3d36;color:#fff;border:none;padding:.5rem 1rem;border-radius:.5rem;font-weight:700;cursor:pointer">Imprimer</button>
+  </form>
+
   <div style="display:flex;gap:.4rem;margin-bottom:1rem">
     {% for s,lbl in [(None,'Tous'),('EN_COURS','En cours'),('SOLDE','Soldés'),('ANNULE','Annulés')] %}
     <a href="{{ url_for('tenant.prets', statut=s) }}" style="padding:.4rem .9rem;border-radius:.5rem;text-decoration:none;font-size:.85rem;font-weight:700;{% if statut==s %}background:#0f3d36;color:#fff{% else %}background:#eef4f2;color:#17564c{% endif %}">{{ lbl }}</a>
