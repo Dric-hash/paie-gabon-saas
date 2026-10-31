@@ -722,3 +722,4 @@ from blueprints.tenant import virements  # noqa: E402,F401
 from blueprints.tenant import rappels  # noqa: E402,F401
 from blueprints.tenant import provisions  # noqa: E402,F401
 from blueprints.tenant import budget  # noqa: E402,F401
+from blueprints.tenant import indicateurs  # noqa: E402,F401
