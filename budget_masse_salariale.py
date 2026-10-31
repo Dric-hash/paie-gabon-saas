@@ -9,7 +9,7 @@ Chaque mois budgété est calculé par le moteur de paie (calculs_paie.calculer_
 comme la génération en lot : salaire de base, éléments récurrents, ancienneté à la fin du
 mois (prime d'ancienneté de la convention), travail de nuit, nombre de parts. On retient :
   brut           = salaire brut ;
-  coût employeur = brut + CNSS et CNAMGS patronales + FNH + CFP.
+  coût employeur = brut + CNSS et CNAMGS patronales + FNH + CFP + TCS.
 Les heures supplémentaires, absences, primes ponctuelles et rappels ne sont pas
 prévisibles : ils apparaissent dans l'écart.
 
@@ -39,7 +39,7 @@ def _f(v):
     return float(v or 0)
 
 
-from calculs_paie import cout_employeur  # noqa: E402  (définition unique, sans la TCS)
+from calculs_paie import cout_employeur  # noqa: E402  (définition unique, TCS comprise)
 
 
 def mois_presence(s, annee):

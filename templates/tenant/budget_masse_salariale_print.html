@@ -48,7 +48,7 @@
   <table><thead><tr><th>Site</th><th class="r">Budget annuel</th><th class="r">Budget à date</th><th class="r">Réalisé à date</th><th class="r">Écart</th></tr></thead>
     <tbody>{% for x in sites %}<tr><td>{{ x.site }}</td><td class="r">{{ fc(x.annuel) }}</td><td class="r">{{ fc(x.budget) }}</td><td class="r">{{ fc(x.realise) }}</td><td class="r">{{ fs(x.ecart) }}</td></tr>{% endfor %}</tbody></table>
   {% endif %}
-  <p class="note">Coût employeur = salaire brut + CNSS et CNAMGS patronales + FNH + CFP. Réalisé : bulletins validés ou payés. Budget calculé par le moteur de paie à partir des contrats et des postes prévus.</p>
+  <p class="note">Coût employeur = salaire brut + CNSS et CNAMGS patronales + FNH + CFP + TCS. Réalisé : bulletins validés ou payés. Budget calculé par le moteur de paie à partir des contrats et des postes prévus.</p>
   <div class="sig"><div><div class="ligne">Établi par {{ b.auteur or '' }}</div></div><div><div class="ligne">Visa de la direction</div></div></div>
   <p class="note" style="margin-top:16px;color:#999">{{ t.denomination }} · édité le {{ now.strftime('%d/%m/%Y') }} avec PaieGabon</p>
 </body>

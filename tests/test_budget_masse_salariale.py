@@ -13,7 +13,7 @@ from calculs_paie import calculer_bulletin
 
 
 def _cout(r):
-    return round(r["salaire_brut"] + r["cnss_patronale"] + r["cnamgs_patronale"] + r["fnh"] + r["cfp"])
+    return round(r["salaire_brut"] + r["cnss_patronale"] + r["cnamgs_patronale"] + r["fnh"] + r["cfp"] + r["tcs"])
 
 
 def _scenario(env):

@@ -156,12 +156,13 @@ class TestCalculerTotaux:
         b = _bulletin(400_000)
         t = _calculer_totaux([b])
         assert t["total_cout_employeur"] > t["total_brut"]
-        # Coût = brut + cnss_pat + cnamgs_pat + fnh + cfp (la TCS, retenue sur le salarié, n'en fait pas partie)
+        # Coût = brut + cnss_pat + cnamgs_pat + fnh + cfp + tcs (TCS comprise)
         attendu = (400_000 + 400_000 * 0.18 + 400_000 * 0.06
-                   + 400_000 * 0.01 + 400_000 * 0.02)
+                   + 400_000 * 0.01 + 400_000 * 0.02 + round(400_000 * 0.01))
         assert t["total_cout_employeur"] == pytest.approx(attendu, abs=1)
         assert t["total_cout_employeur"] == pytest.approx(
-            t["total_brut"] + t["total_cnss_pat"] + t["total_cnamgs_pat"] + t["total_fnh"] + t["total_cfp"], abs=0.01)
+            t["total_brut"] + t["total_cnss_pat"] + t["total_cnamgs_pat"] + t["total_fnh"] + t["total_cfp"] + t["total_tcs"],
+            abs=0.01)
 
 
 # ── Tests journal de paie ─────────────────────────────────────────────────────
