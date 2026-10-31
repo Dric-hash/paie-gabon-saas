@@ -12,7 +12,11 @@
       </h1>
       <p style="color:#6b7280;font-size:.88rem;margin:.25rem 0 0">Prêt du {{ pret.date_octroi.strftime('%d/%m/%Y') }} · {{ pret.nb_echeances }} mensualités{% if pret.motif %} · {{ pret.motif }}{% endif %}</p>
     </div>
-    <a href="{{ url_for('tenant.pret_recu', id=pret.id) }}" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">📄 Reçu de prêt</a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+      <a href="{{ url_for('tenant.pret_imprimer', id=pret.id) }}" target="_blank" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">🖨 Fiche du prêt</a>
+      <a href="{{ url_for('tenant.pret_contractant_imprimer', sid=pret.salarie_id) }}" target="_blank" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">🖨 Tous les prêts du contractant</a>
+      <a href="{{ url_for('tenant.pret_recu', id=pret.id) }}" style="background:#eef4f2;color:#17564c;padding:.55rem 1rem;border-radius:.6rem;text-decoration:none;font-weight:700">📄 Reçu de prêt</a>
+    </div>
   </div>
 
   {% with messages = get_flashed_messages(with_categories=true) %}
