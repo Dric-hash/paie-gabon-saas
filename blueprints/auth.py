@@ -120,7 +120,38 @@ def index():
                     .filter_by(mis_en_avant=True, consentement=True)
                     .order_by(Avis.date_creation.desc())
                     .limit(6).all())
-    return render_template("public/presentation.html", plans=plans, avis_vedette=avis_vedette)
+    return render_template("public/presentation.html", plans=plans, avis_vedette=avis_vedette,
+                           estimation=estimation_net(ESTIMATION_BRUT_DEFAUT))
+
+
+# ── Estimation du net (calculateur de la page de présentation) ────────────────
+# Le calcul passe par le moteur de paie (calculs_paie.calculer_bulletin) : mêmes taux,
+# plafonds, TCS et barème IRPP que les bulletins. 1 part, sans prime ni ancienneté.
+ESTIMATION_BRUT_DEFAUT = 500000
+ESTIMATION_BRUT_MIN, ESTIMATION_BRUT_MAX = 0, 10_000_000
+
+
+def estimation_net(brut):
+    from calculs_paie import calculer_bulletin
+    r = calculer_bulletin({"salaire_base": float(brut)}, nb_parts=1.0)
+    lignes = {k: round(float(r.get(k) or 0)) for k in ("cnss_salarie", "cnamgs_salarie", "tcs", "irpp", "net_a_payer")}
+    return {"brut": int(brut), "cnss": lignes["cnss_salarie"], "cnamgs": lignes["cnamgs_salarie"], "tcs": lignes["tcs"],
+            "irpp": lignes["irpp"], "net": lignes["net_a_payer"]}
+
+
+@bp.route("/api/estimation-net")
+@_rate_limit("120/minute")
+def api_estimation_net():
+    from flask import jsonify
+    try:
+        brut = int(float(request.args.get("brut", "")))
+    except (TypeError, ValueError, OverflowError):
+        return jsonify({"erreur": "Salaire brut invalide."}), 400
+    if not ESTIMATION_BRUT_MIN <= brut <= ESTIMATION_BRUT_MAX:
+        return jsonify({"erreur": "Salaire brut hors limites (0 à 10 000 000 FCFA)."}), 400
+    rep = jsonify(estimation_net(brut))
+    rep.headers["Cache-Control"] = "public, max-age=3600"
+    return rep
 
 
 # ── Login ─────────────────────────────────────────────────────────────────────

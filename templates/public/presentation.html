@@ -114,7 +114,8 @@
     background:#fff;border:3px solid var(--accent-warm);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer;transition:transform .12s}
   .calc-range::-webkit-slider-thumb:hover{transform:scale(1.12)}
   .calc-range::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:#fff;border:3px solid var(--accent-warm);box-shadow:0 2px 8px rgba(0,0,0,.35);cursor:pointer}
-  .calc-val{transition:color .2s}
+  .calc-val{transition:color .2s,opacity .2s}
+  #demo.calcul-en-cours .calc-val{opacity:.55}
 
   /* Cartes : micro-interactions au survol */
   .card{transition:transform .2s ease, box-shadow .2s ease, border-color .2s ease}
@@ -167,10 +168,18 @@
   .flottante .t{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:rgba(255,255,255,.6);font-weight:700}
   .flottante .v{font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1rem;margin-top:.15rem}
   .fl-bulletin{top:-78px;right:-58px;width:200px;transform:translateZ(-70px);animation:flotte 7s ease-in-out infinite}
-  .fl-cnss{bottom:-30px;left:-34px;transform:translateZ(110px);animation:flotte 6s ease-in-out -2s infinite;display:flex;align-items:center;gap:.6rem}
+  .fl-cnss{bottom:-66px;left:-34px;transform:translateZ(110px);animation:flotte 6s ease-in-out -2s infinite;display:flex;align-items:center;gap:.6rem}
   .fl-cnss .ok{width:30px;height:30px;border-radius:9px;background:rgba(31,174,122,.25);color:#7ee2b8;display:flex;align-items:center;justify-content:center}
   .lignes-fictives span{display:block;height:6px;border-radius:4px;background:rgba(255,255,255,.18);margin-top:.4rem}
   @keyframes flotte{0%,100%{translate:0 0}50%{translate:0 -10px}}
+  /* Reflet lumineux qui suit l'inclinaison (calculateur, cartes tarif) */
+  .reflet{position:relative}
+  .reflet::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;
+    transition:opacity .35s ease;mix-blend-mode:soft-light;
+    background:radial-gradient(420px circle at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.55),rgba(255,255,255,0) 60%)}
+  .reflet.eclaire::after{opacity:1}
+  .carte-tarif.visible.inclinee{transition:transform .12s linear,box-shadow .2s ease,border-color .2s ease;
+    transform:perspective(900px) rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg)) translateY(-4px)}
   .drapeau{display:inline-flex;flex-direction:column;width:18px;height:12px;border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
   .drapeau i{flex:1;display:block}
   /* Bande de chiffres */
@@ -211,7 +220,7 @@
   @media (prefers-reduced-motion: reduce){
     .scene-3d,.scene-3d > #demo{transform:none!important}.flottante{animation:none}
     .apercu{transform:none!important}.apercu-graph span{transform:none;transition:none}
-    .hero3d{display:none}
+    .hero3d{display:none}.reflet::after{display:none}.carte-tarif.visible.inclinee{transform:none}
   }
   /* Menu mobile */
   .burger{display:none}
@@ -330,7 +339,7 @@
       <div class="v">Octobre · validé</div>
       <div class="lignes-fictives"><span style="width:90%"></span><span style="width:70%"></span><span style="width:80%"></span></div>
     </div>
-    <div id="demo" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.25rem;padding:1.75rem;box-shadow:0 24px 60px rgba(0,0,0,.25)">
+    <div id="demo" class="reflet" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.25rem;padding:1.75rem;box-shadow:0 24px 60px rgba(0,0,0,.25)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.1rem">
         <span style="font-size:.78rem;color:rgba(255,255,255,.55);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Calculez un net en direct</span>
         <span style="font-size:.7rem;color:var(--accent-light);background:rgba(184,134,47,.16);padding:.2rem .6rem;border-radius:9999px;font-weight:700">temps réel</span>
@@ -338,23 +347,24 @@
 
       <label for="calc-brut" style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:.15rem">
         <span style="color:rgba(255,255,255,.7);font-size:.92rem">Salaire brut mensuel</span>
-        <span><span id="calc-brut-val" class="num display" style="font-weight:800;font-size:1.25rem">500 000</span><span style="color:rgba(255,255,255,.55);font-size:.85rem"> FCFA</span></span>
+        <span><span id="calc-brut-val" class="num display" style="font-weight:800;font-size:1.25rem">{{ '{:,}'.format(estimation.brut).replace(',', ' ') }}</span><span style="color:rgba(255,255,255,.55);font-size:.85rem"> FCFA</span></span>
       </label>
-      <input id="calc-brut" class="calc-range" type="range" min="80000" max="3000000" step="10000" value="500000"
-             aria-label="Salaire brut mensuel en francs CFA" style="--fill:14%"/>
+      <input id="calc-brut" class="calc-range" type="range" min="80000" max="3000000" step="10000" value="{{ estimation.brut }}"
+             aria-label="Salaire brut mensuel en francs CFA" style="--fill:{{ '%.1f'|format((estimation.brut - 80000) / (3000000 - 80000) * 100) }}%"/>
 
       <div style="padding:.6rem 0 .15rem;font-size:.92rem;color:rgba(255,255,255,.62)">
-        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNSS (part salariale, 5 %)</span><span class="num calc-val" id="calc-cnss">25 000</span></div>
-        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNAMGS (2 %)</span><span class="num calc-val" id="calc-cnamgs">10 000</span></div>
-        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– Impôt IRPP</span><span class="num calc-val" id="calc-irpp">33 900</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNSS (part salariale)</span><span class="num calc-val" id="calc-cnss">{{ '{:,}'.format(estimation.cnss).replace(',', ' ') }}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– CNAMGS (part salariale)</span><span class="num calc-val" id="calc-cnamgs">{{ '{:,}'.format(estimation.cnamgs).replace(',', ' ') }}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– TCS</span><span class="num calc-val" id="calc-tcs">{{ '{:,}'.format(estimation.tcs).replace(',', ' ') }}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:.32rem 0"><span>– Impôt IRPP</span><span class="num calc-val" id="calc-irpp">{{ '{:,}'.format(estimation.irpp).replace(',', ' ') }}</span></div>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;padding:.85rem 0 0;border-top:1px solid rgba(255,255,255,.18);margin-top:.4rem">
         <span class="display" style="font-weight:700">Net à payer</span>
-        <span class="num accent calc-val" id="calc-net" style="font-weight:800;font-size:1.55rem;color:var(--accent-warm)">431 100 FCFA</span>
+        <span class="num accent calc-val" id="calc-net" aria-live="polite" style="font-weight:800;font-size:1.55rem;color:var(--accent-warm)">{{ '{:,}'.format(estimation.net).replace(',', ' ') }} FCFA</span>
       </div>
       <p style="font-size:.75rem;color:rgba(255,255,255,.45);margin:.9rem 0 0;line-height:1.5">
-        Estimation pour 1 part (célibataire, sans prime). Le calcul réel intègre votre situation familiale,
-        les primes et indemnités, et votre convention collective.
+        Calculé par le moteur de paie PaieGabon, pour 1 part (célibataire, sans prime). Le bulletin réel intègre
+        votre situation familiale, les primes et indemnités, et votre convention collective.
       </p>
     </div>
     <div class="flottante fl-cnss" aria-hidden="true">
@@ -620,13 +630,13 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
     {% for plan in plans %}
     {% set populaire = (plan.code == 'PRO') %}
-    <div class="reveal card" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
+    <div class="reveal card carte-tarif reflet" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
       {% if populaire %}
       <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1c1206;font-size:.72rem;font-weight:700;padding:.25rem .85rem;border-radius:9999px">Le plus choisi</div>
       {% endif %}
       <h3 class="display" style="font-weight:800;font-size:1.3rem;margin:0 0 .35rem">{{ plan.nom }}</h3>
       <div style="margin:.5rem 0 1.25rem;background:var(--page);border:1px solid var(--border);border-radius:.75rem;padding:.65rem .9rem;display:inline-flex;align-items:baseline;gap:.35rem">
-        <span class="figure display" style="font-size:2rem;font-weight:800;color:var(--brand)">{{ "{:,.0f}".format(plan.prix_mensuel).replace(",", " ") }}</span>
+        <span class="figure display" style="font-size:2rem;font-weight:800;color:var(--brand);white-space:nowrap">{{ "{:,.0f}".format(plan.prix_mensuel).replace(",", " ") }}</span>
         <span style="color:var(--sub);font-size:.85rem">FCFA/mois</span>
       </div>
       <ul style="list-style:none;padding:0;margin:0 0 1.75rem">
@@ -785,45 +795,36 @@
   els.forEach(function(el){ io.observe(el); });
 })();
 
-// Calculateur de net en direct — réplique fidèle de la formule serveur
-// (CNSS 5 %, CNAMGS 2 %, abattement 20 %, plancher au millier, barème IRPP, 1 part).
+// Calculateur de net en direct : chaque position du curseur est calculée par le moteur de paie
+// (/api/estimation-net, mêmes taux, plafonds, TCS et barème IRPP que les bulletins). Les valeurs
+// de départ sont calculées côté serveur ; les réponses arrivées en retard sont ignorées.
 (function(){
   var slider = document.getElementById('calc-brut');
   if (!slider) return;
-  var BAREME = [
-    [0,125000,0.00],[125001,160000,0.05],[160001,225000,0.10],
-    [225001,300000,0.15],[300001,430000,0.20],[430001,625000,0.25],
-    [625001,916667,0.30],[916668,Infinity,0.35]
-  ];
+  var cache = {}, demande = 0, minuteur = null;
   function fmt(n){ return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g,' '); }
-  function irpp(base){
-    if (base <= 0) return 0;
-    var b = Math.floor((base*0.80)/1000)*1000;   // abattement 20 % puis plancher au millier
-    var rpp = b, impot = 0;                        // 1 part
-    for (var i=0;i<BAREME.length;i++){
-      var inf=BAREME[i][0], sup=BAREME[i][1], taux=BAREME[i][2];
-      if (rpp <= inf) break;
-      impot += (Math.min(rpp,sup)-inf)*taux;
-    }
-    return impot;
-  }
   function set(id,v){ var el=document.getElementById(id); if(el) el.textContent=v; }
+  function afficher(e){
+    set('calc-cnss', fmt(e.cnss)); set('calc-cnamgs', fmt(e.cnamgs)); set('calc-tcs', fmt(e.tcs));
+    set('calc-irpp', fmt(e.irpp)); set('calc-net', fmt(e.net) + ' FCFA');
+    document.getElementById('demo').classList.remove('calcul-en-cours');
+  }
   function maj(){
-    var brut = parseInt(slider.value,10)||0;
-    var cnss   = Math.min(brut,1500000)*0.05;
-    var cnamgs = Math.min(brut,2500000)*0.02;
-    var imp    = Math.round(irpp(brut - cnss - cnamgs));   // arrondi au franc, comme sur le bulletin
-    var net    = brut - cnss - cnamgs - imp;
+    var brut = parseInt(slider.value, 10) || 0;
     set('calc-brut-val', fmt(brut));
-    set('calc-cnss',   fmt(cnss));
-    set('calc-cnamgs', fmt(cnamgs));
-    set('calc-irpp',   fmt(imp));
-    set('calc-net',    fmt(net)+' FCFA');
-    var pct = ((brut - slider.min) / (slider.max - slider.min)) * 100;
-    slider.style.setProperty('--fill', pct.toFixed(1)+'%');
+    slider.style.setProperty('--fill', ((brut - slider.min) / (slider.max - slider.min) * 100).toFixed(1) + '%');
+    if (cache[brut]) { afficher(cache[brut]); return; }
+    document.getElementById('demo').classList.add('calcul-en-cours');
+    clearTimeout(minuteur);
+    minuteur = setTimeout(function(){
+      var n = ++demande;
+      fetch('/api/estimation-net?brut=' + brut, { headers: { 'Accept': 'application/json' } })
+        .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+        .then(function(e){ cache[brut] = e; if (n === demande) afficher(e); })
+        .catch(function(){ document.getElementById('demo').classList.remove('calcul-en-cours'); });
+    }, 90);
   }
   slider.addEventListener('input', maj);
-  maj();
 })();
 </script>
 
@@ -835,7 +836,7 @@
   var pointeurFin = window.matchMedia('(pointer: fine)').matches;
 
   // Scène du calculateur : légère inclinaison qui suit la souris (bornée à ±7°), retour au repos en sortie
-  var scene = document.getElementById('scene'), s3d = document.getElementById('scene3d');
+  var scene = document.getElementById('scene'), s3d = document.getElementById('scene3d'), demo = document.getElementById('demo');
   if (scene && s3d && !reduit && large && pointeurFin) {
     var raf = null;
     scene.addEventListener('pointermove', function(e){
@@ -844,9 +845,32 @@
       if (raf) cancelAnimationFrame(raf);
       raf = requestAnimationFrame(function(){
         s3d.style.transform = 'rotateY(' + (-11 + x * 14).toFixed(2) + 'deg) rotateX(' + (5 - y * 10).toFixed(2) + 'deg)';
+        demo.style.setProperty('--gx', ((x + .5) * 100).toFixed(1) + '%');
+        demo.style.setProperty('--gy', ((y + .5) * 100).toFixed(1) + '%');
+        demo.classList.add('eclaire');
       });
     });
-    scene.addEventListener('pointerleave', function(){ s3d.style.transform = ''; });
+    scene.addEventListener('pointerleave', function(){ s3d.style.transform = ''; demo.classList.remove('eclaire'); });
+  }
+
+  // Cartes tarif : inclinaison discrète (±5°) et reflet sous le pointeur, souris uniquement
+  if (!reduit && pointeurFin) {
+    document.querySelectorAll('.carte-tarif').forEach(function(c){
+      var rf = null;
+      c.addEventListener('pointermove', function(e){
+        var r = c.getBoundingClientRect();
+        var x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        if (rf) cancelAnimationFrame(rf);
+        rf = requestAnimationFrame(function(){
+          c.style.setProperty('--ty', ((x - .5) * 10).toFixed(2) + 'deg');
+          c.style.setProperty('--tx', ((.5 - y) * 10).toFixed(2) + 'deg');
+          c.style.setProperty('--gx', (x * 100).toFixed(1) + '%');
+          c.style.setProperty('--gy', (y * 100).toFixed(1) + '%');
+          c.classList.add('inclinee', 'eclaire');
+        });
+      });
+      c.addEventListener('pointerleave', function(){ if (rf) cancelAnimationFrame(rf); c.classList.remove('inclinee', 'eclaire'); });
+    });
   }
 
   // Aperçu de l'application : incliné en arrivant, à plat quand il est au centre de l'écran
@@ -885,8 +909,11 @@
 </script>
 <script type="module" nonce="{{ csp_nonce }}">
 // ── 3D : surface de points ondulante en fond du héros (Three.js 0.160, WebGL) ──
+// La vague est calculée sur le GPU (shader) : le processeur ne fait que passer le temps et le pointeur.
+// Points ronds et doux, couleur selon la hauteur (vert → or sur les crêtes), fondu en profondeur,
+// onde qui part du pointeur, étincelles dorées qui montent, caméra qui suit le pointeur et le défilement.
 // Désactivée si l'utilisateur préfère moins d'animations ou si WebGL manque ; en pause hors écran
-// et quand l'onglet est caché ; densité réduite sur mobile.
+// et quand l'onglet est caché ; densité et résolution réduites sur mobile.
 const canvas = document.getElementById('hero3d');
 const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 if (canvas && !reduit) {
@@ -894,47 +921,163 @@ if (canvas && !reduit) {
     const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js');
     const section = canvas.parentElement;
     const mobile = window.matchMedia('(max-width: 767px)').matches;
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1 : 1.75));
+    const pointeurFin = window.matchMedia('(pointer: fine)').matches;
+    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false, powerPreference: 'low-power' });
+    const dpr = Math.min(window.devicePixelRatio || 1, mobile ? 1.25 : 1.75);
+    renderer.setPixelRatio(dpr);
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, 1, .1, 200);
-    camera.position.set(0, 9, 26); camera.lookAt(0, 0, -4);
-    const NX = mobile ? 60 : 120, NZ = mobile ? 30 : 56, ECART = .55;
-    const n = NX * NZ, pos = new Float32Array(n * 3), col = new Float32Array(n * 3);
-    const vert = new THREE.Color('#2a8f7c'), or = new THREE.Color('#e9b043'), c = new THREE.Color();
+    const CAM = new THREE.Vector3(0, 9, 26), CIBLE = new THREE.Vector3(0, 0, -4);
+    camera.position.copy(CAM); camera.lookAt(CIBLE);
+
+    // — Surface : une grille de points, hauteur calculée dans le vertex shader —
+    const NX = mobile ? 70 : 150, NZ = mobile ? 34 : 64, ECART = mobile ? .62 : .46;
+    const n = NX * NZ, pos = new Float32Array(n * 3);
     let i = 0;
     for (let ix = 0; ix < NX; ix++) for (let iz = 0; iz < NZ; iz++, i++) {
       pos[i * 3] = (ix - NX / 2) * ECART; pos[i * 3 + 1] = 0; pos[i * 3 + 2] = (iz - NZ / 2) * ECART - 4;
-      c.copy(vert).lerp(or, Math.pow(ix / NX, 2.2)); col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b;
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-    const mat = new THREE.PointsMaterial({ size: mobile ? .12 : .1, vertexColors: true, transparent: true, opacity: .85, depthWrite: false });
-    const points = new THREE.Points(geo, mat);
-    points.rotation.y = -.35;
-    scene.add(points);
-    scene.fog = new THREE.Fog('#0a2b25', 14, 40);
+    const uniforms = {
+      uTemps: { value: 0 }, uTaille: { value: (mobile ? 4.6 : 4.2) * dpr },
+      uOnde: { value: new THREE.Vector3(0, -4, -100) },          // x, z du point d'impact ; temps du départ
+      uSurvol: { value: new THREE.Vector2(0, -4) }, uForce: { value: 0 },
+      uVert: { value: new THREE.Color('#2a8f7c') }, uOr: { value: new THREE.Color('#e9b043') },
+      uCreme: { value: new THREE.Color('#fff4d6') }, uLargeur: { value: NX * ECART }
+    };
+    const mat = new THREE.ShaderMaterial({
+      uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+        uniform float uTemps, uTaille, uForce, uLargeur; uniform vec3 uOnde; uniform vec2 uSurvol;
+        varying float vH; varying float vX; varying float vProf;
+        void main(){
+          vec3 p = position;
+          float h = sin(p.x * .35 + uTemps * 2.1) * .7 + cos(p.z * .45 + uTemps * 1.6) * .55
+                  + sin((p.x + p.z) * .22 - uTemps * 1.2) * .3;
+          // Bosse douce sous le pointeur
+          float ds = distance(p.xz, uSurvol);
+          h += uForce * .9 * exp(-ds * ds * .045);
+          // Onde circulaire qui part du dernier clic / survol marqué
+          float age = uTemps - uOnde.z;
+          float d = distance(p.xz, uOnde.xy);
+          float front = age * 9.0;
+          h += sin((d - front) * 1.4) * exp(-pow(d - front, 2.0) * .12) * exp(-age * .9) * 1.1 * step(0.0, age);
+          p.y = h;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          vProf = -mv.z;
+          gl_PointSize = uTaille * (1.0 + clamp(h, 0.0, 1.6) * .35) * (22.0 / vProf);
+          vH = h; vX = p.x / uLargeur + .5;
+        }`,
+      fragmentShader: `
+        uniform vec3 uVert, uOr, uCreme; varying float vH; varying float vX; varying float vProf;
+        void main(){
+          vec2 c = gl_PointCoord - .5; float r = length(c);
+          if (r > .5) discard;
+          float doux = smoothstep(.5, .12, r);
+          float crete = smoothstep(.35, 1.5, vH);
+          vec3 col = mix(uVert, uOr, clamp(pow(vX, 2.0) * .8 + crete * .7, 0.0, 1.0));
+          col = mix(col, uCreme, smoothstep(1.3, 2.0, vH) * .6);
+          float brume = 1.0 - smoothstep(14.0, 40.0, vProf);
+          gl_FragColor = vec4(col, doux * brume * (.62 + crete * .38));
+        }`
+    });
+    const surface = new THREE.Points(geo, mat);
+    surface.rotation.y = -.35;
+    scene.add(surface);
 
+    // — Étincelles dorées qui montent lentement (position calculée dans le shader) —
+    const NE = mobile ? 70 : 180, ep = new Float32Array(NE * 3), eg = new Float32Array(NE);
+    for (let k = 0; k < NE; k++) {
+      ep[k * 3] = (Math.random() - .5) * 46; ep[k * 3 + 1] = Math.random() * 14; ep[k * 3 + 2] = (Math.random() - .5) * 26 - 6;
+      eg[k] = Math.random();
+    }
+    const geoE = new THREE.BufferGeometry();
+    geoE.setAttribute('position', new THREE.BufferAttribute(ep, 3));
+    geoE.setAttribute('graine', new THREE.BufferAttribute(eg, 1));
+    const matE = new THREE.ShaderMaterial({
+      uniforms: { uTemps: uniforms.uTemps, uTaille: { value: 5.0 * dpr }, uOr: uniforms.uOr },
+      transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+      vertexShader: `
+        uniform float uTemps, uTaille; attribute float graine; varying float vA;
+        void main(){
+          vec3 p = position;
+          float y = mod(p.y + uTemps * (1.2 + graine * 1.6), 14.0);
+          p.y = y - 1.0;
+          p.x += sin(uTemps * .8 + graine * 6.283) * .6;
+          vec4 mv = modelViewMatrix * vec4(p, 1.0);
+          gl_Position = projectionMatrix * mv;
+          gl_PointSize = uTaille * (.5 + graine) * (22.0 / -mv.z);
+          vA = smoothstep(0.0, 2.0, y) * (1.0 - smoothstep(9.0, 14.0, y)) * (.35 + .65 * abs(sin(uTemps * 2.0 + graine * 20.0)));
+        }`,
+      fragmentShader: `
+        uniform vec3 uOr; varying float vA;
+        void main(){
+          float r = length(gl_PointCoord - .5); if (r > .5) discard;
+          gl_FragColor = vec4(uOr, smoothstep(.5, .0, r) * vA * .8);
+        }`
+    });
+    scene.add(new THREE.Points(geoE, matE));
+
+    // — Taille : suit la section (ResizeObserver) —
     const taille = () => { const w = section.clientWidth, h = section.clientHeight;
-      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
-    taille(); window.addEventListener('resize', taille);
+      if (!w || !h) return; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
+    taille();
+    if ('ResizeObserver' in window) new ResizeObserver(taille).observe(section); else window.addEventListener('resize', taille);
 
-    let visible = true, actif = !document.hidden, t = 0, dernier = performance.now();
+    // — Pointeur : projeté sur le plan de la surface pour la bosse et l'onde —
+    const ray = new THREE.Raycaster(), plan = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const ndc = new THREE.Vector2(), impact = new THREE.Vector3(), inv = new THREE.Matrix4();
+    let cibleX = 0, cibleY = 0, force = 0, forceCible = 0, dernierImpact = -100, ptX = 0, ptY = 0;
+    const versSurface = (cx, cy) => {
+      const r = canvas.getBoundingClientRect();
+      ndc.set(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      if (!ray.ray.intersectPlane(plan, impact)) return null;
+      inv.copy(surface.matrixWorld).invert();
+      return impact.applyMatrix4(inv);
+    };
+    if (pointeurFin) {
+      section.addEventListener('pointermove', e => {
+        const r = section.getBoundingClientRect();
+        cibleX = (e.clientX - r.left) / r.width - .5; cibleY = (e.clientY - r.top) / r.height - .5;
+        ptX = e.clientX; ptY = e.clientY; forceCible = 1;
+      }, { passive: true });
+      section.addEventListener('pointerleave', () => { cibleX = cibleY = 0; forceCible = 0; });
+    }
+    section.addEventListener('pointerdown', e => {
+      const p = versSurface(e.clientX, e.clientY);
+      if (p) { uniforms.uOnde.value.set(p.x, p.z, uniforms.uTemps.value); dernierImpact = uniforms.uTemps.value; }
+    }, { passive: true });
+
+    // — Boucle : en pause hors écran et onglet caché ; contexte WebGL perdu → on s'arrête proprement —
+    let visible = true, actif = !document.hidden, perdu = false, t = 0, dernier = performance.now(), camX = 0, camY = 0, defil = 0;
     new IntersectionObserver(es => { visible = es[0].isIntersecting; }).observe(section);
-    document.addEventListener('visibilitychange', () => { actif = !document.hidden; });
+    document.addEventListener('visibilitychange', () => { actif = !document.hidden; dernier = performance.now(); });
+    canvas.addEventListener('webglcontextlost', e => { e.preventDefault(); perdu = true; canvas.classList.remove('pret'); });
+    canvas.addEventListener('webglcontextrestored', () => { perdu = false; canvas.classList.add('pret'); });
     const boucle = (now) => {
       requestAnimationFrame(boucle);
       const dt = Math.min(50, now - dernier); dernier = now;
-      if (!visible || !actif) return;
-      t += dt * .00045;
-      const a = geo.attributes.position.array;
-      for (let k = 0; k < n; k++) {
-        const x = a[k * 3], z = a[k * 3 + 2];
-        a[k * 3 + 1] = Math.sin(x * .35 + t * 2.1) * .7 + Math.cos(z * .45 + t * 1.6) * .55;
+      if (!visible || !actif || perdu) return;
+      t += dt * .00045; uniforms.uTemps.value = t;
+      // Inertie douce de la caméra (pointeur + défilement de la page)
+      camX += (cibleX - camX) * .05; camY += (cibleY - camY) * .05;
+      defil += (Math.min(1, window.scrollY / Math.max(1, section.clientHeight)) - defil) * .08;
+      camera.position.set(CAM.x + camX * 4, CAM.y - camY * 2 + defil * 3, CAM.z - defil * 4);
+      camera.lookAt(CIBLE.x + camX * 1.5, CIBLE.y, CIBLE.z);
+      force += (forceCible - force) * .06; uniforms.uForce.value = force;
+      if (force > .01) {
+        const p = versSurface(ptX, ptY);
+        if (p) {
+          uniforms.uSurvol.value.set(p.x, p.z);
+          // Une onde part du pointeur toutes les 2,5 s environ tant qu'il survole
+          if (t - dernierImpact > 1.1) { uniforms.uOnde.value.set(p.x, p.z, t); dernierImpact = t; }
+        }
       }
-      geo.attributes.position.needsUpdate = true;
-      points.rotation.y = -.35 + Math.sin(t * .6) * .06;
+      surface.rotation.y = -.35 + Math.sin(t * .6) * .06;
+      surface.updateMatrixWorld();
       renderer.render(scene, camera);
     };
     requestAnimationFrame(boucle);
