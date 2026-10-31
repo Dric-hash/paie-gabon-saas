@@ -131,24 +131,15 @@
       body.sidebar-collapsed #topnav { display: flex !important; }
     }
     /* Mobile/tablette (<1024px) : repliée par défaut, s'ouvre par-dessus le contenu */
-    /* Menu regroupé : groupes repliables */
-    .nav-groupe { margin:.15rem 0; }
-    .nav-titre { list-style:none; cursor:pointer; display:flex; align-items:center; gap:.6rem; padding:.55rem 1rem; border-radius:.75rem;
-                 font-size:.8rem; font-weight:800; color:rgba(255,255,255,.92); user-select:none; }
-    .nav-titre::-webkit-details-marker { display:none; }
-    .nav-titre:hover { background:rgba(255,255,255,.08); }
-    .nav-chevron { margin-left:auto; font-size:.7rem; opacity:.6; transition:transform .15s; }
-    .nav-groupe[open] .nav-chevron { transform:rotate(90deg); }
-    .nav-items { padding:.1rem 0 .3rem .55rem; border-left:1px solid rgba(255,255,255,.12); margin-left:1.35rem; }
-    .nav-items .nav-lien { font-size:.82rem; padding:.42rem .8rem; }
-    .nav-ico { width:1.2rem; text-align:center; flex-shrink:0; }
     @media (max-width: 1023px) {
       aside { transform: translateX(-100%); }
       main  { margin-left: 0 !important; }
       body.sidebar-open aside { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.3); }
     }
   </style>
+  <link rel="stylesheet" href="/static/css/paiegabon-ui.css?v=20261031"/>
 </head>
+{% from "tenant/_icones.html" import icone %}
 <body class="text-gray-800" style="background:var(--bg-page);color:var(--text-main)">
 <div class="flex min-h-screen">
 
@@ -186,112 +177,104 @@
       {% set ep = (request.endpoint or '').split('.')[-1] %}
       {% set mode_cabinet = current_user.tenant and current_user.tenant.est_cabinet and not session.get('cabinet_entreprise_id') %}
       {% if mode_cabinet %}
-      <a href="/cabinet" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='cabinet_dashboard' else 'text-white/80 hover:bg-white/10' }}">
-        🏢 <span>Mes entreprises</span>
-      </a>
-      <a href="/cabinet/entreprise/nouvelle" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-white/80 hover:bg-white/10">
-        ➕ <span>Ajouter une entreprise</span>
-      </a>
-      <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
-        ⚙️ <span>{{ T.nav.parametres }}</span>
-      </a>
-      <a href="/avis" target="_blank" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all text-white/80 hover:bg-white/10">
-        💬 <span>Donner mon avis</span>
-      </a>
+      <a href="/cabinet" class="nav-lien{{ ' nav-actif' if ep=='cabinet_dashboard' else '' }}">{{ icone("building-2", 18) }}<span>Mes entreprises</span></a>
+      <a href="/cabinet/entreprise/nouvelle" class="nav-lien">{{ icone("plus", 18) }}<span>Ajouter une entreprise</span></a>
+      <a href="/parametres" class="nav-lien{{ ' nav-actif' if ep=='parametres' else '' }}">{{ icone("settings", 18) }}<span>{{ T.nav.parametres }}</span></a>
+      <a href="/avis" target="_blank" class="nav-lien">{{ icone("message-circle", 18) }}<span>Donner mon avis</span></a>
       {% else %}
       {# Menu regroupé par domaine (30/10/2026). nav_lien() : entrée ; nav_groupe : <details> ouvert s'il contient la page active. #}
-      {% macro nav_lien(href, icone, libelle, actif) %}
-      <a href="{{ href }}" class="nav-lien flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900 nav-actif' if actif else 'text-white/80 hover:bg-white/10' }}"{% if actif %} aria-current="page"{% endif %}>
-        <span class="nav-ico">{{ icone }}</span> <span>{{ libelle }}</span>{{ caller() if caller else '' }}
+      {% macro nav_lien(href, ico, libelle, actif) %}
+      <a href="{{ href }}" class="nav-lien{{ ' nav-actif' if actif else '' }}"{% if actif %} aria-current="page"{% endif %}>
+        {{ icone(ico, 18) }}<span>{{ libelle }}</span>{{ caller() if caller else '' }}
       </a>
       {% endmacro %}
-      {% macro nav_groupe(cle, icone, titre) %}
+      {% macro nav_groupe(cle, ico, titre) %}
       <details class="nav-groupe" data-groupe="{{ cle }}">
-        <summary class="nav-titre">{{ icone }} <span>{{ titre }}</span><span class="nav-chevron">▸</span></summary>
+        <summary class="nav-titre">{{ icone(ico, 18) }}<span>{{ titre }}</span><span class="nav-chevron">{{ icone("chevron-right", 15) }}</span></summary>
         <div class="nav-items">{{ caller() }}</div>
       </details>
       {% endmacro %}
       {% set nav_fr = (lang == "fr") %}
 
-      {{ nav_lien("/dashboard", "🏠", T.nav.dashboard, ep == 'dashboard') }}
+      {{ nav_lien("/dashboard", "layout-dashboard", T.nav.dashboard, ep == 'dashboard') }}
 
-      {% call nav_groupe("paie", "📄", "Paie" if nav_fr else "Payroll") %}
-        {{ nav_lien("/bulletins/saisie", "✏️", "Saisie bulletin" if nav_fr else "Enter payslip", ep == 'bulletin_saisie') }}
-        {{ nav_lien("/bulletins", "📑", T.nav.bulletins, ep in ['bulletins', 'bulletin_detail']) }}
-        {{ nav_lien("/periodes", "📅", T.nav.periodes, ep in ['periodes', 'periode_detail']) }}
-        {{ nav_lien("/cycle-paie", "🔄", "Cycle de paie" if nav_fr else "Payroll cycle", 'cycle_paie' in ep) }}
-        {{ nav_lien("/paie/controle", "🔎", "Contrôle de la paie" if nav_fr else "Payroll check", ep == 'controle_paie') }}
-        {{ nav_lien("/rappels", "↩️", "Rappels de salaire" if nav_fr else "Back pay", 'rappel' in ep) }}
+      {% call nav_groupe("paie", "file-text", "Paie" if nav_fr else "Payroll") %}
+        {{ nav_lien("/bulletins/saisie", "square-pen", "Saisie bulletin" if nav_fr else "Enter payslip", ep == 'bulletin_saisie') }}
+        {{ nav_lien("/bulletins", "files", T.nav.bulletins, ep in ['bulletins', 'bulletin_detail']) }}
+        {{ nav_lien("/periodes", "calendar-range", T.nav.periodes, ep in ['periodes', 'periode_detail']) }}
+        {{ nav_lien("/cycle-paie", "refresh-cw", "Cycle de paie" if nav_fr else "Payroll cycle", 'cycle_paie' in ep) }}
+        {{ nav_lien("/paie/controle", "shield-check", "Contrôle de la paie" if nav_fr else "Payroll check", ep == 'controle_paie') }}
+        {{ nav_lien("/rappels", "history", "Rappels de salaire" if nav_fr else "Back pay", 'rappel' in ep) }}
         {% if tenant and (tenant.convention or '')|upper in ['HOTELLERIE', 'BOIS', 'MINIER', 'FORET'] and current_user.is_tenant_admin %}
-        {{ nav_lien("/prime-fin-annee", "🎁", ("Gratif. fin d'année" if (tenant.convention or '')|upper == 'BOIS' else "13ᵉ mois" if (tenant.convention or '')|upper == 'MINIER' else "Gratification" if (tenant.convention or '')|upper == 'FORET' else "Prime fin d'année"), ep == 'prime_fin_annee') }}
+        {{ nav_lien("/prime-fin-annee", "gift", ("Gratif. fin d'année" if (tenant.convention or '')|upper == 'BOIS' else "13ᵉ mois" if (tenant.convention or '')|upper == 'MINIER' else "Gratification" if (tenant.convention or '')|upper == 'FORET' else "Prime fin d'année"), ep == 'prime_fin_annee') }}
         {% endif %}
-        {{ nav_lien("/composants", "🧩", "Composants de paie" if nav_fr else "Pay items", 'composant' in ep) }}
-        {{ nav_lien("/simulateur", "🧮", "Simulateur" if nav_fr else "Simulator", ep == 'simulateur_paie') }}
+        {{ nav_lien("/composants", "puzzle", "Composants de paie" if nav_fr else "Pay items", 'composant' in ep) }}
+        {{ nav_lien("/simulateur", "calculator", "Simulateur" if nav_fr else "Simulator", ep == 'simulateur_paie') }}
       {% endcall %}
 
-      {% call nav_groupe("reglements", "💰", "Règlements et avances" if nav_fr else "Payments & advances") %}
-        {{ nav_lien("/virements", "🏦", "Virements et espèces" if nav_fr else "Transfers & cash", 'virement' in ep or ep == 'paie_especes') }}
-        {{ nav_lien("/acomptes", "💵", T.nav.acomptes, 'acompte' in ep) }}
-        {{ nav_lien("/prets", "🤲", "Prêts" if nav_fr else "Loans", 'pret' in ep and 'prestataire' not in ep) }}
+      {% call nav_groupe("reglements", "wallet", "Règlements et avances" if nav_fr else "Payments & advances") %}
+        {{ nav_lien("/virements", "landmark", "Virements et espèces" if nav_fr else "Transfers & cash", 'virement' in ep or ep == 'paie_especes') }}
+        {{ nav_lien("/acomptes", "banknote", T.nav.acomptes, 'acompte' in ep) }}
+        {{ nav_lien("/prets", "hand-coins", "Prêts" if nav_fr else "Loans", 'pret' in ep and 'prestataire' not in ep) }}
       {% endcall %}
 
-      {% call nav_groupe("personnel", "👥", "Personnel" if nav_fr else "Staff") %}
-        {{ nav_lien("/salaries", "👤", T.nav.salaries, 'salari' in ep and 'portail' not in ep) }}
-        {{ nav_lien("/medailles", "🏅", "Médailles du travail" if nav_fr else "Work medals", 'medaille' in ep) }}
-        {{ nav_lien("/formations", "📚", "Formations" if nav_fr else "Training", 'formation' in ep) }}
-        {{ nav_lien("/evaluations", "📝", "Évaluations" if nav_fr else "Reviews", 'evaluation' in ep) }}
-        {{ nav_lien("/competences", "🧠", "Compétences" if nav_fr else "Skills", 'competence' in ep) }}
-        {{ nav_lien("/portail-employes", "📲", "Portail des employés" if nav_fr else "Employee portal", 'portail_employes' in ep) }}
+      {% call nav_groupe("personnel", "users", "Personnel" if nav_fr else "Staff") %}
+        {{ nav_lien("/salaries", "user-round", T.nav.salaries, 'salari' in ep and 'portail' not in ep) }}
+        {{ nav_lien("/medailles", "medal", "Médailles du travail" if nav_fr else "Work medals", 'medaille' in ep) }}
+        {{ nav_lien("/formations", "graduation-cap", "Formations" if nav_fr else "Training", 'formation' in ep) }}
+        {{ nav_lien("/evaluations", "clipboard-check", "Évaluations" if nav_fr else "Reviews", 'evaluation' in ep) }}
+        {{ nav_lien("/competences", "brain", "Compétences" if nav_fr else "Skills", 'competence' in ep) }}
+        {{ nav_lien("/portail-employes", "smartphone", "Portail des employés" if nav_fr else "Employee portal", 'portail_employes' in ep) }}
       {% endcall %}
 
-      {% call nav_groupe("conges", "🏖️", T.nav.conges) %}
-        {{ nav_lien("/conges", "🏖️", "Demandes et soldes" if nav_fr else "Requests & balances", 'conge' in ep and ep not in ['conges_bilan', 'conges_planning'] and 'planning_annuel' not in ep and 'previsionnel' not in ep and 'provision' not in ep) }}
+      {% call nav_groupe("conges", "tree-palm", T.nav.conges) %}
+        {{ nav_lien("/conges", "calendar-days", "Demandes et soldes" if nav_fr else "Requests & balances", 'conge' in ep and ep not in ['conges_bilan', 'conges_planning'] and 'planning_annuel' not in ep and 'previsionnel' not in ep and 'provision' not in ep) }}
         {% if current_user.is_tenant_admin or current_user.has_permission('view_salaries') %}
-        {{ nav_lien("/conges/bilan", "📊", "Bilan congés" if nav_fr else "Leave balance", ep == 'conges_bilan') }}
-        {{ nav_lien("/conges/planning", "🗓️", "Planning" if nav_fr else "Schedule", ep == 'conges_planning') }}
-        {{ nav_lien("/conges/planning-annuel", "📆", "Vue annuelle" if nav_fr else "Year view", 'planning_annuel' in ep) }}
-        {{ nav_lien("/conges/previsionnel", "🔮", "Prévisionnel" if nav_fr else "Leave plan", 'previsionnel' in ep) }}
+        {{ nav_lien("/conges/bilan", "chart-column", "Bilan congés" if nav_fr else "Leave balance", ep == 'conges_bilan') }}
+        {{ nav_lien("/conges/planning", "calendar-clock", "Planning" if nav_fr else "Schedule", ep == 'conges_planning') }}
+        {{ nav_lien("/conges/planning-annuel", "calendar", "Vue annuelle" if nav_fr else "Year view", 'planning_annuel' in ep) }}
+        {{ nav_lien("/conges/previsionnel", "calendar-search", "Prévisionnel" if nav_fr else "Leave plan", 'previsionnel' in ep) }}
         {% endif %}
-        {{ nav_lien("/provisions-conges", "🧾", "Provision congés payés" if nav_fr else "Leave accrual", 'provision' in ep) }}
+        {{ nav_lien("/provisions-conges", "receipt", "Provision congés payés" if nav_fr else "Leave accrual", 'provision' in ep) }}
       {% endcall %}
 
-      {% call nav_groupe("terrain", "📋", "Terrain" if nav_fr else "Field") %}
-        {{ nav_lien("/pointage", "⏱️", "Pointage" if nav_fr else "Attendance", ep == 'pointage') }}
-        {{ nav_lien("/pointeurs", "📱", "Pointage mobile" if nav_fr else "Mobile attendance", 'pointeur' in ep or ep == 'pointages_mobiles') }}
-        {{ nav_lien("/jours-feries", "🎌", "Jours fériés" if nav_fr else "Holidays", ep == 'jours_feries_page') }}
-        {{ nav_lien("/sites", "🏗️", T.nav.sites, ep in ['sites', 'site_detail']) }}
-        {{ nav_lien("/journaliers", "👷", T.nav.journaliers, 'journalier' in ep and 'journaliers_paie' not in ep) }}
-        {{ nav_lien("/journaliers/paie", "💸", "Paie journaliers" if nav_fr else "Daily pay", 'journaliers_paie' in ep) }}
+      {% call nav_groupe("terrain", "hard-hat", "Terrain" if nav_fr else "Field") %}
+        {{ nav_lien("/pointage", "timer", "Pointage" if nav_fr else "Attendance", ep == 'pointage') }}
+        {{ nav_lien("/pointeurs", "smartphone-nfc", "Pointage mobile" if nav_fr else "Mobile attendance", 'pointeur' in ep or ep == 'pointages_mobiles') }}
+        {{ nav_lien("/jours-feries", "party-popper", "Jours fériés" if nav_fr else "Holidays", ep == 'jours_feries_page') }}
+        {{ nav_lien("/sites", "building-2", T.nav.sites, ep in ['sites', 'site_detail']) }}
+        {{ nav_lien("/journaliers", "users-round", T.nav.journaliers, 'journalier' in ep and 'journaliers_paie' not in ep) }}
+        {{ nav_lien("/journaliers/paie", "coins", "Paie journaliers" if nav_fr else "Daily pay", 'journaliers_paie' in ep) }}
       {% endcall %}
 
-      {% call nav_groupe("tiers", "🤝", "Tiers" if nav_fr else "Third parties") %}
-        {{ nav_lien("/prestataires", "🧰", "Prestataires" if nav_fr else "Contractors", 'prestataire' in ep) }}
-        {{ nav_lien("/mise-a-disposition", "🤝", "Mise à disposition" if nav_fr else "Staffing", 'mad_' in ep) }}
+      {% call nav_groupe("tiers", "handshake", "Tiers" if nav_fr else "Third parties") %}
+        {{ nav_lien("/prestataires", "briefcase", "Prestataires" if nav_fr else "Contractors", 'prestataire' in ep) }}
+        {{ nav_lien("/mise-a-disposition", "users-round", "Mise à disposition" if nav_fr else "Staffing", 'mad_' in ep) }}
       {% endcall %}
 
-      {% call nav_groupe("pilotage", "📈", "Pilotage et déclarations" if nav_fr else "Reporting & filings") %}
-        {{ nav_lien("/indicateurs-rh", "📈", "Indicateurs RH" if nav_fr else "HR indicators", 'indicateurs' in ep) }}
-        {{ nav_lien("/budget-masse-salariale", "🎯", "Budget masse salariale" if nav_fr else "Payroll budget", 'budget' in ep) }}
-        {{ nav_lien("/rapports/mensuel-site", "📊", T.nav.rapports, 'rapport' in ep) }}
-        {{ nav_lien("/declaration-cnss", "🏛️", "Décl. CNSS" if nav_fr else "CNSS Decl.", ep == 'declaration_cnss') }}
+      {% call nav_groupe("pilotage", "chart-line", "Pilotage et déclarations" if nav_fr else "Reporting & filings") %}
+        {{ nav_lien("/indicateurs-rh", "chart-pie", "Indicateurs RH" if nav_fr else "HR indicators", 'indicateurs' in ep) }}
+        {{ nav_lien("/budget-masse-salariale", "target", "Budget masse salariale" if nav_fr else "Payroll budget", 'budget' in ep) }}
+        {{ nav_lien("/rapports/mensuel-site", "chart-no-axes-column", T.nav.rapports, 'rapport' in ep) }}
+        {{ nav_lien("/declaration-cnss", "file-check", "Décl. CNSS" if nav_fr else "CNSS Decl.", ep == 'declaration_cnss') }}
         {% if tenant and tenant.plan and tenant.plan.code in ['CABINET', 'CABINET_COMPTABLE'] %}
-        {{ nav_lien("/declaration-das", "🗂️", "Décl. annuelle (DAS)" if nav_fr else "Annual Decl. (DAS)", ep == 'declaration_das') }}
+        {{ nav_lien("/declaration-das", "folder-archive", "Décl. annuelle (DAS)" if nav_fr else "Annual Decl. (DAS)", ep == 'declaration_das') }}
         {% endif %}
       {% endcall %}
 
-      {% call nav_groupe("compte", "⚙️", "Compte et administration" if nav_fr else "Account & admin") %}
+      {% call nav_groupe("compte", "building", "Compte et administration" if nav_fr else "Account & admin") %}
         {% if current_user.is_tenant_admin %}
-        {{ nav_lien("/utilisateurs", "🔐", "Utilisateurs" if nav_fr else "Users", 'utilisateur' in ep) }}
-        {{ nav_lien("/audit", "🔍", "Journal d'audit" if nav_fr else "Audit log", ep == 'audit_trail') }}
+        {{ nav_lien("/utilisateurs", "key-round", "Utilisateurs" if nav_fr else "Users", 'utilisateur' in ep) }}
+        {{ nav_lien("/audit", "scan-search", "Journal d'audit" if nav_fr else "Audit log", ep == 'audit_trail') }}
         {% endif %}
         {% if current_user.has_permission('view_bulletins') or current_user.is_tenant_admin %}
         {% if current_user.is_tenant_admin %}
-        {% call nav_lien("/messages", "💬", "Support", ep == 'messages_support') %}{% if messages_non_lus and messages_non_lus > 0 %}<span style="margin-left:auto;background:#dc2626;color:white;font-size:.65rem;font-weight:800;padding:.1rem .45rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}{% endcall %}
+        {% call nav_lien("/messages", "message-circle", "Support", ep == 'messages_support') %}{% if messages_non_lus and messages_non_lus > 0 %}<span class="nav-badge">{{ messages_non_lus }}</span>{% endif %}{% endcall %}
         {% endif %}
-        {{ nav_lien("/offres", "🏷️", "Nos offres" if nav_fr else "Plans", ep == 'offres') }}
-        {{ nav_lien("/paiement", "💳", "Abonnement" if nav_fr else "Subscription", ep == 'paiement') }}
+        {{ nav_lien("/offres", "tag", "Nos offres" if nav_fr else "Plans", ep == 'offres') }}
+        {{ nav_lien("/paiement", "credit-card", "Abonnement" if nav_fr else "Subscription", ep == 'paiement') }}
         {% endif %}
-        {{ nav_lien("/parametres", "⚙️", T.nav.parametres, ep == 'parametres') }}
+        {{ nav_lien("/parametres", "settings", T.nav.parametres, ep == 'parametres') }}
       {% endcall %}
 
       <!-- Sélecteur de langue -->
@@ -329,7 +312,7 @@
     <!-- Utilisateur connecté -->
     <div class="px-4 py-4 border-t border-white/10">
       <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center text-sm font-black flex-shrink-0">
+        <div class="w-9 h-9 rounded-full flex items-center justify-center text-sm font-black flex-shrink-0" style="background:rgba(226,176,74,.18);color:#f3d38a;border:1px solid rgba(226,176,74,.35)">
           {{ current_user.prenom[0] }}{{ current_user.nom[0] }}
         </div>
         <div class="flex-1 min-w-0">
@@ -345,14 +328,12 @@
             </span>
           </div>
         </div>
-        <button onclick="toggleDarkMode()" id="btn-dark"
-        title="Basculer mode sombre"
-        style="background:rgba(255,255,255,.1);border:none;color:white;width:32px;height:32px;border-radius:.5rem;cursor:pointer;font-size:1rem;flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:.15s"
-        onmouseover="this.style.background='rgba(255,255,255,.2)'"
-        onmouseout="this.style.background='rgba(255,255,255,.1)'">
-        <span id="icon-dark">🌙</span>
-      </button>
-      <a href="/logout" title="Déconnexion" class="text-white/40 hover:text-white text-lg">⏏</a>
+        <button onclick="toggleDarkMode()" id="btn-dark" title="Passer en mode sombre" aria-label="Basculer le mode sombre"
+          style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);color:rgba(255,255,255,.85);width:36px;height:36px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center">
+          <span id="ico-lune">{{ icone("moon", 17) }}</span><span id="ico-soleil" hidden>{{ icone("sun", 17) }}</span>
+        </button>
+        <a href="/logout" title="Déconnexion" aria-label="Déconnexion"
+          style="color:rgba(255,255,255,.55);width:36px;height:36px;display:flex;align-items:center;justify-content:center;border-radius:10px">{{ icone("log-out", 17) }}</a>
       </div>
       <div style="margin-top:.5rem;text-align:center;font-size:.6rem;color:rgba(255,255,255,.35);letter-spacing:.03em">
         version {{ app_version }}
@@ -362,8 +343,8 @@
     <!-- Bouton Installer PWA (caché par défaut, affiché si installable) -->
     <div id="btn-install-app"
       onclick="installApp()"
-      style="display:none;margin:.5rem .75rem;background:linear-gradient(135deg,#6d28d9,#4c1d95);border-radius:.875rem;padding:.625rem .875rem;cursor:pointer;align-items:center;gap:.625rem">
-      <span style="font-size:1rem">📱</span>
+      style="display:none;margin:.5rem .75rem;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);border-radius:.875rem;padding:.625rem .875rem;cursor:pointer;align-items:center;gap:.625rem">
+      <span style="color:#fff">{{ icone("smartphone", 18) }}</span>
       <div>
         <div style="font-size:.75rem;font-weight:700;color:white">Installer l'application</div>
         <div style="font-size:.65rem;color:rgba(255,255,255,.6)">Accès rapide sur votre téléphone</div>
@@ -373,7 +354,7 @@
     <!-- Bandeau essai -->
     {% if tenant and tenant.statut == 'ESSAI' %}
     <div class="mx-3 mb-3 bg-amber-500/20 border border-amber-500/30 rounded-xl p-3 text-xs text-amber-300 text-center font-semibold">
-      ⏳ Période d'essai gratuite
+      Période d'essai gratuite
     </div>
     {% endif %}
   </aside>
@@ -383,11 +364,9 @@
 
     <!-- ── Barre de navigation horizontale (complément de la sidebar) ──────── -->
     <header id="topbar" class="sticky top-0 z-10 flex items-center gap-3 px-5 py-3"
-      style="background:rgba(246,246,243,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)">
+      style="backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)">
       <!-- Bouton menu (replier / déplier la sidebar) -->
-      <button onclick="toggleSidebar()" id="btn-burger"
-        aria-label="Afficher ou masquer le menu"
-        style="background:var(--bg-card);border:1px solid var(--border);border-radius:.625rem;padding:.4rem .65rem;cursor:pointer;font-size:1.05rem;color:var(--text-main);line-height:1">☰</button>
+      <button onclick="toggleSidebar()" id="btn-burger" class="icone-btn encadre" aria-label="Afficher ou masquer le menu">{{ icone("menu", 19) }}</button>
 
       <!-- Liens rapides horizontaux : affichés uniquement quand la sidebar est repliée -->
       <nav id="topnav" class="hidden items-center gap-1">
@@ -399,23 +378,20 @@
       </nav>
 
       <div class="flex items-center gap-2 ml-auto">
-        <a href="/notifications" aria-label="Notifications" id="notif-bell"
-          style="position:relative;color:var(--text-sub);font-size:1.15rem;padding:.3rem .5rem;text-decoration:none">
-          🔔
+        <a href="/notifications" aria-label="Notifications" id="notif-bell" class="icone-btn">
+          {{ icone("bell", 19) }}
           <span id="notif-badge"
             style="display:none;position:absolute;top:0;right:0;min-width:16px;height:16px;
             background:#dc2626;color:white;font-size:.6rem;font-weight:700;border-radius:9999px;
             display:none;align-items:center;justify-content:center;padding:0 4px;line-height:1"></span>
         </a>
-        <a href="/parametres" aria-label="Paramètres"
-          style="color:var(--text-sub);font-size:1.1rem;padding:.3rem .5rem;text-decoration:none">⚙</a>
-        <a href="/logout"
-          class="text-xs font-bold px-3 py-1.5 rounded-lg"
-          style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-main);text-decoration:none">Déconnexion</a>
+        <a href="/parametres" aria-label="Paramètres" class="icone-btn">{{ icone("settings", 19) }}</a>
+        <span class="avatar" title="{{ current_user.nom_complet }}" aria-hidden="true">{{ current_user.prenom[0] }}{{ current_user.nom[0] }}</span>
+        <a href="/logout" class="btn-secondary" style="min-height:36px;padding:.35rem .8rem;font-size:.8rem">{{ icone("log-out", 15) }}<span>Déconnexion</span></a>
       </div>
     </header>
 
-    <div class="p-8">
+    <div class="p-6 xl:p-8" style="max-width:1600px">
     {% if current_user.tenant and current_user.tenant.est_cabinet and session.get('cabinet_entreprise_id') and tenant %}
     <div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:.9rem;padding:.85rem 1.25rem;margin-bottom:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
       <div style="display:flex;align-items:center;gap:.75rem;color:white">
@@ -429,11 +405,10 @@
       {% if messages %}
       <div class="mb-6 space-y-2">
         {% for cat, msg in messages %}
-        <div class="px-4 py-3 rounded-xl text-sm font-semibold
-          {{ 'bg-emerald-50 text-emerald-800 border border-emerald-200' if cat=='success'
-          else 'bg-red-50 text-red-800 border border-red-200' if cat=='error'
-          else 'bg-amber-50 text-amber-800 border border-amber-200' }}">
-          {{ msg }}
+        <div class="alerte alerte-{{ cat if cat in ['success', 'error', 'warning', 'info'] else 'info' }}" role="{{ 'alert' if cat == 'error' else 'status' }}">
+          {{ icone('circle-check' if cat == 'success' else 'triangle-alert' if cat in ['error', 'warning'] else 'info', 18) }}
+          <span style="flex:1">{{ msg }}</span>
+          <button type="button" class="alerte-fermer" aria-label="Fermer le message" onclick="this.parentElement.remove()">{{ icone("x", 16) }}</button>
         </div>
         {% endfor %}
       </div>
@@ -586,8 +561,8 @@ function toggleDarkMode() {
 }
 
 function updateDarkIcon(isDark) {
-  const icon = document.getElementById('icon-dark');
-  if (icon) icon.textContent = isDark ? '☀️' : '🌙';
+  const lune = document.getElementById('ico-lune'), soleil = document.getElementById('ico-soleil');
+  if (lune && soleil) { lune.hidden = isDark; soleil.hidden = !isDark; }
   const btn = document.getElementById('btn-dark');
   if (btn) btn.title = isDark ? 'Passer en mode clair' : 'Passer en mode sombre';
 }
