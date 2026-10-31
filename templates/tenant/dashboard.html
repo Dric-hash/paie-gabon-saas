@@ -1,69 +1,61 @@
 {% extends "tenant/base.html" %}
+{% from "tenant/_icones.html" import icone %}
 {% block title %}Tableau de bord — {{ tenant.denomination }}{% endblock %}
 {% block content %}
+{% set brut = masse.get('total_brut', 0) if masse else 0 %}
+{% set net = masse.get('total_net', 0) if masse else 0 %}
+{% set charges = masse.get('total_charges_pat', 0) if masse else 0 %}
+{% set cout = brut + charges %}
 
 {% if not current_user.email_verifie %}
-<div class="mb-5 flex items-center justify-between flex-wrap gap-2 px-5 py-3 rounded-2xl"
-  style="background:var(--accent-soft);border:1px solid #ecd9b0">
-  <div class="flex items-center gap-2.5">
-    <span style="font-size:1.1rem">✉</span>
-    <span class="text-sm font-bold" style="color:#7a5410">Confirmez votre email pour sécuriser votre compte.</span>
-  </div>
-  <a href="/renvoyer-confirmation" class="text-xs font-bold px-3.5 py-1.5 rounded-xl text-white" style="background:var(--accent)">
-    Renvoyer l'email
-  </a>
+<div class="alerte alerte-warning mb-5" role="status">
+  {{ icone("info", 18) }}
+  <span style="flex:1">Confirmez votre adresse e-mail pour sécuriser votre compte.</span>
+  <a href="/renvoyer-confirmation" class="btn-secondary" style="min-height:32px;padding:.25rem .75rem;font-size:.78rem">Renvoyer l'e-mail</a>
 </div>
 {% endif %}
 
-<div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+<div class="tb-entete">
   <div>
-    <h1 class="display text-2xl font-extrabold">Tableau de bord</h1>
-    <p class="text-sm mt-0.5" style="color:var(--text-sub)">
-      {{ now.strftime('%d/%m/%Y') }} — {{ tenant.denomination }}
-    </p>
+    <h1>Tableau de bord</h1>
+    <div class="date">{{ now.strftime('%d/%m/%Y') }} · {{ tenant.denomination }}{% if periode %} · période {{ periode.libelle_complet }}{% endif %}</div>
   </div>
-  <div class="flex gap-2 items-center">
-    <button onclick="viderCache()" id="btn-cache" title="Rafraîchir les données"
-      class="text-xs font-semibold px-3 py-2 rounded-xl"
-      style="background:var(--bg-card);border:1px solid var(--border);color:var(--text-sub);cursor:pointer">↻ Rafraîchir</button>
-    <a href="/bulletins/saisie" class="btn-primary">+ Nouveau bulletin</a>
-    <a href="/salaries/nouveau" class="btn-secondary">+ Salarié</a>
+  <div class="tb-actions">
+    <button onclick="viderCache()" id="btn-cache" class="btn-ghost" title="Rafraîchir les données">{{ icone("refresh-cw", 16) }}<span>Rafraîchir</span></button>
+    <a href="/salaries/nouveau" class="btn-secondary">{{ icone("plus", 16) }}<span>Salarié</span></a>
+    <a href="/bulletins/saisie" class="btn-primary">{{ icone("plus", 16) }}<span>Nouveau bulletin</span></a>
   </div>
 </div>
 
 {% if not accueil_termine %}
 <!-- ── Parcours d'accueil (nouveaux clients) ── -->
-<div style="background:linear-gradient(135deg,#0f3d36,#17564c);border-radius:1.25rem;padding:1.5rem;margin-bottom:1.5rem;color:white">
-  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.25rem">
+<div class="card mb-5" style="background:linear-gradient(135deg,#0f3d36,#17564c);border-color:#17564c;padding:1.4rem;color:white">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:1rem;margin-bottom:1.1rem">
     <div>
-      <div style="display:inline-block;background:#e9c46a;color:#0f3d36;font-size:.65rem;font-weight:800;padding:.2rem .7rem;border-radius:9999px;margin-bottom:.5rem">PREMIERS PAS</div>
-      <h2 style="font-size:1.25rem;font-weight:900;margin:0">Bienvenue sur PaieGabon 👋</h2>
+      <div style="display:inline-block;background:#e2b04a;color:#0f3d36;font-size:.66rem;font-weight:800;padding:.2rem .7rem;border-radius:9999px;margin-bottom:.5rem;letter-spacing:.04em">PREMIERS PAS</div>
+      <h2 style="font-size:1.2rem;font-weight:800;margin:0;color:white">Bienvenue sur PaieGabon</h2>
       <p style="font-size:.88rem;opacity:.85;margin-top:.25rem">Quelques étapes pour préparer votre première paie. On vous guide.</p>
     </div>
     <div style="text-align:center">
-      <div style="font-size:1.75rem;font-weight:900;color:#e9c46a">{{ nb_faites }}/{{ etapes_accueil|length }}</div>
-      <div style="font-size:.7rem;opacity:.7">étapes faites</div>
+      <div style="font-size:1.7rem;font-weight:800;color:#e2b04a;font-variant-numeric:tabular-nums">{{ nb_faites }}/{{ etapes_accueil|length }}</div>
+      <div style="font-size:.72rem;opacity:.75">étapes faites</div>
     </div>
   </div>
-
-  <!-- Barre de progression -->
-  <div style="background:rgba(255,255,255,.15);border-radius:9999px;height:8px;overflow:hidden;margin-bottom:1.25rem">
-    <div style="background:#e9c46a;height:100%;border-radius:9999px;width:{{ (nb_faites / etapes_accueil|length * 100)|round|int }}%;transition:width .3s"></div>
+  <div style="background:rgba(255,255,255,.15);border-radius:9999px;height:8px;overflow:hidden;margin-bottom:1.1rem" role="progressbar" aria-valuemin="0" aria-valuemax="{{ etapes_accueil|length }}" aria-valuenow="{{ nb_faites }}">
+    <div style="background:#e2b04a;height:100%;border-radius:9999px;width:{{ (nb_faites / etapes_accueil|length * 100)|round|int }}%"></div>
   </div>
-
-  <!-- Étapes -->
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:.75rem">
     {% for etape in etapes_accueil %}
-    <div style="background:rgba(255,255,255,{{ '.06' if etape.faite else '.12' }});border:1px solid rgba(255,255,255,{{ '.1' if etape.faite else '.2' }});border-radius:.85rem;padding:1rem;display:flex;flex-direction:column">
+    <div style="background:rgba(255,255,255,{{ '.06' if etape.faite else '.12' }});border:1px solid rgba(255,255,255,{{ '.1' if etape.faite else '.2' }});border-radius:12px;padding:1rem;display:flex;flex-direction:column">
       <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
-        <span style="width:22px;height:22px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;{% if etape.faite %}background:#e9c46a;color:#0f3d36{% else %}background:rgba(255,255,255,.2);color:white{% endif %}">{{ '✓' if etape.faite else loop.index }}</span>
-        <span style="font-size:.85rem;font-weight:700;{{ 'opacity:.6;text-decoration:line-through' if etape.faite else '' }}">{{ etape.titre }}</span>
+        <span style="width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:800;flex-shrink:0;{% if etape.faite %}background:#e2b04a;color:#0f3d36{% else %}background:rgba(255,255,255,.2);color:white{% endif %}">{% if etape.faite %}{{ icone("circle-check", 14) }}{% else %}{{ loop.index }}{% endif %}</span>
+        <span style="font-size:.86rem;font-weight:700;{{ 'opacity:.6;text-decoration:line-through' if etape.faite else '' }}">{{ etape.titre }}</span>
       </div>
-      <p style="font-size:.72rem;opacity:.7;margin:0 0 .75rem;line-height:1.4;flex:1">{{ etape.desc }}</p>
+      <p style="font-size:.76rem;opacity:.78;margin:0 0 .75rem;line-height:1.45;flex:1">{{ etape.desc }}</p>
       {% if not etape.faite %}
-      <a href="{{ etape.lien }}" style="display:block;text-align:center;background:#e9c46a;color:#0f3d36;padding:.5rem;border-radius:.6rem;font-weight:700;font-size:.78rem;text-decoration:none">{{ etape.cta }} →</a>
+      <a href="{{ etape.lien }}" style="display:flex;align-items:center;justify-content:center;gap:.3rem;min-height:38px;background:#e2b04a;color:#0f3d36;border-radius:10px;font-weight:700;font-size:.8rem;text-decoration:none">{{ etape.cta }} {{ icone("chevron-right", 14) }}</a>
       {% else %}
-      <div style="text-align:center;font-size:.72rem;opacity:.6;padding:.5rem">Terminé</div>
+      <div style="text-align:center;font-size:.75rem;opacity:.65;padding:.5rem">Terminé</div>
       {% endif %}
     </div>
     {% endfor %}
@@ -71,235 +63,167 @@
 </div>
 {% endif %}
 
-<!-- ── Barre de recherche rapide (avec suggestions) ── -->
-<div class="mb-6" style="position:relative;max-width:560px">
-  <span style="position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:var(--text-muted);pointer-events:none;font-size:1.05rem">⌕</span>
-  <input type="text" id="dashSearch" autocomplete="off"
-    placeholder="Rechercher un salarié, un journalier, un prestataire…  (Ctrl+K)"
-    class="w-full text-sm rounded-xl outline-none"
-    style="background:var(--bg-card);border:1px solid var(--border);padding:.7rem 1rem .7rem 2.5rem;color:var(--text-main)"/>
-  <div id="dashSearchResults"
-    style="display:none;position:absolute;top:calc(100% + .35rem);left:0;right:0;z-index:30;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 28px rgba(28,43,42,.14);max-height:340px;overflow-y:auto"></div>
+<!-- ── Recherche rapide ── -->
+<div class="mb-5" style="display:flex">
+  <div class="recherche-tb">
+    {{ icone("search", 17) }}
+    <label for="dashSearch" class="sr-only">Rechercher</label>
+    <input type="text" id="dashSearch" autocomplete="off" placeholder="Rechercher un salarié, un journalier, un prestataire…"/>
+    <kbd>Ctrl K</kbd>
+    <div id="dashSearchResults"
+      style="display:none;position:absolute;top:calc(100% + .35rem);left:0;right:0;z-index:30;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-pop);max-height:340px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- ── Chiffres clés ── -->
+<div class="kpis">
+  <div class="card kpi">
+    <div class="kpi-tete"><span class="kpi-lib">Effectif</span><span class="kpi-ico">{{ icone("users", 18) }}</span></div>
+    <div class="kpi-val">{{ nb_total_employes }}</div>
+    <div class="kpi-sous">{{ nb_actifs }} mensuel(s) · {{ nb_journaliers }} journalier(s)</div>
+  </div>
+  <div class="card kpi">
+    <div class="kpi-tete"><span class="kpi-lib">Bulletins du mois</span><span class="kpi-ico">{{ icone("files", 18) }}</span></div>
+    <div class="kpi-val">{{ nb_valides }}<small>validé(s)</small></div>
+    <div class="kpi-sous">
+      {% if nb_brouillon > 0 %}<span style="color:var(--warn);font-weight:700">{{ nb_brouillon }} brouillon(s) à valider</span>{% else %}Aucun brouillon en attente{% endif %} · {{ nb_payes }} payé(s)
+    </div>
+  </div>
+  <div class="card kpi">
+    <div class="kpi-tete"><span class="kpi-lib">Net à payer</span><span class="kpi-ico or">{{ icone("banknote", 18) }}</span></div>
+    <div class="kpi-val">{{ net|int|fcfa }}</div>
+    <div class="kpi-sous">{{ periode.libelle_complet if periode else 'Aucune période ouverte' }}</div>
+  </div>
+  <div class="card kpi vedette">
+    <div class="kpi-tete"><span class="kpi-lib">Coût employeur</span><span class="kpi-ico">{{ icone("wallet", 18) }}</span></div>
+    <div class="kpi-val">{{ cout|int|fcfa }}</div>
+    <div class="kpi-sous">Brut {{ brut|int|fcfa }} + charges {{ charges|int|fcfa }}</div>
+  </div>
 </div>
 
 {% if alertes %}
-<div class="card p-5 mb-6">
-  <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-    <div class="flex items-center gap-2">
-      <h3 class="display font-bold text-base">À traiter</h3>
-      {% if nb_alertes_critiques > 0 %}
-      <span style="background:#fdecec;color:#991b1b;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px">{{ nb_alertes_critiques }} critique(s)</span>
-      {% endif %}
-      {% if nb_alertes_warning > 0 %}
-      <span style="background:var(--accent-soft);color:#7a5410;font-size:.7rem;font-weight:700;padding:.15rem .55rem;border-radius:9999px">{{ nb_alertes_warning }} à surveiller</span>
-      {% endif %}
+<!-- ── À traiter ── -->
+<section class="card mb-5" style="padding:1.1rem 1.2rem" aria-labelledby="titre-alertes">
+  <div class="card-titre">
+    <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+      <h2 id="titre-alertes">À traiter</h2>
+      {% if nb_alertes_critiques > 0 %}<span class="badge-inactif">{{ nb_alertes_critiques }} critique(s)</span>{% endif %}
+      {% if nb_alertes_warning > 0 %}<span class="badge-brouillon">{{ nb_alertes_warning }} à surveiller</span>{% endif %}
     </div>
-    <button onclick="toggleAlertes()" id="btn-toggle-alertes"
-      class="text-xs font-semibold" style="color:var(--text-sub);background:none;border:none;cursor:pointer">▼ Replier</button>
+    <button onclick="toggleAlertes()" id="btn-toggle-alertes" class="btn-ghost" aria-expanded="true" aria-controls="bloc-alertes" style="min-height:32px;font-size:.78rem">Replier</button>
   </div>
-  <div id="bloc-alertes" class="flex flex-col gap-2">
+  <div id="bloc-alertes">
     {% for a in alertes %}
-    <div class="flex items-start justify-between gap-3 px-4 py-3 rounded-xl"
-      style="{% if a.type == 'danger' %}background:#fdf3f3;border:1px solid #f3c4c4
-             {% elif a.type == 'warning' %}background:var(--accent-soft);border:1px solid #ecd9b0
-             {% else %}background:#f4f6f5;border:1px solid var(--border){% endif %}">
-      <div class="flex items-start gap-2.5 flex-1 min-w-0">
-        <span style="font-size:1rem;flex-shrink:0;margin-top:.05rem;
-          {% if a.type == 'danger' %}color:#dc2626{% elif a.type == 'warning' %}color:var(--accent){% else %}color:var(--text-sub){% endif %}">
-          {% if a.type == 'danger' %}▲{% elif a.type == 'warning' %}▲{% else %}●{% endif %}
-        </span>
-        <div>
-          <div class="text-sm font-bold" style="{% if a.type == 'danger' %}color:#991b1b{% elif a.type == 'warning' %}color:#7a5410{% else %}color:var(--text-main){% endif %}">{{ a.titre }}</div>
-          <div class="text-xs mt-0.5" style="{% if a.type == 'danger' %}color:#b91c1c{% elif a.type == 'warning' %}color:#9a7635{% else %}color:var(--text-sub){% endif %}">{{ a.msg }}</div>
-        </div>
+    <div class="alerte-tb {{ a.type if a.type in ['danger', 'warning'] else 'info' }}">
+      <span class="puce">{{ icone('triangle-alert' if a.type in ['danger', 'warning'] else 'info', 16) }}</span>
+      <div style="min-width:0">
+        <div class="titre">{{ a.titre }}</div>
+        <div class="msg">{{ a.msg }}</div>
       </div>
-      {% if a.lien %}
-      <a href="{{ a.lien }}" class="text-xs font-bold whitespace-nowrap" style="flex-shrink:0;
-        {% if a.type == 'danger' %}color:#dc2626{% elif a.type == 'warning' %}color:var(--accent){% else %}color:var(--brand){% endif %}">{{ a.lien_texte }} →</a>
-      {% endif %}
+      {% if a.lien %}<a href="{{ a.lien }}" class="lien">{{ a.lien_texte }} {{ icone("chevron-right", 14) }}</a>{% endif %}
     </div>
     {% endfor %}
   </div>
-</div>
+</section>
 {% endif %}
 
-<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-  <div class="card p-5">
-    <div style="font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Effectif total</div>
-    <div class="num mt-2" style="font-size:1.9rem;font-weight:800;line-height:1">{{ nb_total_employes }}</div>
-    <div class="text-xs mt-1.5" style="color:var(--text-sub)">{{ nb_actifs }} mensuels · {{ nb_journaliers }} journaliers</div>
-  </div>
-  <div class="card p-5">
-    <div style="font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Bulletins validés</div>
-    <div class="num mt-2" style="font-size:1.9rem;font-weight:800;line-height:1">{{ nb_valides }}</div>
-    <div class="text-xs mt-1.5" style="color:var(--text-sub)">{{ nb_payes }} payé(s) ce mois</div>
-  </div>
-  <div class="card p-5">
-    <div style="font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">En brouillon</div>
-    <div class="num mt-2" style="font-size:1.9rem;font-weight:800;line-height:1;color:{{ 'var(--accent)' if nb_brouillon > 0 else 'var(--text-main)' }}">{{ nb_brouillon }}</div>
-    <div class="text-xs mt-1.5" style="color:var(--text-sub)">à valider avant clôture</div>
-  </div>
-  <div class="card p-5">
-    <div style="font-size:.72rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">Masse nette</div>
-    <div class="num mt-2" style="font-size:1.3rem;font-weight:800;line-height:1.1">{{ masse.get('total_net',0)|int|fcfa }}</div>
-    <div class="text-xs mt-1.5" style="color:var(--text-sub)">{{ periode.libelle_complet if periode else 'ce mois' }}</div>
-  </div>
-</div>
-
-{% if periode and masse %}
-<div class="card p-5 mb-6">
-  <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-    <h3 class="display font-bold text-base">Résumé masse salariale — {{ periode.libelle_complet }}</h3>
-    <div class="flex gap-2">
-      <span class="badge-validé">{{ nb_valides }} validé(s)</span>
-      {% if nb_brouillon > 0 %}<span class="badge-brouillon">{{ nb_brouillon }} brouillon(s)</span>{% endif %}
-    </div>
-  </div>
-  <div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr))">
-    <div class="rounded-xl p-4" style="background:var(--bg-page)">
-      <div class="text-xs mb-1" style="color:var(--text-sub)">Masse brute</div>
-      <div class="num" style="font-size:1.2rem;font-weight:700">{{ masse.get('total_brut',0)|int|fcfa }}</div>
-    </div>
-    <div class="rounded-xl p-4" style="background:var(--bg-page)">
-      <div class="text-xs mb-1" style="color:var(--text-sub)">Net à payer</div>
-      <div class="num" style="font-size:1.2rem;font-weight:700;color:var(--brand)">{{ masse.get('total_net',0)|int|fcfa }}</div>
-    </div>
-    <div class="rounded-xl p-4" style="background:var(--bg-page)">
-      <div class="text-xs mb-1" style="color:var(--text-sub)">Charges patronales</div>
-      <div class="num" style="font-size:1.2rem;font-weight:700;color:#a3622f">{{ masse.get('total_charges_pat',0)|int|fcfa }}</div>
-    </div>
-    <div class="rounded-xl p-4" style="background:var(--brand)">
-      <div class="text-xs mb-1" style="color:rgba(255,255,255,.6)">Coût total employeur</div>
-      <div class="num" style="font-size:1.2rem;font-weight:700;color:white">{{ (masse.get('total_brut',0) + masse.get('total_charges_pat',0))|int|fcfa }}</div>
-    </div>
-  </div>
-  {% set total = masse.get('total_brut',0) + masse.get('total_charges_pat',0) %}
-  {% if total > 0 %}
-  {% set pct_net = (masse.get('total_net',0) / total * 100) | round(1) %}
-  {% set pct_ret = ((masse.get('total_brut',0) - masse.get('total_net',0)) / total * 100) | round(1) %}
-  {% set pct_charges = (masse.get('total_charges_pat',0) / total * 100) | round(1) %}
-  <div>
-    <div class="text-xs mb-1.5" style="color:var(--text-sub)">Décomposition du coût employeur</div>
-    <div class="flex gap-0.5" style="height:10px;border-radius:9999px;overflow:hidden">
-      <div style="width:{{ pct_net }}%;background:var(--brand);border-radius:9999px 0 0 9999px" title="Net {{ pct_net }}%"></div>
-      <div style="width:{{ pct_ret }}%;background:var(--accent)" title="Retenues {{ pct_ret }}%"></div>
-      <div style="width:{{ pct_charges }}%;background:#c08552;border-radius:0 9999px 9999px 0" title="Charges {{ pct_charges }}%"></div>
-    </div>
-    <div class="flex gap-4 mt-1.5" style="font-size:.68rem;color:var(--text-sub)">
-      <span><span style="display:inline-block;width:8px;height:8px;background:var(--brand);border-radius:50%;margin-right:3px"></span>Net {{ pct_net }}%</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:var(--accent);border-radius:50%;margin-right:3px"></span>Retenues sal. {{ pct_ret }}%</span>
-      <span><span style="display:inline-block;width:8px;height:8px;background:#c08552;border-radius:50%;margin-right:3px"></span>Charges pat. {{ pct_charges }}%</span>
-    </div>
-  </div>
-  {% endif %}
-</div>
-{% endif %}
-
-<div class="grid gap-4 mb-6" style="grid-template-columns:2fr 1fr">
-  <div class="card p-5">
-    <div class="flex justify-between items-center mb-4">
-      <h3 class="display font-bold text-base">Évolution masse salariale</h3>
-      <div class="flex gap-2">
-        <button onclick="toggleChart('bar')" id="btn-bar"
-          class="text-xs font-bold px-2.5 py-1 rounded-md" style="border:1px solid var(--border);cursor:pointer;background:var(--brand);color:white">Barres</button>
-        <button onclick="toggleChart('line')" id="btn-line"
-          class="text-xs font-bold px-2.5 py-1 rounded-md" style="border:1px solid var(--border);cursor:pointer;background:var(--bg-card);color:var(--text-sub)">Courbe</button>
+<!-- ── Évolution et décomposition du coût ── -->
+<div class="tb-grille">
+  <section class="card" style="padding:1.1rem 1.2rem" aria-labelledby="titre-evo">
+    <div class="card-titre">
+      <div><h2 id="titre-evo">Évolution de la masse salariale</h2><div class="sous">Brut, net et charges patronales des derniers mois</div></div>
+      <div class="segment" role="group" aria-label="Type de graphique">
+        <button type="button" onclick="toggleChart('bar')" id="btn-bar" aria-pressed="true">Barres</button>
+        <button type="button" onclick="toggleChart('line')" id="btn-line" aria-pressed="false">Courbe</button>
       </div>
     </div>
-    <canvas id="chartEvolution" height="120"></canvas>
-  </div>
-  <div class="card p-5">
-    <h3 class="display font-bold text-base mb-4">Répartition employés</h3>
-    {% if cats_stats %}
-    <canvas id="chartCategories" height="160"></canvas>
+    <div style="position:relative;height:280px"><canvas id="chartEvolution" aria-label="Évolution mensuelle du brut, du net et des charges patronales" role="img"></canvas></div>
+  </section>
+
+  <section class="card" style="padding:1.1rem 1.2rem;display:flex;flex-direction:column" aria-labelledby="titre-cout">
+    <div class="card-titre"><div><h2 id="titre-cout">Décomposition du coût</h2><div class="sous">{{ periode.libelle_complet if periode else 'Aucune période ouverte' }}</div></div></div>
+    {% if cout > 0 %}
+    {% set p_net = net / cout * 100 %}{% set p_ret = (brut - net) / cout * 100 %}{% set p_ch = charges / cout * 100 %}
+    <div class="decompo" role="img" aria-label="Net {{ '%.1f'|format(p_net) }} %, retenues {{ '%.1f'|format(p_ret) }} %, charges {{ '%.1f'|format(p_ch) }} %">
+      <span style="width:{{ p_net }}%;background:var(--serie-1)"></span><span style="width:{{ p_ret }}%;background:#e2b04a"></span><span style="width:{{ p_ch }}%;background:#c08552"></span>
+    </div>
+    <div class="legende">
+      <div class="legende-ligne"><span class="pastille" style="background:var(--serie-1)"></span>Net versé<span class="val">{{ net|int|fcfa }}</span><span class="pct">{{ '%.1f'|format(p_net)|replace('.', ',') }} %</span></div>
+      <div class="legende-ligne"><span class="pastille" style="background:#e2b04a"></span>Retenues salariales<span class="val">{{ (brut - net)|int|fcfa }}</span><span class="pct">{{ '%.1f'|format(p_ret)|replace('.', ',') }} %</span></div>
+      <div class="legende-ligne"><span class="pastille" style="background:#c08552"></span>Charges patronales<span class="val">{{ charges|int|fcfa }}</span><span class="pct">{{ '%.1f'|format(p_ch)|replace('.', ',') }} %</span></div>
+    </div>
     {% else %}
-    <div class="text-center py-8 text-sm" style="color:var(--text-muted)">Aucune catégorie définie</div>
+    <div class="vide" style="flex:1">Aucun bulletin pour cette période.</div>
     {% endif %}
-  </div>
+    <div style="margin-top:auto;padding-top:1rem">
+      {% if periode %}<a href="/bulletins?periode_id={{ periode.id }}" class="btn-secondary" style="width:100%">{{ icone("files", 16) }}<span>Voir les bulletins de la période</span></a>
+      {% else %}<a href="/periodes" class="btn-primary" style="width:100%">{{ icone("plus", 16) }}<span>Ouvrir la période</span></a>{% endif %}
+    </div>
+  </section>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-  <div class="card p-5">
-    <h3 class="display font-bold text-base mb-3">Période courante</h3>
-    {% if periode %}
-    <div class="text-xl font-extrabold mb-2" style="color:var(--brand)">{{ periode.libelle_complet }}</div>
-    <div class="space-y-1.5 text-sm">
-      <div class="flex justify-between"><span style="color:var(--text-sub)">Brut total</span><span class="font-bold num">{{ masse.get('total_brut',0)|int|fcfa }}</span></div>
-      <div class="flex justify-between"><span style="color:var(--text-sub)">Net total</span><span class="font-bold num" style="color:var(--brand)">{{ masse.get('total_net',0)|int|fcfa }}</span></div>
-      <div class="flex justify-between"><span style="color:var(--text-sub)">Charges pat.</span><span class="font-bold num" style="color:#a3622f">{{ masse.get('total_charges_pat',0)|int|fcfa }}</span></div>
+<!-- ── Derniers bulletins et accès rapides ── -->
+<div class="tb-grille">
+  <section class="card" style="overflow:hidden" aria-labelledby="titre-derniers">
+    <div class="card-titre" style="padding:1.1rem 1.2rem 0;margin-bottom:.6rem">
+      <h2 id="titre-derniers">Derniers bulletins</h2>
+      <a href="/bulletins" class="btn-ghost" style="min-height:32px;font-size:.8rem;color:var(--brand)">Voir tous {{ icone("chevron-right", 14) }}</a>
     </div>
-    <a href="/bulletins?periode_id={{ periode.id }}" class="btn-primary w-full text-center mt-4">Voir les bulletins →</a>
-    {% else %}
-    <p class="text-sm" style="color:var(--text-muted)">Aucune période ouverte ce mois.</p>
-    <a href="/periodes" class="btn-primary w-full text-center mt-3">Créer la période →</a>
-    {% endif %}
-  </div>
+    <table class="liste-tb"><tbody>
+      {% set sc = {'VALIDÉ':'badge-validé','VALIDE':'badge-validé','PAYÉ':'badge-payé','PAYE':'badge-payé','BROUILLON':'badge-brouillon'} %}
+      {% for b in derniers %}
+      <tr>
+        <td><div style="font-weight:700">{{ b.salarie.nom_complet }}</div><div style="font-size:.78rem;color:var(--text-sub)">{{ b.periode.libelle_complet if b.periode else '—' }}</div></td>
+        <td style="text-align:center"><span class="{{ sc.get(b.statut, 'badge-clôturé') }}">{{ b.statut|capitalize }}</span></td>
+        <td style="text-align:right;font-weight:700">{{ b.net_a_payer|int|fcfa }}</td>
+      </tr>
+      {% else %}<tr><td colspan="3" class="vide">Aucun bulletin pour l'instant.</td></tr>{% endfor %}
+    </tbody></table>
+  </section>
 
-  <div class="card p-5">
-    <h3 class="display font-bold text-base mb-3">Accès rapides</h3>
-    <div class="grid grid-cols-2 gap-2">
-      {% for icon, label, href in [
-        ('▦','Bulletins','/bulletins'), ('◷','Pointage','/pointage'),
-        ('▤','Congés','/conges'), ('⊞','Journaliers','/journaliers')
-      ] %}
-      <a href="{{ href }}" class="flex flex-col items-center gap-1.5 py-3 rounded-xl text-xs font-semibold"
-        style="background:var(--bg-page);border:1px solid var(--border);color:var(--text-main);text-decoration:none">
-        <span style="font-size:1.1rem;color:var(--brand)">{{ icon }}</span>{{ label }}
-      </a>
+  <section class="card" style="padding:1.1rem 1.2rem" aria-labelledby="titre-acces">
+    <div class="card-titre"><h2 id="titre-acces">Accès rapides</h2></div>
+    <div class="raccourcis">
+      {% for ico, label, href in [
+        ('square-pen', 'Saisie bulletin', '/bulletins/saisie'), ('shield-check', 'Contrôle de la paie', '/paie/controle'),
+        ('timer', 'Pointage', '/pointage'), ('calendar-days', 'Congés', '/conges'),
+        ('landmark', 'Virements', '/virements'), ('chart-pie', 'Indicateurs RH', '/indicateurs-rh')] %}
+      <a href="{{ href }}" class="raccourci">{{ icone(ico, 18) }}<span>{{ label }}</span></a>
       {% endfor %}
     </div>
-  </div>
-
-  <div class="card p-5">
-    <h3 class="display font-bold text-base mb-3">Répartition salariés</h3>
-    {% if cats_stats %}
-    <div class="space-y-2">
-      {% for code, libelle, nb in cats_stats %}
-      <div>
-        <div class="flex justify-between text-sm mb-1">
-          <span class="font-medium" style="color:var(--text-sub)">{{ libelle }}</span>
-          <span class="font-bold num">{{ nb }}</span>
-        </div>
-        <div class="rounded-full h-2" style="background:var(--bg-page)">
-          <div class="h-2 rounded-full" style="width:{{ (nb / nb_actifs * 100)|int if nb_actifs else 0 }}%;background:var(--brand)"></div>
-        </div>
-      </div>{% endfor %}
-    </div>
-    {% else %}<p class="text-sm" style="color:var(--text-muted)">Aucune donnée.</p>{% endif %}
-  </div>
+  </section>
 </div>
 
-<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-  <div class="card overflow-hidden">
-    <div class="p-4" style="border-bottom:1px solid var(--border-light)"><h3 class="display font-bold text-base">Top 5 salariés (net)</h3></div>
-    <table class="w-full text-sm"><tbody>
-      {% for b in top_salaries %}
-      <tr style="border-bottom:1px solid var(--border-light)">
-        <td class="px-4 py-3"><div class="font-bold">{{ b.salarie.nom_complet }}</div><div class="text-xs" style="color:var(--text-muted)">{{ b.salarie.emploi or '—' }}</div></td>
-        <td class="px-4 py-3 text-right font-bold num" style="color:var(--brand)">{{ b.net_a_payer|int|fcfa }}</td>
-      </tr>
-      {% else %}<tr><td colspan="2" class="text-center py-6 text-sm" style="color:var(--text-muted)">Aucun bulletin ce mois</td></tr>{% endfor %}
-    </tbody></table>
-  </div>
-
-  <div class="card overflow-hidden">
-    <div class="flex items-center justify-between p-4" style="border-bottom:1px solid var(--border-light)">
-      <h3 class="display font-bold text-base">Derniers bulletins</h3>
-      <a href="/bulletins" class="text-xs font-bold" style="color:var(--brand)">Voir tous →</a>
+<!-- ── Répartition et plus hauts nets ── -->
+<div class="tb-grille-2">
+  <section class="card" style="padding:1.1rem 1.2rem" aria-labelledby="titre-rep">
+    <div class="card-titre"><h2 id="titre-rep">Salariés par catégorie</h2><span class="sous">{{ nb_actifs }} salarié(s)</span></div>
+    {% if cats_stats %}
+    {% set couleurs = ['var(--serie-1)', '#e2b04a', '#c08552', '#5a8a7d', '#9a7635', '#7a9b8e', '#c9a96a', '#3d5a52'] %}
+    <div class="legende" style="margin-top:0">
+      {% for code, libelle, nb in cats_stats %}
+      <div>
+        <div class="legende-ligne"><span class="pastille" style="background:{{ couleurs[loop.index0 % 8] }}"></span>{{ libelle }}<span class="val">{{ nb }}</span>
+          <span class="pct">{{ ('%.0f'|format(nb / nb_actifs * 100)) if nb_actifs else 0 }} %</span></div>
+        <div style="height:6px;border-radius:999px;background:var(--bg-card2);margin-top:.35rem;overflow:hidden">
+          <div style="height:100%;border-radius:999px;width:{{ (nb / nb_actifs * 100) if nb_actifs else 0 }}%;background:{{ couleurs[loop.index0 % 8] }}"></div></div>
+      </div>
+      {% endfor %}
     </div>
-    <table class="w-full text-sm"><tbody>
-      {% for b in derniers %}
-      <tr style="border-bottom:1px solid var(--border-light)">
-        <td class="px-4 py-3"><div class="font-bold">{{ b.salarie.nom_complet }}</div><div class="text-xs" style="color:var(--text-muted)">{{ b.periode.libelle_complet if b.periode else '—' }}</div></td>
-        <td class="px-4 py-3 text-center">
-          {% set sc = {'VALIDÉ':'badge-validé','VALIDE':'badge-validé','PAYÉ':'badge-payé','PAYE':'badge-payé','BROUILLON':'badge-brouillon'} %}
-          <span class="{{ sc.get(b.statut,'badge-clôturé') }}">{{ b.statut }}</span>
-        </td>
-        <td class="px-4 py-3 text-right font-bold num text-xs">{{ b.net_a_payer|int|fcfa }}</td>
+    {% else %}<div class="vide">Aucune catégorie définie. <a href="/parametres" style="color:var(--brand);font-weight:700">Configurer</a></div>{% endif %}
+  </section>
+
+  <section class="card" style="overflow:hidden" aria-labelledby="titre-top">
+    <div class="card-titre" style="padding:1.1rem 1.2rem 0;margin-bottom:.6rem"><h2 id="titre-top">Plus hauts nets du mois</h2></div>
+    <table class="liste-tb"><tbody>
+      {% for b in top_salaries %}
+      <tr>
+        <td><div style="font-weight:700">{{ b.salarie.nom_complet }}</div><div style="font-size:.78rem;color:var(--text-sub)">{{ b.salarie.emploi or '—' }}</div></td>
+        <td style="text-align:right;font-weight:700;color:var(--brand)">{{ b.net_a_payer|int|fcfa }}</td>
       </tr>
-      {% else %}<tr><td colspan="3" class="text-center py-6 text-sm" style="color:var(--text-muted)">Aucun bulletin</td></tr>{% endfor %}
+      {% else %}<tr><td colspan="2" class="vide">Aucun bulletin ce mois.</td></tr>{% endfor %}
     </tbody></table>
-  </div>
+  </section>
 </div>
 
 {% endblock %}
@@ -320,8 +244,7 @@
       return;
     }
     box.innerHTML = items.map(function(r) {
-      return '<a href="' + r.lien + '" style="display:flex;align-items:center;gap:.7rem;padding:.65rem 1rem;text-decoration:none;border-bottom:1px solid var(--border-light)">' +
-        '<span style="font-size:1.1rem">' + (r.icone || '•') + '</span>' +
+      return '<a href="' + r.lien + '" style="display:flex;align-items:center;gap:.7rem;padding:.65rem 1rem;min-height:44px;text-decoration:none;border-bottom:1px solid var(--border-light)">' +
         '<span style="flex:1;min-width:0">' +
           '<span style="display:block;font-weight:700;font-size:.85rem;color:var(--text-main)">' + r.titre + '</span>' +
           '<span style="display:block;font-size:.73rem;color:var(--text-sub)">' + (r.sous_titre || '') + '</span>' +
@@ -361,88 +284,66 @@
 })();
 </script>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script nonce="{{ csp_nonce }}">
 const evo = {{ evolution | tojson }};
 const cats = {{ cats_stats | tojson if cats_stats else '[]' }};
-const BRAND = '#0f3d36', ACCENT = '#b8862f', CLAY = '#c08552';
+const BRAND = '#0f3d36', OR = '#e2b04a', ARGILE = '#c08552';
+const sombre = () => document.documentElement.classList.contains('dark');
 let chartEvo = null;
 
 function buildEvoChart(type) {
   if (typeof Chart === 'undefined') return;  // Chart.js non chargé → on n'essaie pas
   if (chartEvo) chartEvo.destroy();
+  const grille = sombre() ? 'rgba(255,255,255,.08)' : 'rgba(16,32,29,.07)';
+  const texte = sombre() ? '#a8b3c4' : '#56625f';
+  const marque = sombre() ? '#2dd4bf' : BRAND;
+  const reduit = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const serie = (label, cle, couleur, alpha) => ({
+    label, data: evo.map(e => e[cle]), borderColor: couleur, borderWidth: 2,
+    backgroundColor: type === 'bar' ? couleur : couleur + alpha, fill: type === 'line', tension: .35,
+    borderRadius: type === 'bar' ? 6 : 0, maxBarThickness: 28,
+    pointBackgroundColor: couleur, pointRadius: type === 'line' ? 3 : 0, pointHoverRadius: 5 });
   chartEvo = new Chart(document.getElementById('chartEvolution'), {
     type: type,
-    data: {
-      labels: evo.map(e => e.mois + ' ' + e.annee),
-      datasets: [
-        { label: 'Brut', data: evo.map(e => e.brut),
-          backgroundColor: type === 'bar' ? 'rgba(15,61,54,.85)' : 'rgba(15,61,54,.1)',
-          borderColor: BRAND, borderWidth: 2, fill: type === 'line', tension: .4,
-          pointBackgroundColor: BRAND, pointRadius: type === 'line' ? 4 : 0 },
-        { label: 'Net', data: evo.map(e => e.net),
-          backgroundColor: type === 'bar' ? 'rgba(184,134,47,.8)' : 'rgba(184,134,47,.1)',
-          borderColor: ACCENT, borderWidth: 2, fill: type === 'line', tension: .4,
-          pointBackgroundColor: ACCENT, pointRadius: type === 'line' ? 4 : 0 },
-        { label: 'Charges pat.', data: evo.map(e => e.charges),
-          backgroundColor: type === 'bar' ? 'rgba(192,133,82,.7)' : 'rgba(192,133,82,.1)',
-          borderColor: CLAY, borderWidth: 2, fill: type === 'line', tension: .4,
-          pointBackgroundColor: CLAY, pointRadius: type === 'line' ? 4 : 0 }
-      ]
-    },
+    data: { labels: evo.map(e => e.mois + ' ' + e.annee),
+            datasets: [serie('Brut', 'brut', marque, '1f'), serie('Net', 'net', OR, '1f'), serie('Charges pat.', 'charges', ARGILE, '1f')] },
     options: {
-      responsive: true,
+      responsive: true, maintainAspectRatio: false, animation: reduit ? false : { duration: 400 },
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12 } },
-        tooltip: { callbacks: { label: ctx => ' ' + ctx.dataset.label + ' : ' + ctx.parsed.y.toLocaleString('fr') + ' FCFA' } }
+        legend: { position: 'top', align: 'end', labels: { color: texte, font: { size: 12, family: 'Inter' }, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'rectRounded' } },
+        tooltip: { padding: 10, cornerRadius: 8, callbacks: { label: ctx => ' ' + ctx.dataset.label + ' : ' + ctx.parsed.y.toLocaleString('fr') + ' FCFA' } }
       },
       scales: {
-        y: { beginAtZero: true, ticks: { font: { size: 10 }, callback: v => {
-          if (v >= 1000000) return (v/1000000).toFixed(1) + ' M';
-          if (v >= 1000) return (v/1000).toFixed(0) + ' K';
-          return v; } } },
-        x: { ticks: { font: { size: 10 } } }
+        y: { beginAtZero: true, grid: { color: grille }, border: { display: false },
+             ticks: { color: texte, font: { size: 11 }, callback: v => v >= 1000000 ? (v / 1000000).toFixed(1).replace('.', ',') + ' M' : v >= 1000 ? (v / 1000).toFixed(0) + ' k' : v } },
+        x: { grid: { display: false }, border: { display: false }, ticks: { color: texte, font: { size: 11 } } }
       }
     }
   });
 }
 
 function toggleChart(type) {
-  document.getElementById('btn-bar').style.background  = type === 'bar'  ? BRAND : 'var(--bg-card)';
-  document.getElementById('btn-bar').style.color       = type === 'bar'  ? 'white' : 'var(--text-sub)';
-  document.getElementById('btn-line').style.background = type === 'line' ? BRAND : 'var(--bg-card)';
-  document.getElementById('btn-line').style.color      = type === 'line' ? 'white' : 'var(--text-sub)';
+  document.getElementById('btn-bar').setAttribute('aria-pressed', type === 'bar');
+  document.getElementById('btn-line').setAttribute('aria-pressed', type === 'line');
   buildEvoChart(type);
 }
 buildEvoChart('bar');
-
-{% if cats_stats %}
-if (typeof Chart !== 'undefined') {
-  const catColors = ['#0f3d36','#b8862f','#c08552','#5a8a7d','#9a7635','#7a9b8e','#c9a96a','#3d5a52'];
-  new Chart(document.getElementById('chartCategories'), {
-    type: 'doughnut',
-    data: { labels: cats.map(c => c[1]), datasets: [{ data: cats.map(c => c[2]),
-      backgroundColor: catColors.slice(0, cats.length), borderWidth: 2, borderColor: '#fff' }] },
-    options: { responsive: true, cutout: '60%',
-      plugins: {
-        legend: { position: 'bottom', labels: { font: { size: 10 }, boxWidth: 10, padding: 8 } },
-        tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ' : ' + ctx.parsed + ' employé(s)' } }
-      } }
-  });
-}
-{% endif %}
 
 function toggleAlertes() {
   const bloc = document.getElementById('bloc-alertes');
   const btn  = document.getElementById('btn-toggle-alertes');
   if (!bloc) return;
-  if (bloc.style.display === 'none') { bloc.style.display = 'flex'; btn.textContent = '▼ Replier'; }
-  else { bloc.style.display = 'none'; btn.textContent = '▶ Afficher (' + document.querySelectorAll('#bloc-alertes > div').length + ')'; }
+  const ouvert = bloc.style.display === 'none';
+  bloc.style.display = ouvert ? '' : 'none';
+  btn.setAttribute('aria-expanded', ouvert);
+  btn.textContent = ouvert ? 'Replier' : 'Afficher (' + document.querySelectorAll('#bloc-alertes > div').length + ')';
 }
 
 function viderCache() {
   const btn = document.getElementById('btn-cache');
-  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+  if (btn) { btn.disabled = true; btn.lastElementChild.textContent = 'Actualisation…'; }
   fetch('/api/cache/clear', { method: 'POST',
     headers: {'X-CSRFToken': '{{ csrf_token() }}', 'Content-Type': 'application/json'} })
     .then(r => r.json()).then(() => window.location.reload()).catch(() => window.location.reload());
