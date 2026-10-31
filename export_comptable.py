@@ -412,9 +412,8 @@ def _nom_mois(mois: int) -> str:
 
 def _derniere_jour_mois(annee: int, mois: int) -> date:
     """Retourne le dernier jour du mois (date d'écriture comptable)."""
-    import calendar
-    dernier = calendar.monthrange(annee, mois)[1]
-    return date(annee, mois, dernier)
+    from calendrier_paie import fin_de_mois
+    return fin_de_mois(annee, mois)
 
 
 # ── Exception ──────────────────────────────────────────────────────────────────

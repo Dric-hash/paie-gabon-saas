@@ -26,15 +26,15 @@ Masse       : bulletins validés ou payés des mois de la période : brut, coût
 """
 from __future__ import annotations
 
-from calendar import monthrange
-from datetime import date, timedelta
+from datetime import timedelta
 
 from models import (Salarie, Contrat, Conge, Pointage, BulletinPaie, PeriodePaie, CategorieEmploi, Site)
 from calculs_paie import cout_employeur
 from plan_comptable_paie import est_national
 import budget_masse_salariale as bms
 
-STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
+from calendrier_paie import (STATUTS_BULLETIN_VALIDES as STATUTS_VALIDES, MOIS,  # noqa: E402
+                             fin_de_mois as fin_mois, site_a_la_date as _site_a)
 CONGES_ACCORDES = ("APPROUVÉ", "APPROUVE", "PRIS")
 MOTIFS_CONGE = {"MALADIE": "Maladie", "MATERNITE": "Maternité", "PATERNITE": "Paternité",
                 "PERMISSION": "Permission (événement familial)", "EXCEPTIONNEL": "Congé exceptionnel",
@@ -46,16 +46,10 @@ TRANCHES_ANCIENNETE = [(0, 1, "Moins d'1 an"), (1, 3, "1 à 3 ans"), (3, 5, "3 �
                        (10, 20, "10 à 20 ans"), (20, 200, "20 ans et plus")]
 TRANCHES_AGE = [(0, 20, "Moins de 20 ans")] + [(a, a + 5, f"{a}–{a + 4} ans") for a in range(20, 65, 5)] + \
                [(65, 200, "65 ans et plus")]
-MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre",
-        "Novembre", "Décembre"]
 
 
 def _f(v):
     return float(v or 0)
-
-
-def fin_mois(a, m):
-    return date(a, m, monthrange(a, m)[1])
 
 
 def mois_de(debut, fin):
@@ -91,15 +85,6 @@ def _tranche(v, tranches):
         if lo <= v < hi:
             return lib
     return tranches[-1][2]
-
-
-def _site_a(histo, d):
-    """Site d'affectation couvrant la date d (la plus récente l'emporte), sinon None."""
-    site = None
-    for d0, d1, sid in histo or []:
-        if d0 <= d and (d1 is None or d < d1 or (d == d1 and d0 == d1)):
-            site = sid
-    return site
 
 
 def calculer(tenant, debut, fin, site_id=None, categorie_id=None):

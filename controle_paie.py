@@ -32,7 +32,7 @@ from models import db, BulletinPaie, PeriodePaie, Salarie, Contrat
 
 SEUIL_VARIATION_DEFAUT = 20          # %
 FACTEUR_HEURES_SUP = 2               # × la moyenne des 3 mois précédents
-STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
+from calendrier_paie import STATUTS_BULLETIN_VALIDES as STATUTS_VALIDES  # noqa: E402
 CHAMPS_HS = ("heures_sup_10", "heures_sup_30", "heures_sup_30b", "heures_sup_40", "heures_sup_70",
              "heures_sup_fj", "heures_sup_fn")
 NIVEAUX = {"bloquant": ("Bloquant", "#b91c1c", "#fee2e2"),

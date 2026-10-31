@@ -28,7 +28,7 @@ TABLES_TRAITEES = {
     "lignes_budget",           # la ligne du budget reste (poste budgété), détachée du salarié
 }
 
-STATUTS_BULLETIN_FIGES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
+from calendrier_paie import STATUTS_BULLETIN_VALIDES as STATUTS_BULLETIN_FIGES  # noqa: E402
 
 
 def _fcfa(v):

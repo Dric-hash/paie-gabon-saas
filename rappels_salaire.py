@@ -29,7 +29,6 @@ doit être ré-enregistré avant validation.
 """
 import json
 from collections import OrderedDict
-from datetime import date
 
 from models import (db, BulletinPaie, PeriodePaie, BulletinComposant, RappelSalaire, LigneRappel, Contrat,
                     EvenementCarriere)
@@ -45,7 +44,7 @@ RUBRIQUES = OrderedDict([
     ("prime_assiduite", ("Prime d'assiduité", ("prime_assiduité",), False)),
 ])
 OBLIGATOIRES = {"salaire_base"}
-STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
+from calendrier_paie import STATUTS_BULLETIN_VALIDES as STATUTS_VALIDES  # noqa: E402
 STATUTS = {"A_VERSER": ("À verser", "#92400e", "#fef3c7"), "VERSE": ("Versé", "#065f46", "#d1fae5"),
            "ANNULE": ("Annulé", "#b91c1c", "#fee2e2")}
 

@@ -23,8 +23,7 @@ CODE_JOURS = 7
 INACTIVITE_MINUTES = 15
 ALPHABET_CODE = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # sans 0/O, 1/I/L
 STATUTS_VISIBLES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
-MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août",
-        "Septembre", "Octobre", "Novembre", "Décembre"]
+from calendrier_paie import MOIS  # noqa: E402,F401
 
 # Empreinte factice : même coût de calcul quand le matricule n'existe pas
 _LEURRE = None
