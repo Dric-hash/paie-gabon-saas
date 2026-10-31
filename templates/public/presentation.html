@@ -178,8 +178,32 @@
     transition:opacity .35s ease;mix-blend-mode:soft-light;
     background:radial-gradient(420px circle at var(--gx,50%) var(--gy,0%),rgba(255,255,255,.55),rgba(255,255,255,0) 60%)}
   .reflet.eclaire::after{opacity:1}
-  .carte-tarif.visible.inclinee{transition:transform .12s linear,box-shadow .2s ease,border-color .2s ease;
+  /* Cartes en relief (toutes les sections) : inclinaison sous la souris, icône qui sort de la carte */
+  .c3d{transform-style:preserve-3d}
+  .c3d.visible.inclinee{transition:transform .12s linear,box-shadow .2s ease,border-color .2s ease;
     transform:perspective(900px) rotateX(var(--tx,0deg)) rotateY(var(--ty,0deg)) translateY(-4px)}
+  .c3d .ico-chip,.c3d .ico-chip-dark,.c3d .ic{transition:transform .35s cubic-bezier(.2,.7,.2,1),background .2s ease,color .2s ease,box-shadow .35s ease}
+  .c3d.inclinee .ico-chip,.c3d.inclinee .ico-chip-dark,.c3d.inclinee .ic{transform:translateZ(34px) scale(1.06);box-shadow:0 12px 22px -8px rgba(15,61,54,.35)}
+  .c3d.inclinee h3,.c3d.inclinee .titre-3d{transform:translateZ(18px);transition:transform .35s cubic-bezier(.2,.7,.2,1)}
+  .card-dark.reflet::after{mix-blend-mode:screen;background:radial-gradient(380px circle at var(--gx,50%) var(--gy,0%),rgba(233,176,67,.2),rgba(233,176,67,0) 60%)}
+  /* Conventions : les cartes pivotent comme des pages qu'on tourne, l'une après l'autre */
+  .conv-carte.reveal{transform:perspective(1000px) rotateY(-32deg) translateZ(-60px);transform-origin:0 50%}
+  .conv-carte.reveal.visible{transform:none}
+  /* Sécurité : les cartes montent de la profondeur */
+  .secu-carte.reveal{transform:perspective(900px) translateZ(-120px) translateY(30px)}
+  .secu-carte.reveal.visible{transform:none}
+  /* Appel final : pièces et anneaux dorés en relief, qui suivent la souris */
+  .final-3d{position:relative;overflow:hidden}
+  .final-scene{position:absolute;inset:0;perspective:900px;pointer-events:none}
+  .final-scene i{position:absolute;display:block;border-radius:50%;
+    transform:translate3d(calc(var(--px,0) * var(--z) * 1px),calc(var(--py,0) * var(--z) * 1px),calc(var(--z) * 1px)) rotateY(var(--rz,0deg)) rotateX(var(--rx,60deg));
+    transition:transform .6s cubic-bezier(.2,.7,.2,1);animation:tourne 18s linear infinite}
+  .final-scene .anneau{border:2px solid rgba(233,176,67,.35);box-shadow:0 0 30px rgba(233,176,67,.12),inset 0 0 20px rgba(233,176,67,.1)}
+  .final-scene .piece{background:radial-gradient(circle at 35% 30%,#ffe3a1,#e9b043 45%,#a8741f 100%);
+    box-shadow:0 10px 24px rgba(0,0,0,.35),inset 0 -3px 0 rgba(0,0,0,.18);opacity:.85}
+  @keyframes tourne{to{--rz:360deg}}
+  @property --rz{syntax:'<angle>';inherits:false;initial-value:0deg}
+  .final-3d .wrap{position:relative;z-index:1}
   .drapeau{display:inline-flex;flex-direction:column;width:18px;height:12px;border-radius:2px;overflow:hidden;box-shadow:0 0 0 1px rgba(255,255,255,.25)}
   .drapeau i{flex:1;display:block}
   /* Bande de chiffres */
@@ -216,11 +240,13 @@
   .apercu.vu .apercu-graph span{transform:scaleY(1)}
   @media(max-width:720px){.apercu-corps{grid-template-columns:1fr}.apercu-menu{display:none}.apercu-kpis{grid-template-columns:repeat(2,1fr)}}
   /* Mobile et préférence « moins d'animations » : scènes à plat, aucune animation continue */
+  @media(max-width:767px){.final-scene .loin{display:none}}
   @media(max-width:919px){.scene-3d{transform:none!important}.scene-3d > #demo{transform:none}.flottante{display:none}}
   @media (prefers-reduced-motion: reduce){
     .scene-3d,.scene-3d > #demo{transform:none!important}.flottante{animation:none}
     .apercu{transform:none!important}.apercu-graph span{transform:none;transition:none}
-    .hero3d{display:none}.reflet::after{display:none}.carte-tarif.visible.inclinee{transform:none}
+    .hero3d{display:none}.reflet::after{display:none}.c3d.visible.inclinee{transform:none}
+    .conv-carte.reveal,.secu-carte.reveal{transform:none}.final-scene{display:none}
   }
   /* Menu mobile */
   .burger{display:none}
@@ -423,7 +449,7 @@
       ("03","file-text","Générez les bulletins","Un clic suffit : bulletins, cotisations et déclarations sont calculés et prêts à imprimer.")
     ] %}
     {% for n, ic, titre, desc in etapes %}
-    <div class="reveal step-card">
+    <div class="reveal step-card c3d reflet" data-ordre="{{ loop.index0 }}">
       <div class="no">{{ n }}</div>
       <div class="ic">{{ icon(ic, 26) }}</div>
       <h3>{{ titre }}</h3>
@@ -482,7 +508,7 @@
         ("bell","Rappels intelligents","Contrats à échéance, congés à valider, périodes à clôturer : ne ratez plus rien.")
       ] %}
       {% for icone, titre, desc in fonctions %}
-      <div class="reveal card" style="background:var(--page);border:1px solid var(--border);border-radius:1rem;padding:1.5rem">
+      <div class="reveal card c3d reflet" data-ordre="{{ loop.index0 % 3 }}" style="background:var(--page);border:1px solid var(--border);border-radius:1rem;padding:1.5rem">
         <span class="ico-chip">{{ icon(icone, 24) }}</span>
         <h3 class="display" style="font-weight:700;font-size:1.1rem;margin:0 0 .5rem">{{ titre }}</h3>
         <p style="color:var(--sub);font-size:.92rem;line-height:1.6;margin:0">{{ desc }}</p>
@@ -517,14 +543,14 @@
       ("pickaxe","Entreprises minières","Mines, carrières & prospection")
     ] %}
     {% for ic, nom, desc in conv %}
-    <div class="reveal card" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
+    <div class="reveal card conv-carte c3d reflet" data-ordre="{{ loop.index0 }}" style="background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:1.35rem">
       <span class="ico-chip" style="width:2.5rem;height:2.5rem;margin-bottom:.6rem">{{ icon(ic, 22) }}</span>
-      <div class="display" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
+      <div class="display titre-3d" style="font-weight:800;font-size:1.05rem;color:var(--brand)">{{ nom }}</div>
       <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
     </div>
     {% endfor %}
-    <div class="reveal" style="background:linear-gradient(150deg,var(--brand),#0c322c);color:#fff;border-radius:1rem;padding:1.35rem;display:flex;flex-direction:column;justify-content:center">
-      <div class="display" style="font-weight:800;font-size:1.05rem">Et la vôtre ?</div>
+    <div class="reveal conv-carte card-dark c3d reflet" data-ordre="8" style="background:linear-gradient(150deg,var(--brand),#0c322c);color:#fff;border-radius:1rem;padding:1.35rem;display:flex;flex-direction:column;justify-content:center">
+      <div class="display titre-3d" style="font-weight:800;font-size:1.05rem">Et la vôtre ?</div>
       <div style="color:rgba(255,255,255,.8);font-size:.83rem;margin-top:.2rem;line-height:1.5">Nous intégrons régulièrement de nouvelles conventions. Dites-nous la vôtre.</div>
     </div>
   </div>
@@ -551,7 +577,7 @@
         ("database","Sauvegardes","Vos données sont sauvegardées et restaurables à tout moment.")
       ] %}
       {% for ic, titre, desc in secu %}
-      <div class="reveal card-dark" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.1rem;padding:1.5rem">
+      <div class="reveal card-dark secu-carte c3d reflet" data-ordre="{{ loop.index0 }}" style="background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);border-radius:1.1rem;padding:1.5rem">
         <span class="ico-chip-dark">{{ icon(ic, 22) }}</span>
         <h3 class="display" style="font-weight:700;font-size:1rem;margin:0 0 .4rem">{{ titre }}</h3>
         <p style="color:rgba(255,255,255,.7);font-size:.88rem;line-height:1.6;margin:0">{{ desc }}</p>
@@ -570,7 +596,7 @@
   </h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem;max-width:1000px;margin:0 auto">
     {% for a in avis_vedette %}
-    <div class="reveal" style="background:var(--surface);border:1px solid var(--border);border-radius:1.1rem;padding:1.5rem;display:flex;flex-direction:column">
+    <div class="reveal card c3d reflet" data-ordre="{{ loop.index0 % 3 }}" style="background:var(--surface);border:1px solid var(--border);border-radius:1.1rem;padding:1.5rem;display:flex;flex-direction:column">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem">
         <div style="width:44px;height:44px;border-radius:12px;background:#0f3d36;color:#e9c46a;display:flex;align-items:center;justify-content:center;font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:1.1rem;flex-shrink:0">
           {{ (a.entreprise or 'E')[0]|upper }}
@@ -630,7 +656,7 @@
   <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem;max-width:900px;margin:0 auto">
     {% for plan in plans %}
     {% set populaire = (plan.code == 'PRO') %}
-    <div class="reveal card carte-tarif reflet" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
+    <div class="reveal card carte-tarif c3d reflet" data-ordre="{{ loop.index0 }}" style="background:var(--surface);border:{{ '2px solid var(--accent)' if populaire else '1px solid var(--border)' }};border-radius:1.25rem;padding:2rem;position:relative;{{ 'box-shadow:0 12px 32px rgba(15,61,54,.1)' if populaire else '' }}">
       {% if populaire %}
       <div style="position:absolute;top:-12px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1c1206;font-size:.72rem;font-weight:700;padding:.25rem .85rem;border-radius:9999px">Le plus choisi</div>
       {% endif %}
@@ -688,7 +714,15 @@
 </section>
 
 <!-- ══════════════ APPEL FINAL ══════════════ -->
-<section style="background:linear-gradient(160deg,#0f3d36,#0c322c);color:#fff">
+<section class="final-3d" id="final3d" style="background:linear-gradient(160deg,#0f3d36,#0c322c);color:#fff">
+  <div class="final-scene" aria-hidden="true">
+    <i class="anneau" style="--z:60;width:260px;height:260px;left:-60px;top:-40px;--rx:64deg"></i>
+    <i class="anneau loin" style="--z:-80;width:380px;height:380px;right:-120px;bottom:-160px;--rx:70deg;animation-duration:26s"></i>
+    <i class="anneau loin" style="--z:20;width:120px;height:120px;right:14%;top:18%;--rx:58deg;animation-duration:14s;animation-direction:reverse"></i>
+    <i class="piece" style="--z:90;width:46px;height:46px;left:12%;bottom:22%;--rx:28deg;animation-duration:9s"></i>
+    <i class="piece loin" style="--z:-40;width:30px;height:30px;right:22%;bottom:16%;--rx:40deg;animation-duration:12s;animation-direction:reverse"></i>
+    <i class="piece" style="--z:40;width:22px;height:22px;left:24%;top:20%;--rx:50deg;animation-duration:7s"></i>
+  </div>
   <div class="wrap" style="padding-top:4.5rem;padding-bottom:4.5rem;text-align:center;max-width:760px">
     <h2 class="display reveal" style="font-size:2rem;font-weight:800;margin:0 0 1rem">
       Prêt à simplifier votre paie ?
@@ -790,7 +824,14 @@
     return;
   }
   var io = new IntersectionObserver(function(entries){
-    entries.forEach(function(e){ if (e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); } });
+    entries.forEach(function(e){
+      if (!e.isIntersecting) return;
+      var el = e.target, n = window.innerWidth < 768 ? 0 : parseInt(el.dataset.ordre || '0', 10);  // une colonne sur mobile : pas de cascade
+      // Cascade : chaque carte d'une même rangée arrive 80 ms après la précédente ; le délai est
+      // retiré ensuite pour que l'inclinaison au survol reste immédiate.
+      if (n) { el.style.transitionDelay = (n * 80) + 'ms'; setTimeout(function(){ el.style.transitionDelay = ''; }, n * 80 + 800); }
+      el.classList.add('visible'); io.unobserve(el);
+    });
   }, { threshold: 0.12 });
   els.forEach(function(el){ io.observe(el); });
 })();
@@ -853,9 +894,10 @@
     scene.addEventListener('pointerleave', function(){ s3d.style.transform = ''; demo.classList.remove('eclaire'); });
   }
 
-  // Cartes tarif : inclinaison discrète (±5°) et reflet sous le pointeur, souris uniquement
+  // Cartes en relief de toutes les sections : inclinaison discrète (±5°), reflet sous le pointeur,
+  // icône et titre qui sortent de la carte ; souris uniquement
   if (!reduit && pointeurFin) {
-    document.querySelectorAll('.carte-tarif').forEach(function(c){
+    document.querySelectorAll('.c3d').forEach(function(c){
       var rf = null;
       c.addEventListener('pointermove', function(e){
         var r = c.getBoundingClientRect();
@@ -871,6 +913,21 @@
       });
       c.addEventListener('pointerleave', function(){ if (rf) cancelAnimationFrame(rf); c.classList.remove('inclinee', 'eclaire'); });
     });
+  }
+
+  // Appel final : les pièces et anneaux se décalent selon leur profondeur quand la souris bouge
+  var fin3d = document.getElementById('final3d');
+  if (fin3d && !reduit && pointeurFin) {
+    var rfin = null;
+    fin3d.addEventListener('pointermove', function(e){
+      var r = fin3d.getBoundingClientRect();
+      var x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      if (rfin) cancelAnimationFrame(rfin);
+      rfin = requestAnimationFrame(function(){
+        fin3d.style.setProperty('--px', (x * .5).toFixed(3)); fin3d.style.setProperty('--py', (y * .5).toFixed(3));
+      });
+    });
+    fin3d.addEventListener('pointerleave', function(){ fin3d.style.setProperty('--px', 0); fin3d.style.setProperty('--py', 0); });
   }
 
   // Aperçu de l'application : incliné en arrivant, à plat quand il est au centre de l'écran
