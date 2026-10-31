@@ -1,0 +1,48 @@
+{% extends "tenant/base.html" %}
+{% block title %}Indicateurs RH{% endblock %}
+{% block content %}
+{% set btn = "padding:.5rem 1rem;border-radius:.625rem;font-size:.8rem;font-weight:700;border:none;cursor:pointer;text-decoration:none" %}
+{% set champ = "border:1px solid #e5e7eb;border-radius:.5rem;padding:.4rem .55rem;font-size:.85rem;background:#fff;display:block" %}
+<style>
+  .ir-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:.75rem; margin-bottom:1rem; }
+  .ir-kpi { background:#fff; border:1px solid #e5e7eb; border-radius:.85rem; padding:.8rem 1rem; }
+  .ir-kpi-lib { font-size:.68rem; color:#6b7280; text-transform:uppercase; font-weight:700; }
+  .ir-kpi-val { font-size:1.35rem; font-weight:800; color:#0f3d36; }
+  .ir-kpi-sub { font-size:.7rem; color:#9ca3af; }
+  .ir-h2 { font-size:1.02rem; font-weight:800; color:#0f3d36; margin:1.3rem 0 .5rem; }
+  .ir-grille { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:.75rem; }
+  .ir-bloc { background:#fff; border:1px solid #e5e7eb; border-radius:.85rem; padding:.8rem 1rem; }
+  .ir-bloc h3 { font-size:.8rem; font-weight:800; color:#0f3d36; margin:0 0 .4rem; text-transform:uppercase; }
+  .ir-t { width:100%; border-collapse:collapse; font-size:.8rem; }
+  .ir-t td { padding:.28rem .35rem; border-bottom:1px solid #f3f4f6; }
+  .ir-t .n { text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .ir-th td { font-size:.66rem; color:#6b7280; text-transform:uppercase; font-weight:700; }
+  .ir-tot td { font-weight:800; border-top:1.5px solid #0f3d36; }
+  .ir-muted { color:#9ca3af; }
+  .ir-note { font-size:.7rem; color:#6b7280; margin:.4rem 0 0; }
+  .ir-bar { background:#eef4f2; border-radius:999px; height:8px; overflow:hidden; }
+  .ir-bar span { display:block; height:8px; border-radius:999px; }
+  .ir-bar-g { direction:rtl; }
+</style>
+<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;margin-bottom:.8rem">
+  <div>
+    <h1 style="font-size:1.5rem;font-weight:900;color:#0f3d36;margin:0">📈 Indicateurs RH</h1>
+    <p style="font-size:.8rem;color:#6b7280;margin:.25rem 0 0">Bilan social simplifié du {{ d.debut.strftime('%d/%m/%Y') }} au {{ d.fin.strftime('%d/%m/%Y') }}{% if p.filtres %} · {{ p.filtres|join(' · ') }}{% endif %}.</p>
+  </div>
+  <div style="display:flex;gap:.4rem">
+    <a href="/indicateurs-rh/imprimer?{{ request.query_string.decode() }}" target="_blank" style="background:#ecfdf5;color:#065f46;{{ btn }}">🖨 Bilan imprimable</a>
+    <a href="/indicateurs-rh/export.csv?{{ request.query_string.decode() }}" style="background:#f3f4f6;color:#374151;{{ btn }}">⬇ CSV</a>
+  </div>
+</div>
+<form method="get" class="card" style="padding:.8rem 1rem;margin-bottom:1rem;display:flex;gap:.6rem;align-items:flex-end;flex-wrap:wrap">
+  <label style="font-size:.75rem;color:#6b7280">Du mois<input type="month" name="du" value="{{ p.du.strftime('%Y-%m') }}" style="{{ champ }}"></label>
+  <label style="font-size:.75rem;color:#6b7280">Au mois<input type="month" name="au" value="{{ p.au.strftime('%Y-%m') }}" style="{{ champ }}"></label>
+  {% if sites %}<label style="font-size:.75rem;color:#6b7280">Site
+    <select name="site_id" style="{{ champ }}"><option value="">Tous</option>{% for s in sites %}<option value="{{ s.id }}" {% if p.site_id == s.id %}selected{% endif %}>{{ s.nom }}</option>{% endfor %}
+      <option value="0" {% if p.site_id == 0 %}selected{% endif %}>Sans site affecté</option></select></label>{% endif %}
+  {% if categories %}<label style="font-size:.75rem;color:#6b7280">Catégorie
+    <select name="categorie_id" style="{{ champ }}"><option value="">Toutes</option>{% for c in categories %}<option value="{{ c.id }}" {% if p.categorie_id == c.id %}selected{% endif %}>{{ c.code }} — {{ c.libelle }}</option>{% endfor %}</select></label>{% endif %}
+  <button style="background:#0f3d36;color:white;{{ btn }}">Afficher</button>
+</form>
+{% include "tenant/_indicateurs_rh_contenu.html" %}
+{% endblock %}

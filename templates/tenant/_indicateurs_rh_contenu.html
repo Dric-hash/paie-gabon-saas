@@ -1,0 +1,104 @@
+{# Contenu partagé par la page Indicateurs RH et l'état imprimable. Variables : d, p, MOIS. #}
+{% macro fc(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+{% macro pct(v, dec=1) %}{{ ('%.' ~ dec ~ 'f')|format(v)|replace('.', ',') ~ ' %' if v is not none else '—' }}{% endmacro %}
+{% macro barre(v, maxi, couleur='#0f3d36') %}<div class="ir-bar"><span style="width:{{ (v / maxi * 100) if maxi else 0 }}%;background:{{ couleur }}"></span></div>{% endmacro %}
+{% set a = d.absenteisme %}{% set m = d.masse %}
+
+<div class="ir-kpis">
+  {% for lib, v, sub in [
+      ("Effectif fin de période", d.effectif_fin, "début : " ~ d.effectif_debut ~ " · moyen : " ~ ('%.1f'|format(d.effectif_moyen)|replace('.', ','))),
+      ("Entrées / sorties", (d.entrees|length) ~ " / " ~ (d.sorties|length), "taux de rotation : " ~ pct(d.rotation)),
+      ("Ancienneté moyenne", ('%.1f'|format(d.anciennete_moyenne)|replace('.', ',') ~ ' ans') if d.anciennete_moyenne is not none else '—', "à la fin de la période"),
+      ("Âge moyen", ('%.1f'|format(d.age_moyen)|replace('.', ',') ~ ' ans') if d.age_moyen is not none else '—', (d.sans_age ~ " date(s) de naissance manquante(s)") if d.sans_age else "à la fin de la période"),
+      ("Taux d'absentéisme", pct(a.taux, 2), a.jours ~ " jour(s) sur " ~ fc(a.theoriques)),
+      ("Masse salariale (coût)", fc(m.total.cout) ~ " F", "brut " ~ fc(m.total.brut) ~ " F · " ~ fc(m.total.nb) ~ " bulletin(s)")] %}
+  <div class="ir-kpi"><div class="ir-kpi-lib">{{ lib }}</div><div class="ir-kpi-val">{{ v }}</div><div class="ir-kpi-sub">{{ sub }}</div></div>
+  {% endfor %}
+</div>
+
+<h2 class="ir-h2">1. Effectifs et répartition (au {{ d.fin.strftime('%d/%m/%Y') }})</h2>
+<div class="ir-grille">
+  {% for titre, rows in d.repartitions.items() %}
+  <div class="ir-bloc"><h3>{{ titre }}</h3>
+    <table class="ir-t">{% for k, v in rows %}
+      <tr><td>{{ k }}</td><td class="n">{{ v }}</td><td class="n ir-muted">{{ pct(v / d.effectif_fin * 100 if d.effectif_fin else none) }}</td><td style="width:35%">{{ barre(v, d.effectif_fin) }}</td></tr>
+    {% else %}<tr><td class="ir-muted">Aucun salarié.</td></tr>{% endfor %}</table>
+  </div>
+  {% endfor %}
+</div>
+
+<h2 class="ir-h2">2. Entrées et sorties</h2>
+<div class="ir-grille">
+  <div class="ir-bloc"><h3>Par mois</h3>
+    <table class="ir-t"><tr class="ir-th"><td>Mois</td><td class="n">Effectif fin de mois</td><td class="n">Entrées</td><td class="n">Sorties</td></tr>
+      {% for x in d.mouvements %}<tr><td>{{ x.libelle }}</td><td class="n">{{ x.effectif }}</td><td class="n">{{ x.entrees or '' }}</td><td class="n">{{ x.sorties or '' }}</td></tr>{% endfor %}
+      <tr class="ir-tot"><td>Total</td><td></td><td class="n">{{ d.entrees|length }}</td><td class="n">{{ d.sorties|length }}</td></tr>
+    </table>
+    <p class="ir-note">Taux de rotation = ((entrées + sorties) ÷ 2) ÷ effectif moyen = {{ pct(d.rotation) }}.</p>
+  </div>
+  <div class="ir-bloc"><h3>Détail</h3>
+    <table class="ir-t"><tr class="ir-th"><td>Entrées</td><td>Matricule</td><td class="n">Embauche</td></tr>
+      {% for s in d.entrees %}<tr><td>{{ s.nom_complet }}</td><td>{{ s.matricule }}</td><td class="n">{{ s.date_embauche.strftime('%d/%m/%Y') }}</td></tr>
+      {% else %}<tr><td class="ir-muted" colspan="3">Aucune entrée.</td></tr>{% endfor %}</table>
+    <table class="ir-t" style="margin-top:.6rem"><tr class="ir-th"><td>Sorties</td><td>Motif</td><td class="n">Date</td></tr>
+      {% for s in d.sorties %}<tr><td>{{ s.nom_complet }}</td><td>{{ s.type_rupture or 'Non précisé' }}</td><td class="n">{{ s.date_cessation.strftime('%d/%m/%Y') }}</td></tr>
+      {% else %}<tr><td class="ir-muted" colspan="3">Aucune sortie.</td></tr>{% endfor %}</table>
+    {% if d.motifs_sortie %}<p class="ir-note">Motifs : {% for k, v in d.motifs_sortie %}{{ k }} ({{ v }}){% if not loop.last %} · {% endif %}{% endfor %}</p>{% endif %}
+  </div>
+</div>
+
+<h2 class="ir-h2">3. Ancienneté et pyramide des âges (au {{ d.fin.strftime('%d/%m/%Y') }})</h2>
+<div class="ir-grille">
+  <div class="ir-bloc"><h3>Ancienneté</h3>
+    {% set amax = (d.anciennete|map(attribute=1)|max) or 1 %}
+    <table class="ir-t">{% for k, v in d.anciennete %}
+      <tr><td>{{ k }}</td><td class="n">{{ v }}</td><td style="width:45%">{{ barre(v, amax) }}</td></tr>{% endfor %}</table>
+  </div>
+  <div class="ir-bloc"><h3>Pyramide des âges</h3>
+    <table class="ir-t ir-pyr"><tr class="ir-th"><td class="n">Hommes</td><td></td><td style="text-align:center">Âge</td><td></td><td>Femmes</td></tr>
+      {% for lib, v in d.pyramide %}
+      <tr><td class="n" style="width:9%">{{ v.H or '' }}</td>
+        <td style="width:30%"><div class="ir-bar ir-bar-g"><span style="width:{{ v.H / d.pyramide_max * 100 }}%;background:#1e6f8c"></span></div></td>
+        <td style="text-align:center;white-space:nowrap;font-size:.92em">{{ lib }}{% if v.NR %} <span class="ir-muted">(+{{ v.NR }})</span>{% endif %}</td>
+        <td style="width:30%"><div class="ir-bar"><span style="width:{{ v.F / d.pyramide_max * 100 }}%;background:#c2557a"></span></div></td>
+        <td style="width:9%">{{ v.F or '' }}</td></tr>
+      {% endfor %}</table>
+    <p class="ir-note">(+n) : sexe non renseigné.{% if d.sans_age %} {{ d.sans_age }} salarié(s) sans date de naissance ne figurent pas dans la pyramide.{% endif %}</p>
+  </div>
+</div>
+
+<h2 class="ir-h2">4. Absentéisme</h2>
+<div class="ir-grille">
+  <div class="ir-bloc"><h3>Par mois</h3>
+    <table class="ir-t"><tr class="ir-th"><td>Mois</td><td class="n">Jours d'absence</td><td class="n">Jours théoriques</td><td class="n">Taux</td></tr>
+      {% for x in a.par_mois %}<tr><td>{{ x.libelle }}</td><td class="n">{{ x.jours }}</td><td class="n">{{ fc(x.theoriques) }}</td><td class="n">{{ pct(x.taux, 2) }}</td></tr>{% endfor %}
+      <tr class="ir-tot"><td>Période</td><td class="n">{{ a.jours }}</td><td class="n">{{ fc(a.theoriques) }}</td><td class="n">{{ pct(a.taux, 2) }}</td></tr>
+    </table>
+  </div>
+  <div class="ir-bloc"><h3>Par motif</h3>
+    <table class="ir-t">{% for k, v in a.par_motif %}
+      <tr><td>{{ k }}</td><td class="n">{{ v }} j</td><td class="n ir-muted">{{ pct(v / a.jours * 100 if a.jours else none) }}</td><td style="width:35%">{{ barre(v, a.jours, '#b45309') }}</td></tr>
+    {% else %}<tr><td class="ir-muted">Aucune absence enregistrée.</td></tr>{% endfor %}</table>
+    <p class="ir-note">{{ a.salaries }} salarié(s) concerné(s). Jours ouvrables (lundi → samedi) : congés accordés autres que le congé annuel
+      (maladie, maternité, paternité, permission, exceptionnel, sans solde) et absences du pointage hors congé. Taux = jours d'absence ÷ jours ouvrables de présence théorique.</p>
+  </div>
+</div>
+
+<h2 class="ir-h2">5. Masse salariale ({{ fc(m.total.nb) }} bulletin(s) validé(s))</h2>
+<div class="ir-bloc" style="margin-bottom:.8rem"><h3>Par mois (coût employeur)</h3>
+  <table class="ir-t"><tr class="ir-th"><td>Mois</td><td class="n">Bulletins</td><td class="n">Brut</td><td class="n">Coût employeur</td><td class="n">Net à payer</td><td style="width:30%"></td></tr>
+    {% for x in m.par_mois %}<tr><td>{{ x.libelle }}</td><td class="n">{{ fc(x.nb) }}</td><td class="n">{{ fc(x.brut) }}</td><td class="n">{{ fc(x.cout) }}</td><td class="n">{{ fc(x.net) }}</td><td>{{ barre(x.cout, m.max_mois) }}</td></tr>{% endfor %}
+    <tr class="ir-tot"><td>Total</td><td class="n">{{ fc(m.total.nb) }}</td><td class="n">{{ fc(m.total.brut) }}</td><td class="n">{{ fc(m.total.cout) }}</td><td class="n">{{ fc(m.total.net) }}</td><td></td></tr>
+  </table>
+</div>
+<div class="ir-grille">
+  {% for titre, rows in [("Par site", m.par_site), ("Par catégorie", m.par_categorie), ("Par sexe", m.par_sexe)] %}
+  <div class="ir-bloc"><h3>{{ titre }}</h3>
+    <table class="ir-t"><tr class="ir-th"><td></td><td class="n">Coût employeur</td><td class="n">Part</td><td class="n">Brut moyen / bulletin</td></tr>
+      {% for x in rows %}<tr><td>{{ x.libelle }}</td><td class="n">{{ fc(x.cout) }}</td><td class="n">{{ pct(x.part) }}</td><td class="n">{{ fc(x.brut_moyen) }}</td></tr>
+      {% else %}<tr><td class="ir-muted" colspan="4">Aucun bulletin validé.</td></tr>{% endfor %}</table>
+  </div>
+  {% endfor %}
+</div>
+<p class="ir-note">Coût employeur = brut + CNSS et CNAMGS patronales + FNH + CFP + TCS. Par site : coût de chaque mois réparti au prorata des jours d'affectation du salarié ;
+  par catégorie : catégorie actuelle du salarié.</p>

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Bilan social simplifié — {{ tenant.denomination }}</title>
+  <style>
+    * { box-sizing:border-box; }
+    body { font-family:'Segoe UI',system-ui,sans-serif; font-size:10px; color:#111; margin:0; padding:20px; background:#fff; }
+    .header { text-align:center; border-bottom:2px solid #0f3d36; padding-bottom:8px; margin-bottom:10px; }
+    .header h1 { font-size:15px; margin:0; color:#0f3d36; } .header h2 { font-size:13px; margin:6px 0 2px; color:#0f3d36; text-transform:uppercase; }
+    .header p { margin:2px 0; color:#555; font-size:9.5px; }
+    .ir-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:6px; }
+    .ir-kpi { border:1px solid #d1d5db; border-radius:6px; padding:5px 8px; }
+    .ir-kpi-lib { font-size:7.5px; color:#6b7280; text-transform:uppercase; font-weight:700; }
+    .ir-kpi-val { font-size:13px; font-weight:800; color:#0f3d36; } .ir-kpi-sub { font-size:8px; color:#6b7280; }
+    .ir-h2 { font-size:11.5px; color:#0f3d36; margin:12px 0 4px; border-bottom:1px solid #0f3d36; padding-bottom:2px; page-break-after:avoid; }
+    .ir-grille { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .ir-bloc { page-break-inside:avoid; } .ir-bloc h3 { font-size:9px; color:#0f3d36; margin:4px 0 3px; text-transform:uppercase; }
+    .ir-t { width:100%; border-collapse:collapse; } .ir-t td { padding:2px 4px; border-bottom:1px solid #eee; }
+    .ir-t .n { text-align:right; font-family:'Courier New',monospace; white-space:nowrap; }
+    .ir-th td { font-size:7.5px; color:#6b7280; text-transform:uppercase; font-weight:700; }
+    .ir-tot td { font-weight:800; border-top:1.5px solid #0f3d36; }
+    .ir-muted { color:#9ca3af; } .ir-note { font-size:8px; color:#555; margin:3px 0 0; }
+    .ir-bar { background:#eef4f2; height:6px; overflow:hidden; border-radius:3px; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
+    .ir-bar span { display:block; height:6px; -webkit-print-color-adjust:exact; print-color-adjust:exact; } .ir-bar-g { direction:rtl; }
+    .sig { margin-top:24px; display:flex; justify-content:space-between; } .sig div { width:42%; }
+    .ligne { border-top:1px solid #888; margin-top:40px; padding-top:3px; color:#555; }
+    @media print { .no-print { display:none; } body { padding:6px; } }
+  </style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:10px"><button onclick="window.print()" style="background:#0f3d36;color:#fff;border:none;padding:8px 20px;border-radius:8px;cursor:pointer;font-weight:700">🖨️ Imprimer / Enregistrer en PDF</button></div>
+<div class="header">
+  <h1>{{ tenant.denomination }}</h1>
+  {% if tenant.nif %}<p>NIF : {{ tenant.nif }}{% if tenant.ville %} — {{ tenant.ville }}{% endif %}</p>{% endif %}
+  <h2>Bilan social simplifié — indicateurs RH</h2>
+  <p>Période du {{ d.debut.strftime('%d/%m/%Y') }} au {{ d.fin.strftime('%d/%m/%Y') }}{% if p.filtres %} · {{ p.filtres|join(' · ') }}{% endif %} · édité le {{ now.strftime('%d/%m/%Y') }}</p>
+</div>
+{% include "tenant/_indicateurs_rh_contenu.html" %}
+<div class="sig"><div><div class="ligne">Établi par</div></div><div><div class="ligne">Visa de la direction</div></div></div>
+<p class="ir-note" style="text-align:right;color:#9ca3af;margin-top:12px">{{ tenant.denomination }} · édité avec PaieGabon</p>
+</body>
+</html>
