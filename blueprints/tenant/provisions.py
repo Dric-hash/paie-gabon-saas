@@ -24,8 +24,7 @@ from audit import log_action
 from models import db, utcnow, ProvisionConges
 import provision_conges as pc
 
-MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre",
-        "Novembre", "Décembre"]
+from calendrier_paie import MOIS  # noqa: E402
 STATUTS = {"BROUILLON": ("Brouillon", "#92400e", "#fef3c7"), "VALIDE": ("Validé", "#065f46", "#d1fae5")}
 
 

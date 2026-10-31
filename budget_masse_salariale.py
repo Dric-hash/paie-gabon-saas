@@ -25,14 +25,13 @@ du budget (en %).
 from __future__ import annotations
 
 import json
-from calendar import monthrange
 from datetime import date
 
 from models import (db, Salarie, Contrat, BulletinPaie, PeriodePaie, BudgetMasseSalariale, LigneBudget,
                     AffectationSite)
 
-STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
-MOIS = ["", "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
+from calendrier_paie import (STATUTS_BULLETIN_VALIDES as STATUTS_VALIDES, MOIS_COURTS as MOIS,  # noqa: E402
+                             fin_de_mois, site_a_la_date)
 
 
 def _f(v):
@@ -68,15 +67,11 @@ def affectations(tenant_id, salarie_ids=None):
 def repartition_mois(periodes_aff, annee, mois):
     """{site_id|None: fraction du mois} au prorata des jours d'affectation (une journée de
     transfert compte pour le nouveau site)."""
-    debut, fin = date(annee, mois, 1), date(annee, mois, monthrange(annee, mois)[1])
+    debut, fin = date(annee, mois, 1), fin_de_mois(annee, mois)
     jours = (fin - debut).days + 1
     parts = {}
     for i in range(jours):
-        j = date.fromordinal(debut.toordinal() + i)
-        site = None
-        for d0, d1, sid in periodes_aff or []:     # la plus récente qui couvre le jour l'emporte
-            if d0 <= j and (d1 is None or j < d1 or (j == d1 and d0 == d1)):
-                site = sid
+        site = site_a_la_date(periodes_aff, date.fromordinal(debut.toordinal() + i))
         parts[site] = parts.get(site, 0) + 1
     return {k: v / jours for k, v in parts.items()}
 
@@ -103,7 +98,7 @@ def calculer_ligne(l, tenant):
             base = round(base * (1 + _f(l.augmentation_pct) / 100))
         donnees = {"salaire_base": base, "convention": tenant.convention}
         donnees.update({k: v for k, v in elements.items() if k != "salaire_base"})
-        fin_mois = date(l.budget.annee, m, monthrange(l.budget.annee, m)[1])
+        fin_mois = fin_de_mois(l.budget.annee, m)
         if s is not None:
             if s.date_embauche:
                 donnees["anciennete_annees"] = max(0, (fin_mois - s.date_embauche).days // 365)

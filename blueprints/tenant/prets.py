@@ -207,7 +207,7 @@ def pret_recu(id):
 
 
 # ── Impressions ───────────────────────────────────────────────────────────────
-MOIS_COURTS = ["", "Janv.", "Févr.", "Mars", "Avr.", "Mai", "Juin", "Juil.", "Août", "Sept.", "Oct.", "Nov.", "Déc."]
+from calendrier_paie import MOIS_COURTS  # noqa: E402
 
 
 def _tableau_mensuel(ech, rembs, total, au, annule=False):

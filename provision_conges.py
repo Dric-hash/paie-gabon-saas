@@ -29,14 +29,12 @@ from __future__ import annotations
 
 import json
 import re
-from datetime import date
-from calendar import monthrange
 
 from models import (db, Salarie, Contrat, BulletinPaie, PeriodePaie, ProvisionConges, LigneProvisionConges)
 import conges_avance as ca
 from plan_comptable_paie import est_national
 
-STATUTS_VALIDES = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
+from calendrier_paie import STATUTS_BULLETIN_VALIDES as STATUTS_VALIDES, fin_de_mois  # noqa: E402,F401
 DIVISEUR_DEFAUT = 24.0
 
 
@@ -92,10 +90,6 @@ def lire_comptes(form) -> str:
 
 def _f(v):
     return float(v or 0)
-
-
-def fin_de_mois(annee, mois):
-    return date(annee, mois, monthrange(annee, mois)[1])
 
 
 def salaries_presents(tenant_id, d):

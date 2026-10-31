@@ -23,8 +23,8 @@ from models import db, utcnow, BudgetMasseSalariale, LigneBudget, Site
 import budget_masse_salariale as bms
 
 STATUTS = {"BROUILLON": ("Brouillon", "#92400e", "#fef3c7"), "ADOPTE": ("Adopté", "#065f46", "#d1fae5")}
-MOIS_LONGS = ["", "janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre",
-              "novembre", "décembre"]
+from calendrier_paie import MOIS as _MOIS  # noqa: E402
+MOIS_LONGS = [m.lower() for m in _MOIS]
 
 
 def _auteur():

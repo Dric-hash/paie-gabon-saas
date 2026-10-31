@@ -28,8 +28,7 @@ from datetime import date
 STATUTS_RETENUS = ("VALIDÉ", "VALIDE", "PAYÉ", "PAYE")
 STATUTS_PAYES = ("PAYÉ", "PAYE")
 STATUTS_BROUILLON = ("BROUILLON",)
-MOIS = ["", "Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août",
-        "Septembre", "Octobre", "Novembre", "Décembre"]
+from calendrier_paie import MOIS  # noqa: E402,F401
 MOIS_COURTS = ["", "Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
 
 # code → libellé, périodicité, champs du bulletin qui donnent le montant dû

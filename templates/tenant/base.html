@@ -131,6 +131,17 @@
       body.sidebar-collapsed #topnav { display: flex !important; }
     }
     /* Mobile/tablette (<1024px) : repliée par défaut, s'ouvre par-dessus le contenu */
+    /* Menu regroupé : groupes repliables */
+    .nav-groupe { margin:.15rem 0; }
+    .nav-titre { list-style:none; cursor:pointer; display:flex; align-items:center; gap:.6rem; padding:.55rem 1rem; border-radius:.75rem;
+                 font-size:.8rem; font-weight:800; color:rgba(255,255,255,.92); user-select:none; }
+    .nav-titre::-webkit-details-marker { display:none; }
+    .nav-titre:hover { background:rgba(255,255,255,.08); }
+    .nav-chevron { margin-left:auto; font-size:.7rem; opacity:.6; transition:transform .15s; }
+    .nav-groupe[open] .nav-chevron { transform:rotate(90deg); }
+    .nav-items { padding:.1rem 0 .3rem .55rem; border-left:1px solid rgba(255,255,255,.12); margin-left:1.35rem; }
+    .nav-items .nav-lien { font-size:.82rem; padding:.42rem .8rem; }
+    .nav-ico { width:1.2rem; text-align:center; flex-shrink:0; }
     @media (max-width: 1023px) {
       aside { transform: translateX(-100%); }
       main  { margin-left: 0 !important; }
@@ -172,7 +183,7 @@
 
     <!-- Navigation -->
     <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-      {% set ep = request.endpoint %}
+      {% set ep = (request.endpoint or '').split('.')[-1] %}
       {% set mode_cabinet = current_user.tenant and current_user.tenant.est_cabinet and not session.get('cabinet_entreprise_id') %}
       {% if mode_cabinet %}
       <a href="/cabinet" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='cabinet_dashboard' else 'text-white/80 hover:bg-white/10' }}">
@@ -188,141 +199,100 @@
         💬 <span>Donner mon avis</span>
       </a>
       {% else %}
-      <a href="/dashboard" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='dashboard' else 'text-white/80 hover:bg-white/10' }}">
-        🏠 <span>{{ T.nav.dashboard }}</span>
+      {# Menu regroupé par domaine (30/10/2026). nav_lien() : entrée ; nav_groupe : <details> ouvert s'il contient la page active. #}
+      {% macro nav_lien(href, icone, libelle, actif) %}
+      <a href="{{ href }}" class="nav-lien flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900 nav-actif' if actif else 'text-white/80 hover:bg-white/10' }}"{% if actif %} aria-current="page"{% endif %}>
+        <span class="nav-ico">{{ icone }}</span> <span>{{ libelle }}</span>{{ caller() if caller else '' }}
       </a>
-      <a href="/salaries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'salari' in ep else 'text-white/80 hover:bg-white/10' }}">
-        👥 <span>{{ T.nav.salaries }}</span>
-      </a>
-      <a href="/simulateur"
-          class="{{ 'bg-white/10 text-white' if request.endpoint == 'simulateur_paie' else 'text-white/70 hover:text-white hover:bg-white/5' }} flex items-center gap-2.5 px-3 py-2 rounded-xl text-sm font-semibold transition-all">
-          <span>🧮</span> {{ "Simulateur" if lang == "fr" else "Simulator" }}
-        </a>
-        <a href="/bulletins/saisie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletin_saisie' else 'text-white/80 hover:bg-white/10' }}">
-        📄 <span>{{ "Saisie bulletin" if lang == "fr" else "Enter payslip" }}</span>
-      </a>
-      <a href="/bulletins" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='bulletins' else 'text-white/80 hover:bg-white/10' }}">
-        📊 <span>{{ T.nav.bulletins }}</span>
-      </a>
-      <a href="/periodes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='periodes' else 'text-white/80 hover:bg-white/10' }}">
-        📅 <span>{{ T.nav.periodes }}</span>
-      </a>
-      <a href="/cycle-paie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'cycle_paie' in (ep or '') else 'text-white/80 hover:bg-white/10' }}">
-        🔄 <span>{{ "Cycle de paie" if lang == "fr" else "Payroll cycle" }}</span>
-      </a>
-      <a href="/conges" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'conge' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🏖️ <span>{{ T.nav.conges }}</span>
-      </a>
-      {% if tenant and (tenant.convention or '')|upper in ['HOTELLERIE', 'BOIS', 'MINIER', 'FORET'] and current_user.is_tenant_admin %}
-      <a href="/prime-fin-annee" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='prime_fin_annee' else 'text-white/80 hover:bg-white/10' }}">
-        🎁 <span>{% if (tenant.convention or '')|upper == 'BOIS' %}Gratif. fin d'année{% elif (tenant.convention or '')|upper == 'MINIER' %}13ᵉ mois{% elif (tenant.convention or '')|upper == 'FORET' %}Gratification{% else %}Prime fin d'année{% endif %}</span>
-      </a>
-      {% endif %}
-      {% if current_user.is_tenant_admin or current_user.has_permission('view_salaries') %}
-      <a href="/conges/bilan" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='conges_bilan' else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
-        📊 <span style="font-size:.8rem">{{ "Bilan congés" if lang == "fr" else "Leave balance" }}</span>
-      </a>
-      <a href="/conges/planning" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='conges_planning' else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
-        📅 <span style="font-size:.8rem">{{ "Planning" if lang == "fr" else "Schedule" }}</span>
-      </a>
-      <a href="/conges/planning-annuel" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'planning_annuel' in (ep or '') else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
-        📊 <span style="font-size:.8rem">{{ "Vue annuelle" if lang == "fr" else "Year view" }}</span>
-      </a>
-      <a href="/conges/previsionnel" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'previsionnel' in (ep or '') else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
-        🗓️ <span style="font-size:.8rem">{{ "Prévisionnel" if lang == "fr" else "Leave plan" }}</span>
-      </a>
-      {% endif %}
-      <a href="/acomptes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'acompte' in ep else 'text-white/80 hover:bg-white/10' }}">
-        💵 <span>{{ T.nav.acomptes }}</span>
-      </a>
-      <a href="/prets" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'pret' in ep else 'text-white/80 hover:bg-white/10' }}">
-        💳 <span>{{ "Prêts" if lang == "fr" else "Loans" }}</span>
-      </a>
-      <a href="/medailles" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'medaille' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🏅 <span>{{ "Médailles du travail" if lang == "fr" else "Work medals" }}</span>
-      </a>
-      <a href="/formations" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'formation' in ep else 'text-white/80 hover:bg-white/10' }}">
-        📚 <span>{{ "Formations" if lang == "fr" else "Training" }}</span>
-      </a>
-      <a href="/evaluations" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'evaluation' in ep else 'text-white/80 hover:bg-white/10' }}">
-        📋 <span>{{ "Évaluations" if lang == "fr" else "Reviews" }}</span>
-      </a>
-      <a href="/competences" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'competence' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🧠 <span>{{ "Compétences" if lang == "fr" else "Skills" }}</span>
-      </a>
-      <div class="border-t border-white/10 my-2"></div>
-      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">{{ "Terrain" if lang == "fr" else "Field" }}</p>
-      <a href="/pointage" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='pointage' else 'text-white/80 hover:bg-white/10' }}">
-        📋 <span>{{ "Pointage" if lang == "fr" else "Attendance" }}</span>
-      </a>
-      <a href="/jours-feries" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='jours_feries_page' else 'text-white/80 hover:bg-white/10' }}" style="padding-left:2.5rem">
-        📅 <span>{{ "Jours fériés" if lang == "fr" else "Holidays" }}</span>
-      </a>
-      <a href="/sites" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='sites' else 'text-white/80 hover:bg-white/10' }}">
-        🏗️ <span>{{ T.nav.sites }}</span>
-      </a>
-      <a href="/pointeurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'pointeur' in ep or ep=='pointages_mobiles' else 'text-white/80 hover:bg-white/10' }}">
-        📱 <span>{{ "Pointage mobile" if lang == "fr" else "Mobile attendance" }}</span>
-      </a>
-      <a href="/composants" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'composant' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🧩 <span>Composants</span>
-      </a>
-      <a href="/prestataires" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'prestataire' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🤝 <span>{{ "Prestataires" if lang == "fr" else "Contractors" }}</span>
-      </a>
-      <a href="/rapports/mensuel-site" class="flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all {{ 'bg-white text-slate-900' if ep=='rapport' else 'text-white/80 hover:bg-white/10' }}">
-        📊 <span>{{ T.nav.rapports }}</span>
-      </a>
-      <a href="/journaliers" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journalier' in ep else 'text-white/80 hover:bg-white/10' }}">
-        👷 <span>{{ T.nav.journaliers }}</span>
-      </a>
-      <a href="/journaliers/paie" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'journaliers_paie' in ep else 'text-white/80 hover:bg-white/10' }}">
-        💵 <span>{{ "Paie journaliers" if lang == "fr" else "Daily pay" }}</span>
-      </a>
-      <a href="/mise-a-disposition" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'mad_' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🤝 <span>{{ "Mise à disposition" if lang == "fr" else "Staffing" }}</span>
-      </a>
-      <div class="border-t border-white/10 my-2"></div>
-      <p style="font-size:.65rem;font-weight:700;color:rgba(255,255,255,.3);text-transform:uppercase;letter-spacing:.08em;padding:.5rem 1rem .25rem">{{ T.nav.declaration }}</p>
-      <a href="/declaration-cnss"
-        class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_cnss' else 'text-white/80 hover:bg-white/10' }}">
-        📋 <span>{{ "Décl. CNSS" if lang == "fr" else "CNSS Decl." }}</span>
-      </a>
-      {% if tenant and tenant.plan and tenant.plan.code in ['CABINET', 'CABINET_COMPTABLE'] %}
-      <a href="/declaration-das"
-        class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='declaration_das' else 'text-white/80 hover:bg-white/10' }}">
-        🗂️ <span>{{ "Décl. annuelle (DAS)" if lang == "fr" else "Annual Decl. (DAS)" }}</span>
-      </a>
-      {% endif %}
-      <div class="border-t border-white/10 my-2"></div>
-      <a href="/portail-employes" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'portail_employes' in (ep or '') else 'text-white/80 hover:bg-white/10' }}">
-        📱 <span>{{ "Portail des employés" if lang == "fr" else "Employee portal" }}</span>
-      </a>
-      {% if current_user.is_tenant_admin %}
-      <a href="/utilisateurs" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if 'utilisateur' in ep else 'text-white/80 hover:bg-white/10' }}">
-        🔐 <span>{{ "Utilisateurs" if lang == "fr" else "Users" }}</span>
-      </a>
-      <a href="/audit" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='audit_trail' else 'text-white/80 hover:bg-white/10' }}">
-        🔍 <span>{{ "Journal d'audit" if lang == "fr" else "Audit log" }}</span>
-      </a>
-      {% endif %}
-      {% if current_user.has_permission('view_bulletins') or current_user.is_tenant_admin %}
-      {% if current_user.is_tenant_admin %}
-      <a href="/messages" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='messages_support' else 'text-white/80 hover:bg-white/10' }}">
-        💬 <span>Support</span>
-        {% if messages_non_lus and messages_non_lus > 0 %}<span style="margin-left:auto;background:#dc2626;color:white;font-size:.65rem;font-weight:800;padding:.1rem .45rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}
-      </a>
-      {% endif %}
-      <a href="/offres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='offres' else 'text-white/80 hover:bg-white/10' }}">
-        🏷️ <span>{{ "Nos offres" if lang == "fr" else "Plans" }}</span>
-      </a>
-      <a href="/paiement" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='paiement' else 'text-white/80 hover:bg-white/10' }}">
-        💳 <span>{{ "Abonnement" if lang == "fr" else "Subscription" }}</span>
-      </a>
-      {% endif %}
-      <a href="/parametres" class="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-semibold transition-all {{ 'bg-white text-slate-900' if ep=='parametres' else 'text-white/80 hover:bg-white/10' }}">
-        ⚙️ <span>{{ T.nav.parametres }}</span>
-      </a>
+      {% endmacro %}
+      {% macro nav_groupe(cle, icone, titre) %}
+      <details class="nav-groupe" data-groupe="{{ cle }}">
+        <summary class="nav-titre">{{ icone }} <span>{{ titre }}</span><span class="nav-chevron">▸</span></summary>
+        <div class="nav-items">{{ caller() }}</div>
+      </details>
+      {% endmacro %}
+      {% set nav_fr = (lang == "fr") %}
+
+      {{ nav_lien("/dashboard", "🏠", T.nav.dashboard, ep == 'dashboard') }}
+
+      {% call nav_groupe("paie", "📄", "Paie" if nav_fr else "Payroll") %}
+        {{ nav_lien("/bulletins/saisie", "✏️", "Saisie bulletin" if nav_fr else "Enter payslip", ep == 'bulletin_saisie') }}
+        {{ nav_lien("/bulletins", "📑", T.nav.bulletins, ep in ['bulletins', 'bulletin_detail']) }}
+        {{ nav_lien("/periodes", "📅", T.nav.periodes, ep in ['periodes', 'periode_detail']) }}
+        {{ nav_lien("/cycle-paie", "🔄", "Cycle de paie" if nav_fr else "Payroll cycle", 'cycle_paie' in ep) }}
+        {{ nav_lien("/paie/controle", "🔎", "Contrôle de la paie" if nav_fr else "Payroll check", ep == 'controle_paie') }}
+        {{ nav_lien("/rappels", "↩️", "Rappels de salaire" if nav_fr else "Back pay", 'rappel' in ep) }}
+        {% if tenant and (tenant.convention or '')|upper in ['HOTELLERIE', 'BOIS', 'MINIER', 'FORET'] and current_user.is_tenant_admin %}
+        {{ nav_lien("/prime-fin-annee", "🎁", ("Gratif. fin d'année" if (tenant.convention or '')|upper == 'BOIS' else "13ᵉ mois" if (tenant.convention or '')|upper == 'MINIER' else "Gratification" if (tenant.convention or '')|upper == 'FORET' else "Prime fin d'année"), ep == 'prime_fin_annee') }}
+        {% endif %}
+        {{ nav_lien("/composants", "🧩", "Composants de paie" if nav_fr else "Pay items", 'composant' in ep) }}
+        {{ nav_lien("/simulateur", "🧮", "Simulateur" if nav_fr else "Simulator", ep == 'simulateur_paie') }}
+      {% endcall %}
+
+      {% call nav_groupe("reglements", "💰", "Règlements et avances" if nav_fr else "Payments & advances") %}
+        {{ nav_lien("/virements", "🏦", "Virements et espèces" if nav_fr else "Transfers & cash", 'virement' in ep or ep == 'paie_especes') }}
+        {{ nav_lien("/acomptes", "💵", T.nav.acomptes, 'acompte' in ep) }}
+        {{ nav_lien("/prets", "🤲", "Prêts" if nav_fr else "Loans", 'pret' in ep and 'prestataire' not in ep) }}
+      {% endcall %}
+
+      {% call nav_groupe("personnel", "👥", "Personnel" if nav_fr else "Staff") %}
+        {{ nav_lien("/salaries", "👤", T.nav.salaries, 'salari' in ep and 'portail' not in ep) }}
+        {{ nav_lien("/medailles", "🏅", "Médailles du travail" if nav_fr else "Work medals", 'medaille' in ep) }}
+        {{ nav_lien("/formations", "📚", "Formations" if nav_fr else "Training", 'formation' in ep) }}
+        {{ nav_lien("/evaluations", "📝", "Évaluations" if nav_fr else "Reviews", 'evaluation' in ep) }}
+        {{ nav_lien("/competences", "🧠", "Compétences" if nav_fr else "Skills", 'competence' in ep) }}
+        {{ nav_lien("/portail-employes", "📲", "Portail des employés" if nav_fr else "Employee portal", 'portail_employes' in ep) }}
+      {% endcall %}
+
+      {% call nav_groupe("conges", "🏖️", T.nav.conges) %}
+        {{ nav_lien("/conges", "🏖️", "Demandes et soldes" if nav_fr else "Requests & balances", 'conge' in ep and ep not in ['conges_bilan', 'conges_planning'] and 'planning_annuel' not in ep and 'previsionnel' not in ep and 'provision' not in ep) }}
+        {% if current_user.is_tenant_admin or current_user.has_permission('view_salaries') %}
+        {{ nav_lien("/conges/bilan", "📊", "Bilan congés" if nav_fr else "Leave balance", ep == 'conges_bilan') }}
+        {{ nav_lien("/conges/planning", "🗓️", "Planning" if nav_fr else "Schedule", ep == 'conges_planning') }}
+        {{ nav_lien("/conges/planning-annuel", "📆", "Vue annuelle" if nav_fr else "Year view", 'planning_annuel' in ep) }}
+        {{ nav_lien("/conges/previsionnel", "🔮", "Prévisionnel" if nav_fr else "Leave plan", 'previsionnel' in ep) }}
+        {% endif %}
+        {{ nav_lien("/provisions-conges", "🧾", "Provision congés payés" if nav_fr else "Leave accrual", 'provision' in ep) }}
+      {% endcall %}
+
+      {% call nav_groupe("terrain", "📋", "Terrain" if nav_fr else "Field") %}
+        {{ nav_lien("/pointage", "⏱️", "Pointage" if nav_fr else "Attendance", ep == 'pointage') }}
+        {{ nav_lien("/pointeurs", "📱", "Pointage mobile" if nav_fr else "Mobile attendance", 'pointeur' in ep or ep == 'pointages_mobiles') }}
+        {{ nav_lien("/jours-feries", "🎌", "Jours fériés" if nav_fr else "Holidays", ep == 'jours_feries_page') }}
+        {{ nav_lien("/sites", "🏗️", T.nav.sites, ep in ['sites', 'site_detail']) }}
+        {{ nav_lien("/journaliers", "👷", T.nav.journaliers, 'journalier' in ep and 'journaliers_paie' not in ep) }}
+        {{ nav_lien("/journaliers/paie", "💸", "Paie journaliers" if nav_fr else "Daily pay", 'journaliers_paie' in ep) }}
+      {% endcall %}
+
+      {% call nav_groupe("tiers", "🤝", "Tiers" if nav_fr else "Third parties") %}
+        {{ nav_lien("/prestataires", "🧰", "Prestataires" if nav_fr else "Contractors", 'prestataire' in ep) }}
+        {{ nav_lien("/mise-a-disposition", "🤝", "Mise à disposition" if nav_fr else "Staffing", 'mad_' in ep) }}
+      {% endcall %}
+
+      {% call nav_groupe("pilotage", "📈", "Pilotage et déclarations" if nav_fr else "Reporting & filings") %}
+        {{ nav_lien("/indicateurs-rh", "📈", "Indicateurs RH" if nav_fr else "HR indicators", 'indicateurs' in ep) }}
+        {{ nav_lien("/budget-masse-salariale", "🎯", "Budget masse salariale" if nav_fr else "Payroll budget", 'budget' in ep) }}
+        {{ nav_lien("/rapports/mensuel-site", "📊", T.nav.rapports, 'rapport' in ep) }}
+        {{ nav_lien("/declaration-cnss", "🏛️", "Décl. CNSS" if nav_fr else "CNSS Decl.", ep == 'declaration_cnss') }}
+        {% if tenant and tenant.plan and tenant.plan.code in ['CABINET', 'CABINET_COMPTABLE'] %}
+        {{ nav_lien("/declaration-das", "🗂️", "Décl. annuelle (DAS)" if nav_fr else "Annual Decl. (DAS)", ep == 'declaration_das') }}
+        {% endif %}
+      {% endcall %}
+
+      {% call nav_groupe("compte", "⚙️", "Compte et administration" if nav_fr else "Account & admin") %}
+        {% if current_user.is_tenant_admin %}
+        {{ nav_lien("/utilisateurs", "🔐", "Utilisateurs" if nav_fr else "Users", 'utilisateur' in ep) }}
+        {{ nav_lien("/audit", "🔍", "Journal d'audit" if nav_fr else "Audit log", ep == 'audit_trail') }}
+        {% endif %}
+        {% if current_user.has_permission('view_bulletins') or current_user.is_tenant_admin %}
+        {% if current_user.is_tenant_admin %}
+        {% call nav_lien("/messages", "💬", "Support", ep == 'messages_support') %}{% if messages_non_lus and messages_non_lus > 0 %}<span style="margin-left:auto;background:#dc2626;color:white;font-size:.65rem;font-weight:800;padding:.1rem .45rem;border-radius:9999px">{{ messages_non_lus }}</span>{% endif %}{% endcall %}
+        {% endif %}
+        {{ nav_lien("/offres", "🏷️", "Nos offres" if nav_fr else "Plans", ep == 'offres') }}
+        {{ nav_lien("/paiement", "💳", "Abonnement" if nav_fr else "Subscription", ep == 'paiement') }}
+        {% endif %}
+        {{ nav_lien("/parametres", "⚙️", T.nav.parametres, ep == 'parametres') }}
+      {% endcall %}
 
       <!-- Sélecteur de langue -->
       <div class="border-t border-white/10 my-2"></div>
@@ -421,7 +391,7 @@
 
       <!-- Liens rapides horizontaux : affichés uniquement quand la sidebar est repliée -->
       <nav id="topnav" class="hidden items-center gap-1">
-        {% set tep = request.endpoint %}
+        {% set tep = (request.endpoint or '').split('.')[-1] %}
         <a href="/dashboard" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="color:{{ 'var(--brand)' if tep=='dashboard' else 'var(--text-sub)' }}">Tableau de bord</a>
         <a href="/salaries" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="color:{{ 'var(--brand)' if 'salari' in (tep or '') else 'var(--text-sub)' }}">Salariés</a>
         <a href="/bulletins" class="px-3 py-1.5 rounded-lg text-sm font-medium" style="color:{{ 'var(--brand)' if tep=='bulletins' else 'var(--text-sub)' }}">Bulletins</a>
@@ -706,6 +676,21 @@ if (window.MutationObserver) {
     if (ov) ov.style.display = 'none';
   });
 })();
+</script>
+<script nonce="{{ csp_nonce }}">
+  /* Menu regroupé : ouvre le groupe de la page active, mémorise les groupes ouverts (par navigateur). */
+  (function () {
+    var cle = "pg-menu-ouverts", ouverts = [];
+    try { ouverts = JSON.parse(localStorage.getItem(cle) || "[]"); } catch (e) { ouverts = []; }
+    document.querySelectorAll("aside details.nav-groupe").forEach(function (d) {
+      if (d.querySelector(".nav-actif") || ouverts.indexOf(d.dataset.groupe) >= 0) d.open = true;
+      d.addEventListener("toggle", function () {
+        var liste = [];
+        document.querySelectorAll("aside details.nav-groupe[open]").forEach(function (x) { liste.push(x.dataset.groupe); });
+        try { localStorage.setItem(cle, JSON.stringify(liste)); } catch (e) {}
+      });
+    });
+  })();
 </script>
 </body>
 </html>
