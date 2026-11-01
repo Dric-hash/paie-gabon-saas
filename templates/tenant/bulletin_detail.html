@@ -43,13 +43,13 @@
       {% endif %}
     {% endmacro %}
     {{ ligne("Salaire de base", bulletin.salaire_base) }}
-    {{ ligne("Heures sup +10%", bulletin.heures_sup_10) }}
-    {{ ligne("Heures sup +30%", bulletin.heures_sup_30) }}
-    {{ ligne("Heures sup +30% (repos/férié)", bulletin.heures_sup_30b) }}
-    {{ ligne("Heures sup +40%", bulletin.heures_sup_40) }}
-    {{ ligne("Heures sup +70%", bulletin.heures_sup_70) }}
-    {{ ligne("Heures sup férié chômé payé — jour", bulletin.heures_sup_fj) }}
-    {{ ligne("Heures sup férié chômé payé — nuit", bulletin.heures_sup_fn) }}
+    {{ ligne(hs_lib['10'], bulletin.heures_sup_10) }}
+    {{ ligne(hs_lib['30'], bulletin.heures_sup_30) }}
+    {{ ligne(hs_lib['30b'], bulletin.heures_sup_30b) }}
+    {{ ligne(hs_lib['40'], bulletin.heures_sup_40) }}
+    {{ ligne(hs_lib['70'], bulletin.heures_sup_70) }}
+    {{ ligne(hs_lib['fj'], bulletin.heures_sup_fj) }}
+    {{ ligne(hs_lib['fn'], bulletin.heures_sup_fn) }}
     {{ ligne("Absences", bulletin.absences, True) }}
     {{ ligne("Sursalaire", bulletin.sursalaire) }}
     {{ ligne("Prime de caisse", bulletin.prime_caisse) }}

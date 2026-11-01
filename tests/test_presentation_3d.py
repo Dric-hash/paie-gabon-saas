@@ -99,7 +99,7 @@ def test_3d_dans_toutes_les_sections(env):
         bloc = bloc[:bloc.index("</section>")]
         assert 'c3d reflet' in bloc, section
     conv = page[page.index('id="conventions"'):]
-    assert conv[:conv.index("</section>")].count("conv-carte") == 9      # 8 conventions + « Et la vôtre ? »
+    assert conv[:conv.index("</section>")].count("conv-carte") == 11     # 10 conventions + « Et la vôtre ? »
     assert page.count("secu-carte c3d") == 4
     assert 'class="final-scene" aria-hidden="true"' in page
     bloc = page[page.index("@media (prefers-reduced-motion: reduce){\n    .scene-3d"):]

@@ -55,8 +55,9 @@ def test_coeffs_heures_sup_petrole():
 
 
 def test_coeffs_heures_sup_non_regression():
-    # BTP, Commerce et AUCUNE conservent la grille historique 10/30/40/70.
-    for conv in ("BTP", "COMMERCE", "AUCUNE", None):
+    # BTP et AUCUNE conservent la grille historique 10/30/40/70. Le Commerce a sa
+    # propre grille A.38 depuis le 01/11/2026 (cf. test_revue_conventions.py).
+    for conv in ("BTP", "AUCUNE", None):
         cf = c.coeffs_heures_sup(conv)
         assert cf["10"] == 1.10 and cf["30"] == 1.30
         assert cf["40"] == 1.40 and cf["70"] == 1.70

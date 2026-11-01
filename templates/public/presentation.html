@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>PaieGabon — Le logiciel de paie conçu pour le Gabon</title>
-<meta name="description" content="Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et déclarations sociales calculés automatiquement selon la loi gabonaise. 8 conventions collectives intégrées : BTP, Commerce, Pétrole, Industrie, Transports aériens, Hôtellerie, Industries du bois et Entreprises minières. Essai gratuit, sans carte bancaire."/>
+<meta name="description" content="Bulletins, cotisations CNSS &amp; CNAMGS, IRPP et déclarations sociales calculés automatiquement selon la loi gabonaise. 10 conventions collectives intégrées : BTP, Commerce, Pétrole, Hydrocarbures, Industrie, Transports aériens, Hôtellerie, Industries du bois, Exploitations forestières et Entreprises minières. Essai gratuit, sans carte bancaire."/>
 <link rel="canonical" href="https://www.paiegabon.com/"/>
 <meta name="theme-color" content="#0f3d36"/>
 
@@ -287,6 +287,8 @@
   "database": '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>',
   "plane": '<path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z"/>',
   "hotel": '<path d="M2 4v16"/><path d="M2 8h18a2 2 0 0 1 2 2v10"/><path d="M2 17h20"/><path d="M6 8v9"/><circle cx="8" cy="12" r="1.5"/>',
+  "droplet": '<path d="M12 22a7 7 0 0 0 7-7c0-2-1-3.9-3-5.5s-3.5-4-4-6.5c-.5 2.5-2 4.9-4 6.5C6 11.1 5 13 5 15a7 7 0 0 0 7 7z"/>',
+  "trees": '<path d="M10 10v.2A3 3 0 0 1 8.9 16H5a3 3 0 0 1-1-5.8V10a3 3 0 0 1 6 0Z"/><path d="M7 16v6"/><path d="M13 19v3"/><path d="M12 19h8.3a1 1 0 0 0 .7-1.7L18 14h.3a1 1 0 0 0 .7-1.7L16 9h.2a1 1 0 0 0 .8-1.7L13 3l-1.4 1.5"/>',
   "tree": '<path d="M12 22v-7"/><path d="M9 8a3 3 0 1 1 6 0"/><path d="M12 2a5 5 0 0 0-5 5c0 1 .3 2 .8 2.8A4 4 0 0 0 6 17h12a4 4 0 0 0-1.8-7.2c.5-.8.8-1.8.8-2.8a5 5 0 0 0-5-5z"/>',
   "message-circle": '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
   "smartphone": '<rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/>',
@@ -408,7 +410,7 @@
     {% set gages = [
       ("scale","Conforme au Code du travail 2021"),
       ("landmark","CNSS · CNAMGS · IRPP à jour"),
-      ("book-open","8 conventions collectives"),
+      ("book-open","10 conventions collectives"),
       ("shield-check","Données chiffrées & sauvegardées")
     ] %}
     {% for ic, txt in gages %}
@@ -523,7 +525,7 @@
   <div style="text-align:center;max-width:680px;margin:0 auto 2.5rem">
     <div class="eyebrow accent" style="margin-bottom:1rem">Votre secteur, vos règles</div>
     <h2 class="display reveal" style="font-size:1.95rem;font-weight:800;margin:0 0 1rem">
-      8 conventions collectives, déjà intégrées
+      10 conventions collectives, déjà intégrées
     </h2>
     <p class="reveal" style="color:var(--sub);font-size:1.05rem;line-height:1.7;margin:0">
       Heures supplémentaires, prime d'ancienneté, préavis, indemnités de services rendus, primes de nuit
@@ -536,10 +538,12 @@
       ("building","BTP","Bâtiment & travaux publics"),
       ("shopping-bag","Commerce","Entreprises commerciales"),
       ("fuel","Pétrole","Professionnels du pétrole"),
+      ("droplet","Hydrocarbures","Recherche & exploitation"),
       ("factory","Industrie","Entreprises industrielles"),
       ("plane","Transports aériens","Compagnies aériennes"),
       ("hotel","Hôtellerie","Hôtellerie, restauration & débits de boissons"),
       ("tree","Industries du bois","Sciages & placages"),
+      ("trees","Exploitations forestières","Abattage, débardage & grumes"),
       ("pickaxe","Entreprises minières","Mines, carrières & prospection")
     ] %}
     {% for ic, nom, desc in conv %}
@@ -549,7 +553,7 @@
       <div style="color:var(--sub);font-size:.83rem;margin-top:.2rem">{{ desc }}</div>
     </div>
     {% endfor %}
-    <div class="reveal conv-carte card-dark c3d reflet" data-ordre="8" style="background:linear-gradient(150deg,var(--brand),#0c322c);color:#fff;border-radius:1rem;padding:1.35rem;display:flex;flex-direction:column;justify-content:center">
+    <div class="reveal conv-carte card-dark c3d reflet" data-ordre="10" style="background:linear-gradient(150deg,var(--brand),#0c322c);color:#fff;border-radius:1rem;padding:1.35rem;display:flex;flex-direction:column;justify-content:center">
       <div class="display titre-3d" style="font-weight:800;font-size:1.05rem">Et la vôtre ?</div>
       <div style="color:rgba(255,255,255,.8);font-size:.83rem;margin-top:.2rem;line-height:1.5">Nous intégrons régulièrement de nouvelles conventions. Dites-nous la vôtre.</div>
     </div>

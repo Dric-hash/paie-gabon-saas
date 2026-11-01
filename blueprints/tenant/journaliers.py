@@ -423,12 +423,13 @@ def pointage_individuel():
         h_sup_40_man = float(request.form.get("heures_sup_40",0) or 0)
         h_sup_70_man = float(request.form.get("heures_sup_70",0) or 0)
         h_sup_30b_final = 0
-        _conv_t = (t.convention or "").upper()
+        from calculs_paie import regime_heures_sup
+        _repos_30b = regime_heures_sup(t.convention)["repos"] == "30b"
 
         if type_jour == "DIMANCHE":
-            if _conv_t in ("PETROLE", "INDUSTRIE"):
-                # Pétrole / Industrie : dimanche de jour → case 30b ; la nuit est
-                # recalculée par la ventilation mensuelle.
+            if _repos_30b:
+                # Conventions à case 30b (Pétrole, Industrie, Commerce, Hôtellerie…) :
+                # dimanche de jour → case 30b ; la nuit est recalculée par la ventilation.
                 h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
                 h_sup_70_final = 0
             else:
@@ -437,7 +438,7 @@ def pointage_individuel():
             h_sup_10_final = 0; h_sup_30_final = 0; h_sup_40_final = 0
             heures_normales_final = 0
         elif type_jour == "FERIE":
-            if _conv_t in ("PETROLE", "INDUSTRIE"):
+            if _repos_30b:
                 h_sup_30b_final = round(h_sup_horaire + heures_normales_final, 2)
                 h_sup_70_final = 0
             else:

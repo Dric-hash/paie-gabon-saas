@@ -107,10 +107,12 @@
           <div style="font-size:.65rem;color:#6b7280">H.sup totales</div>
         </div>
         <div style="background:white;border-radius:.5rem;padding:.4rem .6rem;text-align:center">
-          <div style="font-size:.7rem;color:#6b7280">+10% <strong id="ptg_10">0h</strong></div>
-          <div style="font-size:.7rem;color:#6b7280">+30% <strong id="ptg_30">0h</strong></div>
-          <div style="font-size:.7rem;color:#6b7280">+40% <strong id="ptg_40">0h</strong></div>
-          <div style="font-size:.7rem;color:#6b7280">+70% <strong id="ptg_70">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">Jour {{ hs_lib.pct['10'] }} <strong id="ptg_10">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">Jour {{ hs_lib.pct['30'] }} <strong id="ptg_30">0h</strong></div>
+          {% if hs_regime.repos == '30b' %}<div style="font-size:.7rem;color:#6b7280">Repos jour {{ hs_lib.pct['30b'] }} <strong id="ptg_30b">0h</strong></div>{% endif %}
+          <div style="font-size:.7rem;color:#6b7280">Nuit {{ hs_lib.pct['40'] }} <strong id="ptg_40">0h</strong></div>
+          <div style="font-size:.7rem;color:#6b7280">{{ 'Dim./férié' if hs_regime.repos == '70' else 'Repos nuit' }} {{ hs_lib.pct['70'] }} <strong id="ptg_70">0h</strong></div>
+          {% if hs_regime.feries %}<div style="font-size:.7rem;color:#6b7280">Férié {{ hs_lib.pct['fj'] }} / {{ hs_lib.pct['fn'] }} <strong id="ptg_fjfn">0h</strong></div>{% endif %}
         </div>
       </div>
 
@@ -190,22 +192,22 @@
         </tr></thead>
         <tbody>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup nuit semaine +10%</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['10'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_10" id="base_heures_sup_10" step="any" min="0" placeholder="0" oninput="calcMontant('heures_sup_10')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_10" id="taux_heures_sup_10" placeholder="1" oninput="calcMontant('heures_sup_10')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_10" id="f_heures_sup_10" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup dimanche +30%</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['30'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_30" id="base_heures_sup_30" step="any" min="0" placeholder="0" oninput="calcMontant('heures_sup_30')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_30" id="taux_heures_sup_30" placeholder="1" oninput="calcMontant('heures_sup_30')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_30" id="f_heures_sup_30" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
-          {% if tenant.convention == 'PETROLE' %}
+          {% if hs_regime.repos == '30b' %}
           <tr style="border-bottom:1px solid #f3f4f6;background:#fffdf5">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup repos/férié (jour) +30%</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['30b'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_30b" id="base_heures_sup_30b" min="0" placeholder="0" oninput="calcMontant('heures_sup_30b')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_30b" id="taux_heures_sup_30b" placeholder="1" oninput="calcMontant('heures_sup_30b')" class="pf-rate"/></td>
@@ -213,28 +215,28 @@
           </tr>
           {% endif %}
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup nuit dim. +40%</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['40'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_40" id="base_heures_sup_40" step="any" min="0" placeholder="0" oninput="calcMontant('heures_sup_40')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_40" id="taux_heures_sup_40" placeholder="1" oninput="calcMontant('heures_sup_40')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_40" id="f_heures_sup_40" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup jours fériés +70%</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['70'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_70" id="base_heures_sup_70" step="any" min="0" placeholder="0" oninput="calcMontant('heures_sup_70')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_70" id="taux_heures_sup_70" placeholder="1" oninput="calcMontant('heures_sup_70')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_70" id="f_heures_sup_70" value="0" step="any" min="0"  class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup férié chômé payé — jour</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['fj'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_fj" id="base_heures_sup_fj" min="0" placeholder="0" oninput="calcMontant('heures_sup_fj')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_fj" id="taux_heures_sup_fj" placeholder="1" oninput="calcMontant('heures_sup_fj')" class="pf-rate"/></td>
             <td class="pf-cell"><input type="number" name="heures_sup_fj" id="f_heures_sup_fj" value="0" step="any" min="0" class="champ-calcul pf-amt" oninput="recalculer()"/></td>
           </tr>
           <tr style="border-bottom:1px solid #f3f4f6">
-            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">H. sup férié chômé payé — nuit</td>
+            <td style="padding:.4rem .5rem;font-size:.8rem;font-weight:600;color:#374151">{{ hs_lib['fn'] }}</td>
             <td class="pf-cell"><input type="number" step="any" name="base_heures_sup_fn" id="base_heures_sup_fn" min="0" placeholder="0" oninput="calcMontant('heures_sup_fn')" class="pf-base"/></td>
             <td style="text-align:center;font-size:.8rem;color:#9ca3af">×</td>
             <td class="pf-cell"><input type="text" name="taux_heures_sup_fn" id="taux_heures_sup_fn" placeholder="1" oninput="calcMontant('heures_sup_fn')" class="pf-rate"/></td>
@@ -612,7 +614,10 @@
 // ── Constantes et fonctions BTP ─────────────────────────────────────────────
 const H_NORM_MENSUEL  = 173.33;
 const H_SUP_STRUCT_JS = 17.33;   // 4h × 4,333 semaines/mois
-const C10 = 1.10, C30 = 1.30, C40 = 1.40, C70 = 1.70;
+// Coefficients de la convention de l'entreprise (calculs_paie.coeffs_heures_sup) :
+// correctif 01/11/2026, la grille BTP était appliquée à toutes les conventions.
+const HS_COEFFS = {{ hs_coeffs|tojson }};
+const C10 = HS_COEFFS['10'], C30 = HS_COEFFS['30'], C40 = HS_COEFFS['40'], C70 = HS_COEFFS['70'];
 const CONVENTION_TENANT = "{{ tenant.convention or '' }}".toUpperCase();
 
 function appliquerHSupBTP(salaireBase) {
@@ -627,10 +632,7 @@ function appliquerHSupBTP(salaireBase) {
     const b = document.getElementById('base_' + prefix);
     if (b) b.value = Math.round(th * coef);
   };
-  setBase('heures_sup_10', C10);
-  setBase('heures_sup_30', C30);
-  setBase('heures_sup_40', C40);
-  setBase('heures_sup_70', C70);
+  ['10', '30', '30b', '40', '70', 'fj', 'fn'].forEach(k => setBase('heures_sup_' + k, HS_COEFFS[k]));
 
   // Heures structurelles (17,33h à +10% et +30%) : régime BTP 48h/semaine UNIQUEMENT.
   if (estBTP) {
@@ -676,10 +678,11 @@ function rendreDetailSemaines(semaines) {
       <th style="padding:.35rem .5rem;text-align:left">Semaine</th>
       <th style="padding:.35rem .5rem;text-align:right">Pointées</th>
       <th style="padding:.35rem .5rem;text-align:right">Normales</th>
-      <th style="padding:.35rem .5rem;text-align:right">+10%</th>
-      <th style="padding:.35rem .5rem;text-align:right">+30%</th>
-      <th style="padding:.35rem .5rem;text-align:right">+40%</th>
-      <th style="padding:.35rem .5rem;text-align:right">+70%</th>
+      <th style="padding:.35rem .5rem;text-align:right">Jour {{ hs_lib.pct['10'] }}</th>
+      <th style="padding:.35rem .5rem;text-align:right">Jour {{ hs_lib.pct['30'] }}</th>
+      {% if hs_regime.repos == '30b' %}<th style="padding:.35rem .5rem;text-align:right">Repos jour {{ hs_lib.pct['30b'] }}</th>{% endif %}
+      <th style="padding:.35rem .5rem;text-align:right">Nuit {{ hs_lib.pct['40'] }}</th>
+      <th style="padding:.35rem .5rem;text-align:right">{{ 'Dim./férié' if hs_regime.repos == '70' else 'Repos nuit' }} {{ hs_lib.pct['70'] }}</th>
     </tr></thead><tbody>`;
   semaines.forEach((s, i) => {
     const bg = i % 2 ? 'background:#f0fdf4' : '';
@@ -689,14 +692,18 @@ function rendreDetailSemaines(semaines) {
       <td style="padding:.3rem .5rem;text-align:right">${s.heures_normales}h</td>
       <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_10}h</td>
       <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_30}h</td>
+      {% if hs_regime.repos == '30b' %}<td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_30b || 0}h</td>{% endif %}
       <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_40}h</td>
       <td style="padding:.3rem .5rem;text-align:right">${s.heures_sup_70}h</td>
     </tr>`;
   });
   h += `</tbody></table>
     <p style="font-size:.68rem;color:#047857;margin:.4rem 0 0">
-      Répartition réglementaire BTP : 0→40h normales · 40→44h +10% · 44h et + +30% ·
-      nuit +40% · dimanche/férié travaillé +70% · férié chômé = 8h normales.
+      Répartition hebdomadaire selon votre convention : au-delà du seuil, {{ hs_regime.palier|int }} premières heures
+      de jour {{ hs_lib.pct['10'] }}, au-delà {{ hs_lib.pct['30'] }} · nuit {{ hs_lib.pct['40'] }} ·
+      {% if hs_regime.repos == '70' %}dimanche/férié travaillé {{ hs_lib.pct['70'] }}{% else %}repos/férié de jour {{ hs_lib.pct['30b'] }}, de nuit {{ hs_lib.pct['70'] }}{% endif %}
+      {% if hs_regime.feries %}· férié chômé payé travaillé {{ hs_lib.pct['fj'] }} (jour) / {{ hs_lib.pct['fn'] }} (nuit){% endif %}
+      · férié chômé = 8h normales.
     </p>`;
   box.innerHTML = h;
 }
@@ -717,6 +724,9 @@ function chargerPointage(salId, mois, annee) {
         document.getElementById('ptg_30').textContent = (d.heures_sup_30||0) + 'h';
         document.getElementById('ptg_40').textContent = (d.heures_sup_40||0) + 'h';
         document.getElementById('ptg_70').textContent = (d.heures_sup_70||0) + 'h';
+        const e30b = document.getElementById('ptg_30b'); if (e30b) e30b.textContent = (d.heures_sup_30b||0) + 'h';
+        const efj = document.getElementById('ptg_fjfn');
+        if (efj) efj.textContent = (Math.round(((d.heures_sup_fj||0) + (d.heures_sup_fn||0)) * 100) / 100) + 'h';
         document.getElementById('ptg_message').textContent = '— ' + d.message;
         rendreDetailSemaines(d.detail_semaines || []);
       } else {
@@ -730,16 +740,27 @@ function appliquerPointage() {
   if (_ptgData.nb_jours > 0) {
     const el = document.getElementById('nb_jours'); if(el) el.value = _ptgData.nb_jours;
   }
-  [['heures_sup_10',_ptgData.heures_sup_10||0],['heures_sup_30',_ptgData.heures_sup_30||0],
-   ['heures_sup_40',_ptgData.heures_sup_40||0],['heures_sup_70',_ptgData.heures_sup_70||0]
-  ].forEach(([nom, val]) => {
+  // Le pointage donne des HEURES : elles vont dans la colonne Taux/Qté, la base reçoit
+  // le taux horaire majoré de la convention, et le montant = base × heures.
+  // (Correctif 01/11/2026 : les heures étaient écrites dans la colonne Montant.)
+  const sb = parseFloat(document.getElementById('f_salaire_base')?.value || 0) || 0;
+  const th = sb > 0 ? sb / H_NORM_MENSUEL : 0;
+  ['10', '30', '30b', '40', '70', 'fj', 'fn'].forEach(k => {
+    const nom = 'heures_sup_' + k;
+    const h = parseFloat(_ptgData[nom] || 0) || 0;
+    const qte = document.getElementById('taux_' + nom);
+    const base = document.getElementById('base_' + nom);
     const el = document.getElementById('f_' + nom);
-    if (el) {
-      el.value = val;
-      if (val > 0) {
-        el.style.background = '#f0fdf4'; el.style.borderColor = '#86efac';
-        setTimeout(() => { el.style.background=''; el.style.borderColor=''; }, 3000);
-      }
+    if (!el) return;
+    if (h > 0 && th > 0) {
+      if (base) base.value = Math.round(th * HS_COEFFS[k]);
+      if (qte) qte.value = h;
+      el.value = Math.round(Math.round(th * HS_COEFFS[k]) * h);
+      el.style.background = '#f0fdf4'; el.style.borderColor = '#86efac';
+      setTimeout(() => { el.style.background=''; el.style.borderColor=''; }, 3000);
+    } else {
+      el.value = 0;
+      if (qte) qte.value = '';
     }
   });
   recalculer();
@@ -1022,13 +1043,13 @@ function appliquerDistribBTP() {
     // Appliquer les montants directement si disponibles
     set('f_heures_sup_10', Math.round(_btpData.montant_10 || 0));
     set('f_heures_sup_30', Math.round(_btpData.montant_30 || 0));
-    set('f_heures_sup_40', Math.round((_btpData.heures_sup_40||0) * _btpData.taux_horaire * 1.40));
-    set('f_heures_sup_70', Math.round((_btpData.heures_sup_70||0) * _btpData.taux_horaire * 1.70));
+    set('f_heures_sup_40', Math.round((_btpData.heures_sup_40||0) * _btpData.taux_horaire * C40));
+    set('f_heures_sup_70', Math.round((_btpData.heures_sup_70||0) * _btpData.taux_horaire * C70));
     // Bases et taux
     const th = Math.round(_btpData.taux_horaire);
-    set('base_heures_sup_10', Math.round(th * 1.10));
+    set('base_heures_sup_10', Math.round(th * C10));
     set('taux_heures_sup_10', _btpData.heures_sup_10);
-    set('base_heures_sup_30', Math.round(th * 1.30));
+    set('base_heures_sup_30', Math.round(th * C30));
     set('taux_heures_sup_30', _btpData.heures_sup_30);
   }
 

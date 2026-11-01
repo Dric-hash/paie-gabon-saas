@@ -1673,33 +1673,24 @@ def api_pointage_mois(id):
             "message": "Aucun pointage pour cette période"})
     nb_jours = len(pts_travailles)
 
-    if (t.convention or "").upper() in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN", "MINIER"):
-        # Ventilation réglementaire : semaine par semaine, ligne par ligne
-        from calculs_paie import ventiler_heures_mois, pointage_vers_jours
-        _feries = set()
-        for _an in {p.date.year for p in pts if getattr(p, "date", None)}:
-            _feries |= set(jours_feries_annee(_an).keys())
-        v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), feries=_feries, seuil_normales=t.seuil_hs)
-        heures_normales = v["heures_normales"]
-        heures_sup_10   = v["heures_sup_10"]
-        heures_sup_30   = v["heures_sup_30"]
-        heures_sup_30b  = v.get("heures_sup_30b", 0.0)
-        heures_sup_40   = v["heures_sup_40"]
-        heures_sup_70   = v["heures_sup_70"]
-        heures_sup_fj   = v.get("heures_sup_fj", 0.0)
-        heures_sup_fn   = v.get("heures_sup_fn", 0.0)
-        detail_semaines = v["detail_semaines"]
-    else:
-        # Autres conventions : cumul direct des colonnes déjà ventilées par jour
-        heures_normales = sum(float(p.heures_normales or 8) for p in pts_travailles)
-        heures_sup_10   = sum(float(p.heures_sup_10 or 0) for p in pts_travailles)
-        heures_sup_30   = sum(float(p.heures_sup_30 or 0) for p in pts_travailles)
-        heures_sup_30b  = sum(float(getattr(p, "heures_sup_30b", 0) or 0) for p in pts_travailles)
-        heures_sup_40   = sum(float(p.heures_sup_40 or 0) for p in pts_travailles)
-        heures_sup_70   = sum(float(p.heures_sup_70 or 0) for p in pts_travailles)
-        heures_sup_fj   = 0.0
-        heures_sup_fn   = 0.0
-        detail_semaines = []
+    # Ventilation réglementaire semaine par semaine, pour TOUTES les conventions
+    # (régime et taux propres à chacune : calculs_paie.REGIMES_HS_CONVENTION).
+    # Correctif 01/11/2026 : Commerce, Hôtellerie, Bois, Forêt et Hydrocarbures
+    # cumulaient les colonnes saisies jour par jour, sans paliers hebdomadaires.
+    from calculs_paie import ventiler_heures_mois, pointage_vers_jours
+    _feries = set()
+    for _an in {p.date_pointage.year for p in pts if getattr(p, "date_pointage", None)}:
+        _feries |= set(jours_feries_annee(_an).keys())
+    v = ventiler_heures_mois(t.convention, pointage_vers_jours(pts), feries=_feries, seuil_normales=t.seuil_hs)
+    heures_normales = v["heures_normales"]
+    heures_sup_10   = v["heures_sup_10"]
+    heures_sup_30   = v["heures_sup_30"]
+    heures_sup_30b  = v.get("heures_sup_30b", 0.0)
+    heures_sup_40   = v["heures_sup_40"]
+    heures_sup_70   = v["heures_sup_70"]
+    heures_sup_fj   = v.get("heures_sup_fj", 0.0)
+    heures_sup_fn   = v.get("heures_sup_fn", 0.0)
+    detail_semaines = v["detail_semaines"]
     pts_absents = Pointage.query.filter_by(tenant_id=t.id, salarie_id=id)        .filter(Pointage.date_pointage >= debut, Pointage.date_pointage <= fin,
                 Pointage.absent == True).all()
     pts_absents = [p for p in pts_absents if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]

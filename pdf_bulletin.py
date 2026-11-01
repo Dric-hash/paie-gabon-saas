@@ -251,12 +251,11 @@ def _elements_bulletin(bulletin, tenant):
                               f"{_flt(taux_h):.2f}h" if taux_h else "",
                               gain=montant))
 
-    add_hsup("H.sup +10%", b.heures_sup_10, b.base_heures_sup_10, b.taux_heures_sup_10)
-    add_hsup("H.sup +30%", b.heures_sup_30, b.base_heures_sup_30, b.taux_heures_sup_30)
-    add_hsup("H.sup +30% (repos/férié)", getattr(b, "heures_sup_30b", 0),
-             getattr(b, "base_heures_sup_30b", 0), getattr(b, "taux_heures_sup_30b", ""))
-    add_hsup("H.sup +40% (nuit/dim.)", b.heures_sup_40, b.base_heures_sup_40, b.taux_heures_sup_40)
-    add_hsup("H.sup +70% (jours fériés)", b.heures_sup_70, b.base_heures_sup_70, b.taux_heures_sup_70)
+    from calculs_paie import libelles_heures_sup
+    _lib_hs = libelles_heures_sup(getattr(tenant, "convention", None))   # taux réels de la convention
+    for _k in ("10", "30", "30b", "40", "70", "fj", "fn"):
+        add_hsup(_lib_hs[_k], getattr(b, f"heures_sup_{_k}", 0),
+                 getattr(b, f"base_heures_sup_{_k}", 0), getattr(b, f"taux_heures_sup_{_k}", ""))
 
     # ── Primes et indemnités ─────────────────────────────────────────────────
     extras = [
@@ -602,10 +601,12 @@ def _elements_bulletin_detaille(bulletin, tenant):
             rub(lib, None, None, mt, None)
     rub("Salaire de base", g("base_salaire_base"), g("taux_salaire"), g("salaire_base"), None, force=True)
     rub("Sursalaire", g("base_sursalaire"), g("taux_sursalaire"), g("sursalaire"), None)
-    rub("Heures supplémentaires +10%", None, None, g("heures_sup_10"), None)
-    rub("Heures supplémentaires +30%", None, None, g("heures_sup_30"), None)
-    rub("Heures supplémentaires +40%", None, None, g("heures_sup_40"), None)
-    rub("Heures supplémentaires +70%", None, None, g("heures_sup_70"), None)
+    # Toutes les cases d'heures sup (30b, fj, fn comprises : elles entrent dans le brut),
+    # avec les taux réels de la convention.
+    from calculs_paie import libelles_heures_sup
+    _lib_hs = libelles_heures_sup(getattr(tenant, "convention", None))
+    for _k in ("10", "30", "30b", "40", "70", "fj", "fn"):
+        rub(_lib_hs[_k], g(f"base_heures_sup_{_k}"), g(f"taux_heures_sup_{_k}"), g(f"heures_sup_{_k}"), None)
     rub("Absence", g("base_absences"), g("taux_absences"), None, g("absences"))
     rub("Prime d'ancienneté", g("base_prime_anciennete"), None, g("prime_anciennete"), None)
     rub("Prime de transport", g("base_prime_transport"), None, g("prime_transport"), None)

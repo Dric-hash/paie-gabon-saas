@@ -53,7 +53,7 @@
   <div style="text-align:right;">
     <b>Jours travaillés :</b> {{ totaux.nb_jours }}<br/>
     <b>Absences :</b> {{ totaux.nb_absences }}<br/>
-    {% if convention in ['BTP','PETROLE','INDUSTRIE','AERIEN'] %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
+    {% if personne.type != 'Journalier' %}<b>Seuil heures sup. :</b> {{ '%g'|format(tenant.seuil_hs) }} h/semaine{% endif %}
   </div>
 </div>
 
@@ -106,14 +106,10 @@
   {% if personne.type == 'Journalier' %}
   <p class="note">Pour les journaliers, les heures supplémentaires ne sont pas majorées : elles sont
      rémunérées au même taux horaire que les heures normales.</p>
-  {% elif convention in ['BTP','PETROLE','INDUSTRIE','AERIEN'] %}
+  {% else %}
   <h3 style="margin-top:14px;">Détail des majorations — convention {{ convention|capitalize }}</h3>
   <div class="grid-totaux">
-    {% if totaux.heures_sup_10 %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['10'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_10) }}</div></div>{% endif %}
-    {% if totaux.heures_sup_30 %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['30'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30) }}</div></div>{% endif %}
-    {% if totaux.heures_sup_30b %}<div class="carte"><div class="lbl">Heures à +{{ coeffs_pct['30b'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_30b) }}</div></div>{% endif %}
-    {% if totaux.heures_sup_40 %}<div class="carte"><div class="lbl">Nuit à +{{ coeffs_pct['40'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_40) }}</div></div>{% endif %}
-    {% if totaux.heures_sup_70 %}<div class="carte"><div class="lbl">Nuit dim./férié à +{{ coeffs_pct['70'] }} %</div><div class="val">{{ '%g'|format(totaux.heures_sup_70) }}</div></div>{% endif %}
+    {% for _k in ['10', '30', '30b', '40', '70', 'fj', 'fn'] %}{% if totaux['heures_sup_' ~ _k] %}<div class="carte"><div class="lbl">{{ hs_lib[_k] }}</div><div class="val">{{ '%g'|format(totaux['heures_sup_' ~ _k]) }}</div></div>{% endif %}{% endfor %}
     <div class="carte" style="background:#eef3f1;border-color:#0f3d36;"><div class="lbl">Total heures sup.</div><div class="val">{{ '%g'|format(totaux.total_sup) }}</div></div>
   </div>
   <p class="note">Les heures supplémentaires se déclenchent au-delà de {{ '%g'|format(tenant.seuil_hs) }} h par semaine.

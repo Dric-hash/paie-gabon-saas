@@ -424,7 +424,9 @@
 <script nonce="{{ csp_nonce }}">
 const H_NORM  = 173.33;
 const H_STRUCT= 17.33;
-const C10=1.10, C30=1.30;
+const HS_COEFFS = {{ hs_coeffs|tojson }};   // taux de la convention de l'entreprise
+const C10=HS_COEFFS['10'], C30=HS_COEFFS['30'];
+const P10="{{ hs_lib.pct['10'] }}", P30="{{ hs_lib.pct['30'] }}";
 const TENANT_CONVENTION = "{{ convention }}";
 
 const fmt = n => new Intl.NumberFormat('fr-FR').format(Math.round(n||0)) + ' FCFA';
@@ -460,7 +462,7 @@ function onSalaireChange() {
   const el = document.getElementById('info-th');
   if (sb > 0) {
     const th = sb / H_NORM;
-    el.textContent = `TH : ${Math.round(th)} FCFA/h | +10% : ${Math.round(th*C10)} FCFA/h | +30% : ${Math.round(th*C30)} FCFA/h`;
+    el.textContent = `TH : ${Math.round(th)} FCFA/h | ${P10} : ${Math.round(th*C10)} FCFA/h | ${P30} : ${Math.round(th*C30)} FCFA/h`;
   } else {
     el.textContent = '';
   }
@@ -589,7 +591,7 @@ function afficherResultat(d) {
   // TH info
   if (d.taux_horaire) {
     document.getElementById('info-th').textContent =
-      `TH : ${Math.round(d.taux_horaire)} FCFA/h | +10% : ${Math.round(d.taux_horaire*1.10)} FCFA/h | +30% : ${Math.round(d.taux_horaire*1.30)} FCFA/h`;
+      `TH : ${Math.round(d.taux_horaire)} FCFA/h | ${P10} : ${Math.round(d.taux_horaire*C10)} FCFA/h | ${P30} : ${Math.round(d.taux_horaire*C30)} FCFA/h`;
   }
 }
 
