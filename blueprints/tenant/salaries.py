@@ -1229,7 +1229,8 @@ def salaries_pointage_importer():
         if not s:
             inconnus.append(mat)
             continue
-        vent = ventiler_heures_mois(t.convention, info["jours"], feries=feries)
+        vent = ventiler_heures_mois(t.convention, info["jours"], feries=feries,
+                                    seuil_normales=t.seuil_hs)
         total_abs = sum(info["absences"].values())
         apercu.append({
             "matricule": mat,
@@ -1240,6 +1241,8 @@ def salaries_pointage_importer():
             "heures_sup_30b": vent.get("heures_sup_30b", 0),
             "heures_sup_40": vent.get("heures_sup_40", 0),
             "heures_sup_70": vent.get("heures_sup_70", 0),
+            "heures_sup_fj": vent.get("heures_sup_fj", 0),
+            "heures_sup_fn": vent.get("heures_sup_fn", 0),
             "nb_jours_travailles": len(info["jours"]),
             "absences": info["absences"],
             "total_absences": total_abs,
@@ -1256,6 +1259,23 @@ def salaries_pointage_importer():
         apercu=apercu, annee=annee, mois=mois, tenant=t,
         mois_nom=f"{_MOIS_FR_SAL[mois]} {annee}",
         convention=t.convention, inconnus=inconnus)
+
+
+def _heures_sup_en_montants(salaire_base, heures, convention):
+    """Convertit les heures sup ventilées (cases 10/30/30b/40/70/fj/fn) en montants,
+    au taux horaire du salarié × coefficient de la convention. Renvoie
+    (montants pour calculer_bulletin, colonnes base_/taux_ du bulletin)."""
+    from calculs_paie import calculer_heures_sup_btp
+    h = {k: float(heures.get(f"heures_sup_{k}", 0) or 0) for k in ("10", "30", "30b", "40", "70", "fj", "fn")}
+    hs = calculer_heures_sup_btp(salaire_base, h10=h["10"], h30=h["30"], h40=h["40"], h70=h["70"],
+                                 h30b=h["30b"], hfj=h["fj"], hfn=h["fn"], convention=convention)
+    montants, bases_taux = {}, {}
+    for k in h:
+        montants[f"heures_sup_{k}"] = hs[f"montant_{k}"]
+        if h[k] > 0:
+            bases_taux[f"base_heures_sup_{k}"] = round(hs[f"taux_{k}"], 2)
+            bases_taux[f"taux_heures_sup_{k}"] = f"{h[k]:g}"
+    return montants, bases_taux
 
 
 @bp.route("/salaries/pointage/confirmer", methods=["POST"])
@@ -1297,19 +1317,16 @@ def salaries_pointage_confirmer():
         s = Salarie.query.filter_by(id=ligne["salarie_id"], tenant_id=t.id).first()
         if not s:
             continue
-        heures = {
-            "heures_sup_10": ligne.get("heures_sup_10", 0),
-            "heures_sup_30": ligne.get("heures_sup_30", 0),
-            "heures_sup_30b": ligne.get("heures_sup_30b", 0),
-            "heures_sup_40": ligne.get("heures_sup_40", 0),
-            "heures_sup_70": ligne.get("heures_sup_70", 0),
-        }
         contrat = (Contrat.query
                    .filter_by(salarie_id=s.id, tenant_id=t.id, actif=True)
                    .order_by(Contrat.date_debut.desc()).first())
         if not contrat or not contrat.salaire_base:
             ignores += 1
             continue
+        # Le moteur attend des MONTANTS d'heures sup : on convertit les HEURES ventilées
+        # au taux horaire du salarié × coefficient de la convention (correctif 01/11/2026 :
+        # les heures étaient passées telles quelles, 12 h devenaient 12 FCFA).
+        heures, bases_taux = _heures_sup_en_montants(float(contrat.salaire_base), ligne, t.convention)
 
         if s.id in deja:
             # Bulletin existant : on met à jour SEULEMENT les heures sup, sans
@@ -1325,6 +1342,8 @@ def salaries_pointage_confirmer():
                 for k, v in res.items():
                     if not k.startswith("_") and hasattr(b, k):
                         setattr(b, k, v)
+                for k, v in bases_taux.items():
+                    setattr(b, k, v)
                 maj += 1
             else:
                 ignores += 1
@@ -1340,6 +1359,8 @@ def salaries_pointage_confirmer():
         for k, v in res.items():
             if not k.startswith("_") and hasattr(b, k):
                 setattr(b, k, v)
+        for k, v in bases_taux.items():
+            setattr(b, k, v)
         b.statut = "BROUILLON"
         b.mode_paiement = s.mode_paiement or "ESPECES"
         db.session.add(b)

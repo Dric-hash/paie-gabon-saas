@@ -148,10 +148,10 @@
       <td class="num">{{ n(b.salaire_base) }}</td><td class="num"></td>
     </tr>
     {{ rub("Sursalaire", b.base_sursalaire, b.taux_sursalaire, b.sursalaire, None) }}
-    {{ rub("Heures supplémentaires +10%", None, None, b.heures_sup_10, None) }}
-    {{ rub("Heures supplémentaires +30%", None, None, b.heures_sup_30, None) }}
-    {{ rub("Heures supplémentaires +40%", None, None, b.heures_sup_40, None) }}
-    {{ rub("Heures supplémentaires +70%", None, None, b.heures_sup_70, None) }}
+    {# Toutes les cases d'heures sup (30b, fj, fn comprises), taux réels de la convention #}
+    {% for _k in ['10', '30', '30b', '40', '70', 'fj', 'fn'] %}
+    {{ rub(hs_lib[_k], b['base_heures_sup_' ~ _k], b['taux_heures_sup_' ~ _k], b['heures_sup_' ~ _k], None) }}
+    {% endfor %}
     {{ rub("Absence", b.base_absences, b.taux_absences, None, b.absences) }}
     {{ rub("Prime d'ancienneté", b.base_prime_anciennete, None, b.prime_anciennete, None) }}
     {{ rub("Prime de transport", b.base_prime_transport, None, b.prime_transport, None) }}

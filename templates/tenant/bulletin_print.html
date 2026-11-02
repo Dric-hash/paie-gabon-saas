@@ -144,7 +144,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_10 and bulletin.heures_sup_10|float > 0 %}
       <tr>
-        <td>Heures supplémentaires +10%</td>
+        <td>{{ hs_lib['10'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_10|int if bulletin.base_heures_sup_10 else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_10 or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_10|fcfa }}</td>
@@ -152,7 +152,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_30 and bulletin.heures_sup_30|float > 0 %}
       <tr>
-        <td>Heures supplémentaires +30%</td>
+        <td>{{ hs_lib['30'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_30|int if bulletin.base_heures_sup_30 else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_30 or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_30|fcfa }}</td>
@@ -160,7 +160,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_30b and bulletin.heures_sup_30b|float > 0 %}
       <tr>
-        <td>Heures supplémentaires +30% (repos/férié)</td>
+        <td>{{ hs_lib['30b'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_30b|int if bulletin.base_heures_sup_30b else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_30b or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_30b|fcfa }}</td>
@@ -168,7 +168,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_40 and bulletin.heures_sup_40|float > 0 %}
       <tr>
-        <td>Heures supplémentaires +40%</td>
+        <td>{{ hs_lib['40'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_40|int if bulletin.base_heures_sup_40 else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_40 or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_40|fcfa }}</td>
@@ -176,7 +176,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_70 and bulletin.heures_sup_70|float > 0 %}
       <tr>
-        <td>Heures supplémentaires +70%</td>
+        <td>{{ hs_lib['70'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_70|int if bulletin.base_heures_sup_70 else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_70 or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_70|fcfa }}</td>
@@ -184,7 +184,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_fj and bulletin.heures_sup_fj|float > 0 %}
       <tr>
-        <td>Heures sup férié chômé payé — jour</td>
+        <td>{{ hs_lib['fj'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_fj|int if bulletin.base_heures_sup_fj else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_fj or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_fj|fcfa }}</td>
@@ -192,7 +192,7 @@
       </tr>{% endif %}
       {% if bulletin.heures_sup_fn and bulletin.heures_sup_fn|float > 0 %}
       <tr>
-        <td>Heures sup férié chômé payé — nuit</td>
+        <td>{{ hs_lib['fn'] }}</td>
         <td class="tr" style="font-family:monospace;font-size:8.5px">{{ bulletin.base_heures_sup_fn|int if bulletin.base_heures_sup_fn else '' }}</td>
         <td class="tc" style="font-size:8.5px">{{ bulletin.taux_heures_sup_fn or '' }}</td>
         <td class="tr gain">{{ bulletin.heures_sup_fn|fcfa }}</td>

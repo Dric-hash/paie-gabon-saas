@@ -107,7 +107,11 @@ def donnees(b, t) -> dict:
     s, p = b.salarie, b.periode
     g = lambda champ: getattr(b, champ, None) if champ else None   # noqa: E731
     gains = []
+    from calculs_paie import libelles_heures_sup
+    _lib_hs = libelles_heures_sup(getattr(t, "convention", None))
     for lib, champ, cb, ct in _GAINS:
+        if champ.startswith("heures_sup_"):
+            lib = _lib_hs[champ[len("heures_sup_"):]]   # taux réels de la convention
         if _f(g(champ)) > 0:
             gains.append({"lib": lib, "base": _n(g(cb)), "taux": _txt(g(ct) or ""), "gain": g(champ), "ret": None})
     if _f(b.absences) > 0:

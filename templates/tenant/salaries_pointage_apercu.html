@@ -29,11 +29,13 @@
         <tr style="background:#0f3d36;color:white">
           <th style="padding:.75rem;text-align:left;font-size:.75rem">Salarié</th>
           <th style="padding:.75rem;text-align:center;font-size:.75rem">Jours travaillés</th>
-          <th style="padding:.75rem;text-align:right;font-size:.75rem">+10%</th>
-          <th style="padding:.75rem;text-align:right;font-size:.75rem">+30%</th>
-          {% if convention in ('PETROLE','INDUSTRIE','AERIEN') %}<th style="padding:.75rem;text-align:right;font-size:.75rem">+30%b</th>{% endif %}
-          <th style="padding:.75rem;text-align:right;font-size:.75rem">+40% nuit</th>
-          <th style="padding:.75rem;text-align:right;font-size:.75rem">+70% dim/fér.</th>
+          <th style="padding:.75rem;text-align:right;font-size:.75rem">Jour {{ hs_lib.pct['10'] }}</th>
+          <th style="padding:.75rem;text-align:right;font-size:.75rem">Jour {{ hs_lib.pct['30'] }}</th>
+          {% if hs_regime.repos == '30b' %}<th style="padding:.75rem;text-align:right;font-size:.75rem">Repos/férié jour {{ hs_lib.pct['30b'] }}</th>{% endif %}
+          <th style="padding:.75rem;text-align:right;font-size:.75rem">Nuit {{ hs_lib.pct['40'] }}</th>
+          <th style="padding:.75rem;text-align:right;font-size:.75rem">{{ 'Dim./férié' if hs_regime.repos == '70' else 'Repos/férié nuit' }} {{ hs_lib.pct['70'] }}</th>
+          {% if hs_regime.feries %}<th style="padding:.75rem;text-align:right;font-size:.75rem">Férié jour {{ hs_lib.pct['fj'] }}</th>
+          <th style="padding:.75rem;text-align:right;font-size:.75rem">Férié nuit {{ hs_lib.pct['fn'] }}</th>{% endif %}
           <th style="padding:.75rem;text-align:left;font-size:.75rem">Absences</th>
         </tr>
       </thead>
@@ -47,9 +49,11 @@
           <td style="padding:.75rem;text-align:center;font-size:.85rem">{{ a.nb_jours_travailles }}</td>
           <td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_10 or '—' }}</td>
           <td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_30 or '—' }}</td>
-          {% if convention in ('PETROLE','INDUSTRIE','AERIEN') %}<td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_30b or '—' }}</td>{% endif %}
+          {% if hs_regime.repos == '30b' %}<td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_30b or '—' }}</td>{% endif %}
           <td style="padding:.75rem;text-align:right;font-size:.85rem;color:#7c3aed">{{ a.heures_sup_40 or '—' }}</td>
           <td style="padding:.75rem;text-align:right;font-size:.85rem;color:#b91c1c">{{ a.heures_sup_70 or '—' }}</td>
+          {% if hs_regime.feries %}<td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_fj or '—' }}</td>
+          <td style="padding:.75rem;text-align:right;font-size:.85rem">{{ a.heures_sup_fn or '—' }}</td>{% endif %}
           <td style="padding:.75rem;font-size:.8rem">
             {% if a.total_absences %}
               {% for motif, n in a.absences.items() %}

@@ -69,10 +69,10 @@
         <th style="padding:.5rem;text-align:center;font-weight:700;width:80px" data-i18n="common.status">Statut</th>
         <th style="padding:.5rem;text-align:center;font-weight:700;width:70px">H.norm.</th>
         {% if type_worker == "sal" %}
-        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+10%</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+30%</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+40%</th>
-        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">+70%</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">{{ hs_lib.pct['10'] }}</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">{{ hs_lib.pct['30'] }}</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">Nuit {{ hs_lib.pct['40'] }}</th>
+        <th style="padding:.5rem;text-align:center;font-weight:700;width:60px">Dim./férié</th>
         {% else %}
         <th style="padding:.5rem;text-align:center;font-weight:700;width:80px">H.sup</th>
         {% endif %}
@@ -85,7 +85,7 @@
       {% for p in pts_hist %}
       {% set jours_fr = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"] %}
       {% set total_h = (p.heures_normales|float) if p.present else 0 %}
-      {% set h_sup_total = (p.heures_sup_10|float + p.heures_sup_30|float +
+      {% set h_sup_total = (p.heures_sup_10|float + p.heures_sup_30|float + (p.heures_sup_30b or 0)|float +
                             p.heures_sup_40|float + p.heures_sup_70|float +
                             p.heures_sup|float) if p.present else 0 %}
       <tr style="border-bottom:1px solid #f9fafb;
@@ -121,8 +121,9 @@
         <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if p.heures_sup_40|float > 0 %}#d97706{% else %}#e5e7eb{% endif %}">
           {% if p.present and p.heures_sup_40|float > 0 %}{{ p.heures_sup_40|float|round(1) }}h{% else %}—{% endif %}
         </td>
-        <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if p.heures_sup_70|float > 0 %}#d97706{% else %}#e5e7eb{% endif %}">
-          {% if p.present and p.heures_sup_70|float > 0 %}{{ p.heures_sup_70|float|round(1) }}h{% else %}—{% endif %}
+        {% set _h_rep = p.heures_sup_70|float + (p.heures_sup_30b or 0)|float %}
+        <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if _h_rep > 0 %}#d97706{% else %}#e5e7eb{% endif %}">
+          {% if p.present and _h_rep > 0 %}{{ _h_rep|round(1) }}h{% else %}—{% endif %}
         </td>
         {% else %}
         <td style="text-align:center;font-family:monospace;font-size:.75rem;color:{% if p.heures_sup|float > 0 %}#d97706{% else %}#e5e7eb{% endif %}">

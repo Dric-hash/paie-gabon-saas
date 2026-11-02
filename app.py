@@ -330,9 +330,22 @@ def montant_en_lettres_filter(v):
 
 @app.context_processor
 def inject_globals():
-    from calculs_paie import CONVENTIONS_DISPONIBLES
+    from calculs_paie import CONVENTIONS_DISPONIBLES, libelles_heures_sup, regime_heures_sup, coeffs_heures_sup
+    # Libellés et régime des heures sup de la convention de l'entreprise courante :
+    # les bulletins et écrans affichent les taux réels (+20 % en Pétrole, pas +10 %).
+    conv = None
+    try:
+        from flask_login import current_user as _cu
+        if getattr(_cu, "is_authenticated", False) and not getattr(_cu, "is_super_admin", False):
+            from core import get_tenant
+            _t = get_tenant()
+            conv = _t.convention if _t else None
+    except Exception:
+        conv = None
     return {"now": datetime.now(), "enumerate": enumerate, "app_version": APP_VERSION,
-            "conventions_disponibles": CONVENTIONS_DISPONIBLES}
+            "conventions_disponibles": CONVENTIONS_DISPONIBLES,
+            "hs_lib": libelles_heures_sup(conv), "hs_regime": regime_heures_sup(conv),
+            "hs_coeffs": coeffs_heures_sup(conv)}
 
 # ── Error handlers ────────────────────────────────────────────────────────────
 @app.errorhandler(403)

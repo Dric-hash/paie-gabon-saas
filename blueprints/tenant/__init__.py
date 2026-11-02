@@ -334,7 +334,11 @@ def rendu_bulletin_html(b, t, portail=False, retour_url=None, imprimer=False):
     except Exception as _e:
         logger.warning(f"Cumuls/congés bulletin {b.id} indisponibles : {_e}")
 
+    # Libellés d'heures sup de la convention de CE bulletin (et non de l'utilisateur
+    # connecté : portail salarié, super-admin) — taux réels imprimés sur le bulletin.
+    from calculs_paie import libelles_heures_sup, regime_heures_sup
     return render_template(template, bulletin=b, tenant=t, composants=composants,
+                           hs_lib=libelles_heures_sup(t.convention), hs_regime=regime_heures_sup(t.convention),
                            recap_sites=recap_sites, multi_sites=multi_sites,
                            cumuls=cumuls, conges_annees=conges_annees,
                            config_rubriques=_config_rubriques_dict(t.id),
@@ -403,7 +407,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     # que la colonne « DONT NUIT » de chaque ligne soit cohérente avec le total
     # +40 % affiché en bas (somme des lignes = total).
     nuit_par_date = {}
-    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
+    if True:   # toutes les conventions passent désormais par la ventilation hebdomadaire
         from calculs_paie import pointage_vers_jours
         for j in pointage_vers_jours(pts):
             d = j.get("date")
@@ -424,7 +428,7 @@ def _pointages_mois_contexte(t, pointages, convention):
         total_jour = hn + hsup + h10 + h30 + h30b + h40 + h70
         tj = (p.type_jour or "NORMAL").upper()
         # Nuit du jour : depuis l'horaire (BTP/Pétrole/Industrie), sinon valeur stockée (journaliers)
-        if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN"):
+        if True:   # nuit depuis l'horaire, comme la ventilation (toutes conventions)
             nuit_jour = nuit_par_date.get(p.date_pointage, 0.0)
         else:
             nuit_jour = h40
@@ -443,10 +447,10 @@ def _pointages_mois_contexte(t, pointages, convention):
     pts_travailles = [p for p in pts if p.present and not p.absent]
     pts_absents    = [p for p in pts if p.absent]
 
-    if conv in ("BTP", "PETROLE", "INDUSTRIE", "AERIEN", "MINIER") and pts_travailles:
+    if pts_travailles:   # toutes les conventions (régime propre à chacune)
         from calculs_paie import ventiler_heures_mois, pointage_vers_jours
         _feries = set()
-        for _an in {p.date.year for p in pts if getattr(p, "date", None)}:
+        for _an in {p.date_pointage.year for p in pts if getattr(p, "date_pointage", None)}:
             _feries |= set(jours_feries_annee(_an).keys())
         v = ventiler_heures_mois(conv, pointage_vers_jours(pts), feries=_feries, seuil_normales=t.seuil_hs)
         totaux = {
@@ -479,6 +483,7 @@ def _pointages_mois_contexte(t, pointages, convention):
     totaux["total_sup"] = round(totaux["heures_sup_10"] + totaux["heures_sup_30"]
                                 + totaux.get("heures_sup_30b", 0)
                                 + totaux["heures_sup_40"] + totaux["heures_sup_70"]
+                                + totaux.get("heures_sup_fj", 0) + totaux.get("heures_sup_fn", 0)
                                 + heures_sup_simple, 2)
     totaux["total_general"] = round(totaux["heures_normales"] + totaux["total_sup"], 2)
     # Total des heures de nuit = somme des heures de nuit de chaque ligne (cohérent

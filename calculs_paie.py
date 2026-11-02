@@ -67,6 +67,15 @@ COEFFS_HEURES_SUP_DEFAUT = {
 }
 COEFFS_HEURES_SUP_CONVENTION = {
     "PETROLE": {"10": 1.20, "30": 1.35, "30b": 1.30, "40": 1.50, "70": 2.00},
+    # Commerce — Art. A.38 (constantes COEFF_COMMERCE_* ci-dessous) :
+    #   8 premières H.S. de jour ..... +10 %  → case 10
+    #   au-delà, de jour ............. +30 %  → case 30
+    #   repos hebdo / férié, de JOUR . +40 %  → case 30b
+    #   nuit (21h-6h) ouvrable ....... +70 %  → case 40
+    #   repos hebdo / férié, de NUIT . +140 % → case 70
+    # (Correctif 01/11/2026 : sans cette entrée, le Commerce retombait sur la grille
+    #  BTP et payait la nuit à +40 % et le dimanche de jour à +70 %.)
+    "COMMERCE": {"10": 1.10, "30": 1.30, "30b": 1.40, "40": 1.70, "70": 2.40},
     "HYDROCARBURES": {"10": 1.15, "30": 1.30, "30b": 1.35, "40": 1.60, "70": 2.20},
     # Entreprises Industrielles — Art. A.38 :
     #   40→48 h ouvrable .......... +16 %  → case 10
@@ -109,6 +118,53 @@ COEFFS_HEURES_SUP_CONVENTION = {
     "FORET": {"10": 1.10, "30": 1.30, "30b": 1.50, "40": 1.60, "70": 2.00,
               "fj": 2.00, "fn": 2.50},
 }
+
+
+# ─── RÉGIME DE VENTILATION DES HEURES SUP PAR CONVENTION ───────────────────────
+# palier  : largeur (en heures) du 1ᵉʳ palier hebdomadaire au-delà du seuil (case 10).
+# repos   : "70"  → dimanche/férié travaillé payé en bloc à la case 70 (BTP, Code) ;
+#           "30b" → heures de JOUR d'un repos/férié en case 30b, heures de NUIT en case 70.
+# feries  : True → le jour férié chômé payé travaillé a ses propres taux (cases fj/fn),
+#           distincts du repos hebdomadaire.
+# Chaque valeur reprend la règle de l'article cité dans COEFFS_HEURES_SUP_CONVENTION.
+REGIME_HS_DEFAUT = {"palier": 4.0, "repos": "70", "feries": False}   # BTP, Code du travail
+REGIMES_HS_CONVENTION = {
+    "COMMERCE":      {"palier": 8.0, "repos": "30b", "feries": False},   # A.38 : 8 premières
+    "PETROLE":       {"palier": 8.0, "repos": "30b", "feries": False},   # 38.2 : 41ᵉ→48ᵉ
+    "HYDROCARBURES": {"palier": 8.0, "repos": "30b", "feries": False},   # 38.2 : 8 premières
+    "INDUSTRIE":     {"palier": 8.0, "repos": "30b", "feries": False},   # A.38 : 40→48 h
+    "AERIEN":        {"palier": 8.0, "repos": "30b", "feries": False},   # A.39 : 8 h au-delà de 40
+    "HOTELLERIE":    {"palier": 8.0, "repos": "30b", "feries": False},   # 38 : 1 à 8 H.S.
+    "BOIS":          {"palier": 8.0, "repos": "30b", "feries": False},   # 38 : 41ᵉ→48ᵉ
+    "MINIER":        {"palier": 8.0, "repos": "30b", "feries": True},    # 40 : 8 premières ; fériés distincts
+    "FORET":         {"palier": 6.0, "repos": "30b", "feries": True},    # 38.2 : 6 premières ; fériés distincts
+}
+
+
+def regime_heures_sup(convention=None) -> dict:
+    """Règles de ventilation des heures sup de la convention (cf. REGIMES_HS_CONVENTION)."""
+    return dict(REGIMES_HS_CONVENTION.get((convention or "").upper(), REGIME_HS_DEFAUT))
+
+
+def libelles_heures_sup(convention=None) -> dict:
+    """Libellés des cases d'heures sup avec les taux RÉELS de la convention, pour les
+    bulletins et les écrans (évite d'afficher « +10 % » sur un bulletin payé à +20 %)."""
+    c = coeffs_heures_sup(convention)
+    r = regime_heures_sup(convention)
+    pct = {k: f"+{int(round((float(v) - 1) * 100))} %" for k, v in c.items()}
+    palier = int(r["palier"]) if float(r["palier"]).is_integer() else r["palier"]
+    lib = {
+        "10":  f"H. sup. de jour, {palier} premières {pct['10']}",
+        "30":  f"H. sup. de jour, au-delà {pct['30']}",
+        "30b": f"H. sup. repos/férié, jour {pct['30b']}",
+        "40":  f"H. sup. de nuit {pct['40']}",
+        "70":  (f"H. sup. dimanche/férié {pct['70']}" if r["repos"] == "70"
+                else f"H. sup. repos/férié, nuit {pct['70']}"),
+        "fj":  f"H. sup. férié chômé payé, jour {pct['fj']}",
+        "fn":  f"H. sup. férié chômé payé, nuit {pct['fn']}",
+    }
+    lib["pct"] = pct
+    return lib
 
 
 def coeffs_heures_sup(convention=None) -> dict:
@@ -219,7 +275,8 @@ def calculer_taux_horaire(salaire_base: float) -> float:
 def calculer_heures_sup_btp(salaire_base: float,
                               h10: float = None, h30: float = None,
                               h40: float = 0.0,  h70: float = 0.0,
-                              h30b: float = 0.0, convention=None) -> dict:
+                              h30b: float = 0.0, convention=None,
+                              hfj: float = 0.0, hfn: float = 0.0) -> dict:
     """
     Calcule les montants des heures supplémentaires selon la convention.
 
@@ -237,6 +294,8 @@ def calculer_heures_sup_btp(salaire_base: float,
     h40  = float(h40)
     h70  = float(h70)
     h30b = float(h30b)
+    hfj  = float(hfj or 0)
+    hfn  = float(hfn or 0)
 
     coeffs = coeffs_heures_sup(convention)
 
@@ -246,6 +305,8 @@ def calculer_heures_sup_btp(salaire_base: float,
     taux_40  = round(th * coeffs["40"],  4)
     taux_70  = round(th * coeffs["70"],  4)
     taux_30b = round(th * coeffs["30b"], 4)
+    taux_fj  = round(th * coeffs["fj"], 4)
+    taux_fn  = round(th * coeffs["fn"], 4)
 
     # Montants
     montant_10  = round(h10  * taux_10,  2) if h10  > 0 else 0.0
@@ -253,6 +314,8 @@ def calculer_heures_sup_btp(salaire_base: float,
     montant_40  = round(h40  * taux_40,  2) if h40  > 0 else 0.0
     montant_70  = round(h70  * taux_70,  2) if h70  > 0 else 0.0
     montant_30b = round(h30b * taux_30b, 2) if h30b > 0 else 0.0
+    montant_fj  = round(hfj * taux_fj, 2) if hfj > 0 else 0.0
+    montant_fn  = round(hfn * taux_fn, 2) if hfn > 0 else 0.0
 
     return {
         "taux_horaire":    th,
@@ -276,9 +339,12 @@ def calculer_heures_sup_btp(salaire_base: float,
         "h70":             h70,
         "taux_70":         taux_70,
         "montant_70":      montant_70,
+        # Férié chômé payé travaillé (jour / nuit) — Minier, Forêt
+        "hfj": hfj, "taux_fj": taux_fj, "montant_fj": montant_fj,
+        "hfn": hfn, "taux_fn": taux_fn, "montant_fn": montant_fn,
         # Total heures sup
         "total_sup":       round(montant_10 + montant_30 + montant_30b
-                                 + montant_40 + montant_70, 2),
+                                 + montant_40 + montant_70 + montant_fj + montant_fn, 2),
     }
 
 
@@ -982,7 +1048,8 @@ def ventiler_heures_mois_btp(jours, feries=None, seuil_normales: float = None,
     return resultat
 
 
-def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = None) -> dict:
+def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = None,
+                                 palier: float = 8.0, separer_ferie: bool = False) -> dict:
     """
     Ventile un MOIS de pointage selon la Convention Pétrole (SGEPP/GPP), Art. 38.2.
 
@@ -1000,27 +1067,36 @@ def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = Non
     Le seuil S vaut 40 h par défaut (déclenchement légal). Une dérogation peut le
     porter jusqu'à 48 h ; le palier +20 % couvre alors les 8 heures suivantes.
 
+    Sert aussi aux autres conventions à « 5 cases » (cf. REGIMES_HS_CONVENTION) :
+    `palier` = largeur du 1ᵉʳ palier (8 h, 6 h en Forêt) ; `separer_ferie` isole le
+    férié chômé payé travaillé dans les cases fj/fn (Minier, Forêt).
+
     Retour : dict des totaux mensuels ventilés (5 cases) + le détail par semaine.
     """
     feries_set = set(feries) if feries else set()
     seuil_norm = _SEUIL_NORMALES if seuil_normales is None else float(seuil_normales)
     # Largeur du 1er palier pétrolier : 41ᵉ → 48ᵉ heure = 8 h (contre 4 h en BTP).
-    seuil_20 = seuil_norm + 8.0
+    seuil_20 = seuil_norm + float(palier)
 
     semaines = {}
     for jour in jours:
         d = jour.get("date")
         if d is None:
             continue
-        cat, hj, hn = _classer_jour_btp(jour, feries_set)
+        cat, hj, hn = _classer_jour_btp(jour, feries_set, separer_ferie=separer_ferie)
         sem = semaines.setdefault(_cle_semaine(d), {
             "cumul_ordinaire": 0.0,   # heures de jour ordinaires (cumul hebdo)
             "nuit": 0.0,              # nuit jour ouvrable (+50 %)
             "dim_ferie_jour": 0.0,    # dim/férié travaillé, heures de jour (+30 %)
             "dim_ferie_nuit": 0.0,    # dim/férié travaillé, heures de nuit (+100 %)
+            "ferie_jour": 0.0,        # férié chômé payé travaillé, jour (fj)
+            "ferie_nuit": 0.0,        # férié chômé payé travaillé, nuit (fn)
             "feries_chomes": 0.0,     # heures normales issues de fériés chômés
         })
-        if cat == "DIM_FERIE_TRAVAILLE":
+        if cat == "FERIE_TRAVAILLE":
+            sem["ferie_jour"] += hj
+            sem["ferie_nuit"] += hn
+        elif cat == "DIM_FERIE_TRAVAILLE":
             sem["dim_ferie_jour"] += hj
             sem["dim_ferie_nuit"] += hn
         elif cat == "FERIE_CHOME":
@@ -1031,7 +1107,8 @@ def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = Non
         # "REPOS" : rien
 
     tot = {"heures_normales": 0.0, "heures_sup_10": 0.0, "heures_sup_30": 0.0,
-           "heures_sup_30b": 0.0, "heures_sup_40": 0.0, "heures_sup_70": 0.0}
+           "heures_sup_30b": 0.0, "heures_sup_40": 0.0, "heures_sup_70": 0.0,
+           "heures_sup_fj": 0.0, "heures_sup_fn": 0.0}
     detail_semaines = []
 
     for cle in sorted(semaines.keys()):
@@ -1051,6 +1128,8 @@ def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = Non
         tot["heures_sup_30b"]  += h30b
         tot["heures_sup_40"]   += h40
         tot["heures_sup_70"]   += h70
+        tot["heures_sup_fj"]   += s["ferie_jour"]
+        tot["heures_sup_fn"]   += s["ferie_nuit"]
 
         detail_semaines.append({
             "semaine": f"{cle[0]}-S{cle[1]:02d}",
@@ -1067,31 +1146,28 @@ def ventiler_heures_mois_petrole(jours, feries=None, seuil_normales: float = Non
     resultat["total_heures"] = round(sum(tot.values()), 2)
     resultat["total_heures_sup"] = round(
         tot["heures_sup_10"] + tot["heures_sup_30"] + tot["heures_sup_30b"]
-        + tot["heures_sup_40"] + tot["heures_sup_70"], 2)
+        + tot["heures_sup_40"] + tot["heures_sup_70"]
+        + tot["heures_sup_fj"] + tot["heures_sup_fn"], 2)
     resultat["detail_semaines"] = detail_semaines
     return resultat
 
 
 def ventiler_heures_mois(convention, jours, feries=None, seuil_normales: float = None) -> dict:
-    """Ventilation mensuelle du pointage selon la convention (BTP ou Pétrole).
+    """Ventilation mensuelle du pointage selon la convention.
 
-    Les deux conventions raisonnent par seuils hebdomadaires ; le résultat
-    contient toujours les 5 cases (la case 30b reste à 0 hors Pétrole).
+    Toutes les conventions raisonnent par seuils hebdomadaires ; le résultat
+    contient toujours les cases 10/30/30b/40/70 et fj/fn (à 0 si non utilisées).
     """
-    c = (convention or "").upper()
-    if c in ("PETROLE", "INDUSTRIE", "AERIEN"):
-        # Même structure de ventilation : bande 41→48 h (8 h) puis >48 h, et
-        # 5 cases distinctes (jour férié / nuit / nuit férié). Seuls les
-        # coefficients diffèrent (cf. COEFFS_HEURES_SUP_CONVENTION).
-        return ventiler_heures_mois_petrole(jours, feries=feries, seuil_normales=seuil_normales)
-    if c == "MINIER":
-        # Modèle hebdomadaire (Art. 40) avec SÉPARATION des jours fériés chômés
-        # payés (routés vers fj/fn au taux +100 %/+150 %), distincts du repos.
-        res = ventiler_heures_mois_btp(jours, feries=feries,
-                                       seuil_normales=seuil_normales, separer_ferie=True)
-        res.setdefault("heures_sup_30b", 0.0)
-        return res
-    res = ventiler_heures_mois_btp(jours, feries=feries, seuil_normales=seuil_normales)
+    # Le régime (largeur du 1ᵉʳ palier, traitement du repos/férié, fériés distincts)
+    # vient de REGIMES_HS_CONVENTION ; les taux, de COEFFS_HEURES_SUP_CONVENTION.
+    # Correctif 01/11/2026 : Commerce, Hôtellerie, Bois, Forêt, Hydrocarbures et Minier
+    # passaient par le régime BTP (palier de 4 h, dimanche de jour payé au taux de nuit).
+    r = regime_heures_sup(convention)
+    if r["repos"] == "30b":
+        return ventiler_heures_mois_petrole(jours, feries=feries, seuil_normales=seuil_normales,
+                                            palier=r["palier"], separer_ferie=r["feries"])
+    res = ventiler_heures_mois_btp(jours, feries=feries, seuil_normales=seuil_normales,
+                                   separer_ferie=r["feries"])
     res.setdefault("heures_sup_30b", 0.0)
     return res
 
@@ -1213,9 +1289,12 @@ def pointage_vers_jours(pointages):
         type_jour = (getattr(p, "type_jour", "") or "").upper()
 
         # Total des heures réellement travaillées ce jour-là
+        # (Correctif 01/11/2026 : la case 30b — repos/férié de jour — était oubliée,
+        #  si bien qu'un dimanche Pétrole/Industrie saisi en 30b disparaissait du mois.)
         raw = (float(getattr(p, "heures_normales", 0) or 0)
                + float(getattr(p, "heures_sup_10", 0) or 0)
                + float(getattr(p, "heures_sup_30", 0) or 0)
+               + float(getattr(p, "heures_sup_30b", 0) or 0)
                + float(getattr(p, "heures_sup_40", 0) or 0)
                + float(getattr(p, "heures_sup_70", 0) or 0))
 
@@ -1236,12 +1315,13 @@ def pointage_vers_jours(pointages):
             jours.append({"date": d, "heures": 0.0, "heures_nuit": 0.0,
                           "ferie": True, "present": False})
         elif type_jour == "FERIE":
-            # Férié travaillé : tout passe en +70%, pas d'isolement de la nuit
-            jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
+            # Férié travaillé : la nuit est isolée ; le régime BTP la recompte en bloc
+            # (+70 %), les conventions à case 30b la paient au taux nuit repos/férié.
+            jours.append({"date": d, "heures": max(raw - nuit, 0.0), "heures_nuit": nuit,
                           "ferie": True, "present": present})
         elif hasattr(d, "weekday") and d.weekday() == 6:
-            # Dimanche : l'intégralité (jour ET nuit) bascule en +70%
-            jours.append({"date": d, "heures": raw, "heures_nuit": 0.0,
+            # Dimanche : même principe (BTP : tout à +70 % ; 30b : jour / nuit séparés)
+            jours.append({"date": d, "heures": max(raw - nuit, 0.0), "heures_nuit": nuit,
                           "ferie": False, "present": present})
         else:
             # Jour ordinaire (lun-sam) : on isole la nuit (+40%), le reste
@@ -1857,7 +1937,7 @@ def permissions_familiales_petrole(evenement: str) -> int:
 # ══════════════════════════════════════════════════════════════════════════════
 # DISPATCHER PAR CONVENTION
 # Permet à l'application d'appliquer le bon barème selon Tenant.convention.
-# Valeurs possibles : "BTP" | "COMMERCE" | "AUCUNE"
+# Valeurs possibles : les clés de CONVENTIONS_DISPONIBLES ci-dessous.
 # ══════════════════════════════════════════════════════════════════════════════
 
 CONVENTIONS_DISPONIBLES = {
@@ -1865,6 +1945,7 @@ CONVENTIONS_DISPONIBLES = {
     "BTP":      "Convention Collective BTP",
     "COMMERCE": "Convention Collective du Commerce",
     "PETROLE":  "Convention Collective des professionnels du pétrole",
+    "HYDROCARBURES": "Convention Collective Recherche et Exploitation des Hydrocarbures",
     "INDUSTRIE": "Convention Collective des Entreprises Industrielles",
     "AERIEN":    "Convention Collective des Compagnies de Transports Aériens",
     "HOTELLERIE": "Convention Collective Hôtellerie – Restauration – Débits de Boissons",
@@ -2073,6 +2154,19 @@ def permissions_familiales(convention, evenement: str) -> int:
     c = _conv(convention)
     if c == "PETROLE":
         return permissions_familiales_petrole(evenement)
+    if c == "MINIER":
+        from convention_minier import PERMISSIONS_EVENEMENTS_MINIER
+        return PERMISSIONS_EVENEMENTS_MINIER.get((evenement or "").lower(), 0)
+    if c == "BOIS":
+        from convention_bois import jours_permission_bois
+        return jours_permission_bois(evenement)
+    if c == "HOTELLERIE":
+        from convention_hotellerie import jours_permission_hotellerie
+        # La table Hôtellerie regroupe frère/sœur et beaux-parents (2 j) sous une clé.
+        ev = (evenement or "").lower()
+        if ev in ("deces_frere_soeur", "deces_beau_parent"):
+            ev = "deces_frere_soeur_beau"
+        return jours_permission_hotellerie(ev)
     if c in ("BTP", "INDUSTRIE", "AERIEN", "FORET"):
         # A.41 identique : 4/2/1 (mariages), 5/2/2 (décès), 3 (naissance), 1 (cérémonie).
         return permissions_familiales_btp(evenement)
