@@ -26,6 +26,10 @@
     .b-jour{background:#dbeafe;color:#1d4ed8;}
     .sig-cell{width:150px;border-bottom:1px dashed #9ca3af;}
     .tot-row td{font-weight:900;background:#eef3f1 !important;border-top:2px solid #0f3d36;}
+    th.h{background:#174d44;}
+    .ast{color:#b45309;font-weight:700;}
+    .note-h{font-size:9px;color:#6b7280;margin:-4px 0 8px;}
+    .tot-h td{font-weight:700;background:#f6f8f7 !important;}
     .footer{margin-top:18px;font-size:9px;color:#9ca3af;display:flex;justify-content:space-between;}
     .recap-page{page-break-before:always;}
     .recap-page h2{font-size:14px;color:#0f3d36;margin:0 0 10px;}
@@ -67,7 +71,10 @@
         <th class="center">Type</th>
         <th>Période</th>
         <th class="center">Jours</th>
-        <th class="num">Heures</th>
+        <th class="num h">H. normales</th>
+        <th class="num h">H. sup.</th>
+        <th class="num h">H. dimanche</th>
+        <th class="num h">Total h</th>
         <th class="num">Taux/h</th>
         <th class="num">Montant brut</th>
         <th class="center">Émargement / Signature</th>
@@ -90,7 +97,11 @@
         </td>
         <td>{{ f.date_debut.strftime('%d/%m/%Y') }} → {{ f.date_fin.strftime('%d/%m/%Y') }}</td>
         <td class="center">{{ f.nb_jours }}</td>
-        <td class="num">{{ "%.1f"|format(f.total_heures|float) }}h</td>
+        {% set dh = detail_h.get(f.id) %}
+        <td class="num">{{ "%.1f"|format(dh.normales) }}</td>
+        <td class="num">{{ "%.1f"|format(dh.sup) if dh.sup else '—' }}</td>
+        <td class="num">{{ "%.1f"|format(dh.dimanche) if dh.dimanche else '—' }}</td>
+        <td class="num"><b>{{ "%.1f"|format(f.total_heures|float) }}</b>{% if not dh.fiable %}<sup class="ast">*</sup>{% endif %}</td>
         <td class="num">{{ f.taux_horaire|int }}</td>
         <td class="num">
           <b>{{ f.montant_a_payer|int }}</b>
@@ -102,16 +113,26 @@
         <td class="sig-cell">&nbsp;</td>
       </tr>
       {% else %}
-      <tr><td colspan="8" class="center" style="padding:18px;color:#9ca3af">Aucune feuille pour ce site sur la période.</td></tr>
+      <tr><td colspan="11" class="center" style="padding:18px;color:#9ca3af">Aucune feuille pour ce site sur la période.</td></tr>
       {% endfor %}
       {% if g.feuilles %}
+      {% set tn = namespace(n=0, s=0, d=0, t=0) %}
+      {% for f in g.feuilles %}{% set dh = detail_h.get(f.id) %}{% set tn.n = tn.n + dh.normales %}{% set tn.s = tn.s + dh.sup %}{% set tn.d = tn.d + dh.dimanche %}{% set tn.t = tn.t + f.total_heures|float %}{% endfor %}
+      <tr class="tot-h">
+        <td colspan="4" class="num">Total des heures</td>
+        <td class="num">{{ "%.1f"|format(tn.n) }}</td>
+        <td class="num">{{ "%.1f"|format(tn.s) }}</td>
+        <td class="num">{{ "%.1f"|format(tn.d) }}</td>
+        <td class="num">{{ "%.1f"|format(tn.t) }}</td>
+        <td colspan="3"></td>
+      </tr>
       <tr class="tot-row">
-        <td colspan="6" class="num">SOUS-TOTAL {{ g.site.nom if g.site else 'Sans site' }}</td>
+        <td colspan="9" class="num">SOUS-TOTAL {{ g.site.nom if g.site else 'Sans site' }}</td>
         <td class="num">{{ g.total|int }} FCFA</td>
         <td></td>
       </tr>
       <tr>
-        <td colspan="6" class="num" style="font-size:11px;color:#374151">dont Espèces ({{ g.recap_mode.ESPECES.nb }}) / Virement ({{ g.recap_mode.VIREMENT.nb }})</td>
+        <td colspan="9" class="num" style="font-size:11px;color:#374151">dont Espèces ({{ g.recap_mode.ESPECES.nb }}) / Virement ({{ g.recap_mode.VIREMENT.nb }})</td>
         <td class="num" style="font-size:11px;color:#374151">{{ g.recap_mode.ESPECES.total|int }} / {{ g.recap_mode.VIREMENT.total|int }}</td>
         <td></td>
       </tr>
@@ -119,6 +140,9 @@
     </tbody>
   </table>
 
+  <p class="note-h">Heures normales, supplémentaires et du dimanche détaillées pour information : toutes sont payées au taux horaire du journalier.
+  {% set sans_detail = namespace(n=0) %}{% for f in g.feuilles %}{% if not detail_h[f.id].fiable %}{% set sans_detail.n = sans_detail.n + 1 %}{% endif %}{% endfor %}
+  {% if sans_detail.n %}<br/><span class="ast">*</span> Détail non disponible (heures saisies à la main ou pointage modifié après la génération) : partage enregistré sur la feuille.{% endif %}</p>
   <div class="footer">
     <span>Reçu pour solde de tout compte de la période — signatures ci-dessus.</span>
     <span>Visa chef de chantier : ______________________</span>
