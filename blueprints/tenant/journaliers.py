@@ -1442,6 +1442,39 @@ def journaliers_pointage_importer_confirmer():
     flash(f"✅ Import terminé : {nb_creer} pointage(s) créé(s), {nb_maj} mis à jour.", "success")
     return redirect(url_for("tenant.pointage"))
 
+def _detail_heures_feuilles(t, feuilles):
+    """Détail des heures de chaque feuille pour l'impression : normales, supplémentaires et
+    dimanche — affichage seulement, le taux horaire et le montant ne changent pas.
+
+    Relu dans les pointages validés de la période de la feuille : un jour est « dimanche »
+    si sa date tombe un dimanche ou s'il a été pointé comme tel ; toutes ses heures y vont
+    (selon l'écran de saisie, elles ont pu être rangées en normales ou en sup.). Si le total
+    relu ne retombe pas sur les heures de la feuille (heures saisies à la main, pointage
+    modifié après génération), on garde le partage enregistré sur la feuille et on le signale.
+    → {feuille_id: {"normales", "sup", "dimanche", "fiable"}}"""
+    res = {}
+    for f in feuilles:
+        pts = (Pointage.query.filter_by(tenant_id=t.id, journalier_id=f.journalier_id)
+               .filter(Pointage.date_pointage >= f.date_debut, Pointage.date_pointage <= f.date_fin,
+                       Pointage.present == True).all())  # noqa: E712
+        pts = [p for p in pts if (getattr(p, "statut", None) or "VALIDE") == "VALIDE"]
+        hn = hs = hd = 0.0
+        for p in pts:
+            n, s_ = float(p.heures_normales or 0), float(p.heures_sup or 0)
+            if p.date_pointage.weekday() == 6 or (p.type_jour or "").upper() == "DIMANCHE":
+                hd += n + s_
+            else:
+                hn += n
+                hs += s_
+        total = float(f.total_heures or 0)
+        if pts and abs((hn + hs + hd) - total) < 0.01:
+            res[f.id] = {"normales": round(hn, 2), "sup": round(hs, 2), "dimanche": round(hd, 2), "fiable": True}
+        else:
+            res[f.id] = {"normales": float(f.heures_normales or 0) or total, "sup": float(f.heures_sup or 0),
+                         "dimanche": 0.0, "fiable": False}
+    return res
+
+
 @bp.route("/journaliers/paie/imprimer-sites")
 @login_required
 def journaliers_paie_imprimer_sites():
@@ -1565,7 +1598,7 @@ def journaliers_paie_imprimer_sites():
         tenant=t, groupes=groupes_ordonnes, total_general=total_general,
         recap_global=recap_global,
         nb_total=nb_total, statut=statut_f, date_debut=date_debut, date_fin=date_fin,
-        imput_av=imput_av, now=datetime.now())
+        imput_av=imput_av, detail_h=_detail_heures_feuilles(t, feuilles), now=datetime.now())
 
 
 @bp.route("/journaliers/paie/imprimer")
@@ -1615,7 +1648,7 @@ def journaliers_paie_imprimer():
         tenant=t, feuilles=feuilles, site=site, statut=statut_f,
         date_debut=date_debut, date_fin=date_fin, total=total,
         recap_mode=recap_mode,
-        imput_av=imput_av, now=datetime.now())
+        imput_av=imput_av, detail_h=_detail_heures_feuilles(t, feuilles), now=datetime.now())
 
 
 @bp.route("/journaliers/paie/export")

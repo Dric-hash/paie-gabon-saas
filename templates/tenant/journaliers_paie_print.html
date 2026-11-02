@@ -22,6 +22,10 @@
     .b-jour{background:#dbeafe;color:#1d4ed8;}
     .sig-cell{width:150px;border-bottom:1px dashed #9ca3af;}
     .tot-row td{font-weight:900;background:#eef3f1 !important;border-top:2px solid #0f3d36;}
+    th.h{background:#174d44;}
+    .ast{color:#b45309;font-weight:700;}
+    .note-h{font-size:9px;color:#6b7280;margin-top:-6px;}
+    .tot-h td{font-weight:700;background:#f6f8f7 !important;}
     .footer{margin-top:24px;text-align:right;font-size:9px;color:#9ca3af;}
     @media print{.no-print{display:none;}body{padding:0;}}
   </style>
@@ -61,7 +65,10 @@
       <th class="center">Type</th>
       <th>Période</th>
       <th class="center">Jours</th>
-      <th class="num">Heures</th>
+      <th class="num h">H. normales</th>
+      <th class="num h">H. sup.</th>
+      <th class="num h">H. dimanche</th>
+      <th class="num h">Total h</th>
       <th class="num">Taux/h</th>
       <th class="num">Taux/jour</th>
       <th class="num">Montant brut</th>
@@ -85,15 +92,11 @@
       </td>
       <td>{{ f.date_debut.strftime('%d/%m/%Y') }} → {{ f.date_fin.strftime('%d/%m/%Y') }}</td>
       <td class="center">{{ f.nb_jours }}</td>
-      <td class="num">
-        {% set hn = f.heures_normales|float %}{% set hs = f.heures_sup|float %}
-        {% if (hn + hs) > 0 %}
-          {{ "%.1f"|format(hn) }}h <span style="color:#9ca3af;font-size:8px">norm.</span>
-          {% if hs > 0 %}<br/><b>{{ "%.1f"|format(hs) }}h</b> <span style="color:#9ca3af;font-size:8px">sup.</span>{% endif %}
-        {% else %}
-          {{ "%.1f"|format(f.total_heures|float) }}h
-        {% endif %}
-      </td>
+{% set dh = detail_h.get(f.id) %}
+      <td class="num">{{ "%.1f"|format(dh.normales) }}</td>
+      <td class="num">{{ "%.1f"|format(dh.sup) if dh.sup else '—' }}</td>
+      <td class="num">{{ "%.1f"|format(dh.dimanche) if dh.dimanche else '—' }}</td>
+      <td class="num"><b>{{ "%.1f"|format(f.total_heures|float) }}</b>{% if not dh.fiable %}<sup class="ast">*</sup>{% endif %}</td>
       <td class="num">{{ f.taux_horaire|int }}</td>
       <td class="num">{{ (f.taux_horaire|float * 8)|int }}</td>
       <td class="num">
@@ -106,11 +109,21 @@
       <td class="sig-cell">&nbsp;</td>
     </tr>
     {% else %}
-    <tr><td colspan="9" class="center" style="padding:20px;color:#9ca3af">Aucune feuille de paie à afficher.</td></tr>
+    <tr><td colspan="12" class="center" style="padding:20px;color:#9ca3af">Aucune feuille de paie à afficher.</td></tr>
     {% endfor %}
     {% if feuilles %}
+    {% set tn = namespace(n=0, s=0, d=0, t=0) %}
+    {% for f in feuilles %}{% set dh = detail_h.get(f.id) %}{% set tn.n = tn.n + dh.normales %}{% set tn.s = tn.s + dh.sup %}{% set tn.d = tn.d + dh.dimanche %}{% set tn.t = tn.t + f.total_heures|float %}{% endfor %}
+    <tr class="tot-h">
+      <td colspan="4" class="num">Total des heures</td>
+      <td class="num">{{ "%.1f"|format(tn.n) }}</td>
+      <td class="num">{{ "%.1f"|format(tn.s) }}</td>
+      <td class="num">{{ "%.1f"|format(tn.d) }}</td>
+      <td class="num">{{ "%.1f"|format(tn.t) }}</td>
+      <td colspan="4"></td>
+    </tr>
     <tr class="tot-row">
-      <td colspan="7" class="num">TOTAL</td>
+      <td colspan="10" class="num">TOTAL</td>
       <td class="num">{{ total|int }} FCFA</td>
       <td></td>
     </tr>
@@ -119,6 +132,8 @@
 </table>
 
 {% if feuilles %}
+<p class="note-h">Heures normales, supplémentaires et du dimanche sont détaillées pour information : elles sont toutes payées au taux horaire du journalier.
+{% if detail_h.values()|rejectattr('fiable')|list %}<br/><span class="ast">*</span> Détail non disponible (heures saisies à la main ou pointage modifié après la génération) : partage enregistré sur la feuille.{% endif %}</p>
 <div style="margin-top:16px;max-width:340px;margin-left:auto;border:1px solid #d1d5db;border-radius:8px;overflow:hidden">
   <div style="background:#0f3d36;color:#fff;padding:6px 12px;font-weight:700;font-size:13px">Récapitulatif par mode de paiement</div>
   <table style="width:100%;border-collapse:collapse;font-size:13px">
