@@ -373,6 +373,8 @@ class Utilisateur(db.Model, UserMixin):
     # Régénéré à chaque changement de mot de passe : invalide toutes les sessions
     # ouvertes (anti-détournement de session après reset / vol de mot de passe).
     session_token            = db.Column(db.String(32))
+    # Compte Ameriack relié (« ameriack:<identifiant> ») : connexion par compte.ameriack.com
+    external_ref             = db.Column(db.String(64), unique=True)
 
     def get_id(self):
         """Identité de session = id + jeton. Le changement de mot de passe fait

@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Relier mon compte Ameriack — PaieGabon</title>
+  <meta name="robots" content="noindex"/>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css', v=2) }}">
+</head>
+<body>
+  {% import "auth/_auth.html" as ui %}
+  {{ ui.brandside() }}
+
+  <main class="formside">
+    <div class="formwrap">
+      <div class="mobile-brand">{{ ui.logo(34) }}<div class="name">Paie<span>Gabon</span></div></div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash">{% for cat, msg in messages %}
+        <div class="{{ 'ok' if cat=='success' else 'err' if cat=='error' else 'info' }}">{{ msg }}</div>
+      {% endfor %}</div>
+      {% endif %}{% endwith %}
+
+      <h1 class="title display">Relier votre compte Ameriack</h1>
+      <p class="subtitle">Vous avez déjà un accès PaieGabon avec l'adresse <b>{{ u.email }}</b>{% if u.tenant %} ({{ u.tenant.denomination }}){% endif %}. Pour le relier à votre compte Ameriack de <b>{{ ident.organisation.nom }}</b>, confirmez une seule fois avec votre <b>mot de passe PaieGabon</b>.</p>
+
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="field">
+          <label for="mdp">Mot de passe PaieGabon</label>
+          <input id="mdp" type="password" name="password" autocomplete="current-password" required autofocus>
+        </div>
+        <button type="submit" class="btn btn-primary"><span class="btn-text">Relier et me connecter</span></button>
+      </form>
+      <form method="POST" style="margin-top:.8rem">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <button name="annuler" value="1" class="back" style="background:none;border:none;cursor:pointer;padding:0">Annuler</button>
+      </form>
+      <p class="subtitle" style="font-size:.8rem;margin-top:1rem">Mot de passe oublié ? Utilisez « Mot de passe oublié » sur la page de connexion de PaieGabon, puis revenez ici.</p>
+
+      <div style="margin-top:1.4rem">
+        <a href="{{ url_for('auth.login') }}" class="back">← Retour à la connexion</a>
+      </div>
+
+      <p class="foot">© 2026 Ameriack I.T. Solutions</p>
+    </div>
+  </main>
+</body>
+</html>
