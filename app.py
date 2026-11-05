@@ -122,6 +122,12 @@ app.config["CAISSE_TOKEN"]         = os.environ.get("CAISSE_TOKEN", "")
 app.config["PROJETS_URL"]          = os.environ.get("PROJETS_URL", "").rstrip("/")
 app.config["PROJETS_TOKEN"]        = os.environ.get("PROJETS_TOKEN", "")
 
+# ── Compte Ameriack (compte unique de la suite, compte.ameriack.com) ──────────
+app.config["AMERIACK_URL"]           = os.environ.get("AMERIACK_URL", "").rstrip("/")
+app.config["AMERIACK_CLIENT_ID"]     = os.environ.get("AMERIACK_CLIENT_ID", "")
+app.config["AMERIACK_CLIENT_SECRET"] = os.environ.get("AMERIACK_CLIENT_SECRET", "")
+app.config["AMERIACK_RETOUR"]        = os.environ.get("AMERIACK_RETOUR", "")
+
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
 from core import init_limiter
 limiter = init_limiter(app)
@@ -418,6 +424,8 @@ import models_sso
 from blueprints.sso_provider import bp as sso_bp, sso_api as sso_api_bp
 app.register_blueprint(sso_bp)
 app.register_blueprint(sso_api_bp)
+from blueprints.compte_ameriack import bp as compte_ameriack_bp   # noqa: E402
+app.register_blueprint(compte_ameriack_bp)   # « Se connecter avec mon compte Ameriack »
 csrf.exempt(sso_bp)      # flux SSO /authorize : POST cross-origin, protege par state + client_secret
 csrf.exempt(sso_api_bp)
 csrf.exempt(api_v1_bp)   # API REST utilise Bearer tokens, pas CSRF
@@ -769,6 +777,9 @@ def run_migrations():
         # Interconnexion Projets Ameriack : chantier relié à un site (04/11/2026)
         "ALTER TABLE sites ADD COLUMN IF NOT EXISTS projets_chantier_id INTEGER",
         "ALTER TABLE sites ADD COLUMN IF NOT EXISTS projets_chantier_nom VARCHAR(200)",
+        # Compte Ameriack (compte unique de la suite) : accès relié (05/11/2026)
+        "ALTER TABLE utilisateurs ADD COLUMN IF NOT EXISTS external_ref VARCHAR(64)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_utilisateurs_external_ref ON utilisateurs (external_ref)",
     ]
     for sql in migrations:
         try:

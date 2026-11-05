@@ -1,0 +1,32 @@
+{% extends "tenant/base.html" %}
+{% block title %}Applications liées — PaieGabon{% endblock %}
+{% block content %}
+<div style="max-width:820px">
+  <h1 class="text-2xl font-black text-gray-900">Applications liées</h1>
+  <p class="text-gray-500 text-sm mt-1 mb-5">{{ t.denomination }} dans la suite Ameriack</p>
+  <div class="card p-5 mb-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Référence d'interconnexion</div>
+    {% if t.external_ref %}
+    <div style="display:flex;align-items:center;gap:.75rem;flex-wrap:wrap"><span class="font-mono" style="font-size:1.35rem;font-weight:800;color:#0f3d36">{{ t.external_ref }}</span>
+      <span style="font-size:.75rem;padding:.15rem .6rem;border-radius:99px;background:#e6f4ea;color:#1d7a44">Entreprise reliée</span></div>
+    <p class="text-sm text-gray-600 mt-2">C'est la référence de votre entreprise dans le compte Ameriack : PaieGabon l'utilise pour échanger vos données avec les autres applications de la suite (Caisse, Projets, Ops, États financiers). Elle vient de votre compte Ameriack et ne se modifie pas ici.</p>
+    {% else %}
+    <div><span style="font-size:.75rem;padding:.15rem .6rem;border-radius:99px;background:#fff8e6;color:#9a6a00">Entreprise non reliée</span></div>
+    <p class="text-sm text-gray-600 mt-2">{% if current_user.is_tenant_admin %}Reliez votre accès au compte Ameriack de l'entreprise : la référence sera reprise automatiquement.{% else %}L'administrateur doit relier l'entreprise en se connectant avec son compte Ameriack.{% endif %}</p>
+    {% endif %}
+  </div>
+  <div class="card p-5 mb-4">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Votre accès</div>
+    {% if moi_relie %}<p class="text-sm"><span style="font-size:.75rem;padding:.15rem .6rem;border-radius:99px;background:#e6f4ea;color:#1d7a44">Relié</span> Vous vous connectez avec votre compte Ameriack.</p>
+    {% elif configure %}<p class="text-sm text-gray-600 mb-3">Reliez votre accès : vous vous connecterez ensuite d'un clic, avec le même compte que pour les autres applications.</p>
+      <a href="{{ url_for('compte_ameriack.connexion') }}" class="bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-bold" style="display:inline-block;background:#0f3d36">Relier à mon compte Ameriack</a>
+    {% else %}<p class="text-sm text-gray-500">La connexion avec le compte Ameriack n'est pas encore configurée sur ce serveur.</p>{% endif %}
+    <p class="text-xs text-gray-400 mt-3">{{ relies }} accès sur {{ total }} relié(s) au compte Ameriack.</p>
+  </div>
+  <div class="card p-5">
+    <div class="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">Votre compte Ameriack</div>
+    <p class="text-sm text-gray-600 mb-3">Équipe, informations de l'entreprise et accès à toutes les applications de la suite.</p>
+    <a href="{{ url_compte }}" class="text-sm font-bold" style="color:#17564c">Ouvrir compte.ameriack.com →</a>
+  </div>
+</div>
+{% endblock %}

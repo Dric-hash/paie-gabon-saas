@@ -178,6 +178,12 @@
         </button>
       </form>
 
+      {% if AMERIACK_ACTIF %}
+      <a href="{{ url_for('compte_ameriack.connexion') }}" style="display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;margin-top:14px;padding:.8rem;border-radius:.8rem;border:1.5px solid #0f3d36;color:#0f3d36;background:#fff;font-weight:700;font-size:.93rem;text-decoration:none">
+        <svg width="20" height="20" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#0F3D36"/><path d="M17.5 49.5L32 15L46.5 49.5" fill="none" stroke="#FAF8F2" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M23.6 37.5H40.4" stroke="#E9B043" stroke-width="5.2" stroke-linecap="round"/></svg>
+        Se connecter avec mon compte Ameriack</a>
+      {% endif %}
+
       <div class="divider">nouvelle entreprise ?</div>
       <a href="/inscription" class="register">Créer mon espace entreprise →</a>
 

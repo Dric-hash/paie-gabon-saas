@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Ouvrir PaieGabon — PaieGabon</title>
+  <meta name="robots" content="noindex"/>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Plus+Jakarta+Sans:wght@700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/auth.css', v=2) }}">
+</head>
+<body>
+  {% import "auth/_auth.html" as ui %}
+  {{ ui.brandside() }}
+
+  <main class="formside">
+    <div class="formwrap">
+      <div class="mobile-brand">{{ ui.logo(34) }}<div class="name">Paie<span>Gabon</span></div></div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash">{% for cat, msg in messages %}
+        <div class="{{ 'ok' if cat=='success' else 'err' if cat=='error' else 'info' }}">{{ msg }}</div>
+      {% endfor %}</div>
+      {% endif %}{% endwith %}
+
+      <h1 class="title display">Ouvrir PaieGabon pour {{ org.nom }}</h1>
+      <p class="subtitle">{{ org.nom }} n'a pas encore d'espace PaieGabon. Vous en serez l'administrateur ({{ ident.email }}). Essai gratuit de 30 jours. L'espace est relié à votre entreprise Ameriack (référence <b style="font-family:ui-monospace,monospace">{{ org.reference }}</b>).</p>
+
+      <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+        <div class="field">
+          <label for="tc">Votre profil</label>
+          <select id="tc" name="type_compte" style="width:100%;border:1.5px solid var(--border);border-radius:.8rem;padding:.8rem 1rem;font-size:.95rem;font-family:inherit;background:#fff;color:var(--ink)">{% for k, v in types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+        </div>
+        <label style="display:flex;gap:.5rem;align-items:flex-start;font-size:.85rem;margin:.6rem 0 1rem"><input type="checkbox" name="cgu" value="1" required style="margin-top:.2rem"> <span>J'accepte les <a href="/cgu" target="_blank" style="text-decoration:underline">conditions générales d'utilisation</a> de PaieGabon.</span></label>
+        <button type="submit" class="btn btn-primary"><span class="btn-text">Créer l'espace et commencer l'essai</span></button>
+      </form>
+
+      <div style="margin-top:1.4rem">
+        <a href="{{ url_for('auth.login') }}" class="back">← Retour à la connexion</a>
+      </div>
+
+      <p class="foot">© 2026 Ameriack I.T. Solutions</p>
+    </div>
+  </main>
+</body>
+</html>
