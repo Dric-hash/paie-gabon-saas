@@ -114,6 +114,23 @@
         </div>
       </div>
 
+      <!-- Chantier de Projets Ameriack (coût de la main-d'œuvre envoyé chaque mois) -->
+      {% if projets_configure %}
+      <div style="border:1px dashed #e5e7eb;border-radius:.75rem;padding:.9rem 1rem;background:#fafafa">
+        <div style="font-size:.8rem;font-weight:800;color:#0f3d36;margin-bottom:.15rem">🏗️ Chantier dans Projets Ameriack <span style="font-weight:600;color:#9ca3af">(facultatif)</span></div>
+        <p style="font-size:.76rem;color:#9ca3af;margin:0 0 .6rem">Le coût de la main-d'œuvre de ce site (salariés et journaliers) sera envoyé chaque mois à ce chantier, comme dépense « Main-d'œuvre ».</p>
+        {% if chantiers is none %}
+        <p style="font-size:.8rem;color:#b45309;margin:0">Projets ne répond pas : la liste des chantiers n'est pas disponible{% if site and site.projets_chantier_id %} (chantier relié : {{ site.projets_chantier_nom }}){% endif %}.</p>
+        <input type="hidden" name="projets_inchange" value="1">
+        {% else %}
+        <select name="projets_chantier_id" style="width:100%;border:1px solid #e5e7eb;border-radius:.6rem;padding:.5rem;font-size:.85rem;box-sizing:border-box;background:white">
+          <option value="">— Aucun chantier —</option>
+          {% for c in chantiers %}<option value="{{ c.id }}" {{ 'selected' if site and site.projets_chantier_id == c.id }}>{{ c.nom }}{% if c.statut_label %} ({{ c.statut_label }}){% endif %}</option>{% endfor %}
+        </select>
+        {% endif %}
+      </div>
+      {% endif %}
+
       <div style="display:flex;gap:.75rem;padding-top:.5rem">
         <a href="/sites"
           style="flex:1;text-align:center;border:1px solid #e5e7eb;color:#6b7280;padding:.75rem;border-radius:.75rem;font-weight:700;font-size:.875rem;text-decoration:none">

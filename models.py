@@ -602,6 +602,9 @@ class Site(db.Model):
     latitude    = db.Column(db.Numeric(9, 6))
     longitude   = db.Column(db.Numeric(9, 6))
     rayon_m     = db.Column(db.Integer, default=200)   # rayon de tolérance en mètres
+    # ── Chantier de Projets Ameriack relié (coût de la main-d'œuvre envoyé chaque mois) ──
+    projets_chantier_id  = db.Column(db.Integer)
+    projets_chantier_nom = db.Column(db.String(200))
 
     tenant       = db.relationship("Tenant", backref="sites")
     affectations = db.relationship("AffectationSite", backref="site", lazy=True,

@@ -116,6 +116,12 @@ app.config["CAISSE_INTERCO_ACTIF"] = os.environ.get("CAISSE_INTERCO", "1") == "1
 app.config["CAISSE_URL"]           = os.environ.get("CAISSE_URL", "").rstrip("/")
 app.config["CAISSE_TOKEN"]         = os.environ.get("CAISSE_TOKEN", "")
 
+# ── Interconnexion Projets Ameriack ───────────────────────────────────────────
+# Coût de la main-d'œuvre de chaque site relié à un chantier, envoyé chaque mois
+# comme dépense du chantier. PROJETS_TOKEN = INTERCO_TOKEN de Projets.
+app.config["PROJETS_URL"]          = os.environ.get("PROJETS_URL", "").rstrip("/")
+app.config["PROJETS_TOKEN"]        = os.environ.get("PROJETS_TOKEN", "")
+
 # ── Rate Limiting ─────────────────────────────────────────────────────────────
 from core import init_limiter
 limiter = init_limiter(app)
@@ -760,6 +766,9 @@ def run_migrations():
         # ── 30/10/2026 — budget : transfert de site en cours d'année ─────────────
         "ALTER TABLE lignes_budget ADD COLUMN IF NOT EXISTS nouveau_site_id INTEGER REFERENCES sites(id)",
         "ALTER TABLE lignes_budget ADD COLUMN IF NOT EXISTS mois_transfert INTEGER",
+        # Interconnexion Projets Ameriack : chantier relié à un site (04/11/2026)
+        "ALTER TABLE sites ADD COLUMN IF NOT EXISTS projets_chantier_id INTEGER",
+        "ALTER TABLE sites ADD COLUMN IF NOT EXISTS projets_chantier_nom VARCHAR(200)",
     ]
     for sql in migrations:
         try:
