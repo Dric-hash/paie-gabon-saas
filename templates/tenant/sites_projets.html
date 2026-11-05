@@ -1,0 +1,72 @@
+{% extends "tenant/base.html" %}
+{% block title %}Main-d'œuvre par chantier — {{ tenant.denomination }}{% endblock %}
+{% block content %}
+{% macro f(v) %}{{ '{:,.0f}'.format(v or 0).replace(',', ' ') }}{% endmacro %}
+{% set noms = ['', 'janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'] %}
+<div style="display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap;margin-bottom:1.25rem">
+  <div>
+    <a href="/sites" style="font-size:.8rem;color:#0f3d36;text-decoration:none">← Sites &amp; chantiers</a>
+    <h1 class="text-2xl font-black text-gray-900" style="margin-top:.25rem">Main-d'œuvre par chantier</h1>
+    <p class="text-gray-500 text-sm mt-1">Coût du mois par site, envoyé aux chantiers de Projets Ameriack comme dépense « Main-d'œuvre ».</p>
+  </div>
+  <form method="get" style="display:flex;gap:.5rem;align-items:center">
+    <input type="month" name="mois" value="{{ '%04d-%02d'|format(annee, mois) }}" aria-label="Mois"
+      style="border:1px solid #e5e7eb;border-radius:.6rem;padding:.45rem .6rem;font-size:.85rem">
+    <button style="border:1px solid #e5e7eb;background:white;border-radius:.6rem;padding:.45rem .8rem;font-size:.85rem;font-weight:700;cursor:pointer">Afficher</button>
+  </form>
+</div>
+
+{% if not projets_configure %}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem;background:#fffbeb;border-color:#fde68a;color:#92400e;font-size:.85rem">
+  Interconnexion avec Projets Ameriack non configurée : le calcul s'affiche, mais l'envoi est impossible (variables PROJETS_URL et PROJETS_TOKEN, et même référence d'interconnexion de l'entreprise dans les deux applications).
+</div>
+{% endif %}
+{% if not res.periode %}
+<div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem;font-size:.85rem;color:#6b7280">Aucune période de paie pour {{ noms[mois] }} {{ annee }} : seuls les journaliers sont comptés.</div>
+{% endif %}
+
+<div class="card" style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;min-width:760px">
+    <thead><tr style="text-align:left;color:#6b7280;font-size:.72rem;text-transform:uppercase;border-bottom:1px solid #f0f0f0">
+      <th style="padding:.7rem 1rem">Site</th><th style="padding:.7rem .5rem">Chantier dans Projets</th>
+      <th style="padding:.7rem .5rem;text-align:right">Salariés<br><span style="text-transform:none;font-weight:500">coût employeur</span></th>
+      <th style="padding:.7rem .5rem;text-align:right">Journaliers<br><span style="text-transform:none;font-weight:500">feuilles de paie</span></th>
+      <th style="padding:.7rem 1rem;text-align:right">Total</th></tr></thead>
+    <tbody>
+    {% for l in res.sites if l.total or l.site.projets_chantier_id %}
+    <tr style="border-bottom:1px solid #f7f7f7">
+      <td style="padding:.6rem 1rem;font-weight:700">{{ l.site.nom }}{% if not l.site.actif %} <span style="font-weight:500;color:#9ca3af">(inactif)</span>{% endif %}</td>
+      <td style="padding:.6rem .5rem">{% if l.site.projets_chantier_id %}{{ l.site.projets_chantier_nom }}{% else %}<a href="/sites/{{ l.site.id }}/modifier" style="color:#b45309">à relier</a>{% endif %}</td>
+      <td style="padding:.6rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(l.salaries) }}{% if l.nb_salaries %}<div style="font-size:.7rem;color:#9ca3af;font-family:system-ui,sans-serif">{{ l.nb_salaries }} salarié(s)</div>{% endif %}</td>
+      <td style="padding:.6rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(l.journaliers) }}{% if l.en_attente %}<div style="font-size:.7rem;color:#b45309;font-family:system-ui,sans-serif">dont {{ l.en_attente }} feuille(s) non payée(s)</div>{% endif %}</td>
+      <td style="padding:.6rem 1rem;text-align:right;font-family:ui-monospace,monospace;font-weight:700">{{ f(l.total) }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5" style="padding:1rem;color:#9ca3af">Aucun coût de main-d'œuvre sur un site pour ce mois.</td></tr>
+    {% endfor %}
+    {% if res.sans_site.salaries or res.sans_site.journaliers %}
+    <tr style="border-bottom:1px solid #f7f7f7;color:#6b7280">
+      <td style="padding:.6rem 1rem">Sans site affecté</td><td style="padding:.6rem .5rem;font-size:.78rem">non envoyé</td>
+      <td style="padding:.6rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.sans_site.salaries) }}</td>
+      <td style="padding:.6rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.sans_site.journaliers) }}</td>
+      <td style="padding:.6rem 1rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.sans_site.salaries + res.sans_site.journaliers) }}</td></tr>
+    {% endif %}
+    </tbody>
+    <tfoot><tr style="border-top:2px solid #0f3d36;font-weight:800">
+      <td style="padding:.7rem 1rem" colspan="2">Total du mois</td>
+      <td style="padding:.7rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.total_salaries) }}</td>
+      <td style="padding:.7rem .5rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.total_journaliers) }}</td>
+      <td style="padding:.7rem 1rem;text-align:right;font-family:ui-monospace,monospace">{{ f(res.total_salaries + res.total_journaliers) }}</td></tr></tfoot>
+  </table>
+</div>
+<p style="font-size:.75rem;color:#6b7280;margin:.75rem 0">Salariés : bulletins validés ou payés de la période, coût employeur (brut + CNSS et CNAMGS patronales + FNH + CFP + TCS), réparti au prorata des jours d'affectation dans le mois. Journaliers : feuilles dont la période se termine dans le mois, réparties selon les jours de présence pointés sur chaque site (à défaut, les jours d'affectation). Arrondi au franc par site.</p>
+
+{% if projets_configure %}
+<form method="post" action="{{ url_for('tenant.sites_projets_envoyer') }}" style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="mois" value="{{ '%04d-%02d'|format(annee, mois) }}">
+  <button style="background:#0f3d36;color:white;padding:.65rem 1.1rem;border-radius:.75rem;font-weight:700;font-size:.875rem;border:none;cursor:pointer">Envoyer {{ noms[mois] }} {{ annee }} à Projets</button>
+  <span style="font-size:.75rem;color:#6b7280">Renvoyer un mois remplace ses montants (pas de doublon) ; un site détaché ou à zéro retire sa dépense.</span>
+</form>
+{% endif %}
+{% endblock %}

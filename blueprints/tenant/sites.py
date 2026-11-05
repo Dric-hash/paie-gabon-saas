@@ -2,8 +2,10 @@
 """Sites / chantiers et affectations de travailleurs — extrait de tenant.py.
 Partage le même blueprint « tenant » : les endpoints (tenant.sites, etc.) sont inchangés."""
 from datetime import datetime, date, timedelta
-from flask import render_template, request, redirect, url_for, flash, session
+from flask import render_template, request, redirect, url_for, flash, session, abort
 from flask_login import current_user
+import interco_projets
+import main_oeuvre_chantiers as moc
 from blueprints.tenant import bp
 from core import tenant_required, get_tenant
 from models import (db, Site, AffectationSite, Salarie, Pointage,
@@ -37,6 +39,95 @@ def _appliquer_geo_site(s, form):
         s.rayon_m = 200
 
 
+def _ctx_projets(t):
+    conf = interco_projets.configure(t)
+    return {"projets_configure": conf, "chantiers": interco_projets.chantiers(t) if conf else []}
+
+
+def _appliquer_chantier_projets(t, s, form):
+    """Chantier de Projets relié au site (liste relue dans Projets pour valider l'identifiant)."""
+    if not interco_projets.configure(t) or form.get("projets_inchange") or "projets_chantier_id" not in form:
+        return
+    brut = (form.get("projets_chantier_id") or "").strip()
+    if not brut:
+        s.projets_chantier_id = s.projets_chantier_nom = None
+        return
+    liste = interco_projets.chantiers(t)
+    c = next((c for c in (liste or []) if str(c.get("id")) == brut), None)
+    if c is None:
+        flash("Chantier de Projets introuvable ou Projets injoignable : le lien du site n'a pas changé.", "warning")
+        return
+    s.projets_chantier_id, s.projets_chantier_nom = int(c["id"]), str(c.get("nom") or "")[:200]
+
+
+def _mois_demande(brut):
+    """(année, mois) d'un « AAAA-MM » ; par défaut le mois précédent."""
+    try:
+        a, m = (int(x) for x in (brut or "").split("-"))
+        if 2000 <= a <= 2100 and 1 <= m <= 12:
+            return a, m
+    except ValueError:
+        pass
+    d = date.today().replace(day=1) - timedelta(days=1)
+    return d.year, d.month
+
+
+@bp.route("/sites/projets")
+@tenant_required
+def sites_projets():
+    """Coût de la main-d'œuvre du mois par site, et envoi aux chantiers de Projets Ameriack."""
+    if not current_user.can_edit:
+        abort(403)
+    t = get_tenant()
+    annee, mois = _mois_demande(request.args.get("mois"))
+    res = moc.calculer(t.id, annee, mois)
+    return render_template("tenant/sites_projets.html", tenant=t, res=res, annee=annee, mois=mois,
+                           projets_configure=interco_projets.configure(t))
+
+
+@bp.route("/sites/projets/envoyer", methods=["POST"])
+@tenant_required
+def sites_projets_envoyer():
+    if not current_user.can_edit:
+        abort(403)
+    t = get_tenant()
+    annee, mois = _mois_demande(request.form.get("mois"))
+    retour = redirect(url_for("tenant.sites_projets", mois=f"{annee}-{mois:02d}"))
+    if not interco_projets.configure(t):
+        flash("Interconnexion avec Projets non configurée (PROJETS_URL, PROJETS_TOKEN, référence d'interconnexion).",
+              "error")
+        return retour
+    from calendrier_paie import fin_de_mois
+    jour = fin_de_mois(annee, mois)
+    res = moc.calculer(t.id, annee, mois)
+    envoyes, retires, erreurs = 0, 0, []
+    for l in res["sites"]:
+        s = l["site"]
+        for cat, montant, quoi in (("sal", l["salaries"], "salariés (coût employeur : brut + charges patronales)"),
+                                   ("jour", l["journaliers"], "journaliers (feuilles de paie)")):
+            corps, err = interco_projets.envoyer_depense(
+                t, moc.reference(annee, mois, s.id, cat), s.projets_chantier_id, montant, jour,
+                f"Main-d'œuvre {mois:02d}/{annee} — {quoi}, site {s.nom}")
+            if err:
+                erreurs.append(f"{s.nom} : {err}")
+                if err == "Projets ne répond pas":
+                    break
+            elif s.projets_chantier_id and round(montant or 0) > 0:
+                envoyes += 1
+            elif (corps or {}).get("supprimee"):
+                retires += 1
+        if erreurs and erreurs[-1].endswith("Projets ne répond pas"):
+            break
+    if erreurs:
+        for e in erreurs[:5]:
+            flash(f"Envoi incomplet — {e}.", "error")
+    else:
+        flash(f"Main-d'œuvre de {mois:02d}/{annee} envoyée à Projets : {envoyes} dépense(s) à jour"
+              + (f", {retires} retirée(s)" if retires else "") + ". Vous pouvez renvoyer le mois après une "
+              "correction de paie : les montants sont remplacés, sans doublon.", "success")
+    return retour
+
+
 @bp.route("/sites/nouveau", methods=["GET","POST"])
 @tenant_required
 def site_nouveau():
@@ -53,11 +144,12 @@ def site_nouveau():
             description = request.form.get("description","").strip() or None,
         )
         _appliquer_geo_site(s, request.form)
+        _appliquer_chantier_projets(t, s, request.form)
         db.session.add(s)
         db.session.commit()
         flash(f"Site « {s.nom} » créé avec succès.", "success")
         return redirect(url_for("tenant.sites"))
-    return render_template("tenant/site_form.html", tenant=t, site=None)
+    return render_template("tenant/site_form.html", tenant=t, site=None, **_ctx_projets(t))
 
 @bp.route("/sites/<int:id>/modifier", methods=["GET","POST"])
 @tenant_required
@@ -73,10 +165,11 @@ def site_modifier(id):
         s.telephone   = request.form.get("telephone","").strip() or None
         s.description = request.form.get("description","").strip() or None
         _appliquer_geo_site(s, request.form)
+        _appliquer_chantier_projets(t, s, request.form)
         db.session.commit()
         flash(f"Site « {s.nom} » modifié.", "success")
         return redirect(url_for("tenant.sites"))
-    return render_template("tenant/site_form.html", tenant=t, site=s)
+    return render_template("tenant/site_form.html", tenant=t, site=s, **_ctx_projets(t))
 
 @bp.route("/sites/<int:id>/toggle", methods=["POST"])
 @tenant_required
